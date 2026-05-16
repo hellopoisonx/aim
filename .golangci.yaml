@@ -1,0 +1,38 @@
+run:
+  timeout: 5m
+  # 包含测试文件
+  tests: true
+
+linters:
+  enable:
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - errorlint
+    - exptostd
+    - fatcontext
+    - gocritic
+    - iface
+    - mirror
+    - wsl_v5
+    - usetesting
+    - goconst
+    - gocyclo
+    - gosec
+    - modernize
+    - testifylint
+  settings:
+    goconst:
+      ignore-tests: true
+
+issues:
+  # 不限制每类问题的数量
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
+  # 仅针对新修改的代码进行检查（如果是存量项目，建议开启）
+  # new-from-rev: HEAD~1
+
+version: "2"
