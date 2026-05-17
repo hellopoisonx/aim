@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+package logic;
+
+option go_package = "./pb";
+
+service PermissionService {
+  // CheckMessagePermission checks whether a sender can publish into a conversation.
+  // aim-core calls this before accepting a message into Kafka.
+  rpc CheckMessagePermission(CheckMessagePermissionReq) returns (CheckMessagePermissionResp);
+}
+
+message CheckMessagePermissionReq {
+  int64 sender_id = 1;
+  int64 conversation_id = 2;
+  // message_type must be a short client-supported type such as text/image/file/voice/video.
+  string message_type = 3;
+  // mentions is capped by the logic service before policy evaluation.
+  repeated int64 mentions = 4;
+}
+
+message CheckMessagePermissionResp {
+  bool allowed = 1;
+  int32 biz_code = 2;
+  string reason = 3;
+}

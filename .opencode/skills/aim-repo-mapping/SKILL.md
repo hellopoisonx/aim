@@ -20,5 +20,3 @@ description: aim 仓库导航 Skill。用于快速判断需求应该落到哪个
 
 - `references/module-routing.md`
 - `references/request-to-module-map.md`
-- `references/generated-api-index.md`
-- `scripts/extract_api_index.py`

@@ -95,3 +95,15 @@ message LogoutResp {
   bool success = 1; // 登出是否成功
 }
 ```
+
+## 当前实现
+
+- 当前代码文件：`app/auth/rpc/auth.proto`。
+- 当前生成路径：`app/auth/rpc/pb` 与 `app/auth/rpc/authservice`。
+- 为避免 goctl 在仓库内生成冗余 `github.com/hellopoisonx/aim/...` 路径，当前实现使用 module-relative 生成方式；重新生成时从仓库根执行：
+
+```bash
+goctl rpc protoc app/auth/rpc/auth.proto --go_out=app/auth/rpc --go-grpc_out=app/auth/rpc --zrpc_out=app/auth/rpc --style go_zero
+```
+
+- 重新生成后必须确认 `app/auth/rpc/pb/auth_grpc.pb.go` 的 `Metadata` 是 `app/auth/rpc/auth.proto`，避免 protobuf descriptor 与其他 `auth.proto` 冲突。

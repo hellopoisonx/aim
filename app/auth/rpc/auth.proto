@@ -1,0 +1,56 @@
+syntax = "proto3";
+
+package auth;
+
+option go_package = "./pb";
+
+service AuthService {
+  rpc Register(RegisterReq) returns (RegisterResp);
+  rpc Login(LoginReq) returns (LoginResp);
+  rpc RefreshToken(RefreshTokenReq) returns (RefreshTokenResp);
+  rpc Logout(LogoutReq) returns (LogoutResp);
+}
+
+message RegisterReq {
+  string email = 1;
+  string password = 2;
+  string username = 3;
+  string avatar = 4;
+  string device_id = 5;
+}
+
+message RegisterResp {
+  int64 user_id = 1;
+}
+
+message LoginReq {
+  string email = 1;
+  string password = 2;
+  string device_id = 3;
+}
+
+message LoginResp {
+  int64 user_id = 1;
+  string access_token = 2;
+  string refresh_token = 3;
+  int64 expires_at = 4;
+}
+
+message RefreshTokenReq {
+  string refresh_token = 1;
+}
+
+message RefreshTokenResp {
+  string access_token = 1;
+  string refresh_token = 2;
+  int64 expires_at = 3;
+}
+
+message LogoutReq {
+  int64 user_id = 1;
+  string device_id = 2;
+}
+
+message LogoutResp {
+  bool success = 1;
+}

@@ -1,0 +1,115 @@
+syntax = "proto3";
+
+package gateway;
+
+option go_package = "github.com/hellopoisonx/aim/shared/proto/gateway/pb";
+
+// ============================================================
+// GatewayService — 网关内部 gRPC 服务
+//
+// 由 aim-core 的 Delivery Consumer 调用，用于：
+//   - 推送聊天消息到目标用户的网关节点
+//   - 推送用户在线状态变更
+//   - 踢出用户连接（多设备管理 / 被迫下线）
+//   - 通知网关节点即将关闭（drain 窗口）
+// ============================================================
+
+service GatewayService {
+  // PushMessage — 将聊天消息投递到目标用户连接的网关节点
+  //
+  // 使用场景：
+  //   - aim-core Delivery Consumer 从 Kafka 消费消息后，查询到目标用户在某个网关节点
+  //   - 通过 PushMessage gRPC 将消息投递到该网关节点，由网关通过 WebSocket 推送给客户端
+  rpc PushMessage(PushMessageReq) returns (PushMessageResp);
+
+  // PushPresence — 推送用户在线状态变更
+  //
+  // 使用场景：
+  //   - 用户上线 / 下线 / 输入中时，通知其他好友
+  //   - 由 aim-core Presence Service 调用，投递到所有在线好友的网关节点
+  rpc PushPresence(PushPresenceReq) returns (PushPresenceResp);
+
+  // KickUser — 踢出用户连接
+  //
+  // 使用场景：
+  //   - 用户被禁言、强制下线、多设备登录冲突时，踢掉指定设备或全部设备
+  //   - device_id 为空时踢掉该用户所有设备，否则只踢指定设备
+  rpc KickUser(KickUserReq) returns (KickUserResp);
+
+  // DrainNotify — 通知网关节点即将关闭，提供 drain 窗口
+  //
+  // 使用场景：
+  //   - 网关节点计划下线时，先通知所有连接的客户端在 drain_timeout_ms 内重连
+  //   - aim-gateway 自身调用 PushMessage 推送 ReconnectPayload 给客户端
+  rpc DrainNotify(DrainNotifyReq) returns (DrainNotifyResp);
+}
+
+// ============================================================
+// PushMessage — 聊天消息投递
+// ============================================================
+
+// PushMessageReq — 投递聊天消息请求
+message PushMessageReq {
+  int64 message_id = 1;           // 消息全局唯一 ID
+  int64 conversation_id = 2;     // 会话 ID
+  string conversation_type = 3;   // 会话类型：single/group
+  string message_type = 4;        // 消息类型：text/image/voice/etc
+  string content = 5;            // 消息内容
+  int64 sender_id = 6;           // 发送者用户 ID
+  int64 sent_at = 7;             // 发送时间戳（毫秒）
+  string client_msg_id = 8;      // 客户端消息 ID（用于去重）
+  repeated string mentions = 9;  // 被 @ 的用户 ID 列表
+  int64 target_user_id = 10;     // 目标用户 ID（投递到此用户在本节点的所有连接）
+}
+
+// PushMessageResp — 投递聊天消息响应
+message PushMessageResp {
+  bool success = 1;  // 是否成功投递到网关节点
+}
+
+// ============================================================
+// PushPresence — 在线状态变更推送
+// ============================================================
+
+// PushPresenceReq — 推送用户在线状态请求
+message PushPresenceReq {
+  int64 user_id = 1;    // 用户 ID
+  string status = 2;    // 状态：online/offline/typing
+  int64 updated_at = 3; // 状态变更时间戳（毫秒）
+}
+
+// PushPresenceResp — 推送用户在线状态响应
+message PushPresenceResp {
+  bool success = 1;  // 是否成功推送
+}
+
+// ============================================================
+// KickUser — 踢出用户连接
+// ============================================================
+
+// KickUserReq — 踢出用户请求
+message KickUserReq {
+  int64 user_id = 1;    // 用户 ID
+  string device_id = 2; // 设备 ID（空字符串表示踢掉所有设备）
+  string reason = 3;   // 踢人原因
+}
+
+// KickUserResp — 踢出用户响应
+message KickUserResp {
+  int32 kicked_count = 1;  // 被踢出的连接数量
+}
+
+// ============================================================
+// DrainNotify — 网关节点下线通知
+// ============================================================
+
+// DrainNotifyReq — 通知网关节点即将关闭请求
+message DrainNotifyReq {
+  int64 drain_timeout_ms = 1;  // drain 超时时间（毫秒），客户端需在此时间内重连
+  string gateway_node_id = 2;  // 网关节点 ID
+}
+
+// DrainNotifyResp — 通知网关节点即将关闭响应
+message DrainNotifyResp {
+  int32 affected_count = 1;  // 受影响的连接数量
+}

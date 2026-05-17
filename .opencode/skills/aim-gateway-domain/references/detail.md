@@ -5,3 +5,210 @@
 - 有状态服务，根据 User_ID 做一致性哈希，确保同一用户落在固定网关节点
 - 使用 150+ 虚拟节点/物理节点，减少 rebalancing 影响
 - 节点下线前推送 reconnect 帧，提供 5-10s drain 窗口，避免惊群重连
+
+## 已实现 auth REST 代理
+
+- 实现位置：`app/gateway/api`。
+- REST 规格：`app/gateway/api/gateway.api`。
+- 服务入口：`app/gateway/api/gateway.go`。
+- Auth RPC 客户端注入：`app/gateway/api/internal/svc/service_context.go`。
+- Auth RPC 服务发现：`app/gateway/api/internal/svc/service_context.go` 通过 `app/shared/nacos` 注册 Nacos 适配的 gRPC resolver（scheme `nacos`），创建 `zrpc` 客户端使用 `nacos:///auth.rpc` 目标。Resolver 订阅 Nacos 实例变更，auth 后启动不会导致 gateway panic，实例上线后自动发现；`app/gateway/api/etc/gateway-api.yaml` 的 `AuthRpc` 块是 Nacos 配置，不再使用 `AuthRpc.Etcd`。
+- Nacos gRPC resolver（scheme `nacos`）实现：`app/shared/nacos/resolver.go`，通过 `NamingClient.Subscribe` 监听服务实例变更并更新 gRPC address list；支持空初始实例（auth 后启动不 panic）、实例上线动态添加、下线动态移除。
+- Docker Compose 配置：`docker-compose.yaml` 将 `app/gateway/api/etc/gateway-api.yaml` 挂载到容器内 `/app/etc/gateway-api.yaml`，与 `app/gateway/api/gateway.go` 默认 `-f etc/gateway-api.yaml` 保持一致；`AuthRpc.ServerAddr` 在 Compose 网络内使用 `nacos:8848`。
+- JWT 本地验签：`app/shared/jwt`。
+- `Authorization` header 上下文传递：`app/gateway/api/internal/authctx`。
+- REST 统一响应包装：`app/gateway/api/internal/handler/response.go` 通过 go-zero `httpx.SetOkHandler` / `httpx.SetErrorHandlerCtx` 输出 `{code,msg,body}`。
+- go-zero OTel/Jaeger：`app/gateway/api/etc/gateway-api.yaml` 的 `Telemetry` 块使用 `Batcher: otlphttp`、`Endpoint: jaeger:4318`、`OtlpHttpPath: /v1/traces`，依赖 `rest.RestConf` 内嵌的 `service.ServiceConf.Telemetry` 自动启动 trace agent。
+
+### 闭环边界
+
+- `register/login/refresh` 只做 REST -> auth RPC 转发，不在 gateway 持有凭证状态。
+- `logout` 是 gateway 的本地 JWT 验签边界：从 Bearer token 解析 `user_id` 和 `device_id`，再调用 auth RPC 注销 refresh token。
+- AccessToken 签发仍属于 auth 域；gateway 只负责快速验签和代理转发。
+- auth RPC 返回的错误由 `sanitizeAuthRPCError` 处理：通过 `errorx.FromGRPCError` 从 gRPC status 中提取 biz code（40100/unauthenticated, 40900/conflict 等业务错误保留原文透传），基础设施错误（Internal/Unavailable/DataLoss 等）sanitize 为 `"internal error"`；非 gRPC 错误（网络超时等）记录日志后返回 `50000/"internal error"`。
+- `CodeError` 实现了 `GRPCStatus()` 方法，gRPC 框架自动将 biz code 类别映射为对应的 gRPC status code（如 40100→Unauthenticated, 40900→AlreadyExists），message 保留原文。
+- HTTP 错误响应 `response.go`：优先级依次尝试 `*errorx.CodeError` → `errorx.FromGRPCError` → gRPC status 兜底 sanitize → 普通 error。
+- `httpStatusFromCode` 支持 40xxx-59xxx 范围（code/100 自动映射，clamp [400,511]）和 sentinel codes（1001-1006，显式语义映射：1001/1004/1005→401, 1002→404, 1003→409, 1006→403）。
+
+### 测试与验证
+
+- 代理逻辑测试：`app/gateway/api/internal/logic/auth/proxy_logic_test.go`。
+- Logout JWT 测试：`app/gateway/api/internal/logic/auth/logout_logic_test.go`。
+- 统一响应测试：`app/gateway/api/internal/handler/response_test.go`。
+- 配置加载测试：`app/gateway/api/internal/config/config_test.go` 覆盖 Telemetry 字段。
+- Nacos 注册/发现适配测试：`app/shared/nacos`，包括 register、deregister、BuildDirectTarget、gRPC resolver 构建、空实例回调、实例上线/下线动态更新。
+- 关键覆盖率目标：`app/gateway/api/internal/logic/auth` 保持 80% 以上。
+- 关键验证命令：`goctl api validate -api app/gateway/api/gateway.api`、`go mod tidy`、`go build ./...`、`go test -coverprofile=count.out ./...`、`go vet ./...`、`golangci-lint run ./...`。
+
+## 已实现 WebSocket 端点
+
+### WebSocket `/ws` 端点
+
+- 实现位置：`app/gateway/api/internal/handler/ws/ws_handler.go`。
+- 路由注册：`app/gateway/api/internal/handler/routes.go`，`GET /ws` 路由独立挂载在根路径 `/ws`，不使用 `/api/auth` 前缀。
+- JWT 验签：仅支持 `Authorization: Bearer <token>` header，验签失败在 upgrade 前返回 JSON `CodeError`；禁止 `?token=<token>`，避免 JWT 泄露到访问日志、浏览器历史和代理日志。
+- Protobuf WS 帧协议：`shared/proto/ws/ws.proto` 定义 `FrameType` 枚举和 `WsFrame` 主帧格式，以及所有 Payload 消息类型。
+- Protobuf 代码生成：`shared/proto/ws/pb/ws.pb.go`，使用 `protoc --go_out=. ws.proto` 生成。
+- 连接管理：`app/gateway/api/internal/ws/manager.go`，`Manager` 按 `user_id + device_id` 注册/注销连接，支持多设备同一用户。
+- 帧编解码：`app/gateway/api/internal/ws/frame.go`，`EncodeFrame`/`DecodeFrame` 负责 WsFrame 序列化，`EncodePayload`/`DecodePayload` 负责各 Payload 类型序列化，`BuildFrame`/`NewServerAck` 构建响应帧。
+- JWT Token 提取：`app/gateway/api/internal/ws/auth/token.go`，`ExtractAndValidate` 组合提取和验签，返回 `*jwt.Claims`。
+- 心跳处理：收到 `FRAME_TYPE_HEARTBEAT` 返回 `FRAME_TYPE_SERVER_ACK`。
+- 消息处理：收到 `FRAME_TYPE_SEND_MESSAGE` 返回 `FRAME_TYPE_SERVER_ACK`（不转发 core）。
+- 依赖：`github.com/coder/websocket`（已添加），`google.golang.org/protobuf`。
+
+### WebSocket 配置
+
+- 配置定义：`app/gateway/api/internal/config/config.go` 的 `WebSocket` struct，字段包括 `OriginPatterns`、`ReadLimit`、`WriteLimit`、`PongWait`、`PingPeriod`、`MaxMsgSize`、`ServerAckDelay`、`HeartbeatInterv`；`OriginPatterns` 传给 `coder/websocket.AcceptOptions`，默认仅允许同源请求。
+- 配置文件：`app/gateway/api/etc/gateway-api.yaml` 的 `WebSocket` 块。
+
+### 测试
+
+- 帧编解码测试：`app/gateway/api/internal/ws/frame_test.go`（8 个测试用例）。
+- 连接管理测试：`app/gateway/api/internal/ws/manager_test.go`（11 个测试用例，含并发测试）。
+- Token 提取测试：`app/gateway/api/internal/ws/auth/token_test.go`（9 个测试用例）。
+
+### 闭环边界
+
+- `/ws` 不转发消息到 core/logic，仅返回 `FRAME_TYPE_SERVER_ACK`。
+- 连接注销在 context cancel 或 disconnect 时触发。
+- 心跳和消息 ACK 使用 `FRAME_TYPE_SERVER_ACK` 帧类型。
+
+## 已实现 GatewayService gRPC 服务端
+
+实现位置：`app/gateway/rpc`（gRPC server）。
+
+### 四个 RPC 方法
+
+Proto 定义：`shared/proto/gateway/gateway.proto`，生成的 pb 代码在 `shared/proto/gateway/pb/`。
+
+| RPC | 用途 | 调用方 |
+| --- | --- | --- |
+| `PushMessage` | 将聊天消息投递到目标用户的 WebSocket 连接 | aim-core/Delivery Consumer |
+| `PushPresence` | 推送用户在线状态变更通知给目标用户的好友 | aim-core/Presence Service |
+| `KickUser` | 踢下线指定用户设备（多设备管理/被迫下线） | aim-auth / 管理员后台 |
+| `DrainNotify` | 通知网关节点进行优雅迁移（会话 drain） | Nacos 服务发现 / 运维工具 |
+
+### PushMessage
+
+- 请求：`PushMessageReq`（message_id, conversation_id, conversation_type, message_type, content, sender_id, sent_at, client_msg_id, mentions）
+- 响应：`PushMessageResp`（success）
+- 内部实现：查找 `user_id + device_id` 对应的本地 WebSocket 连接，写入 `FRAME_TYPE_PUSH_MESSAGE` 帧
+- 投递成功（用户在线）返回 `success=true`；用户不在线也返回 `success=true`（消息已在投递链路中处理）
+
+### PushPresence
+
+- 请求：`PushPresenceReq`（user_id, status, updated_at）
+- 响应：`PushPresenceResp`（success）
+- 内部实现：向 `notify_user_ids` 列表中的用户推送 `FRAME_TYPE_PUSH_PRESENCE` 帧
+
+### KickUser
+
+- 请求：`KickUserReq`（user_id, device_id, reason）
+- 响应：`KickUserResp`（kicked_count）
+- `device_id` 为空字符串踢掉所有设备，否则只踢指定设备
+- reason 取值：`duplicate_login` / `admin_kick` / `security`
+
+### DrainNotify
+
+- 请求：`DrainNotifyReq`（drain_timeout_ms, gateway_node_id）
+- 响应：`DrainNotifyResp`（affected_count）
+- 内部实现：向所有连接推送 `FRAME_TYPE_RECONNECT` 帧，等待 drain_timeout_ms 后关闭连接
+
+## 已实现 CoreRpc 客户端
+
+实现位置：`app/gateway/rpc`（gRPC client，调用 aim-core）。
+
+### CoreRpc 配置
+
+配置定义：`app/gateway/rpc/internal/config/config.go` 的 `CoreRpcConf`。
+
+```go
+type CoreRpcConf struct {
+    zrpc.RpcClientConf
+}
+```
+
+目标地址通过 Nacos resolver 发现（scheme `nacos:///core.rpc`），`app/gateway/rpc/etc/gateway-rpc.yaml` 的 `CoreRpc` 块配置 Nacos 注册中心地址。
+
+### Transfer 调用流程
+
+1. WebSocket 收到 `FRAME_TYPE_SEND_MESSAGE`（SendMessagePayload）
+2. JWT 验签通过后，提取 `sender_id` / `device_id`
+3. 调用 `core.Transfer(TransferReq)` gRPC
+4. 根据返回结果映射到 `ServerAckPayload` 回传给客户端
+
+## ACK 映射表
+
+`core.Transfer` gRPC 返回结果映射到 `FRAME_TYPE_SERVER_ACK`（ServerAckPayload）：
+
+| Core gRPC 结果 | WS AckStatus | WS code | 客户端行为 |
+| --- | --- | --- | --- |
+| Transfer 成功 | `ACK_STATUS_ACCEPTED` | `0` | 标记消息已发送/已接受 |
+| 重复 client_msg_id（已有 message_id） | `ACK_STATUS_ACCEPTED` | `0` | 使用返回的已有 message_id |
+| 无效输入（参数校验失败） | `ACK_STATUS_REJECTED` | `40000` | 显示校验错误，不自动重试 |
+| 身份未认证（token 无效/已过期） | `ACK_STATUS_REJECTED` | `40100` | 刷新 token 或重新登录 |
+| 被禁言/拉黑/非会话成员 | `ACK_STATUS_REJECTED` | `40300` | 显示业务错误，不自动重试 |
+| 会话不存在 | `ACK_STATUS_REJECTED` | `40400` | 显示业务错误，不自动重试 |
+| 配额/限流（滑动窗口触发） | `ACK_STATUS_REJECTED` | `42900` | 显示配额错误，仅在策略延迟后重试 |
+| core 不可用/deadline/Kafka 瞬时故障 | `ACK_STATUS_RETRYABLE` | `50000` | 保留本地 pending 消息，用相同 client_msg_id 重试 |
+
+### ServerAckPayload 结构
+
+```protobuf
+enum AckStatus {
+  ACK_STATUS_UNSPECIFIED = 0;
+  ACK_STATUS_ACCEPTED = 1;
+  ACK_STATUS_REJECTED = 2;
+  ACK_STATUS_RETRYABLE = 3;
+}
+
+message ServerAckPayload {
+  int64     ack_seq       = 1; // 确认的客户端序列号
+  string    client_msg_id = 2; // 确认的客户端消息 ID
+  int32     code          = 3; // 0=ok，否则为 shared/errorx biz code
+  string    msg           = 4; // 错误描述
+  AckStatus status        = 5; // ACCEPTED / REJECTED / RETRYABLE
+  int64     message_id    = 6; // 服务端分配的消息 ID（accepted 时 > 0）
+}
+```
+
+`ACK_STATUS_REJECTED`：业务无效，不自动重试。
+`ACK_STATUS_RETRYABLE`：瞬时故障，客户端可用相同 client_msg_id 重试。
+
+## Presence Heartbeat 流程
+
+WebSocket 心跳 `FRAME_TYPE_HEARTBEAT` 处理流程：
+
+1. 收到心跳请求，更新 Redis 在线状态（`user_id + device_id` → 在线 + TTL）
+2. 发布 Kafka presence 事件（用户上线/状态变更），供 aim-core Presence Service 消费
+3. 返回 `FRAME_TYPE_SERVER_ACK`（heartbeat 单独 ACK，不走 core.Transfer）
+
+Redis key 格式：`presence:{user_id}:{device_id}`，TTL = `PingPeriod * 2`（约 60s）。
+
+Kafka topic：`aim.presence`，key = `user_id`，用于保证同一用户状态变更有序。
+
+## Token 过期生命周期
+
+### Token 过期帧
+
+```protobuf
+FRAME_TYPE_TOKEN_EXPIRED = 107;
+
+message TokenExpiredPayload {
+  int64  expired_at = 1; // 过期时间戳
+  string reason     = 2; // access_token_expired
+}
+```
+
+### 处理流程
+
+1. JWT 验签时记录 `exp`（过期时间戳）
+2. 在 WebSocket 读循环或定时器中检查 token 是否即将过期
+3. 推送 `FRAME_TYPE_TOKEN_EXPIRED` 给客户端
+4. 关闭 WebSocket 连接
+5. 客户端调用 `/api/auth/refresh` 获取新 token，然后重新连接 `/ws`
+
+### 依赖方向
+
+- aim-core → aim-logic（单向）：core 通过 gRPC 查询 logic 的好友/群组关系（Redis TTL 缓存），logic 不反向依赖 core
+- gateway → core：gateway 通过 gRPC 调用 core.Transfer，gateway 作为 Ingress 不反向依赖 core 内部状态

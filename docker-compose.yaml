@@ -36,8 +36,8 @@ services:
     environment:
       PGPASSWORD: password
     volumes:
-      - ./app/auth/rpc/model/migrations:/migrations:ro
-    command: ["sh", "-c", "psql -h postgres -U user -d aim_auth -f /migrations/001_create_user_credentials.up.sql"]
+      - ./app/auth/rpc/model/schema.sql:/schema.sql:ro
+    command: ["sh", "-c", "psql -h postgres -U user -d aim_auth -f /schema.sql"]
     networks:
       - aim-network
 
@@ -50,7 +50,7 @@ services:
       - "8888:8888"  # REST API
       - "9090:9090"  # gRPC
     volumes:
-      - ./app/gateway/etc/gateway.yaml:/app/etc/gateway.yaml:ro
+      - ./app/gateway/api/etc/gateway-api.yaml:/app/etc/gateway-api.yaml:ro
       - gateway_log:/app/log
     depends_on:
       redis:

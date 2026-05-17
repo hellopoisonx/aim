@@ -1,0 +1,48 @@
+// Proto3 syntax
+syntax = "proto3";
+
+package core;
+
+option go_package = "github.com/hellopoisonx/aim/app/core/rpc/pb";
+
+// TransferService 处理来自网关的消息发送请求
+// 主要职责：
+//   - 验证发送者是否为会话成员
+//   - 检查发送者是否被禁言或拉黑
+//   - 配额检查（滑动窗口限流）
+//   - 消息去重（基于 client_msg_id）
+//   - 发布消息到 Kafka
+// 返回：core.Transfer 返回 gRPC 状态码，网关负责映射到 WebSocket ACK 状态码
+service TransferService {
+  // Transfer 将消息路由到核心服务进行投递
+  // 网关调用此 RPC 将用户发送的消息交给核心处理
+  rpc Transfer(TransferReq) returns (TransferResp);
+}
+
+// TransferReq 消息发送请求
+message TransferReq {
+  // 发送者用户 ID
+  int64 sender_id = 1;
+  // 设备 ID（用于设备维度去重和限流）
+  string device_id = 2;
+  // 会话 ID
+  int64 conversation_id = 3;
+  // 消息类型（text/image/file/voice/video等）
+  string message_type = 4;
+  // 消息内容
+  string content = 5;
+  // 客户端消息 ID（用于去重和幂等）
+  string client_msg_id = 6;
+  // 被 @ 的用户 ID 列表
+  repeated string mentions = 7;
+}
+
+// TransferResp 消息发送响应
+message TransferResp {
+  // 服务端分配的消息 ID
+  int64 message_id = 1;
+  // 客户端消息 ID（回传用于确认）
+  string client_msg_id = 2;
+  // 消息被服务端接受的时间戳（Unix 毫秒）
+  int64 accepted_at = 3;
+}

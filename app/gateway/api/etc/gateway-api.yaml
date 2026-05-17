@@ -1,0 +1,63 @@
+Name: gateway-api
+Host: 0.0.0.0
+Port: 8888
+Telemetry:
+  Name: gateway-api
+  Endpoint: jaeger:4318
+  Sampler: 1.0
+  Batcher: otlphttp
+  OtlpHttpPath: /v1/traces
+AuthRpc:
+  ServerAddr: nacos:8848
+  NamespaceID: ""
+  Group: DEFAULT_GROUP
+  Cluster: DEFAULT
+  ServiceName: auth.rpc
+  AdvertiseIP: ""
+  AdvertisePort: 0
+  Ephemeral: true
+  Weight: 1
+  TimeoutMs: 5000
+  Username: ""
+  Password: ""
+  LogDir: /app/log/nacos
+  CacheDir: /tmp/nacos/cache
+  LogLevel: info
+CoreRpc:
+  ServerAddr: nacos:8848
+  NamespaceID: ""
+  Group: DEFAULT_GROUP
+  Cluster: DEFAULT
+  ServiceName: core.rpc
+  AdvertiseIP: ""
+  AdvertisePort: 0
+  Ephemeral: true
+  Weight: 1
+  TimeoutMs: 5000
+  Username: ""
+  Password: ""
+  LogDir: /app/log/nacos
+  CacheDir: /tmp/nacos/cache
+  LogLevel: info
+Auth:
+  AccessSecret: aim-dev-access-secret
+WebSocket:
+  OriginPatterns: []
+  ReadLimit: 32768
+  WriteLimit: 32768
+  PongWait: 30
+  PingPeriod: 15
+  MaxMsgSize: 1024
+  ServerAckDelay: 5
+  HeartbeatInterv: 30
+Redis:
+  Addr: 127.0.0.1:6379
+  Password: ""
+  DB: 0
+  PresenceTTL: 60
+Kafka:
+  Brokers:
+    - 127.0.0.1:9092
+  PresenceTopic: aim.presence.events
+GatewayRpc:
+  ListenOn: 127.0.0.1:9090

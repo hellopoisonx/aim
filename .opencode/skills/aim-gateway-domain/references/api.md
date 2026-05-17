@@ -2,17 +2,50 @@
 
 ## REST API - `/api`
 
+### 规范
+
+- 统一返回http status code + json
+```json5
+{
+    "code": xxxx, // 业务错误码 (0 -> ok)
+    "msg": "xxx", // 错误详情/暴露给前端的消息
+    "body": any // 返回给前端的数据
+}
+```
+
+- 对于grpc内部的错误 对外包装为 `internal error`, 但日志以及链路追踪上下文仍然保留原始错误链
+
 ### JWT 鉴权
 
 - Headers.Authorization: Bearer <Token>
 - payload: user_id && device_id
 
-### 代理转发  `auth` - `/auth`
+### 代理转发  `auth` - `/api/auth`
 
 - `/register` 参考 `aim-auth-domain` 中的 gRPC api 定义 **无需鉴权**
 - `/login` 参考 `aim-auth-domain` 中的 gRPC api 定义 **无需鉴权**
 - `/logout` 解析 JWT payload 填入 gRPC 请求参数 **需要鉴权**
 - `/refresh` 参考 `aim-auth-domain` 中的 gRPC api 定义 **无需鉴权**
+
+当前实现位置：`app/gateway/api`。
+
+| Method | Path | Auth | Handler |
+| --- | --- | --- | --- |
+| POST | `/api/auth/register` | 无需鉴权 | `internal/handler/auth/register_handler.go` |
+| POST | `/api/auth/login` | 无需鉴权 | `internal/handler/auth/login_handler.go` |
+| POST | `/api/auth/refresh` | 无需鉴权 | `internal/handler/auth/refresh_handler.go` |
+| POST | `/api/auth/logout` | `Authorization: Bearer <access_token>` | `internal/handler/auth/logout_handler.go` |
+
+`logout` 使用 `internal/authctx` 将 HTTP `Authorization` header 传入 logic，`internal/logic/auth/logout_logic.go` 本地验证 JWT 后调用 `aim-auth Logout`。
+
+重新生成 REST 脚手架：
+
+```bash
+goctl api validate -api app/gateway/api/gateway.api
+goctl api go -api app/gateway/api/gateway.api -dir app/gateway/api --style go_zero
+```
+
+重新生成后需要检查 `logout_handler.go` 是否仍把 `Authorization` header 写入 `authctx`；goctl 可能覆盖 handler。
 
 ### `ws` 升级 - `/ws`
 
@@ -108,6 +141,20 @@ message DrainNotifyResp {
   bool success = 1;
 }
 ```
+
+## CoreRpc 配置
+
+配置路径：`app/gateway/rpc/etc/gateway-rpc.yaml`，配置结构定义：`app/gateway/rpc/internal/config/config.go`。
+
+```go
+type CoreRpcConf struct {
+    zrpc.RpcClientConf // 包含 Target / App / Timeout 等字段
+}
+```
+
+目标地址通过 Nacos resolver 发现（scheme `nacos:///core.rpc`），需在配置中指定 Nacos 注册中心地址（与 AuthRpc 配置方式一致）。
+
+调用示例：`app/gateway/rpc/internal/svc/service_context.go` 注入 `CoreRpc` 到 ServiceContext，供 `Transfer` logic 使用。
 
 ## `ws` 通信
 ```protobuf

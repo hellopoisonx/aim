@@ -1,0 +1,155 @@
+syntax = "proto3";
+
+package ws;
+
+option go_package = "github.com/hellopoisonx/aim/shared/proto/ws";
+
+// ============================================================
+// WebSocket 帧类型枚举
+// ============================================================
+
+enum FrameType {
+  FRAME_TYPE_UNSPECIFIED = 0;
+
+  // ---- 客户端 → 网关 ----
+  FRAME_TYPE_SEND_MESSAGE = 1;  // 发送聊天消息
+  FRAME_TYPE_HEARTBEAT = 2;     // 心跳保活
+  FRAME_TYPE_TYPING = 3;        // 正在输入
+  FRAME_TYPE_READ_RECEIPT = 4;  // 已读回执
+  FRAME_TYPE_ACK = 5;           // 客户端消息确认
+
+  // ---- 网关 → 客户端 ----
+  FRAME_TYPE_PUSH_MESSAGE = 101;      // 推送聊天消息
+  FRAME_TYPE_PUSH_PRESENCE = 102;      // 推送在线状态
+  FRAME_TYPE_PUSH_NOTIFICATION = 103;  // 推送系统通知
+  FRAME_TYPE_PUSH_TYPING = 104;         // 推送输入状态
+  FRAME_TYPE_RECONNECT = 105;           // 网关要求重连（drain 窗口）
+  FRAME_TYPE_SERVER_ACK = 106;          // 服务端确认
+  FRAME_TYPE_TOKEN_EXPIRED = 107;       // Token 已过期
+}
+
+// ============================================================
+// AckStatus — 服务端确认状态枚举
+// ============================================================
+
+enum AckStatus {
+  ACK_STATUS_UNSPECIFIED = 0;
+  ACK_STATUS_ACCEPTED = 1;    // 消息已被接受
+  ACK_STATUS_REJECTED = 2;    // 消息被拒绝
+  ACK_STATUS_RETRYABLE = 3;   // 可重试
+}
+
+// ============================================================
+// WsFrame — 所有 WebSocket 通信统一使用此帧格式封装。
+//
+// 协议流程：
+//   1. 客户端序列化具体 Payload（如 SendMessagePayload）为 bytes
+//   2. 填入 WsFrame.payload，设置 type 和 seq
+//   3. 序列化 WsFrame 为二进制，通过 WebSocket 发送
+//   4. 接收方反序列化 WsFrame，根据 type 决定 payload 的具体类型
+//
+// 序列号规则：
+//   - 客户端 seq：单向递增，由客户端维护
+//   - 服务端 seq：单向递增，由网关维护
+//   - ACK 匹配：ServerAck.ack_seq 匹配客户端 seq；ClientAck.ack_seq 匹配服务端 seq
+// ============================================================
+
+message WsFrame {
+  FrameType type = 1;
+  int64 seq = 2;
+  bytes payload = 3;
+  int64 timestamp = 4;
+}
+
+// ============================================================
+// 客户端 → 网关 消息体
+// ============================================================
+
+// SendMessagePayload — 客户端发送聊天消息
+message SendMessagePayload {
+  int64 conversation_id = 1;
+  string message_type = 2;
+  string content = 3;
+  string client_msg_id = 4;
+  repeated string mentions = 5;
+}
+
+// HeartbeatPayload — 心跳保活
+message HeartbeatPayload {
+  int64 last_seq = 1;
+}
+
+// TypingPayload — 正在输入通知
+message TypingPayload {
+  int64 conversation_id = 1;
+}
+
+// ReadReceiptPayload — 已读回执
+message ReadReceiptPayload {
+  int64 conversation_id = 1;
+  int64 last_msg_id = 2;
+}
+
+// ClientAckPayload — 客户端确认收到服务端推送
+message ClientAckPayload {
+  int64 ack_seq = 1;
+}
+
+// ============================================================
+// 网关 → 客户端 消息体
+// ============================================================
+
+// PushMessagePayload — 推送聊天消息
+message PushMessagePayload {
+  int64 message_id = 1;
+  int64 conversation_id = 2;
+  string message_type = 3;
+  string content = 4;
+  int64 sender_id = 5;
+  int64 sent_at = 6;
+  string conversation_type = 7;
+  string client_msg_id = 8;
+}
+
+// PushPresencePayload — 推送在线状态变更
+message PushPresencePayload {
+  int64 user_id = 1;
+  string status = 2;
+  int64 updated_at = 3;
+}
+
+// PushNotificationPayload — 推送系统通知
+message PushNotificationPayload {
+  string notification_type = 1;
+  string title = 2;
+  string body = 3;
+  int64 related_id = 4;
+}
+
+// PushTypingPayload — 推送输入状态
+message PushTypingPayload {
+  int64 user_id = 1;
+  int64 conversation_id = 2;
+}
+
+// ReconnectPayload — 网关要求客户端重连（drain 窗口）
+message ReconnectPayload {
+  int64 reconnect_delay_ms = 1;
+  string gateway_node_id = 2;
+}
+
+// TokenExpiredPayload — 网关通知客户端 Token 已过期
+message TokenExpiredPayload {
+  int64 expired_at = 1;
+  string reason = 2;
+}
+
+// ServerAckPayload — 服务端确认收到客户端消息
+message ServerAckPayload {
+  int64 ack_seq = 1;
+  string client_msg_id = 2;
+  int32 code = 3;
+  string msg = 4;
+  AckStatus status = 5;
+  int64 message_id = 6;
+}

@@ -1,0 +1,65 @@
+syntax = "v1"
+
+info (
+	title:  "aim gateway api"
+	desc:   "AIM gateway auth proxy API"
+	author: "aim"
+)
+
+type RegisterRequest {
+	Email    string `json:"email" validate:"required,email"`
+	Password string `json:"password" validate:"required,min=8"`
+	Username string `json:"username,optional"`
+	Avatar   string `json:"avatar,optional"`
+	DeviceId string `json:"device_id" validate:"required"`
+}
+
+type RegisterResponse {
+	UserId int64 `json:"user_id"`
+}
+
+type LoginRequest {
+	Email    string `json:"email" validate:"required,email"`
+	Password string `json:"password" validate:"required,min=8"`
+	DeviceId string `json:"device_id" validate:"required"`
+}
+
+type LoginResponse {
+	UserId       int64  `json:"user_id"`
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token"`
+	ExpiresAt    int64  `json:"expires_at"`
+}
+
+type RefreshRequest {
+	RefreshToken string `json:"refresh_token" validate:"required"`
+}
+
+type RefreshResponse {
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token"`
+	ExpiresAt    int64  `json:"expires_at"`
+}
+
+type LogoutResponse {
+	Success bool `json:"success"`
+}
+
+@server (
+	prefix: /api/auth
+	group:  auth
+)
+service gateway-api {
+	@handler Register
+	post /register (RegisterRequest) returns (RegisterResponse)
+
+	@handler Login
+	post /login (LoginRequest) returns (LoginResponse)
+
+	@handler Refresh
+	post /refresh (RefreshRequest) returns (RefreshResponse)
+
+	@handler Logout
+	post /logout returns (LogoutResponse)
+}
+

@@ -39,7 +39,7 @@ AIM — multi-user real-time IM system with self-deployed AI assistant. Go-zero 
 - 不要手动展开 go-zero 相关的代码, 使用 `goctl`
 - 代码生成或修改后不要跳过 mod tidy, build verify, test, coverage test, vet test, lint
 - 不要造成循环依赖
-- 不要生成毫无根据、无法溯源的代码。每此生成/更改代码后必须在 `docs/` 目录下生成/更新对应的文档
+- 不要生成毫无根据、无法溯源的代码。每此生成/更改代码后必须在 `.opencode/skills/` 目录下生成/更新对应的文档
 - 不要假设 Redis/RedisBloom 命令在不同协议版本下的返回类型固定。例如 `BF.EXISTS` 在 RESP2 下可能返回 `int64(0/1)`，在 RESP3/go-redis 下可能返回 `bool`；必须用类型分支兼容并添加回归测试，避免将本地解码错误折叠成难排查的 `internal error`
 
 ## UNIQUE STYLES
@@ -71,7 +71,7 @@ goctl api validate -api <file>.api
 go test ./...
 
 # coverage test
-go test -coverprofile=count.out ./...
+go test -cover ./...
 ```
 
 ## NOTES
