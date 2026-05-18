@@ -208,7 +208,7 @@ const file_core_proto_rawDesc = "" +
 	"\vaccepted_at\x18\x03 \x01(\x03R\n" +
 	"acceptedAt2D\n" +
 	"\x0fTransferService\x121\n" +
-	"\bTransfer\x12\x11.core.TransferReq\x1a\x12.core.TransferRespB-Z+github.com/hellopoisonx/aim/app/core/rpc/pbb\x06proto3"
+	"\bTransfer\x12\x11.core.TransferReq\x1a\x12.core.TransferRespB\x06Z\x04./pbb\x06proto3"
 
 var (
 	file_core_proto_rawDescOnce sync.Once

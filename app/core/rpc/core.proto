@@ -3,7 +3,7 @@ syntax = "proto3";
 
 package core;
 
-option go_package = "github.com/hellopoisonx/aim/app/core/rpc/pb";
+option go_package = "./pb";
 
 // TransferService 处理来自网关的消息发送请求
 // 主要职责：

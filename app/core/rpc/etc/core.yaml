@@ -1,0 +1,14 @@
+Name: core.rpc
+ListenOn: 0.0.0.0:8080
+SnowflakeMachineID: 1
+Redis:
+  Addr: 127.0.0.1:6379
+  Password: ""
+  DB: 0
+LogicRpc:
+  ServerAddr: nacos:8848
+  ServiceName: logic.rpc
+KqPusherConf:
+  Brokers:
+    - 127.0.0.1:9092
+  Topic: aim-message-transfer
