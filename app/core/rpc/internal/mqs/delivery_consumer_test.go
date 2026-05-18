@@ -1,0 +1,260 @@
+package mqs
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"testing"
+
+	"github.com/alicebob/miniredis/v2"
+	"github.com/hellopoisonx/aim/app/core/rpc/internal/config"
+	"github.com/hellopoisonx/aim/app/core/rpc/internal/rpc"
+	"github.com/hellopoisonx/aim/app/core/rpc/internal/svc"
+	gwpb "github.com/hellopoisonx/aim/shared/proto/gateway/pb"
+	"github.com/redis/go-redis/v9"
+	"github.com/stretchr/testify/require"
+	"github.com/zeromicro/go-queue/kq"
+	"github.com/zeromicro/go-zero/core/service"
+)
+
+// --- Fake implementations ---
+
+type fakeGatewayClient struct {
+	pushes   []pushRecord
+	pushErr  error
+	pushResp *gwpb.PushMessageResp
+}
+
+type pushRecord struct {
+	ctx  context.Context
+	req  *gwpb.PushMessageReq
+}
+
+func (f *fakeGatewayClient) PushMessage(ctx context.Context, req *gwpb.PushMessageReq) (*gwpb.PushMessageResp, error) {
+	if f.pushErr != nil {
+		return nil, f.pushErr
+	}
+	f.pushes = append(f.pushes, pushRecord{ctx: ctx, req: req})
+	if f.pushResp != nil {
+		return f.pushResp, nil
+	}
+	return &gwpb.PushMessageResp{Success: true}, nil
+}
+
+func newFakeGatewayClient() *fakeGatewayClient {
+	return &fakeGatewayClient{pushResp: &gwpb.PushMessageResp{Success: true}}
+}
+
+// Ensure fakeGatewayClient implements rpc.GatewayPusher
+var _ rpc.GatewayPusher = (*fakeGatewayClient)(nil)
+
+// --- Test helpers ---
+
+func newTestServiceContext(t *testing.T, gwClient rpc.GatewayPusher) *svc.ServiceContext {
+	mr := miniredis.NewMiniRedis()
+	require.NoError(t, mr.Start())
+	t.Cleanup(func() { mr.Close() })
+
+	client := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	t.Cleanup(func() { client.Close() })
+
+	return &svc.ServiceContext{
+		RedisClient:   client,
+		GatewayClient: gwClient,
+	}
+}
+
+// --- Test cases ---
+
+func TestDeliveryConsumer_Consume_Success(t *testing.T) {
+	fakeGw := newFakeGatewayClient()
+	svcCtx := newTestServiceContext(t, fakeGw)
+	consumer := NewDeliveryConsumer(context.Background(), svcCtx)
+
+	event := transferEvent{
+		MessageID:      12345,
+		SenderID:       100,
+		DeviceID:       "device-1",
+		ConversationID: 200,
+		MessageType:    "text",
+		Content:        "hello world",
+		ClientMsgID:    "client-msg-1",
+		Mentions:       []string{"alice", "bob"},
+		Timestamp:      1700000000000,
+	}
+	value, err := json.Marshal(event)
+	require.NoError(t, err)
+
+	err = consumer.Consume(context.Background(), "200", string(value))
+	require.NoError(t, err)
+	require.Len(t, fakeGw.pushes, 1)
+	require.Equal(t, int64(12345), fakeGw.pushes[0].req.MessageId)
+	require.Equal(t, int64(100), fakeGw.pushes[0].req.TargetUserId)
+	require.Equal(t, "text", fakeGw.pushes[0].req.MessageType)
+	require.Equal(t, "hello world", fakeGw.pushes[0].req.Content)
+}
+
+func TestDeliveryConsumer_Consume_InvalidJSON(t *testing.T) {
+	fakeGw := newFakeGatewayClient()
+	svcCtx := newTestServiceContext(t, fakeGw)
+	consumer := NewDeliveryConsumer(context.Background(), svcCtx)
+
+	err := consumer.Consume(context.Background(), "200", "invalid json{")
+	require.Error(t, err)
+	require.Len(t, fakeGw.pushes, 0)
+}
+
+func TestDeliveryConsumer_Consume_GatewayPushFailure(t *testing.T) {
+	fakeGw := &fakeGatewayClient{pushErr: errors.New("gateway unavailable")}
+	svcCtx := newTestServiceContext(t, fakeGw)
+	consumer := NewDeliveryConsumer(context.Background(), svcCtx)
+
+	event := transferEvent{
+		MessageID:      12345,
+		SenderID:       100,
+		ConversationID: 200,
+		MessageType:    "text",
+		Content:        "hello",
+		ClientMsgID:    "client-1",
+		Timestamp:      1700000000000,
+	}
+	value, err := json.Marshal(event)
+	require.NoError(t, err)
+
+	err = consumer.Consume(context.Background(), "200", string(value))
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "gateway unavailable")
+}
+
+func TestDeliveryConsumer_Consume_AllFields(t *testing.T) {
+	fakeGw := newFakeGatewayClient()
+	svcCtx := newTestServiceContext(t, fakeGw)
+	consumer := NewDeliveryConsumer(context.Background(), svcCtx)
+
+	event := transferEvent{
+		MessageID:      99999,
+		SenderID:       42,
+		DeviceID:       "dev-x",
+		ConversationID: 300,
+		MessageType:    "image",
+		Content:        "https://example.com/image.png",
+		ClientMsgID:    "msg-xyz",
+		Mentions:       []string{"alice"},
+		Timestamp:      1700000000000,
+	}
+	value, err := json.Marshal(event)
+	require.NoError(t, err)
+
+	err = consumer.Consume(context.Background(), "300", string(value))
+	require.NoError(t, err)
+	require.Len(t, fakeGw.pushes, 1)
+
+	push := fakeGw.pushes[0].req
+	require.Equal(t, int64(99999), push.MessageId)
+	require.Equal(t, int64(42), push.SenderId)
+	require.Equal(t, int64(300), push.ConversationId)
+	require.Equal(t, "image", push.MessageType)
+	require.Equal(t, "https://example.com/image.png", push.Content)
+	require.Equal(t, "msg-xyz", push.ClientMsgId)
+	require.Equal(t, []string{"alice"}, push.Mentions)
+	require.Equal(t, int64(1700000000000), push.SentAt)
+}
+
+func TestDeliveryConsumer_Consume_EmptyContent(t *testing.T) {
+	fakeGw := newFakeGatewayClient()
+	svcCtx := newTestServiceContext(t, fakeGw)
+	consumer := NewDeliveryConsumer(context.Background(), svcCtx)
+
+	event := transferEvent{
+		MessageID:      111,
+		SenderID:       10,
+		ConversationID: 50,
+		MessageType:    "text",
+		Content:        "",
+		ClientMsgID:    "client-empty",
+		Timestamp:      1700000000000,
+	}
+	value, err := json.Marshal(event)
+	require.NoError(t, err)
+
+	err = consumer.Consume(context.Background(), "50", string(value))
+	require.NoError(t, err)
+	require.Len(t, fakeGw.pushes, 1)
+	require.Equal(t, "", fakeGw.pushes[0].req.Content)
+}
+
+func TestDeliveryConsumer_Consume_NoMentions(t *testing.T) {
+	fakeGw := newFakeGatewayClient()
+	svcCtx := newTestServiceContext(t, fakeGw)
+	consumer := NewDeliveryConsumer(context.Background(), svcCtx)
+
+	event := transferEvent{
+		MessageID:      222,
+		SenderID:       20,
+		ConversationID: 60,
+		MessageType:    "text",
+		Content:        "no mentions",
+		ClientMsgID:    "client-no-mentions",
+		Mentions:       []string{},
+		Timestamp:      1700000000000,
+	}
+	value, err := json.Marshal(event)
+	require.NoError(t, err)
+
+	err = consumer.Consume(context.Background(), "60", string(value))
+	require.NoError(t, err)
+	require.Len(t, fakeGw.pushes, 1)
+	require.Empty(t, fakeGw.pushes[0].req.Mentions)
+}
+
+func TestDeliveryConsumer_Consume_MultipleMessages(t *testing.T) {
+	fakeGw := newFakeGatewayClient()
+	svcCtx := newTestServiceContext(t, fakeGw)
+	consumer := NewDeliveryConsumer(context.Background(), svcCtx)
+
+	event1 := transferEvent{
+		MessageID: 1, SenderID: 1, ConversationID: 1,
+		MessageType: "text", Content: "msg1", ClientMsgID: "c1", Timestamp: 1000,
+	}
+	value1, _ := json.Marshal(event1)
+	err := consumer.Consume(context.Background(), "1", string(value1))
+	require.NoError(t, err)
+
+	event2 := transferEvent{
+		MessageID: 2, SenderID: 2, ConversationID: 2,
+		MessageType: "text", Content: "msg2", ClientMsgID: "c2", Timestamp: 2000,
+	}
+	value2, _ := json.Marshal(event2)
+	err = consumer.Consume(context.Background(), "2", string(value2))
+	require.NoError(t, err)
+
+	require.Len(t, fakeGw.pushes, 2)
+	require.Equal(t, int64(1), fakeGw.pushes[0].req.MessageId)
+	require.Equal(t, int64(2), fakeGw.pushes[1].req.MessageId)
+}
+
+// --- Consumers registration test ---
+
+func TestConsumers_ReturnsQueueService(t *testing.T) {
+	fakeGw := newFakeGatewayClient()
+	svcCtx := &svc.ServiceContext{
+		GatewayClient: fakeGw,
+		Config: config.Config{
+			KqConsumerConf: kq.KqConf{
+				ServiceConf: service.ServiceConf{
+					Name: "test-consumer",
+					Mode: "dev",
+				},
+				Brokers:   []string{"127.0.0.1:9092"},
+				Group:     "test-group",
+				Topic:     "test-topic",
+				Offset:    "first",
+				Consumers: 1,
+				Processors: 1,
+			},
+		},
+	}
+
+	services := Consumers(context.Background(), svcCtx)
+	require.Len(t, services, 1)
+}

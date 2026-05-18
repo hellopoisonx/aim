@@ -3,7 +3,9 @@ package svc
 import (
 	"context"
 
+	"github.com/hellopoisonx/aim/app/core/rpc/internal/cache"
 	"github.com/hellopoisonx/aim/app/core/rpc/internal/config"
+	"github.com/hellopoisonx/aim/app/core/rpc/internal/rpc"
 	"github.com/hellopoisonx/aim/app/shared/nacos"
 	"github.com/hellopoisonx/aim/app/shared/tools"
 	logicpb "github.com/hellopoisonx/aim/app/logic/rpc/pb"
@@ -20,6 +22,8 @@ type ServiceContext struct {
 	Snowflake             *tools.Snowflake
 	KqPusher              *kq.Pusher
 	LogicPermissionClient logicpb.PermissionServiceClient
+	GatewayClient         rpc.GatewayPusher
+	PresenceStore         *cache.PresenceStore
 	namingClient          nacos.NamingClient
 }
 
@@ -68,11 +72,27 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		}
 	}
 
+	// Presence store (nil if not configured)
+	var presenceStore *cache.PresenceStore
+	if c.Presence.TTLSeconds > 0 {
+		presenceStore = cache.NewPresenceStore(redisClient, c.Presence.TTLSeconds)
+	}
+
+	// Gateway RPC client (nil if not configured)
+	var gatewayClient rpc.GatewayPusher
+	if c.GatewayRpc.Target != "" {
+		gw := rpc.NewGatewayClient(c.GatewayRpc.Target)
+		gatewayClient = gw
+		logx.Infof("gateway client initialized with target %s", c.GatewayRpc.Target)
+	}
+
 	return &ServiceContext{
 		Config:                c,
 		RedisClient:           redisClient,
 		Snowflake:             sf,
 		KqPusher:              kqPusher,
 		LogicPermissionClient: logicClient,
+		GatewayClient:         gatewayClient,
+		PresenceStore:         presenceStore,
 	}
 }

@@ -12,3 +12,17 @@ KqPusherConf:
   Brokers:
     - 127.0.0.1:9092
   Topic: aim-message-transfer
+KqConsumerConf:
+  Name: core-delivery-consumer
+  Brokers:
+    - 127.0.0.1:9092
+  Group: aim-core-delivery
+  Topic: aim-message-transfer
+  Offset: first
+  Consumers: 1
+  Processors: 1
+GatewayRpc:
+  ServiceName: gateway.rpc
+  Target: 127.0.0.1:9090
+Presence:
+  TTLSeconds: 30
