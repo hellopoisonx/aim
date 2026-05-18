@@ -13,6 +13,7 @@ type Querier interface {
 	GetFriendship(ctx context.Context, arg GetFriendshipParams) (GetFriendshipRow, error)
 	GetFriendshipBidirectional(ctx context.Context, arg GetFriendshipBidirectionalParams) ([]GetFriendshipBidirectionalRow, error)
 	GetMember(ctx context.Context, arg GetMemberParams) (GetMemberRow, error)
+	InsertMessage(ctx context.Context, arg InsertMessageParams) error
 	IsMemberMuted(ctx context.Context, arg IsMemberMutedParams) (IsMemberMutedRow, error)
 }
 

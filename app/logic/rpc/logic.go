@@ -1,10 +1,12 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/config"
+	"github.com/hellopoisonx/aim/app/logic/rpc/internal/mqs"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/server"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
@@ -34,6 +36,14 @@ func main() {
 	})
 	defer s.Stop()
 
+	// Run Kafka consumer alongside the RPC server via ServiceGroup
+	group := service.NewServiceGroup()
+	group.Add(s)
+	for _, svc := range mqs.Consumers(context.Background(), ctx) {
+		group.Add(svc)
+	}
+	defer group.Stop()
+
 	fmt.Printf("Starting rpc server at %s...\n", c.ListenOn)
-	s.Start()
+	group.Start()
 }

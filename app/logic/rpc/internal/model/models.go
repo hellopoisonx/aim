@@ -30,3 +30,14 @@ type Friendship struct {
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 }
+
+type Message struct {
+	ID             int64              `json:"id"`
+	ConversationID int64              `json:"conversation_id"`
+	SenderID       int64              `json:"sender_id"`
+	MessageType    string             `json:"message_type"`
+	Content        []byte             `json:"content"`
+	ClientMsgID    *string            `json:"client_msg_id"`
+	Mentions       []byte             `json:"mentions"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+}

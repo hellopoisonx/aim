@@ -3,18 +3,21 @@ package svc
 import (
 	"context"
 
+	"github.com/hellopoisonx/aim/app/logic/rpc/internal/cache"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/config"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/model"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/service"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/redis/go-redis/v9"
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
 type ServiceContext struct {
 	Config            config.Config
 	PermissionChecker service.PermissionChecker
-	DB                *pgxpool.Pool
+	DB                model.DBTX
+	QuotaStore        *cache.QuotaStore
 }
 
 func NewServiceContext(c config.Config) *ServiceContext {
@@ -34,6 +37,17 @@ func NewServiceContext(c config.Config) *ServiceContext {
 			svcCtx.PermissionChecker = service.NewDatabasePermissionChecker(queries)
 			logx.Infof("Postgres connected, using DatabasePermissionChecker")
 		}
+	}
+
+	// Connect to Redis if configured
+	if c.Redis.Addr != "" {
+		client := redis.NewClient(&redis.Options{
+			Addr:     c.Redis.Addr,
+			Password: c.Redis.Password,
+			DB:       c.Redis.DB,
+		})
+		svcCtx.QuotaStore = cache.NewQuotaStore(client, c.Quota.WindowSeconds, c.Quota.MaxRequests)
+		logx.Infof("Redis connected for quota store")
 	}
 
 	return svcCtx

@@ -6,3 +6,19 @@ Etcd:
   Key: logic.rpc
 Postgres:
   DataSource: postgres://aim:aim@127.0.0.1:5432/aim_logic?sslmode=disable
+Redis:
+  Addr: 127.0.0.1:6379
+  Password: ""
+  DB: 0
+KqConsumerConf:
+  Name: logic-archive-consumer
+  Brokers:
+    - 127.0.0.1:9092
+  Group: aim-logic-archive
+  Topic: aim-message-transfer
+  Offset: first
+  Consumers: 1
+  Processors: 1
+Quota:
+  WindowSeconds: 60
+  MaxRequests: 100

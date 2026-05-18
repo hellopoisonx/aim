@@ -65,6 +65,10 @@ func (f *fakeQuerier) IsMemberMuted(ctx context.Context, arg model.IsMemberMuted
 	return model.IsMemberMutedRow{}, nil
 }
 
+func (f *fakeQuerier) InsertMessage(ctx context.Context, arg model.InsertMessageParams) error {
+	return nil
+}
+
 func convUserKey(convID, userID int64) string {
 	return fmt.Sprintf("%d:%d", convID, userID)
 }
