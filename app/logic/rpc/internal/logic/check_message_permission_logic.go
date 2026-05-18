@@ -7,10 +7,9 @@ import (
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/service"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
+	"github.com/hellopoisonx/aim/app/shared/errorx"
 
 	"github.com/zeromicro/go-zero/core/logx"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 var errPermissionCheckerMissing = errors.New("permission checker is not configured")
@@ -72,7 +71,7 @@ func (l *CheckMessagePermissionLogic) CheckMessagePermission(in *pb.CheckMessage
 
 	checker := l.svcCtx.PermissionChecker
 	if checker == nil {
-		return nil, status.Error(codes.Internal, errPermissionCheckerMissing.Error())
+		return nil, errorx.NewCodeError(errorx.CodeInternal, errPermissionCheckerMissing.Error())
 	}
 
 	decision, err := checker.CheckMessagePermission(l.ctx, service.PermissionCheck{
@@ -82,7 +81,7 @@ func (l *CheckMessagePermissionLogic) CheckMessagePermission(in *pb.CheckMessage
 		Mentions:       in.GetMentions(),
 	})
 	if err != nil {
-		return nil, status.Error(codes.Internal, "check message permission failed")
+		return nil, errorx.NewCodeError(errorx.CodeInternal, "check message permission failed")
 	}
 
 	return &pb.CheckMessagePermissionResp{
