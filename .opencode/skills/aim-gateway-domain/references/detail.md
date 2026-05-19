@@ -13,12 +13,12 @@
 - 服务入口：`app/gateway/api/gateway.go`。
 - Auth RPC 客户端注入：`app/gateway/api/internal/svc/service_context.go`。
 - Auth RPC 服务发现：`app/gateway/api/internal/svc/service_context.go` 通过 `app/shared/nacos` 注册 Nacos 适配的 gRPC resolver（scheme `nacos`），创建 `zrpc` 客户端使用 `nacos:///auth.rpc` 目标。Resolver 订阅 Nacos 实例变更，auth 后启动不会导致 gateway panic，实例上线后自动发现；`app/gateway/api/etc/gateway-api.yaml` 的 `AuthRpc` 块是 Nacos 配置，不再使用 `AuthRpc.Etcd`。
-- Nacos gRPC resolver（scheme `nacos`）实现：`app/shared/nacos/resolver.go`，通过 `NamingClient.Subscribe` 监听服务实例变更并更新 gRPC address list；支持空初始实例（auth 后启动不 panic）、实例上线动态添加、下线动态移除。
+- Nacos gRPC resolver（scheme `nacos`）实现：`app/shared/nacos/resolver.go`，通过 `NamingClient.Subscribe` 监听服务实例变更并更新 gRPC address list；同一进程内只注册一次全局 scheme，但每个 `nacos:///<serviceName>` 客户端必须按 target endpoint 独立订阅对应服务名，避免 `auth.rpc`、`core.rpc`、`logic.rpc` 串线；支持空初始实例（auth 后启动不 panic）、实例上线动态添加、下线动态移除。
 - Docker Compose 配置：`docker-compose.yaml` 将 `app/gateway/api/etc/gateway-api.yaml` 挂载到容器内 `/app/etc/gateway-api.yaml`，与 `app/gateway/api/gateway.go` 默认 `-f etc/gateway-api.yaml` 保持一致；`AuthRpc.ServerAddr` 在 Compose 网络内使用 `nacos:8848`。
 - JWT 本地验签：`app/shared/jwt`。
 - `Authorization` header 上下文传递：`app/gateway/api/internal/authctx`。
 - REST 统一响应包装：`app/gateway/api/internal/handler/response.go` 通过 go-zero `httpx.SetOkHandler` / `httpx.SetErrorHandlerCtx` 输出 `{code,msg,body}`。
-- 用户查询 REST 代理：`GET /api/users/by-name/:name` 位于 `app/gateway/api/internal/logic/users/get_user_by_name_logic.go`，通过 `LogicRpc` 调用 `aim-logic UserService.GetUserInfoByNickname` 做昵称精确查询；非 gRPC 客户端错误必须记录日志并对外返回 `50000/"internal error"`。
+- 用户查询 REST 代理：`GET /api/users/by-name/:name` 位于 `app/gateway/api/internal/logic/users/get_user_by_name_logic.go`，通过 `LogicRpc` 调用 `aim-logic UserService.SearchUserInfoByNickname` 做 PostgreSQL `pg_trgm`/GIN 支撑的昵称模糊查询，返回 `users(id,email,avatar)` 列表；nickname 不唯一，不要对外返回单个用户详情。`GET /api/users/by-id/:id` 位于 `app/gateway/api/internal/logic/users/get_user_by_id_logic.go`，通过 `UserService.GetUserInfo` 返回单个用户详情。非 gRPC 客户端错误必须记录日志并对外返回 `50000/"internal error"`。
 - go-zero OTel/Jaeger：`app/gateway/api/etc/gateway-api.yaml` 的顶层 `Telemetry` 块覆盖 REST 服务，`GatewayRpc.Telemetry` 块覆盖 GatewayService RPC 服务；两者均使用 `Batcher: otlphttp`、`Endpoint: jaeger:4318`、`OtlpHttpPath: /v1/traces`。REST 依赖 `rest.RestConf` 内嵌的 `service.ServiceConf.Telemetry` 自动启动 trace agent，GatewayService 依赖 `zrpc.RpcServerConf.Telemetry` 自动接入 go-zero RPC tracing interceptor。
 - Core → GatewayService 的客户端位于 `app/core/rpc/internal/rpc/gateway_client.go`，不是 go-zero `zrpc` client；该 raw gRPC client 必须保留自定义 unary interceptor 注入 W3C trace metadata，使 `core.kafka.delivery.consume` 后续的 `PushMessage` 调用能进入 GatewayService trace。
 
@@ -38,9 +38,9 @@
 - Logout JWT 测试：`app/gateway/api/internal/logic/auth/logout_logic_test.go`。
 - 统一响应测试：`app/gateway/api/internal/handler/response_test.go`。
 - 配置加载测试：`app/gateway/api/internal/config/config_test.go` 覆盖 REST Telemetry 字段和 `GatewayRpc` zrpc/Telemetry 字段。
-- Nacos 注册/发现适配测试：`app/shared/nacos`，包括 register、deregister、BuildDirectTarget、gRPC resolver 构建、空实例回调、实例上线/下线动态更新。
+- Nacos 注册/发现适配测试：`app/shared/nacos`，包括 register、deregister、BuildDirectTarget、gRPC resolver 构建、按 target 服务名订阅、空实例回调、实例上线/下线动态更新。
 - 关键覆盖率目标：`app/gateway/api/internal/logic/auth` 保持 80% 以上。
-- 用户查询代理测试：`app/gateway/api/internal/logic/users/get_user_by_name_logic_test.go`。
+- 用户查询代理测试：`app/gateway/api/internal/logic/users/get_user_by_name_logic_test.go` 覆盖 by-name 模糊列表响应与 by-id 详情响应。
 - 关键验证命令：`goctl api validate -api app/gateway/api/gateway.api`、`go mod tidy`、`go build ./...`、`go test -coverprofile=count.out ./...`、`go vet ./...`、`golangci-lint run ./...`。
 
 ## 已实现 WebSocket 端点
