@@ -49,6 +49,16 @@ type GetUserByNameRequest {
 	Name string `path:"name" validate:"required"`
 }
 
+type GetUserByIdRequest {
+	Id int64 `path:"id" validate:"required"`
+}
+
+type UserListItem {
+	Id     int64  `json:"id"`
+	Email  string `json:"email"`
+	Avatar string `json:"avatar"`
+}
+
 type UserInfo {
 	Id        int64  `json:"id"`
 	Email     string `json:"email"`
@@ -60,6 +70,10 @@ type UserInfo {
 }
 
 type GetUserByNameResponse {
+	Users []UserListItem `json:"users"`
+}
+
+type GetUserByIdResponse {
 	User UserInfo `json:"user"`
 }
 
@@ -88,5 +102,8 @@ service gateway-api {
 service gateway-api {
 	@handler GetUserByName
 	get /by-name/:name (GetUserByNameRequest) returns (GetUserByNameResponse)
+
+	@handler GetUserById
+	get /by-id/:id (GetUserByIdRequest) returns (GetUserByIdResponse)
 }
 

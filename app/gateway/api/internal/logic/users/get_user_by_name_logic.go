@@ -38,16 +38,33 @@ func (l *GetUserByNameLogic) GetUserByName(req *types.GetUserByNameRequest) (res
 		return nil, errorx.NewCodeError(errorx.CodeInternal, "internal error")
 	}
 
-	rpcResp, err := l.svcCtx.LogicUserClient.GetUserInfoByNickname(l.ctx, &userservice.GetUserInfoByNicknameReq{
+	rpcResp, err := l.svcCtx.LogicUserClient.SearchUserInfoByNickname(l.ctx, &userservice.SearchUserInfoByNicknameReq{
 		Nickname: req.Name,
 	})
 	if err != nil {
 		return nil, l.sanitizeLogicRPCError("get user by name", err)
 	}
 
+	users := make([]types.UserListItem, 0, len(rpcResp.GetUsers()))
+	for _, user := range rpcResp.GetUsers() {
+		users = append(users, userListItemFromRPC(user))
+	}
+
 	return &types.GetUserByNameResponse{
-		User: userInfoFromRPC(rpcResp.GetUser()),
+		Users: users,
 	}, nil
+}
+
+func userListItemFromRPC(user *pb.UserInfoResponse) types.UserListItem {
+	if user == nil {
+		return types.UserListItem{}
+	}
+
+	return types.UserListItem{
+		Id:     user.GetId(),
+		Email:  user.GetEmail(),
+		Avatar: user.GetAvatar(),
+	}
 }
 
 func userInfoFromRPC(user *pb.UserInfoResponse) types.UserInfo {

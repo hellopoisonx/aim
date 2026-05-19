@@ -3,12 +3,20 @@
 
 package types
 
+type GetUserByIdRequest struct {
+	Id int64 `path:"id" validate:"required"`
+}
+
+type GetUserByIdResponse struct {
+	User UserInfo `json:"user"`
+}
+
 type GetUserByNameRequest struct {
 	Name string `path:"name" validate:"required"`
 }
 
 type GetUserByNameResponse struct {
-	User UserInfo `json:"user"`
+	Users []UserListItem `json:"users"`
 }
 
 type LoginRequest struct {
@@ -58,4 +66,10 @@ type UserInfo struct {
 	Avatar    string `json:"avatar"`
 	CreatedAt int64  `json:"created_at"`
 	UpdatedAt int64  `json:"updated_at"`
+}
+
+type UserListItem struct {
+	Id     int64  `json:"id"`
+	Email  string `json:"email"`
+	Avatar string `json:"avatar"`
 }
