@@ -75,7 +75,7 @@ service UserService {
 - 表：`app/logic/rpc/sql/migrations/003_user_info.sql` 中的 `user_info(id, email, status, nickname, avatar, created_at, updated_at)`。
 - 扩展：`app/logic/rpc/sql/migrations/000_extensions.sql` 中的 `pg_trgm`，用于 `idx_user_info_nickname_trgm` 和昵称相似度排序。
 - 查询：`app/logic/rpc/sql/queries/user_info.sql`，通过 `sqlc generate` 生成到 `app/logic/rpc/internal/model`。
-- `GetUserInfoByNickname` 是昵称精确查询，用于 gateway `GET /api/users/by-name/:name` 代理；模糊搜索仍使用 `SearchUserInfoByNickname`。
+- `GetUserInfoByNickname` 是内部昵称精确查询；由于 nickname 不唯一，gateway `GET /api/users/by-name/:name` 必须调用 `SearchUserInfoByNickname`，使用 `pg_trgm`/GIN 支撑的模糊查询并返回列表。gateway `GET /api/users/by-id/:id` 调用 `GetUserInfo` 返回用户详情。
 
 ### 返回码约定
 
