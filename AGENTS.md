@@ -14,6 +14,7 @@ AIM — multi-user real-time IM system with self-deployed AI assistant. Go-zero 
 3. 生成计划
 4. 执行代码审查
 5. 更新仓库 skills
+6. 总结工作区更改并进行 `git commit`
 
 ## 约束
 
