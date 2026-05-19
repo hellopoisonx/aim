@@ -1,6 +1,7 @@
 package nacos
 
 import (
+	"net/url"
 	"testing"
 
 	"github.com/nacos-group/nacos-sdk-go/v2/model"
@@ -73,6 +74,29 @@ func TestResolverBuilder_Build_WithHealthyInstances(t *testing.T) {
 	// Only 10.0.0.1:8080 is healthy, enabled, and weight>0.
 	assert.Len(t, cc.state.Addresses, 1)
 	assert.Equal(t, "10.0.0.1:8080", cc.state.Addresses[0].Addr)
+
+	r.Close()
+}
+
+func TestResolverBuilder_Build_UsesTargetServiceName(t *testing.T) {
+	t.Parallel()
+
+	client := &fakeNamingClient{instances: []model.Instance{
+		{Ip: "10.0.0.9", Port: 8080, Healthy: true, Enable: true, Weight: 1},
+	}}
+	cfg := Config{Group: "AIM", Cluster: "BJ", ServiceName: "auth.rpc"}
+	builder := &ResolverBuilder{Client: client, Config: cfg}
+	cc := &fakeClientConn{}
+	target := resolver.Target{URL: url.URL{Scheme: Scheme, Path: "/logic.rpc"}}
+
+	r, err := builder.Build(target, cc, resolver.BuildOptions{})
+	require.NoError(t, err)
+	require.NotNil(t, r)
+
+	assert.Equal(t, "logic.rpc", client.subscribeParam.ServiceName)
+	assert.Equal(t, "logic.rpc", client.selectParam.ServiceName)
+	assert.Len(t, cc.state.Addresses, 1)
+	assert.Equal(t, "10.0.0.9:8080", cc.state.Addresses[0].Addr)
 
 	r.Close()
 }

@@ -29,18 +29,23 @@ type ResolverBuilder struct {
 
 // Build creates a Resolver for the given target.
 func (b *ResolverBuilder) Build(target resolver.Target, cc resolver.ClientConn, _ resolver.BuildOptions) (resolver.Resolver, error) {
+	serviceName := target.Endpoint()
+	if serviceName == "" {
+		serviceName = b.Config.ServiceName
+	}
+
 	r := &nacosResolver{
 		client: b.Client,
 		cc:     cc,
 	}
 
 	param := &vo.SubscribeParam{
-		ServiceName: b.Config.ServiceName,
+		ServiceName: serviceName,
 		GroupName:   b.Config.Group,
 		Clusters:    []string{b.Config.Cluster},
 		SubscribeCallback: func(instances []model.Instance, err error) {
 			if err != nil {
-				logx.Errorf("nacos subscribe callback error for %q: %v", b.Config.ServiceName, err)
+				logx.Errorf("nacos subscribe callback error for %q: %v", serviceName, err)
 				return
 			}
 
@@ -49,7 +54,7 @@ func (b *ResolverBuilder) Build(target resolver.Target, cc resolver.ClientConn, 
 	}
 
 	if err := b.Client.Subscribe(param); err != nil {
-		return nil, fmt.Errorf("nacos subscribe %q: %w", b.Config.ServiceName, err)
+		return nil, fmt.Errorf("nacos subscribe %q: %w", serviceName, err)
 	}
 
 	r.unsubscribe = func() {
@@ -58,13 +63,13 @@ func (b *ResolverBuilder) Build(target resolver.Target, cc resolver.ClientConn, 
 
 	// Initial fetch — may be empty if auth hasn't started yet, which is fine.
 	instances, err := b.Client.SelectInstances(vo.SelectInstancesParam{
-		ServiceName: b.Config.ServiceName,
+		ServiceName: serviceName,
 		GroupName:   b.Config.Group,
 		Clusters:    []string{b.Config.Cluster},
 		HealthyOnly: true,
 	})
 	if err != nil {
-		logx.Errorf("nacos initial SelectInstances for %q: %v", b.Config.ServiceName, err)
+		logx.Errorf("nacos initial SelectInstances for %q: %v", serviceName, err)
 	} else {
 		r.updateAddrs(instances)
 	}

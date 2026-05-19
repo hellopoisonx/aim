@@ -11,6 +11,8 @@ import (
 type fakeNamingClient struct {
 	registerParam    vo.RegisterInstanceParam
 	deregisterParam  vo.DeregisterInstanceParam
+	selectParam      vo.SelectInstancesParam
+	subscribeParam   vo.SubscribeParam
 	instances        []model.Instance
 	subscribeCB      func(services []model.Instance, err error)
 	subscribeErr     error
@@ -27,7 +29,9 @@ func (f *fakeNamingClient) DeregisterInstance(param vo.DeregisterInstanceParam) 
 	return true, nil
 }
 
-func (f *fakeNamingClient) SelectInstances(vo.SelectInstancesParam) ([]model.Instance, error) {
+func (f *fakeNamingClient) SelectInstances(param vo.SelectInstancesParam) ([]model.Instance, error) {
+	f.selectParam = param
+
 	return f.instances, nil
 }
 
@@ -36,6 +40,7 @@ func (f *fakeNamingClient) Subscribe(param *vo.SubscribeParam) error {
 		return f.subscribeErr
 	}
 
+	f.subscribeParam = *param
 	f.subscribeCB = param.SubscribeCallback
 
 	return nil
