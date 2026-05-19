@@ -1,5 +1,6 @@
 // Code scaffolded by goctl. Safe to edit.
 // goctl 1.10.1
+//lint:file-ignore SA5008 go-zero conf uses json tag options for defaults.
 
 package config
 
@@ -7,13 +8,15 @@ import (
 	aimnacos "github.com/hellopoisonx/aim/app/shared/nacos"
 
 	"github.com/zeromicro/go-zero/rest"
+	"github.com/zeromicro/go-zero/zrpc"
 )
 
 type Config struct {
 	rest.RestConf
-	AuthRpc aimnacos.Config
-	CoreRpc aimnacos.Config
-	Auth    struct {
+	AuthRpc  aimnacos.Config
+	CoreRpc  aimnacos.Config
+	LogicRpc aimnacos.Config
+	Auth     struct {
 		AccessSecret string
 	}
 	WebSocket struct {
@@ -42,8 +45,5 @@ type Config struct {
 		// PresenceTopic is the Kafka topic for presence events.
 		PresenceTopic string `json:",default=aim.presence.events"` //nolint:staticcheck // go-zero conf uses json tag options for defaults.
 	}
-	GatewayRpc struct {
-		// ListenOn is the gRPC server listen address for GatewayService.
-		ListenOn string `json:",default=127.0.0.1:9090"` //nolint:staticcheck // go-zero conf uses json tag options for defaults.
-	}
+	GatewayRpc zrpc.RpcServerConf
 }

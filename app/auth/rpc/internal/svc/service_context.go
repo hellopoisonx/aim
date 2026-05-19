@@ -2,6 +2,7 @@ package svc
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/hellopoisonx/aim/app/auth/rpc/internal/config"
@@ -10,13 +11,33 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
+	"github.com/zeromicro/go-queue/kq"
 )
 
+// userEventPublisher publishes user events to Kafka.
+type userEventPublisher interface {
+	Publish(ctx context.Context, key string, value []byte) error
+}
+
+// kqPublisher wraps kq.Pusher to implement userEventPublisher.
+type kqPublisher struct {
+	pusher *kq.Pusher
+}
+
+func (p *kqPublisher) Publish(ctx context.Context, key string, value []byte) error {
+	if p.pusher == nil {
+		return errors.New("kafka pusher is not configured")
+	}
+
+	return p.pusher.PushWithKey(ctx, key, string(value))
+}
+
 type ServiceContext struct {
-	Config      config.Config
-	Users       service.UserStore
-	Sessions    service.SessionStore
-	TokenIssuer service.TokenIssuer
+	Config             config.Config
+	Users              service.UserStore
+	Sessions           service.SessionStore
+	TokenIssuer        service.TokenIssuer
+	UserEventPublisher userEventPublisher
 }
 
 func NewServiceContext(c config.Config) *ServiceContext {
@@ -29,12 +50,19 @@ func NewServiceContext(c config.Config) *ServiceContext {
 
 	redisClient := redis.NewClient(&redis.Options{Addr: c.SessionRedis.Host, Password: c.SessionRedis.Pass})
 
-	return &ServiceContext{
+	svcCtx := &ServiceContext{
 		Config:      c,
 		Users:       service.NewSQLUserStoreWithMachineID(model.New(pool), c.Token.SnowflakeMachineID),
 		Sessions:    service.NewRedisSessionStore(redisClient, c.Token.RefreshTTL),
 		TokenIssuer: service.NewJWTIssuer(c.Token.AccessSecret, c.Token.AccessTTL),
 	}
+
+	// Initialize Kafka publisher if configured
+	if c.IsKqPusherConfigured() {
+		svcCtx.UserEventPublisher = &kqPublisher{pusher: kq.NewPusher(c.KqPusherConf.Brokers, c.KqPusherConf.Topic)}
+	}
+
+	return svcCtx
 }
 
 func applyDefaults(c *config.Config) {
@@ -59,6 +87,7 @@ func applyDefaults(c *config.Config) {
 	}
 }
 
-func NewServiceContextWithStores(c config.Config, users service.UserStore, sessions service.SessionStore, issuer service.TokenIssuer) *ServiceContext {
-	return &ServiceContext{Config: c, Users: users, Sessions: sessions, TokenIssuer: issuer}
+// NewServiceContextWithStores allows tests to inject fake stores and a fake publisher.
+func NewServiceContextWithStores(c config.Config, users service.UserStore, sessions service.SessionStore, issuer service.TokenIssuer, publisher userEventPublisher) *ServiceContext {
+	return &ServiceContext{Config: c, Users: users, Sessions: sessions, TokenIssuer: issuer, UserEventPublisher: publisher}
 }

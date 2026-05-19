@@ -17,6 +17,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/test/bufconn"
 )
 
@@ -45,12 +46,11 @@ func setupGatewayTest(t *testing.T) *gatewayTestEnv {
 		_ = server.Serve(listener)
 	}()
 
-	ctx := context.Background()
-	conn, err := grpc.DialContext(ctx, "bufnet",
+	conn, err := grpc.NewClient("passthrough:///bufnet",
 		grpc.WithContextDialer(func(context.Context, string) (net.Conn, error) {
 			return listener.Dial()
 		}),
-		grpc.WithInsecure(),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	)
 	require.NoError(t, err)
 
@@ -62,7 +62,10 @@ func setupGatewayTest(t *testing.T) *gatewayTestEnv {
 		server:   server,
 		client:   client,
 		cleanup: func() {
-			conn.Close()
+			if err := conn.Close(); err != nil {
+				t.Logf("close grpc connection: %v", err)
+			}
+
 			server.Stop()
 		},
 	}
@@ -96,6 +99,7 @@ func newWSTestServer(t *testing.T, manager *Manager, userID int64, deviceID stri
 			t.Logf("websocket accept error: %v", err)
 			return
 		}
+
 		wsServer.mu.Lock()
 		wsServer.conn = conn
 		wsServer.mu.Unlock()
@@ -119,6 +123,7 @@ func newWSTestServer(t *testing.T, manager *Manager, userID int64, deviceID stri
 	})
 
 	wsServer.server = httptest.NewServer(mux)
+
 	return wsServer
 }
 
@@ -141,6 +146,7 @@ func (s *wsTestServer) dialWebSocket(token string) (*websocket.Conn, error) {
 	conn, _, err := websocket.Dial(ctx, "ws"+s.server.URL[len("http"):]+"/ws", &websocket.DialOptions{
 		HTTPHeader: http.Header{"Authorization": []string{"Bearer " + token}},
 	})
+
 	return conn, err
 }
 
@@ -157,8 +163,10 @@ func waitForRegistrationCount(manager *Manager, userID int64, expectedCount int,
 		if manager.CountByUser(userID) >= expectedCount {
 			return nil
 		}
+
 		time.Sleep(5 * time.Millisecond)
 	}
+
 	return fmt.Errorf("timeout waiting for registration of user %d (expected %d, got %d)",
 		userID, expectedCount, manager.CountByUser(userID))
 }
@@ -169,9 +177,11 @@ func readFrame(ctx context.Context, conn *websocket.Conn) (*wspb.WsFrame, error)
 	if err != nil {
 		return nil, err
 	}
+
 	if msgType != websocket.MessageBinary {
 		return nil, nil
 	}
+
 	return DecodeFrame(data)
 }
 
@@ -222,6 +232,7 @@ func TestGatewayServerPushMessage(t *testing.T) {
 
 	payload, err := DecodePayload(frame)
 	require.NoError(t, err)
+
 	pushMsg, ok := payload.(*wspb.PushMessagePayload)
 	require.True(t, ok)
 	require.Equal(t, int64(999), pushMsg.GetMessageId())
@@ -262,6 +273,7 @@ func TestGatewayServerPushPresence(t *testing.T) {
 
 	payload, err := DecodePayload(frame)
 	require.NoError(t, err)
+
 	pushPresence, ok := payload.(*wspb.PushPresencePayload)
 	require.True(t, ok)
 	require.Equal(t, userID, pushPresence.GetUserId())
@@ -406,6 +418,7 @@ func TestGatewayServerDrainNotify(t *testing.T) {
 	// Verify reconnect payload
 	payload1, err := DecodePayload(frame1)
 	require.NoError(t, err)
+
 	reconnect1, ok := payload1.(*wspb.ReconnectPayload)
 	require.True(t, ok)
 	require.Equal(t, drainTimeoutMs, reconnect1.GetReconnectDelayMs())

@@ -18,7 +18,9 @@
 - JWT 本地验签：`app/shared/jwt`。
 - `Authorization` header 上下文传递：`app/gateway/api/internal/authctx`。
 - REST 统一响应包装：`app/gateway/api/internal/handler/response.go` 通过 go-zero `httpx.SetOkHandler` / `httpx.SetErrorHandlerCtx` 输出 `{code,msg,body}`。
-- go-zero OTel/Jaeger：`app/gateway/api/etc/gateway-api.yaml` 的 `Telemetry` 块使用 `Batcher: otlphttp`、`Endpoint: jaeger:4318`、`OtlpHttpPath: /v1/traces`，依赖 `rest.RestConf` 内嵌的 `service.ServiceConf.Telemetry` 自动启动 trace agent。
+- 用户查询 REST 代理：`GET /api/users/by-name/:name` 位于 `app/gateway/api/internal/logic/users/get_user_by_name_logic.go`，通过 `LogicRpc` 调用 `aim-logic UserService.GetUserInfoByNickname` 做昵称精确查询；非 gRPC 客户端错误必须记录日志并对外返回 `50000/"internal error"`。
+- go-zero OTel/Jaeger：`app/gateway/api/etc/gateway-api.yaml` 的顶层 `Telemetry` 块覆盖 REST 服务，`GatewayRpc.Telemetry` 块覆盖 GatewayService RPC 服务；两者均使用 `Batcher: otlphttp`、`Endpoint: jaeger:4318`、`OtlpHttpPath: /v1/traces`。REST 依赖 `rest.RestConf` 内嵌的 `service.ServiceConf.Telemetry` 自动启动 trace agent，GatewayService 依赖 `zrpc.RpcServerConf.Telemetry` 自动接入 go-zero RPC tracing interceptor。
+- Core → GatewayService 的客户端位于 `app/core/rpc/internal/rpc/gateway_client.go`，不是 go-zero `zrpc` client；该 raw gRPC client 必须保留自定义 unary interceptor 注入 W3C trace metadata，使 `core.kafka.delivery.consume` 后续的 `PushMessage` 调用能进入 GatewayService trace。
 
 ### 闭环边界
 
@@ -35,9 +37,10 @@
 - 代理逻辑测试：`app/gateway/api/internal/logic/auth/proxy_logic_test.go`。
 - Logout JWT 测试：`app/gateway/api/internal/logic/auth/logout_logic_test.go`。
 - 统一响应测试：`app/gateway/api/internal/handler/response_test.go`。
-- 配置加载测试：`app/gateway/api/internal/config/config_test.go` 覆盖 Telemetry 字段。
+- 配置加载测试：`app/gateway/api/internal/config/config_test.go` 覆盖 REST Telemetry 字段和 `GatewayRpc` zrpc/Telemetry 字段。
 - Nacos 注册/发现适配测试：`app/shared/nacos`，包括 register、deregister、BuildDirectTarget、gRPC resolver 构建、空实例回调、实例上线/下线动态更新。
 - 关键覆盖率目标：`app/gateway/api/internal/logic/auth` 保持 80% 以上。
+- 用户查询代理测试：`app/gateway/api/internal/logic/users/get_user_by_name_logic_test.go`。
 - 关键验证命令：`goctl api validate -api app/gateway/api/gateway.api`、`go mod tidy`、`go build ./...`、`go test -coverprofile=count.out ./...`、`go vet ./...`、`golangci-lint run ./...`。
 
 ## 已实现 WebSocket 端点
@@ -75,7 +78,7 @@
 
 ## 已实现 GatewayService gRPC 服务端
 
-实现位置：`app/gateway/rpc`（gRPC server）。
+实现位置：`app/gateway/api` 内嵌的 `GatewayRpc` zrpc 服务；入口为 `app/gateway/api/gateway.go`，配置块为 `app/gateway/api/etc/gateway-api.yaml` 的 `GatewayRpc`。不要再使用手写 `grpc.NewServer` 启动 GatewayService，避免绕过 go-zero tracing interceptor、health check 和统一生命周期管理。
 
 ### 四个 RPC 方法
 

@@ -2,6 +2,8 @@
 
 ## 必须在所有操作之前先阅读此文档
 
+## 主/从 agent 必须将 `简体中文` 作为首选的自然语言
+
 ## 项目概览
 
 AIM — multi-user real-time IM system with self-deployed AI assistant. Go-zero microservices (gateway/auth/core/logic/ai) + Kafka + Redis + PostgreSQL/pgvector + Nacos.

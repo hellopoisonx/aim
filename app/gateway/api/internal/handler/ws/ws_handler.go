@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"sync/atomic"
 	"time"
@@ -24,7 +25,7 @@ import (
 type WsHandler struct {
 	srv      *svc.ServiceContext
 	manager  *ws.Manager
-	frameSeq int64 // server-side sequence counter
+	frameSeq atomic.Int64 // server-side sequence counter
 }
 
 func NewWsHandler(srv *svc.ServiceContext, manager *ws.Manager) *WsHandler {
@@ -79,7 +80,9 @@ func (h *WsHandler) ServeWS(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.manager.Register(identity, conn, cancel); err != nil {
 		logx.WithContext(ctx).Errorf("ws register failed: %v", err)
+
 		_ = conn.Close(websocket.StatusInternalError, "registration failed")
+
 		return
 	}
 
@@ -87,6 +90,7 @@ func (h *WsHandler) ServeWS(w http.ResponseWriter, r *http.Request) {
 	tokenExpiresAt := claims.ExpiresAt.Time
 	if tokenExpiresAt.After(time.Now()) {
 		duration := time.Until(tokenExpiresAt)
+
 		connEntry, err := h.manager.Get(identity)
 		if err == nil {
 			connEntry.ExpiresAt = tokenExpiresAt.Unix()
@@ -132,12 +136,14 @@ func (h *WsHandler) ServeWS(w http.ResponseWriter, r *http.Request) {
 				logx.WithContext(ctx).Info("ws connection closed by client")
 			} else {
 				// Check for WebSocket close
-				if closeErr, ok := err.(*websocket.CloseError); ok {
+				closeErr := &websocket.CloseError{}
+				if errors.As(err, &closeErr) {
 					logx.WithContext(ctx).Infof("ws close: code=%d reason=%s", closeErr.Code, closeErr.Reason)
 				} else {
 					logx.WithContext(ctx).Errorf("ws read error: %v", err)
 				}
 			}
+
 			return
 		}
 
@@ -263,6 +269,11 @@ func (h *WsHandler) writeErrorAck(ctx context.Context, conn *websocket.Conn, ack
 	if conn == nil {
 		return errors.New("connection nil")
 	}
+
+	if code < math.MinInt32 || code > math.MaxInt32 {
+		return errorx.NewCodeError(errorx.CodeInternal, "ack code overflows int32")
+	}
+
 	ackFrame, err := ws.NewServerAckExtended(
 		ackSeq,
 		clientMsgID,
@@ -275,7 +286,16 @@ func (h *WsHandler) writeErrorAck(ctx context.Context, conn *websocket.Conn, ack
 	if err != nil {
 		return err
 	}
+
 	return h.writeFrame(ctx, conn, ackFrame)
+}
+
+func int32Code(code int) int32 {
+	if code < math.MinInt32 || code > math.MaxInt32 {
+		return int32(errorx.CodeInternal)
+	}
+
+	return int32(code) //nolint:gosec // bounded above before conversion.
 }
 
 // mapTransferToAck maps the Transfer response/error to a SERVER_ACK frame.
@@ -301,6 +321,7 @@ func mapTransferToAck(ackSeq int64, clientMsgID string, seq int64, resp *corepb.
 			"",
 			resp.GetMessageId(),
 		)
+
 		return ackFrame
 	}
 
@@ -313,15 +334,17 @@ func mapTransferToAck(ackSeq int64, clientMsgID string, seq int64, resp *corepb.
 			clientMsgID,
 			seq,
 			pb.AckStatus_ACK_STATUS_RETRYABLE,
-			int32(errorx.CodeInternal),
+			int32Code(errorx.CodeInternal),
 			"internal error",
 			0,
 		)
+
 		return ackFrame
 	}
 
 	// Map biz code to ACK status
 	var status pb.AckStatus
+
 	switch codeErr.Code {
 	case errorx.CodeBadInput, errorx.CodeAuth, errorx.CodeForbidden, errorx.CodeNotFound, errorx.CodeRateLimit:
 		status = pb.AckStatus_ACK_STATUS_REJECTED
@@ -335,10 +358,11 @@ func mapTransferToAck(ackSeq int64, clientMsgID string, seq int64, resp *corepb.
 		clientMsgID,
 		seq,
 		status,
-		int32(codeErr.Code),
+		int32Code(codeErr.Code),
 		codeErr.Message,
 		0,
 	)
+
 	return ackFrame
 }
 
@@ -357,7 +381,7 @@ func (h *WsHandler) writeFrame(ctx context.Context, conn *websocket.Conn, frame 
 
 // nextSeq returns the next server-side sequence number.
 func (h *WsHandler) nextSeq() int64 {
-	return atomic.AddInt64(&h.frameSeq, 1)
+	return h.frameSeq.Add(1)
 }
 
 // sendTokenExpired builds and sends a TOKEN_EXPIRED frame, then closes the connection.
@@ -366,22 +390,28 @@ func (h *WsHandler) sendTokenExpired(conn *websocket.Conn, identity ws.Identity,
 		ExpiredAt: expiredAt * 1000, // convert to milliseconds
 		Reason:    "access_token_expired",
 	}
+
 	payloadBytes, err := ws.EncodePayload(payload)
 	if err != nil {
 		logx.Errorf("failed to encode token expired payload: %v", err)
 		return
 	}
+
 	frame := ws.BuildFrame(pb.FrameType_FRAME_TYPE_TOKEN_EXPIRED, h.nextSeq(), payloadBytes)
+
 	frameBytes, err := ws.EncodeFrame(frame)
 	if err != nil {
 		logx.Errorf("failed to encode token expired frame: %v", err)
 		return
 	}
+
 	writeCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+
 	if err := conn.Write(writeCtx, websocket.MessageBinary, frameBytes); err != nil {
 		logx.Errorf("failed to send token expired frame: %v", err)
 	}
+
 	_ = conn.Close(websocket.StatusPolicyViolation, "token expired")
 }
 

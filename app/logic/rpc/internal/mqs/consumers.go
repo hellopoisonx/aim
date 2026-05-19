@@ -9,7 +9,14 @@ import (
 )
 
 func Consumers(ctx context.Context, svcCtx *svc.ServiceContext) []service.Service {
-	return []service.Service{
+	services := []service.Service{
 		kq.MustNewQueue(svcCtx.Config.KqConsumerConf, NewArchiveConsumer(ctx, svcCtx)),
 	}
+
+	// Add user-created consumer only if configured
+	if svcCtx.Config.IsUserCreatedConsumerConfigured() {
+		services = append(services, kq.MustNewQueue(svcCtx.Config.UserCreatedConsumerConf, NewUserCreatedConsumer(ctx, svcCtx)))
+	}
+
+	return services
 }

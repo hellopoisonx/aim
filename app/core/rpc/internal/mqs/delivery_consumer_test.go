@@ -10,11 +10,13 @@ import (
 	"github.com/hellopoisonx/aim/app/core/rpc/internal/config"
 	"github.com/hellopoisonx/aim/app/core/rpc/internal/rpc"
 	"github.com/hellopoisonx/aim/app/core/rpc/internal/svc"
+	"github.com/hellopoisonx/aim/app/shared/tracing"
 	gwpb "github.com/hellopoisonx/aim/shared/proto/gateway/pb"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/require"
 	"github.com/zeromicro/go-queue/kq"
 	"github.com/zeromicro/go-zero/core/service"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // --- Fake implementations ---
@@ -26,18 +28,20 @@ type fakeGatewayClient struct {
 }
 
 type pushRecord struct {
-	ctx  context.Context
-	req  *gwpb.PushMessageReq
+	ctx context.Context
+	req *gwpb.PushMessageReq
 }
 
 func (f *fakeGatewayClient) PushMessage(ctx context.Context, req *gwpb.PushMessageReq) (*gwpb.PushMessageResp, error) {
 	if f.pushErr != nil {
 		return nil, f.pushErr
 	}
+
 	f.pushes = append(f.pushes, pushRecord{ctx: ctx, req: req})
 	if f.pushResp != nil {
 		return f.pushResp, nil
 	}
+
 	return &gwpb.PushMessageResp{Success: true}, nil
 }
 
@@ -56,7 +60,12 @@ func newTestServiceContext(t *testing.T, gwClient rpc.GatewayPusher) *svc.Servic
 	t.Cleanup(func() { mr.Close() })
 
 	client := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	t.Cleanup(func() { client.Close() })
+
+	t.Cleanup(func() {
+		if err := client.Close(); err != nil {
+			t.Logf("close redis client: %v", err)
+		}
+	})
 
 	return &svc.ServiceContext{
 		RedisClient:   client,
@@ -94,6 +103,32 @@ func TestDeliveryConsumer_Consume_Success(t *testing.T) {
 	require.Equal(t, "hello world", fakeGw.pushes[0].req.Content)
 }
 
+func TestDeliveryConsumer_Consume_PropagatesTraceContext(t *testing.T) {
+	fakeGw := newFakeGatewayClient()
+	svcCtx := newTestServiceContext(t, fakeGw)
+	consumer := NewDeliveryConsumer(context.Background(), svcCtx)
+	traceID, err := trace.TraceIDFromHex("4bf92f3577b34da6a3ce929d0e0e4736")
+	require.NoError(t, err)
+
+	event := transferEvent{
+		TraceContextFields: tracing.TraceContextFields{TraceParent: "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"},
+		MessageID:          12345,
+		SenderID:           100,
+		ConversationID:     200,
+		MessageType:        "text",
+		Content:            "hello world",
+		ClientMsgID:        "client-msg-1",
+		Timestamp:          1700000000000,
+	}
+	value, err := json.Marshal(event)
+	require.NoError(t, err)
+
+	err = consumer.Consume(context.Background(), "200", string(value))
+	require.NoError(t, err)
+	require.Len(t, fakeGw.pushes, 1)
+	require.Equal(t, traceID, trace.SpanContextFromContext(fakeGw.pushes[0].ctx).TraceID())
+}
+
 func TestDeliveryConsumer_Consume_InvalidJSON(t *testing.T) {
 	fakeGw := newFakeGatewayClient()
 	svcCtx := newTestServiceContext(t, fakeGw)
@@ -101,7 +136,7 @@ func TestDeliveryConsumer_Consume_InvalidJSON(t *testing.T) {
 
 	err := consumer.Consume(context.Background(), "200", "invalid json{")
 	require.Error(t, err)
-	require.Len(t, fakeGw.pushes, 0)
+	require.Empty(t, fakeGw.pushes)
 }
 
 func TestDeliveryConsumer_Consume_GatewayPushFailure(t *testing.T) {
@@ -180,7 +215,7 @@ func TestDeliveryConsumer_Consume_EmptyContent(t *testing.T) {
 	err = consumer.Consume(context.Background(), "50", string(value))
 	require.NoError(t, err)
 	require.Len(t, fakeGw.pushes, 1)
-	require.Equal(t, "", fakeGw.pushes[0].req.Content)
+	require.Empty(t, fakeGw.pushes[0].req.Content)
 }
 
 func TestDeliveryConsumer_Consume_NoMentions(t *testing.T) {
@@ -245,11 +280,11 @@ func TestConsumers_ReturnsQueueService(t *testing.T) {
 					Name: "test-consumer",
 					Mode: "dev",
 				},
-				Brokers:   []string{"127.0.0.1:9092"},
-				Group:     "test-group",
-				Topic:     "test-topic",
-				Offset:    "first",
-				Consumers: 1,
+				Brokers:    []string{"127.0.0.1:9092"},
+				Group:      "test-group",
+				Topic:      "test-topic",
+				Offset:     "first",
+				Consumers:  1,
 				Processors: 1,
 			},
 		},

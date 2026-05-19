@@ -1,5 +1,7 @@
 package config
 
+//lint:file-ignore SA5008 go-zero conf uses json tag options for defaults.
+
 import (
 	"time"
 
@@ -24,4 +26,13 @@ type Config struct {
 		RefreshTTL         time.Duration
 		SnowflakeMachineID int64
 	}
+	KqPusherConf struct {
+		Brokers []string `json:",optional"`
+		Topic   string   `json:",optional"`
+	} `json:",optional"`
+}
+
+// IsKqPusherConfigured returns true if Kafka pusher is properly configured.
+func (c *Config) IsKqPusherConfigured() bool {
+	return len(c.KqPusherConf.Brokers) > 0 && c.KqPusherConf.Topic != ""
 }

@@ -2,11 +2,17 @@ package logic
 
 import (
 	"context"
+	"encoding/json"
+	"strconv"
+	"time"
 
-	authsvc "github.com/hellopoisonx/aim/app/auth/rpc/internal/service"
 	"github.com/hellopoisonx/aim/app/auth/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/auth/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
+	"github.com/hellopoisonx/aim/app/shared/events"
+	"github.com/hellopoisonx/aim/app/shared/tracing"
+
+	authsvc "github.com/hellopoisonx/aim/app/auth/rpc/internal/service"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -43,6 +49,27 @@ func (l *RegisterLogic) Register(in *pb.RegisterReq) (*pb.RegisterResp, error) {
 		}
 
 		return nil, errorx.NewCodeError(authsvc.CodeInternal, "create user failed")
+	}
+
+	// Publish user created event to Kafka
+	if l.svcCtx.UserEventPublisher != nil {
+		event := events.UserCreatedEvent{
+			TraceContextFields: tracing.InjectTraceContext(l.ctx),
+			UserID:             user.ID,
+			Email:              email,
+			Nickname:           in.GetUsername(),
+			Avatar:             in.GetAvatar(),
+			CreatedAt:          time.Now().UnixMilli(),
+		}
+
+		eventBytes, err := json.Marshal(event)
+		if err != nil {
+			return nil, errorx.NewCodeError(authsvc.CodeInternal, "publish user created event failed")
+		}
+
+		if err := l.svcCtx.UserEventPublisher.Publish(l.ctx, strconv.FormatInt(user.ID, 10), eventBytes); err != nil {
+			return nil, errorx.NewCodeError(authsvc.CodeInternal, "publish user created event failed")
+		}
 	}
 
 	return &pb.RegisterResp{UserId: user.ID}, nil

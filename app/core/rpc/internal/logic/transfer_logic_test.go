@@ -17,6 +17,7 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/require"
 	"github.com/zeromicro/go-zero/core/logx"
+	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
 )
 
@@ -32,7 +33,9 @@ func (f *fakeIdempotencyStore) Check(ctx context.Context, key string) (bool, int
 	if f.checkErr != nil {
 		return false, 0, f.checkErr
 	}
+
 	id, ok := f.store[key]
+
 	return ok, id, nil
 }
 
@@ -40,10 +43,13 @@ func (f *fakeIdempotencyStore) Set(ctx context.Context, key string, messageID in
 	if f.setErr != nil {
 		return f.setErr
 	}
+
 	if f.store == nil {
 		f.store = make(map[string]int64)
 	}
+
 	f.store[key] = messageID
+
 	return nil
 }
 
@@ -61,7 +67,9 @@ func (f *fakeMessagePublisher) Publish(ctx context.Context, key string, value []
 	if f.err != nil {
 		return f.err
 	}
+
 	f.messages = append(f.messages, publishedMessage{Key: key, Value: value})
+
 	return nil
 }
 
@@ -76,6 +84,7 @@ func (f *fakePermissionClient) CheckMessagePermission(ctx context.Context, req *
 	if f.err != nil {
 		return nil, f.err
 	}
+
 	return &logicpb.CheckMessagePermissionResp{
 		Allowed: f.allowed,
 		BizCode: f.bizCode,
@@ -101,6 +110,7 @@ func newTestTransferLogic(svcCtx *svc.ServiceContext, idem idempotencyStore, pub
 func mustSnowflake(t *testing.T, machineID int64) *tools.Snowflake {
 	sf, err := tools.NewSnowflake(machineID)
 	require.NoError(t, err)
+
 	return sf
 }
 
@@ -126,9 +136,9 @@ func TestTransfer_Success(t *testing.T) {
 	resp, err := logic.Transfer(req)
 	require.NoError(t, err)
 	require.NotNil(t, resp)
-	require.Greater(t, resp.MessageId, int64(0))
+	require.Positive(t, resp.MessageId)
 	require.Equal(t, "client-1", resp.ClientMsgId)
-	require.Greater(t, resp.AcceptedAt, int64(0))
+	require.Positive(t, resp.AcceptedAt)
 	require.Len(t, fakePub.messages, 1)
 	require.Equal(t, "100", fakePub.messages[0].Key)
 }
@@ -143,6 +153,7 @@ func TestTransfer_IdempotentDuplicate(t *testing.T) {
 
 	// Pre-store a message ID for this idempotency key
 	const expectedMsgID int64 = 99999
+
 	idempKey := "idempotency:transfer:1:dev1:client-duplicate"
 	fakeIdem.store[idempKey] = expectedMsgID
 
@@ -161,7 +172,7 @@ func TestTransfer_IdempotentDuplicate(t *testing.T) {
 	require.Equal(t, expectedMsgID, resp.MessageId)
 	require.Equal(t, "client-duplicate", resp.ClientMsgId)
 	// Kafka should NOT be called for duplicate
-	require.Len(t, fakePub.messages, 0)
+	require.Empty(t, fakePub.messages)
 }
 
 func TestTransfer_PermissionDenied(t *testing.T) {
@@ -187,7 +198,7 @@ func TestTransfer_PermissionDenied(t *testing.T) {
 	require.Error(t, err)
 	require.Nil(t, resp)
 	// Kafka should NOT be called when permission denied
-	require.Len(t, fakePub.messages, 0)
+	require.Empty(t, fakePub.messages)
 }
 
 func TestTransfer_InvalidSenderID(t *testing.T) {
@@ -405,7 +416,7 @@ func TestTransfer_IdempotencySetErrorAfterKafka(t *testing.T) {
 	// Error should be nil since Kafka was already published successfully
 	require.NoError(t, err)
 	require.NotNil(t, resp)
-	require.Greater(t, resp.MessageId, int64(0))
+	require.Positive(t, resp.MessageId)
 	// Kafka WAS called
 	require.Len(t, fakePub.messages, 1)
 }
@@ -458,7 +469,7 @@ func TestTransfer_PermissionDeniedWithBizCode(t *testing.T) {
 	require.Error(t, err)
 	require.Nil(t, resp)
 	// Kafka should NOT be called
-	require.Len(t, fakePub.messages, 0)
+	require.Empty(t, fakePub.messages)
 }
 
 func TestTransfer_ValidMessageTypeBoundary(t *testing.T) {
@@ -541,11 +552,12 @@ func TestTransfer_KafkaEventContent(t *testing.T) {
 
 	// Verify JSON content
 	var event map[string]any
+
 	err = json.Unmarshal(msg.Value, &event)
 	require.NoError(t, err)
-	require.Equal(t, float64(42), event["sender_id"])
+	require.InEpsilon(t, float64(42), event["sender_id"], 0)
 	require.Equal(t, "device-abc", event["device_id"])
-	require.Equal(t, float64(200), event["conversation_id"])
+	require.InEpsilon(t, float64(200), event["conversation_id"], 0)
 	require.Equal(t, "image", event["message_type"])
 	require.Equal(t, "test content", event["content"])
 	require.Equal(t, "msg-123", event["client_msg_id"])
@@ -553,6 +565,38 @@ func TestTransfer_KafkaEventContent(t *testing.T) {
 	require.Equal(t, "bob", (event["mentions"].([]any))[1])
 	require.Greater(t, event["timestamp"].(float64), float64(0))
 	require.Greater(t, event["message_id"].(float64), float64(0))
+}
+
+func TestTransfer_KafkaEventIncludesTraceContext(t *testing.T) {
+	traceID, err := trace.TraceIDFromHex("4bf92f3577b34da6a3ce929d0e0e4736")
+	require.NoError(t, err)
+	spanID, err := trace.SpanIDFromHex("00f067aa0ba902b7")
+	require.NoError(t, err)
+
+	ctx := trace.ContextWithSpanContext(context.Background(), trace.NewSpanContext(trace.SpanContextConfig{
+		TraceID:    traceID,
+		SpanID:     spanID,
+		TraceFlags: trace.FlagsSampled,
+	}))
+	logic := &TransferLogic{
+		ctx:    ctx,
+		svcCtx: &svc.ServiceContext{},
+		Logger: logx.WithContext(ctx),
+	}
+
+	eventBytes, err := logic.buildTransferEvent(&pb.TransferReq{
+		SenderId:       42,
+		DeviceId:       "device-abc",
+		ConversationId: 200,
+		MessageType:    "text",
+		Content:        "hello",
+		ClientMsgId:    "msg-123",
+	}, 12345)
+	require.NoError(t, err)
+
+	var event map[string]any
+	require.NoError(t, json.Unmarshal(eventBytes, &event))
+	require.Equal(t, "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01", event["traceparent"])
 }
 
 func TestTransfer_IdempotencyKeyFormat(t *testing.T) {
@@ -585,11 +629,16 @@ func TestTransfer_IdempotencyKeyFormat(t *testing.T) {
 
 func TestRedisIdempotencyStore_CheckAndSet(t *testing.T) {
 	mr := miniredis.NewMiniRedis()
+
 	require.NoError(t, mr.Start())
 	defer mr.Close()
 
 	client := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	defer client.Close()
+	defer func() {
+		if err := client.Close(); err != nil {
+			t.Logf("close redis client: %v", err)
+		}
+	}()
 
 	store := &redisIdempotencyStore{client: client}
 	ctx := context.Background()

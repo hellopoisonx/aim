@@ -17,6 +17,7 @@ func TestExtractTokenFromBearerHeader(t *testing.T) {
 	if codeErr != nil {
 		t.Fatalf("ExtractToken failed: %v", codeErr)
 	}
+
 	assert.Equal(t, "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9", token)
 }
 

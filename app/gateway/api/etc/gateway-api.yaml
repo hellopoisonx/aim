@@ -39,6 +39,22 @@ CoreRpc:
   LogDir: /app/log/nacos
   CacheDir: /tmp/nacos/cache
   LogLevel: info
+LogicRpc:
+  ServerAddr: nacos:8848
+  NamespaceID: ""
+  Group: DEFAULT_GROUP
+  Cluster: DEFAULT
+  ServiceName: logic.rpc
+  AdvertiseIP: ""
+  AdvertisePort: 0
+  Ephemeral: true
+  Weight: 1
+  TimeoutMs: 5000
+  Username: ""
+  Password: ""
+  LogDir: /app/log/nacos
+  CacheDir: /tmp/nacos/cache
+  LogLevel: info
 Auth:
   AccessSecret: aim-dev-access-secret
 WebSocket:
@@ -60,4 +76,11 @@ Kafka:
     - 127.0.0.1:9092
   PresenceTopic: aim.presence.events
 GatewayRpc:
+  Name: gateway.rpc
   ListenOn: 127.0.0.1:9090
+  Telemetry:
+    Name: gateway.rpc
+    Endpoint: jaeger:4318
+    Sampler: 1.0
+    Batcher: otlphttp
+    OtlpHttpPath: /v1/traces

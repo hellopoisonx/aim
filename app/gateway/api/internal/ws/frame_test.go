@@ -37,7 +37,7 @@ func TestEncodeDecodeFrame(t *testing.T) {
 	assert.Equal(t, pb.FrameType_FRAME_TYPE_HEARTBEAT, decoded.GetType())
 	assert.Equal(t, int64(1), decoded.GetSeq())
 	assert.Equal(t, payloadBytes, decoded.GetPayload())
-	assert.Greater(t, decoded.GetTimestamp(), int64(0))
+	assert.Positive(t, decoded.GetTimestamp())
 }
 
 func TestEncodeDecodeSendMessage(t *testing.T) {
@@ -79,7 +79,7 @@ func TestDecodeEmptyData(t *testing.T) {
 	t.Parallel()
 
 	_, err := ws.DecodeFrame(nil)
-	assert.Error(t, err)
+	require.Error(t, err)
 
 	_, err = ws.DecodeFrame([]byte{})
 	assert.Error(t, err)
@@ -214,7 +214,7 @@ func TestNewServerAck(t *testing.T) {
 
 	assert.Equal(t, pb.FrameType_FRAME_TYPE_SERVER_ACK, ackFrame.GetType())
 	assert.Equal(t, int64(100), ackFrame.GetSeq())
-	assert.Greater(t, ackFrame.GetTimestamp(), int64(0))
+	assert.Positive(t, ackFrame.GetTimestamp())
 
 	// Decode payload
 	decodedPayload, err := ws.DecodePayload(ackFrame)

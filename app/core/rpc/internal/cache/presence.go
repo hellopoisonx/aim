@@ -2,6 +2,7 @@ package cache
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -23,23 +24,26 @@ func (s *PresenceStore) SetUserOnline(ctx context.Context, userID int64, gateway
 	pipe.Set(ctx, fmt.Sprintf("presence:%d", userID), "online", s.ttl)
 	pipe.Set(ctx, fmt.Sprintf("user_gateway:%d", userID), gatewayAddr, s.ttl)
 	_, err := pipe.Exec(ctx)
+
 	return err
 }
 
 // GetUserGateway returns the gateway node address for a user.
 func (s *PresenceStore) GetUserGateway(ctx context.Context, userID int64) (string, error) {
 	addr, err := s.client.Get(ctx, fmt.Sprintf("user_gateway:%d", userID)).Result()
-	if err == redis.Nil {
+	if errors.Is(err, redis.Nil) {
 		return "", fmt.Errorf("user %d is offline", userID)
 	}
+
 	return addr, err
 }
 
 // IsUserOnline checks if a user is online.
 func (s *PresenceStore) IsUserOnline(ctx context.Context, userID int64) (bool, error) {
 	val, err := s.client.Get(ctx, fmt.Sprintf("presence:%d", userID)).Result()
-	if err == redis.Nil {
+	if errors.Is(err, redis.Nil) {
 		return false, nil
 	}
+
 	return val == "online", err
 }

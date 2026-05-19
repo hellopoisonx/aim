@@ -3,6 +3,14 @@
 
 package types
 
+type GetUserByNameRequest struct {
+	Name string `path:"name" validate:"required"`
+}
+
+type GetUserByNameResponse struct {
+	User UserInfo `json:"user"`
+}
+
 type LoginRequest struct {
 	Email    string `json:"email" validate:"required,email"`
 	Password string `json:"password" validate:"required,min=8"`
@@ -40,4 +48,14 @@ type RegisterRequest struct {
 
 type RegisterResponse struct {
 	UserId int64 `json:"user_id"`
+}
+
+type UserInfo struct {
+	Id        int64  `json:"id"`
+	Email     string `json:"email"`
+	Status    int32  `json:"status"`
+	Nickname  string `json:"nickname"`
+	Avatar    string `json:"avatar"`
+	CreatedAt int64  `json:"created_at"`
+	UpdatedAt int64  `json:"updated_at"`
 }

@@ -7,11 +7,14 @@ import (
 
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/config"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/mqs"
-	"github.com/hellopoisonx/aim/app/logic/rpc/internal/server"
+	serverpermissionservice "github.com/hellopoisonx/aim/app/logic/rpc/internal/server/permissionservice"
+	serveruserservice "github.com/hellopoisonx/aim/app/logic/rpc/internal/server/userservice"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
+	aimnacos "github.com/hellopoisonx/aim/app/shared/nacos"
 
 	"github.com/zeromicro/go-zero/core/conf"
+	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/core/service"
 	"github.com/zeromicro/go-zero/zrpc"
 	"google.golang.org/grpc"
@@ -25,10 +28,24 @@ func main() {
 
 	var c config.Config
 	conf.MustLoad(*configFile, &c)
+	logx.Must(c.Nacos.ApplyDefaults(c.Name, c.ListenOn))
+
+	namingClient, err := aimnacos.NewNamingClient(c.Nacos)
+	logx.Must(err)
+
+	logx.Must(aimnacos.RegisterInstance(namingClient, c.Nacos))
+	defer namingClient.CloseClient()
+	defer func() {
+		if err := aimnacos.DeregisterInstance(namingClient, c.Nacos); err != nil {
+			logx.Error(err)
+		}
+	}()
+
 	ctx := svc.NewServiceContext(c)
 
 	s := zrpc.MustNewServer(c.RpcServerConf, func(grpcServer *grpc.Server) {
-		pb.RegisterPermissionServiceServer(grpcServer, server.NewPermissionServiceServer(ctx))
+		pb.RegisterPermissionServiceServer(grpcServer, serverpermissionservice.NewPermissionServiceServer(ctx))
+		pb.RegisterUserServiceServer(grpcServer, serveruserservice.NewUserServiceServer(ctx))
 
 		if c.Mode == service.DevMode || c.Mode == service.TestMode {
 			reflection.Register(grpcServer)
@@ -39,9 +56,11 @@ func main() {
 	// Run Kafka consumer alongside the RPC server via ServiceGroup
 	group := service.NewServiceGroup()
 	group.Add(s)
+
 	for _, svc := range mqs.Consumers(context.Background(), ctx) {
 		group.Add(svc)
 	}
+
 	defer group.Stop()
 
 	fmt.Printf("Starting rpc server at %s...\n", c.ListenOn)

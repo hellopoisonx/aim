@@ -3,6 +3,7 @@ package logic
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"time"
@@ -11,6 +12,7 @@ import (
 	"github.com/hellopoisonx/aim/app/core/rpc/pb"
 	logicpb "github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
+	"github.com/hellopoisonx/aim/app/shared/tracing"
 
 	"github.com/redis/go-redis/v9"
 	"github.com/zeromicro/go-queue/kq"
@@ -28,9 +30,9 @@ type TransferLogic struct {
 
 func NewTransferLogic(ctx context.Context, svcCtx *svc.ServiceContext) *TransferLogic {
 	return &TransferLogic{
-		ctx:    ctx,
-		svcCtx: svcCtx,
-		Logger: logx.WithContext(ctx),
+		ctx:         ctx,
+		svcCtx:      svcCtx,
+		Logger:      logx.WithContext(ctx),
 		idempotency: &redisIdempotencyStore{client: svcCtx.RedisClient},
 		publisher:   &kqMessagePublisher{pusher: svcCtx.KqPusher},
 	}
@@ -48,10 +50,12 @@ func (l *TransferLogic) Transfer(in *pb.TransferReq) (*pb.TransferResp, error) {
 
 	// 2. Idempotency check: detect duplicate requests by (sender, device, client_msg_id)
 	idempKey := fmt.Sprintf("idempotency:transfer:%d:%s:%s", in.SenderId, in.DeviceId, in.ClientMsgId)
+
 	exists, existingMsgID, err := l.idempotency.Check(l.ctx, idempKey)
 	if err != nil {
 		return nil, errorx.NewCodeErrorf(errorx.CodeInternal, "idempotency check failed: %v", err)
 	}
+
 	if exists {
 		return &pb.TransferResp{
 			MessageId:   existingMsgID,
@@ -76,6 +80,7 @@ func (l *TransferLogic) Transfer(in *pb.TransferReq) (*pb.TransferResp, error) {
 	if err != nil {
 		return nil, errorx.NewCodeErrorf(errorx.CodeInternal, "failed to build transfer event: %v", err)
 	}
+
 	kafkaKey := strconv.FormatInt(in.ConversationId, 10)
 	if err := l.publisher.Publish(l.ctx, kafkaKey, event); err != nil {
 		return nil, errorx.NewCodeErrorf(errorx.CodeInternal, "kafka publish failed: %v", err)
@@ -100,21 +105,27 @@ func (l *TransferLogic) validate(in *pb.TransferReq) error {
 	if in.SenderId <= 0 {
 		return errorx.NewCodeError(errorx.CodeBadInput, "sender_id is required")
 	}
+
 	if in.ConversationId <= 0 {
 		return errorx.NewCodeError(errorx.CodeBadInput, "conversation_id is required")
 	}
+
 	if len(in.MessageType) == 0 {
 		return errorx.NewCodeError(errorx.CodeBadInput, "message_type is required")
 	}
+
 	if len(in.MessageType) > 32 {
 		return errorx.NewCodeError(errorx.CodeBadInput, "message_type must be at most 32 characters")
 	}
+
 	if len(in.ClientMsgId) == 0 {
 		return errorx.NewCodeError(errorx.CodeBadInput, "client_msg_id is required")
 	}
+
 	if len(in.Mentions) > 20 {
 		return errorx.NewCodeError(errorx.CodeBadInput, "too many mentions (max 20)")
 	}
+
 	return nil
 }
 
@@ -135,6 +146,7 @@ func (l *TransferLogic) checkPermission(in *pb.TransferReq) error {
 		if ce := errorx.FromGRPCError(err); ce != nil {
 			return ce
 		}
+
 		return errorx.NewCodeErrorf(errorx.CodeInternal, "permission check failed: %v", err)
 	}
 
@@ -143,10 +155,12 @@ func (l *TransferLogic) checkPermission(in *pb.TransferReq) error {
 		if resp.BizCode != 0 {
 			code = int(resp.BizCode)
 		}
+
 		reason := resp.Reason
 		if reason == "" {
 			reason = "permission denied"
 		}
+
 		return errorx.NewCodeError(code, reason)
 	}
 
@@ -155,7 +169,10 @@ func (l *TransferLogic) checkPermission(in *pb.TransferReq) error {
 
 // buildTransferEvent serializes the transfer event as JSON for Kafka.
 func (l *TransferLogic) buildTransferEvent(in *pb.TransferReq, msgID int64) ([]byte, error) {
+	traceFields := tracing.InjectTraceContext(l.ctx)
 	event := map[string]any{
+		"traceparent":     traceFields.TraceParent,
+		"tracestate":      traceFields.TraceState,
 		"message_id":      msgID,
 		"sender_id":       in.SenderId,
 		"device_id":       in.DeviceId,
@@ -166,6 +183,7 @@ func (l *TransferLogic) buildTransferEvent(in *pb.TransferReq, msgID int64) ([]b
 		"mentions":        in.Mentions,
 		"timestamp":       time.Now().UnixMilli(),
 	}
+
 	return json.Marshal(event)
 }
 
@@ -177,12 +195,14 @@ type redisIdempotencyStore struct {
 
 func (s *redisIdempotencyStore) Check(ctx context.Context, key string) (bool, int64, error) {
 	val, err := s.client.Get(ctx, key).Int64()
-	if err == redis.Nil {
+	if errors.Is(err, redis.Nil) {
 		return false, 0, nil
 	}
+
 	if err != nil {
 		return false, 0, fmt.Errorf("redis get idempotency key %s: %w", key, err)
 	}
+
 	return true, val, nil
 }
 
@@ -200,5 +220,6 @@ func (p *kqMessagePublisher) Publish(ctx context.Context, key string, value []by
 	if p.pusher == nil {
 		return fmt.Errorf("kafka pusher is not configured")
 	}
+
 	return p.pusher.PushWithKey(ctx, key, string(value))
 }

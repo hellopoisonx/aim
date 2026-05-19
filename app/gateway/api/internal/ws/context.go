@@ -20,6 +20,8 @@ func IdentityFromContext(ctx context.Context) (Identity, bool) {
 	if val == nil {
 		return Identity{}, false
 	}
+
 	id, ok := val.(Identity)
+
 	return id, ok
 }

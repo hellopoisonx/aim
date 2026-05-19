@@ -51,6 +51,7 @@ func TestServeWSRejectsInvalidAuthorizationHeader(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/ws", nil)
 	req.Header.Set("Authorization", "not-a-bearer-token")
+
 	rec := httptest.NewRecorder()
 
 	handler.ServeWS(rec, req)
@@ -69,6 +70,7 @@ func TestServeWSValidTokenWithoutUpgradeHeaders(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/ws", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
+
 	rec := httptest.NewRecorder()
 
 	handler.ServeWS(rec, req)
@@ -114,6 +116,7 @@ func TestServeWSHeartbeatAck(t *testing.T) {
 
 	payload, err := wsmanager.EncodePayload(&pb.HeartbeatPayload{LastSeq: 7})
 	require.NoError(t, err)
+
 	frame := wsmanager.BuildFrame(pb.FrameType_FRAME_TYPE_HEARTBEAT, 11, payload)
 	data, err := wsmanager.EncodeFrame(frame)
 	require.NoError(t, err)
@@ -130,6 +133,7 @@ func TestServeWSHeartbeatAck(t *testing.T) {
 
 	ackPayload, err := wsmanager.DecodePayload(ackFrame)
 	require.NoError(t, err)
+
 	ack, ok := ackPayload.(*pb.ServerAckPayload)
 	require.True(t, ok)
 	require.Equal(t, int64(11), ack.GetAckSeq())
@@ -161,6 +165,7 @@ func TestServeWSSendMessageAck(t *testing.T) {
 		ClientMsgId:    "client-100",
 	})
 	require.NoError(t, err)
+
 	frame := wsmanager.BuildFrame(pb.FrameType_FRAME_TYPE_SEND_MESSAGE, 21, payload)
 	data, err := wsmanager.EncodeFrame(frame)
 	require.NoError(t, err)
@@ -177,6 +182,7 @@ func TestServeWSSendMessageAck(t *testing.T) {
 
 	ackPayload, err := wsmanager.DecodePayload(ackFrame)
 	require.NoError(t, err)
+
 	ack, ok := ackPayload.(*pb.ServerAckPayload)
 	require.True(t, ok)
 	require.Equal(t, int64(21), ack.GetAckSeq())
@@ -218,6 +224,7 @@ func newTestServiceContext(t *testing.T) *svc.ServiceContext {
 	t.Helper()
 
 	var c config.Config
+
 	c.Auth.AccessSecret = "test-secret"
 	c.WebSocket.MaxMsgSize = 32768
 
@@ -260,9 +267,12 @@ func (m *mockCoreClient) Transfer(ctx context.Context, req *corepb.TransferReq, 
 
 func newTestServiceContextWithCore(t *testing.T, coreClient corepb.TransferServiceClient) *svc.ServiceContext {
 	t.Helper()
+
 	var c config.Config
+
 	c.Auth.AccessSecret = "test-secret"
 	c.WebSocket.MaxMsgSize = 32768
+
 	return svc.NewServiceContextWithCore(c, noopAuthClient{}, coreClient)
 }
 
@@ -291,6 +301,7 @@ func TestHandleSendMessageCoreSuccess(t *testing.T) {
 		ClientMsgId:    "client-success",
 	})
 	require.NoError(t, err)
+
 	frame := wsmanager.BuildFrame(pb.FrameType_FRAME_TYPE_SEND_MESSAGE, 31, payload)
 	data, err := wsmanager.EncodeFrame(frame)
 	require.NoError(t, err)
@@ -306,6 +317,7 @@ func TestHandleSendMessageCoreSuccess(t *testing.T) {
 
 	ackPayload, err := wsmanager.DecodePayload(ackFrame)
 	require.NoError(t, err)
+
 	ack, ok := ackPayload.(*pb.ServerAckPayload)
 	require.True(t, ok)
 	require.Equal(t, int64(31), ack.GetAckSeq())
@@ -317,6 +329,7 @@ func TestHandleSendMessageCoreSuccess(t *testing.T) {
 // TestHandleSendMessageCoreRejected verifies ACK_STATUS_REJECTED for business errors.
 func TestHandleSendMessageCoreRejected(t *testing.T) {
 	t.Parallel()
+
 	tests := []struct {
 		name       string
 		err        error
@@ -379,6 +392,7 @@ func TestHandleSendMessageCoreRejected(t *testing.T) {
 				ClientMsgId:    clientMsgID,
 			})
 			require.NoError(t, err)
+
 			frame := wsmanager.BuildFrame(pb.FrameType_FRAME_TYPE_SEND_MESSAGE, 41, payload)
 			data, err := wsmanager.EncodeFrame(frame)
 			require.NoError(t, err)
@@ -392,6 +406,7 @@ func TestHandleSendMessageCoreRejected(t *testing.T) {
 			require.NoError(t, err)
 			ackPayload, err := wsmanager.DecodePayload(ackFrame)
 			require.NoError(t, err)
+
 			ack, ok := ackPayload.(*pb.ServerAckPayload)
 			require.True(t, ok)
 			require.Equal(t, tt.wantStatus, ack.GetStatus())
@@ -404,6 +419,7 @@ func TestHandleSendMessageCoreRejected(t *testing.T) {
 // TestHandleSendMessageCoreRetryable verifies ACK_STATUS_RETRYABLE for infrastructure errors.
 func TestHandleSendMessageCoreRetryable(t *testing.T) {
 	t.Parallel()
+
 	tests := []struct {
 		name string
 		err  error
@@ -446,6 +462,7 @@ func TestHandleSendMessageCoreRetryable(t *testing.T) {
 				ClientMsgId:    clientMsgID,
 			})
 			require.NoError(t, err)
+
 			frame := wsmanager.BuildFrame(pb.FrameType_FRAME_TYPE_SEND_MESSAGE, 51, payload)
 			data, err := wsmanager.EncodeFrame(frame)
 			require.NoError(t, err)
@@ -459,6 +476,7 @@ func TestHandleSendMessageCoreRetryable(t *testing.T) {
 			require.NoError(t, err)
 			ackPayload, err := wsmanager.DecodePayload(ackFrame)
 			require.NoError(t, err)
+
 			ack, ok := ackPayload.(*pb.ServerAckPayload)
 			require.True(t, ok)
 			require.Equal(t, pb.AckStatus_ACK_STATUS_RETRYABLE, ack.GetStatus())
@@ -491,6 +509,7 @@ func TestHandleSendMessageCoreUnavailable(t *testing.T) {
 		ClientMsgId:    "client-nocore",
 	})
 	require.NoError(t, err)
+
 	frame := wsmanager.BuildFrame(pb.FrameType_FRAME_TYPE_SEND_MESSAGE, 61, payload)
 	data, err := wsmanager.EncodeFrame(frame)
 	require.NoError(t, err)
@@ -504,6 +523,7 @@ func TestHandleSendMessageCoreUnavailable(t *testing.T) {
 	require.NoError(t, err)
 	ackPayload, err := wsmanager.DecodePayload(ackFrame)
 	require.NoError(t, err)
+
 	ack, ok := ackPayload.(*pb.ServerAckPayload)
 	require.True(t, ok)
 	require.Equal(t, pb.AckStatus_ACK_STATUS_RETRYABLE, ack.GetStatus())
@@ -513,11 +533,13 @@ func TestHandleSendMessageCoreUnavailable(t *testing.T) {
 // TestMapTransferToAckSuccess unit tests mapTransferToAck with success response.
 func TestMapTransferToAckSuccess(t *testing.T) {
 	t.Parallel()
+
 	resp := &corepb.TransferResp{MessageId: 123, ClientMsgId: "c1"}
 	ackFrame := mapTransferToAck(10, "c1", 1, resp, nil)
 
 	ackPayload, err := wsmanager.DecodePayload(ackFrame)
 	require.NoError(t, err)
+
 	ack, ok := ackPayload.(*pb.ServerAckPayload)
 	require.True(t, ok)
 	require.Equal(t, pb.AckStatus_ACK_STATUS_ACCEPTED, ack.GetStatus())
@@ -529,6 +551,7 @@ func TestMapTransferToAckSuccess(t *testing.T) {
 // TestMapTransferToAckRejected unit tests mapTransferToAck with rejected errors.
 func TestMapTransferToAckRejected(t *testing.T) {
 	t.Parallel()
+
 	tests := []struct {
 		name     string
 		grpcCode codes.Code
@@ -570,15 +593,17 @@ func TestMapTransferToAckRejected(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			err := status.New(tt.grpcCode, tt.wantMsg).Err()
 			ackFrame := mapTransferToAck(10, "c1", 1, nil, err)
 
 			ackPayload, err := wsmanager.DecodePayload(ackFrame)
 			require.NoError(t, err)
+
 			ack, ok := ackPayload.(*pb.ServerAckPayload)
 			require.True(t, ok)
 			require.Equal(t, pb.AckStatus_ACK_STATUS_REJECTED, ack.GetStatus())
-			require.Equal(t, int32(tt.wantBiz), ack.GetCode())
+			require.Equal(t, tt.wantBiz, int(ack.GetCode()))
 			require.Equal(t, tt.wantMsg, ack.GetMsg())
 		})
 	}
@@ -587,6 +612,7 @@ func TestMapTransferToAckRejected(t *testing.T) {
 // TestMapTransferToAckRetryable unit tests mapTransferToAck with retryable errors.
 func TestMapTransferToAckRetryable(t *testing.T) {
 	t.Parallel()
+
 	tests := []struct {
 		name     string
 		err      error
@@ -622,14 +648,16 @@ func TestMapTransferToAckRetryable(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
 			ackFrame := mapTransferToAck(10, "c1", 1, nil, tt.err)
 
 			ackPayload, err := wsmanager.DecodePayload(ackFrame)
 			require.NoError(t, err)
+
 			ack, ok := ackPayload.(*pb.ServerAckPayload)
 			require.True(t, ok)
 			require.Equal(t, pb.AckStatus_ACK_STATUS_RETRYABLE, ack.GetStatus())
-			require.Equal(t, int32(tt.wantCode), ack.GetCode())
+			require.Equal(t, tt.wantCode, int(ack.GetCode()))
 		})
 	}
 }
@@ -648,21 +676,26 @@ type presenceCall struct {
 func (m *mockPresencePublisher) PublishPresence(ctx context.Context, userID int64, status string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.calls = append(m.calls, presenceCall{UserID: userID, Status: status})
+
 	return nil
 }
 
 func (m *mockPresencePublisher) Clear() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	m.calls = nil
 }
 
 func (m *mockPresencePublisher) getCalls() []presenceCall {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
 	c := make([]presenceCall, len(m.calls))
 	copy(c, m.calls)
+
 	return c
 }
 
@@ -675,6 +708,7 @@ func newTestServiceContextWithRedis(t *testing.T, presencePub *mockPresencePubli
 	t.Cleanup(mr.Close)
 
 	var c config.Config
+
 	c.Auth.AccessSecret = "test-secret"
 	c.WebSocket.MaxMsgSize = 32768
 	c.Redis.PresenceTTL = 60
@@ -689,7 +723,11 @@ func newTestServiceContextWithRedis(t *testing.T, presencePub *mockPresencePubli
 		PresencePub: presencePub,
 	}
 
-	t.Cleanup(func() { rdb.Close() })
+	t.Cleanup(func() {
+		if err := rdb.Close(); err != nil {
+			t.Logf("close redis client: %v", err)
+		}
+	})
 
 	return sc, mr
 }
@@ -717,6 +755,7 @@ func TestHandleHeartbeatWritesPresenceToRedis(t *testing.T) {
 	// Send heartbeat
 	payload, err := wsmanager.EncodePayload(&pb.HeartbeatPayload{LastSeq: 0})
 	require.NoError(t, err)
+
 	frame := wsmanager.BuildFrame(pb.FrameType_FRAME_TYPE_HEARTBEAT, 100, payload)
 	data, err := wsmanager.EncodeFrame(frame)
 	require.NoError(t, err)
@@ -752,6 +791,7 @@ func TestHandleHeartbeatPresenceFailureNonBlocking(t *testing.T) {
 
 	// ServiceContext with nil RedisClient and nil PresencePub
 	var c config.Config
+
 	c.Auth.AccessSecret = "test-secret"
 	c.WebSocket.MaxMsgSize = 32768
 	sc := &svc.ServiceContext{
@@ -779,6 +819,7 @@ func TestHandleHeartbeatPresenceFailureNonBlocking(t *testing.T) {
 	// Send heartbeat
 	payload, err := wsmanager.EncodePayload(&pb.HeartbeatPayload{LastSeq: 0})
 	require.NoError(t, err)
+
 	frame := wsmanager.BuildFrame(pb.FrameType_FRAME_TYPE_HEARTBEAT, 110, payload)
 	data, err := wsmanager.EncodeFrame(frame)
 	require.NoError(t, err)
@@ -814,6 +855,7 @@ func TestServeWSDisconnectWritesOfflinePresence(t *testing.T) {
 	// Send a heartbeat first so we have "online" set
 	payload, err := wsmanager.EncodePayload(&pb.HeartbeatPayload{LastSeq: 0})
 	require.NoError(t, err)
+
 	frame := wsmanager.BuildFrame(pb.FrameType_FRAME_TYPE_HEARTBEAT, 120, payload)
 	data, err := wsmanager.EncodeFrame(frame)
 	require.NoError(t, err)
@@ -876,6 +918,7 @@ func TestHandleHeartbeatPublishesPresenceEvent(t *testing.T) {
 	// Send heartbeat
 	payload, err := wsmanager.EncodePayload(&pb.HeartbeatPayload{LastSeq: 0})
 	require.NoError(t, err)
+
 	frame := wsmanager.BuildFrame(pb.FrameType_FRAME_TYPE_HEARTBEAT, 130, payload)
 	data, err := wsmanager.EncodeFrame(frame)
 	require.NoError(t, err)
@@ -909,6 +952,7 @@ func generateShortLivedToken(secret string, userID int64, deviceID string, expir
 	}
 	token := jwtlib.NewWithClaims(jwtlib.SigningMethodHS256, claims)
 	signed, err := token.SignedString([]byte(secret))
+
 	return signed, expiresAt, err
 }
 
@@ -947,6 +991,7 @@ func TestTokenExpiryPushesFrame(t *testing.T) {
 
 	payload, err := wsmanager.DecodePayload(frame)
 	require.NoError(t, err)
+
 	expiredPayload, ok := payload.(*pb.TokenExpiredPayload)
 	require.True(t, ok)
 	require.Equal(t, "access_token_expired", expiredPayload.GetReason())
@@ -974,6 +1019,7 @@ func TestTokenNotExpiredNormalOperation(t *testing.T) {
 	// Send heartbeat - should get ACK, no token expired frame
 	payload, err := wsmanager.EncodePayload(&pb.HeartbeatPayload{LastSeq: 0})
 	require.NoError(t, err)
+
 	frame := wsmanager.BuildFrame(pb.FrameType_FRAME_TYPE_HEARTBEAT, 200, payload)
 	data, err := wsmanager.EncodeFrame(frame)
 	require.NoError(t, err)

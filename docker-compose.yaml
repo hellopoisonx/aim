@@ -20,6 +20,8 @@ services:
         condition: service_healthy
       kafka:
         condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
       nacos:
         condition: service_healthy
       jaeger:
@@ -59,9 +61,77 @@ services:
         condition: service_healthy
       kafka:
         condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
       nacos:
         condition: service_healthy
       jaeger:
+        condition: service_started
+    networks:
+      - aim-network
+
+  aim-logic:
+    build:
+      context: .
+      dockerfile: app/logic/rpc/Dockerfile
+    container_name: aim-logic
+    volumes:
+      - ./app/logic/rpc/etc/logic.yaml:/app/etc/logic.yaml:ro
+      - logic_log:/app/log
+    depends_on:
+      logic-migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+      nacos:
+        condition: service_healthy
+      jaeger:
+        condition: service_started
+    networks:
+      - aim-network
+
+  logic-migrate:
+    image: postgres:17-alpine
+    container_name: aim-logic-migrate
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: password
+    volumes:
+      - ./app/logic/rpc/sql/migrations:/migrations:ro
+    command: ["sh", "-c", "psql -h postgres -U user -d postgres -c \"SELECT 1 FROM pg_database WHERE datname = 'aim_logic'\" | grep -q 1 || psql -h postgres -U user -d postgres -c \"CREATE DATABASE aim_logic\" && psql -h postgres -U user -d aim_logic -f /migrations/000_extensions.sql && psql -h postgres -U user -d aim_logic -f /migrations/001_initial_permission.sql && psql -h postgres -U user -d aim_logic -f /migrations/002_messages.sql && psql -h postgres -U user -d aim_logic -f /migrations/003_user_info.sql"]
+    networks:
+      - aim-network
+
+  aim-core:
+    build:
+      context: .
+      dockerfile: app/core/rpc/Dockerfile
+    container_name: aim-core
+    ports:
+      - "8081:8080"
+    volumes:
+      - ./app/core/rpc/etc/core.yaml:/app/etc/core.yaml:ro
+      - core_log:/app/log
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+      nacos:
+        condition: service_healthy
+      jaeger:
+        condition: service_started
+      aim-logic:
         condition: service_started
     networks:
       - aim-network
@@ -131,6 +201,21 @@ services:
     networks:
       - aim-network
 
+  kafka-init:
+    image: apache/kafka:4.0.2
+    container_name: aim-kafka-init
+    depends_on:
+      kafka:
+        condition: service_healthy
+    command:
+      - sh
+      - -c
+      - |
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic aim.user.events --partitions 3 --replication-factor 1
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic aim-message-transfer --partitions 3 --replication-factor 1
+    networks:
+      - aim-network
+
   nacos:
     image: nacos/nacos-server:v2.5.1
     container_name: aim-nacos
@@ -180,3 +265,5 @@ volumes:
   nacos_logs:
   gateway_log:
   auth_log:
+  logic_log:
+  core_log:

@@ -17,4 +17,28 @@ func TestConfigLoadsAuthYAML(t *testing.T) {
 	require.Equal(t, "redis:6379", c.SessionRedis.Host)
 	require.Equal(t, "aim-dev-access-secret", c.Token.AccessSecret)
 	require.Equal(t, "nacos:8848", c.Nacos.ServerAddr)
+	require.Equal(t, "auth.rpc", c.Telemetry.Name)
+	require.Equal(t, "jaeger:4318", c.Telemetry.Endpoint)
+	require.InEpsilon(t, 1.0, c.Telemetry.Sampler, 0.0001)
+	require.Equal(t, "otlphttp", c.Telemetry.Batcher)
+	require.Equal(t, "/v1/traces", c.Telemetry.OtlpHttpPath)
+}
+
+func TestConfigKqPusherConf(t *testing.T) {
+	t.Parallel()
+
+	var c Config
+	require.NoError(t, conf.Load("../../etc/auth.yaml", &c))
+	require.True(t, c.IsKqPusherConfigured())
+	require.Equal(t, []string{"kafka:9092"}, c.KqPusherConf.Brokers)
+	require.Equal(t, "aim.user.events", c.KqPusherConf.Topic)
+}
+
+func TestConfigKqPusherConf_NotConfigured(t *testing.T) {
+	t.Parallel()
+
+	c := Config{}
+	require.False(t, c.IsKqPusherConfigured())
+	require.Empty(t, c.KqPusherConf.Brokers)
+	require.Empty(t, c.KqPusherConf.Topic)
 }

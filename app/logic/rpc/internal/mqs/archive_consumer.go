@@ -6,12 +6,15 @@ import (
 
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/model"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
+	"github.com/hellopoisonx/aim/app/shared/tracing"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
 // transferEvent is the JSON event published by core TransferLogic.
 type transferEvent struct {
+	tracing.TraceContextFields
+
 	MessageID      int64    `json:"message_id"`
 	SenderID       int64    `json:"sender_id"`
 	DeviceID       string   `json:"device_id"`
@@ -45,6 +48,11 @@ func (c *ArchiveConsumer) Consume(ctx context.Context, key string, value string)
 		return err
 	}
 
+	ctx = tracing.ExtractTraceContext(ctx, event.TraceContextFields)
+
+	ctx, span := tracing.StartKafkaConsumerSpan(ctx, "logic.kafka.archive.consume")
+	defer span.End()
+
 	// Marshal content to JSONB ([]byte)
 	contentJSON, err := json.Marshal(event.Content)
 	if err != nil {
@@ -64,6 +72,7 @@ func (c *ArchiveConsumer) Consume(ctx context.Context, key string, value string)
 	}
 
 	queries := model.New(c.svcCtx.DB)
+
 	err = queries.InsertMessage(ctx, model.InsertMessageParams{
 		ID:             event.MessageID,
 		ConversationID: event.ConversationID,
@@ -79,5 +88,6 @@ func (c *ArchiveConsumer) Consume(ctx context.Context, key string, value string)
 	}
 
 	logx.WithContext(ctx).Infof("archived message %d", event.MessageID)
+
 	return nil
 }

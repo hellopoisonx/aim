@@ -9,12 +9,19 @@ import (
 )
 
 type Querier interface {
+	CreateUserInfo(ctx context.Context, arg CreateUserInfoParams) (UserInfo, error)
 	GetConversation(ctx context.Context, id int64) (GetConversationRow, error)
 	GetFriendship(ctx context.Context, arg GetFriendshipParams) (GetFriendshipRow, error)
 	GetFriendshipBidirectional(ctx context.Context, arg GetFriendshipBidirectionalParams) ([]GetFriendshipBidirectionalRow, error)
 	GetMember(ctx context.Context, arg GetMemberParams) (GetMemberRow, error)
+	GetUserInfoByEmail(ctx context.Context, email string) (UserInfo, error)
+	GetUserInfoByID(ctx context.Context, id int64) (UserInfo, error)
+	GetUserInfoByNickname(ctx context.Context, nickname string) (UserInfo, error)
 	InsertMessage(ctx context.Context, arg InsertMessageParams) error
 	IsMemberMuted(ctx context.Context, arg IsMemberMutedParams) (IsMemberMutedRow, error)
+	SearchUserInfoByNickname(ctx context.Context, arg SearchUserInfoByNicknameParams) ([]UserInfo, error)
+	UpdateUserInfoProfile(ctx context.Context, arg UpdateUserInfoProfileParams) (UserInfo, error)
+	UpdateUserInfoStatus(ctx context.Context, arg UpdateUserInfoStatusParams) (UserInfo, error)
 }
 
 var _ Querier = (*Queries)(nil)

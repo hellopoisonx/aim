@@ -15,6 +15,7 @@ func EncodeFrame(frame *pb.WsFrame) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("encode wsframe: %w", err)
 	}
+
 	return data, nil
 }
 
@@ -23,10 +24,12 @@ func DecodeFrame(data []byte) (*pb.WsFrame, error) {
 	if len(data) == 0 {
 		return nil, fmt.Errorf("decode wsframe: empty data")
 	}
+
 	var frame pb.WsFrame
 	if err := proto.Unmarshal(data, &frame); err != nil {
 		return nil, fmt.Errorf("decode wsframe: %w", err)
 	}
+
 	return &frame, nil
 }
 
@@ -36,6 +39,7 @@ func EncodePayload(msg proto.Message) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("encode payload: %w", err)
 	}
+
 	return data, nil
 }
 
@@ -48,72 +52,84 @@ func DecodePayload(frame *pb.WsFrame) (proto.Message, error) {
 		if err := proto.Unmarshal(frame.GetPayload(), &payload); err != nil {
 			return nil, fmt.Errorf("decode sendmessage: %w", err)
 		}
+
 		return &payload, nil
 	case pb.FrameType_FRAME_TYPE_HEARTBEAT:
 		var payload pb.HeartbeatPayload
 		if err := proto.Unmarshal(frame.GetPayload(), &payload); err != nil {
 			return nil, fmt.Errorf("decode heartbeat: %w", err)
 		}
+
 		return &payload, nil
 	case pb.FrameType_FRAME_TYPE_TYPING:
 		var payload pb.TypingPayload
 		if err := proto.Unmarshal(frame.GetPayload(), &payload); err != nil {
 			return nil, fmt.Errorf("decode typing: %w", err)
 		}
+
 		return &payload, nil
 	case pb.FrameType_FRAME_TYPE_READ_RECEIPT:
 		var payload pb.ReadReceiptPayload
 		if err := proto.Unmarshal(frame.GetPayload(), &payload); err != nil {
 			return nil, fmt.Errorf("decode readreceipt: %w", err)
 		}
+
 		return &payload, nil
 	case pb.FrameType_FRAME_TYPE_ACK:
 		var payload pb.ClientAckPayload
 		if err := proto.Unmarshal(frame.GetPayload(), &payload); err != nil {
 			return nil, fmt.Errorf("decode clientack: %w", err)
 		}
+
 		return &payload, nil
 	case pb.FrameType_FRAME_TYPE_PUSH_MESSAGE:
 		var payload pb.PushMessagePayload
 		if err := proto.Unmarshal(frame.GetPayload(), &payload); err != nil {
 			return nil, fmt.Errorf("decode pushmessage: %w", err)
 		}
+
 		return &payload, nil
 	case pb.FrameType_FRAME_TYPE_PUSH_PRESENCE:
 		var payload pb.PushPresencePayload
 		if err := proto.Unmarshal(frame.GetPayload(), &payload); err != nil {
 			return nil, fmt.Errorf("decode pushpresence: %w", err)
 		}
+
 		return &payload, nil
 	case pb.FrameType_FRAME_TYPE_PUSH_NOTIFICATION:
 		var payload pb.PushNotificationPayload
 		if err := proto.Unmarshal(frame.GetPayload(), &payload); err != nil {
 			return nil, fmt.Errorf("decode pushnotification: %w", err)
 		}
+
 		return &payload, nil
 	case pb.FrameType_FRAME_TYPE_PUSH_TYPING:
 		var payload pb.PushTypingPayload
 		if err := proto.Unmarshal(frame.GetPayload(), &payload); err != nil {
 			return nil, fmt.Errorf("decode pushtyping: %w", err)
 		}
+
 		return &payload, nil
 	case pb.FrameType_FRAME_TYPE_RECONNECT:
 		var payload pb.ReconnectPayload
 		if err := proto.Unmarshal(frame.GetPayload(), &payload); err != nil {
 			return nil, fmt.Errorf("decode reconnect: %w", err)
 		}
+
 		return &payload, nil
 	case pb.FrameType_FRAME_TYPE_TOKEN_EXPIRED:
 		var payload pb.TokenExpiredPayload
 		if err := proto.Unmarshal(frame.GetPayload(), &payload); err != nil {
 			return nil, fmt.Errorf("decode tokenexpired: %w", err)
 		}
+
 		return &payload, nil
 	case pb.FrameType_FRAME_TYPE_SERVER_ACK:
 		var payload pb.ServerAckPayload
 		if err := proto.Unmarshal(frame.GetPayload(), &payload); err != nil {
 			return nil, fmt.Errorf("decode serverack: %w", err)
 		}
+
 		return &payload, nil
 	default:
 		return nil, fmt.Errorf("unknown frame type: %v", frame.GetType())
@@ -137,10 +153,12 @@ func NewServerAck(ackSeq int64, clientMsgID string, seq int64) (*pb.WsFrame, err
 		AckSeq:      ackSeq,
 		ClientMsgId: clientMsgID,
 	}
+
 	data, err := EncodePayload(payload)
 	if err != nil {
 		return nil, err
 	}
+
 	return BuildFrame(pb.FrameType_FRAME_TYPE_SERVER_ACK, seq, data), nil
 }
 
@@ -162,10 +180,12 @@ func NewServerAckExtended(
 		Msg:         msg,
 		MessageId:   messageID,
 	}
+
 	data, err := EncodePayload(payload)
 	if err != nil {
 		return nil, err
 	}
+
 	return BuildFrame(pb.FrameType_FRAME_TYPE_SERVER_ACK, seq, data), nil
 }
 

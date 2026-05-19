@@ -148,10 +148,12 @@ func TestCheckMessagePermission(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			svcCtx := svc.NewServiceContextWithPermissionChecker(config.Config{}, tt.checker)
+
 			got, err := NewCheckMessagePermissionLogic(ctx, svcCtx).CheckMessagePermission(tt.req)
 			if tt.wantCode != codes.OK {
 				require.Error(t, err)
 				require.Equal(t, tt.wantCode, status.Code(err))
+
 				return
 			}
 

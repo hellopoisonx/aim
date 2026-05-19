@@ -33,6 +33,7 @@ func ValidateToken(tokenString string, secretKey string) (*jwt.Claims, *errorx.C
 	// Simple JWT validation without a full JWT manager
 	// We create a temporary manager to validate
 	manager := jwt.NewManager(secretKey)
+
 	claims, err := manager.ValidateAccessToken(tokenString)
 	if err != nil {
 		// Determine specific error type
@@ -40,6 +41,7 @@ func ValidateToken(tokenString string, secretKey string) (*jwt.Claims, *errorx.C
 			strings.Contains(err.Error(), "expired") {
 			return nil, errorx.NewCodeError(errorx.CodeTokenExpired, "token expired")
 		}
+
 		return nil, errorx.NewCodeError(errorx.CodeTokenInvalid, "invalid token")
 	}
 

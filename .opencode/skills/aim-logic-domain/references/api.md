@@ -51,3 +51,41 @@ message CheckMessagePermissionResp {
 ```bash
 goctl rpc protoc app/logic/rpc/logic.proto --go_out=app/logic/rpc --go-grpc_out=app/logic/rpc --zrpc_out=app/logic/rpc --style go_zero
 ```
+
+## UserService RPC
+
+`UserService` 属于 User/Relationship Service，只维护用户资料数据；认证凭证、密码哈希、RefreshToken 仍由 `aim-auth` 的 `user_credentials` 和 Redis 会话持有。
+
+### UserService
+
+```protobuf
+service UserService {
+  rpc CreateUserInfo(CreateUserInfoReq) returns (CreateUserInfoResp);
+  rpc GetUserInfo(GetUserInfoReq) returns (GetUserInfoResp);
+  rpc GetUserInfoByEmail(GetUserInfoByEmailReq) returns (GetUserInfoResp);
+  rpc GetUserInfoByNickname(GetUserInfoByNicknameReq) returns (GetUserInfoResp);
+  rpc UpdateUserInfoProfile(UpdateUserInfoProfileReq) returns (UpdateUserInfoProfileResp);
+  rpc UpdateUserInfoStatus(UpdateUserInfoStatusReq) returns (UpdateUserInfoStatusResp);
+  rpc SearchUserInfoByNickname(SearchUserInfoByNicknameReq) returns (SearchUserInfoByNicknameResp);
+}
+```
+
+### 数据与查询
+
+- 表：`app/logic/rpc/sql/migrations/003_user_info.sql` 中的 `user_info(id, email, status, nickname, avatar, created_at, updated_at)`。
+- 扩展：`app/logic/rpc/sql/migrations/000_extensions.sql` 中的 `pg_trgm`，用于 `idx_user_info_nickname_trgm` 和昵称相似度排序。
+- 查询：`app/logic/rpc/sql/queries/user_info.sql`，通过 `sqlc generate` 生成到 `app/logic/rpc/internal/model`。
+- `GetUserInfoByNickname` 是昵称精确查询，用于 gateway `GET /api/users/by-name/:name` 代理；模糊搜索仍使用 `SearchUserInfoByNickname`。
+
+### 返回码约定
+
+- 参数错误通过 `errorx.NewCodeError(40000, ...)` 返回 gRPC `InvalidArgument`。
+- 用户不存在通过 `errorx.NewCodeError(40400, "user not found")` 返回 gRPC `NotFound`。
+- 邮箱或 ID 唯一约束冲突通过 `errorx.NewCodeError(40900, "user already exists")` 返回 gRPC `AlreadyExists`。
+- 数据库等基础设施错误通过 `errorx.NewCodeError(50000, "internal error")` 返回 gRPC `Internal`，不泄漏底层错误细节。
+- `CreateUserInfo` 与 `UpdateUserInfoProfile` 在业务层将空字符串 avatar 归一化为 `https://implement.me`，与 `user_info.avatar` 的数据库默认值一致，避免显式 `""` 覆盖 DB default。
+
+### 边界
+
+- `UserService` 不存储 `password_hash`，也不签发 JWT。
+- `aim-logic` 不导入 `aim-core`；`aim-core` 仍只通过 gRPC 查询业务上下文。

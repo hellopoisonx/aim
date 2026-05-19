@@ -46,11 +46,13 @@ func (m *Manager) Register(identity Identity, conn *websocket.Conn, cancel conte
 	if _, exists := m.connections[identity]; exists {
 		return fmt.Errorf("connection already exists for user_id=%d device_id=%s", identity.UserID, identity.DeviceID)
 	}
+
 	m.connections[identity] = &Connection{
 		Identity: identity,
 		Cancel:   cancel,
 		Conn:     conn,
 	}
+
 	return nil
 }
 
@@ -63,8 +65,11 @@ func (m *Manager) Unregister(identity Identity) error {
 	if !exists {
 		return fmt.Errorf("connection not found for user_id=%d device_id=%s", identity.UserID, identity.DeviceID)
 	}
+
 	delete(m.connections, identity)
+
 	_ = conn.Cancel // cancel is called by handler on disconnect
+
 	return nil
 }
 
@@ -77,6 +82,7 @@ func (m *Manager) Get(identity Identity) (*Connection, error) {
 	if !exists {
 		return nil, fmt.Errorf("connection not found for user_id=%d device_id=%s", identity.UserID, identity.DeviceID)
 	}
+
 	return conn, nil
 }
 
@@ -84,6 +90,7 @@ func (m *Manager) Get(identity Identity) (*Connection, error) {
 func (m *Manager) Count() int {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+
 	return len(m.connections)
 }
 
@@ -91,12 +98,15 @@ func (m *Manager) Count() int {
 func (m *Manager) CountByUser(userID int64) int {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+
 	count := 0
+
 	for _, conn := range m.connections {
 		if conn.Identity.UserID == userID {
 			count++
 		}
 	}
+
 	return count
 }
 
@@ -104,12 +114,15 @@ func (m *Manager) CountByUser(userID int64) int {
 func (m *Manager) GetByUserID(userID int64) []*Connection {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+
 	var result []*Connection
+
 	for _, conn := range m.connections {
 		if conn.Identity.UserID == userID {
 			result = append(result, conn)
 		}
 	}
+
 	return result
 }
 
@@ -117,6 +130,7 @@ func (m *Manager) GetByUserID(userID int64) []*Connection {
 func (m *Manager) ForEachUser(userID int64, fn func(*Connection)) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+
 	for _, conn := range m.connections {
 		if conn.Identity.UserID == userID {
 			fn(conn)
@@ -128,10 +142,12 @@ func (m *Manager) ForEachUser(userID int64, fn func(*Connection)) {
 func (m *Manager) All() []*Connection {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+
 	result := make([]*Connection, 0, len(m.connections))
 	for _, conn := range m.connections {
 		result = append(result, conn)
 	}
+
 	return result
 }
 
@@ -139,10 +155,12 @@ func (m *Manager) All() []*Connection {
 func (m *Manager) ListIdentities() []Identity {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+
 	identities := make([]Identity, 0, len(m.connections))
 	for identity := range m.connections {
 		identities = append(identities, identity)
 	}
+
 	return identities
 }
 
@@ -155,6 +173,7 @@ func (m *Manager) CloseAll() {
 		if conn.Cancel != nil {
 			conn.Cancel()
 		}
+
 		delete(m.connections, identity)
 	}
 }

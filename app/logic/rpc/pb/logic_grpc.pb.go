@@ -2,7 +2,7 @@
 // versions:
 // - protoc-gen-go-grpc v1.5.1
 // - protoc             v3.19.4
-// source: app/logic/rpc/logic.proto
+// source: logic.proto
 
 package pb
 
@@ -121,5 +121,349 @@ var PermissionService_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "app/logic/rpc/logic.proto",
+	Metadata: "logic.proto",
+}
+
+const (
+	UserService_CreateUserInfo_FullMethodName           = "/logic.UserService/CreateUserInfo"
+	UserService_GetUserInfo_FullMethodName              = "/logic.UserService/GetUserInfo"
+	UserService_GetUserInfoByEmail_FullMethodName       = "/logic.UserService/GetUserInfoByEmail"
+	UserService_GetUserInfoByNickname_FullMethodName    = "/logic.UserService/GetUserInfoByNickname"
+	UserService_UpdateUserInfoProfile_FullMethodName    = "/logic.UserService/UpdateUserInfoProfile"
+	UserService_UpdateUserInfoStatus_FullMethodName     = "/logic.UserService/UpdateUserInfoStatus"
+	UserService_SearchUserInfoByNickname_FullMethodName = "/logic.UserService/SearchUserInfoByNickname"
+)
+
+// UserServiceClient is the client API for UserService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+type UserServiceClient interface {
+	// CreateUserInfo creates a new user profile.
+	CreateUserInfo(ctx context.Context, in *CreateUserInfoReq, opts ...grpc.CallOption) (*CreateUserInfoResp, error)
+	// GetUserInfo retrieves a user profile by ID.
+	GetUserInfo(ctx context.Context, in *GetUserInfoReq, opts ...grpc.CallOption) (*GetUserInfoResp, error)
+	// GetUserInfoByEmail retrieves a user profile by email.
+	GetUserInfoByEmail(ctx context.Context, in *GetUserInfoByEmailReq, opts ...grpc.CallOption) (*GetUserInfoResp, error)
+	// GetUserInfoByNickname retrieves a user profile by exact nickname.
+	GetUserInfoByNickname(ctx context.Context, in *GetUserInfoByNicknameReq, opts ...grpc.CallOption) (*GetUserInfoResp, error)
+	// UpdateUserInfoProfile updates nickname and avatar.
+	UpdateUserInfoProfile(ctx context.Context, in *UpdateUserInfoProfileReq, opts ...grpc.CallOption) (*UpdateUserInfoProfileResp, error)
+	// UpdateUserInfoStatus updates user status.
+	UpdateUserInfoStatus(ctx context.Context, in *UpdateUserInfoStatusReq, opts ...grpc.CallOption) (*UpdateUserInfoStatusResp, error)
+	// SearchUserInfoByNickname searches user profiles by nickname prefix.
+	SearchUserInfoByNickname(ctx context.Context, in *SearchUserInfoByNicknameReq, opts ...grpc.CallOption) (*SearchUserInfoByNicknameResp, error)
+}
+
+type userServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewUserServiceClient(cc grpc.ClientConnInterface) UserServiceClient {
+	return &userServiceClient{cc}
+}
+
+func (c *userServiceClient) CreateUserInfo(ctx context.Context, in *CreateUserInfoReq, opts ...grpc.CallOption) (*CreateUserInfoResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateUserInfoResp)
+	err := c.cc.Invoke(ctx, UserService_CreateUserInfo_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *userServiceClient) GetUserInfo(ctx context.Context, in *GetUserInfoReq, opts ...grpc.CallOption) (*GetUserInfoResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetUserInfoResp)
+	err := c.cc.Invoke(ctx, UserService_GetUserInfo_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *userServiceClient) GetUserInfoByEmail(ctx context.Context, in *GetUserInfoByEmailReq, opts ...grpc.CallOption) (*GetUserInfoResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetUserInfoResp)
+	err := c.cc.Invoke(ctx, UserService_GetUserInfoByEmail_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *userServiceClient) GetUserInfoByNickname(ctx context.Context, in *GetUserInfoByNicknameReq, opts ...grpc.CallOption) (*GetUserInfoResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetUserInfoResp)
+	err := c.cc.Invoke(ctx, UserService_GetUserInfoByNickname_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *userServiceClient) UpdateUserInfoProfile(ctx context.Context, in *UpdateUserInfoProfileReq, opts ...grpc.CallOption) (*UpdateUserInfoProfileResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UpdateUserInfoProfileResp)
+	err := c.cc.Invoke(ctx, UserService_UpdateUserInfoProfile_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *userServiceClient) UpdateUserInfoStatus(ctx context.Context, in *UpdateUserInfoStatusReq, opts ...grpc.CallOption) (*UpdateUserInfoStatusResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UpdateUserInfoStatusResp)
+	err := c.cc.Invoke(ctx, UserService_UpdateUserInfoStatus_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *userServiceClient) SearchUserInfoByNickname(ctx context.Context, in *SearchUserInfoByNicknameReq, opts ...grpc.CallOption) (*SearchUserInfoByNicknameResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SearchUserInfoByNicknameResp)
+	err := c.cc.Invoke(ctx, UserService_SearchUserInfoByNickname_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// UserServiceServer is the server API for UserService service.
+// All implementations must embed UnimplementedUserServiceServer
+// for forward compatibility.
+type UserServiceServer interface {
+	// CreateUserInfo creates a new user profile.
+	CreateUserInfo(context.Context, *CreateUserInfoReq) (*CreateUserInfoResp, error)
+	// GetUserInfo retrieves a user profile by ID.
+	GetUserInfo(context.Context, *GetUserInfoReq) (*GetUserInfoResp, error)
+	// GetUserInfoByEmail retrieves a user profile by email.
+	GetUserInfoByEmail(context.Context, *GetUserInfoByEmailReq) (*GetUserInfoResp, error)
+	// GetUserInfoByNickname retrieves a user profile by exact nickname.
+	GetUserInfoByNickname(context.Context, *GetUserInfoByNicknameReq) (*GetUserInfoResp, error)
+	// UpdateUserInfoProfile updates nickname and avatar.
+	UpdateUserInfoProfile(context.Context, *UpdateUserInfoProfileReq) (*UpdateUserInfoProfileResp, error)
+	// UpdateUserInfoStatus updates user status.
+	UpdateUserInfoStatus(context.Context, *UpdateUserInfoStatusReq) (*UpdateUserInfoStatusResp, error)
+	// SearchUserInfoByNickname searches user profiles by nickname prefix.
+	SearchUserInfoByNickname(context.Context, *SearchUserInfoByNicknameReq) (*SearchUserInfoByNicknameResp, error)
+	mustEmbedUnimplementedUserServiceServer()
+}
+
+// UnimplementedUserServiceServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedUserServiceServer struct{}
+
+func (UnimplementedUserServiceServer) CreateUserInfo(context.Context, *CreateUserInfoReq) (*CreateUserInfoResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CreateUserInfo not implemented")
+}
+func (UnimplementedUserServiceServer) GetUserInfo(context.Context, *GetUserInfoReq) (*GetUserInfoResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetUserInfo not implemented")
+}
+func (UnimplementedUserServiceServer) GetUserInfoByEmail(context.Context, *GetUserInfoByEmailReq) (*GetUserInfoResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetUserInfoByEmail not implemented")
+}
+func (UnimplementedUserServiceServer) GetUserInfoByNickname(context.Context, *GetUserInfoByNicknameReq) (*GetUserInfoResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetUserInfoByNickname not implemented")
+}
+func (UnimplementedUserServiceServer) UpdateUserInfoProfile(context.Context, *UpdateUserInfoProfileReq) (*UpdateUserInfoProfileResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UpdateUserInfoProfile not implemented")
+}
+func (UnimplementedUserServiceServer) UpdateUserInfoStatus(context.Context, *UpdateUserInfoStatusReq) (*UpdateUserInfoStatusResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UpdateUserInfoStatus not implemented")
+}
+func (UnimplementedUserServiceServer) SearchUserInfoByNickname(context.Context, *SearchUserInfoByNicknameReq) (*SearchUserInfoByNicknameResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SearchUserInfoByNickname not implemented")
+}
+func (UnimplementedUserServiceServer) mustEmbedUnimplementedUserServiceServer() {}
+func (UnimplementedUserServiceServer) testEmbeddedByValue()                     {}
+
+// UnsafeUserServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to UserServiceServer will
+// result in compilation errors.
+type UnsafeUserServiceServer interface {
+	mustEmbedUnimplementedUserServiceServer()
+}
+
+func RegisterUserServiceServer(s grpc.ServiceRegistrar, srv UserServiceServer) {
+	// If the following call pancis, it indicates UnimplementedUserServiceServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&UserService_ServiceDesc, srv)
+}
+
+func _UserService_CreateUserInfo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateUserInfoReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(UserServiceServer).CreateUserInfo(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: UserService_CreateUserInfo_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(UserServiceServer).CreateUserInfo(ctx, req.(*CreateUserInfoReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _UserService_GetUserInfo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetUserInfoReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(UserServiceServer).GetUserInfo(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: UserService_GetUserInfo_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(UserServiceServer).GetUserInfo(ctx, req.(*GetUserInfoReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _UserService_GetUserInfoByEmail_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetUserInfoByEmailReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(UserServiceServer).GetUserInfoByEmail(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: UserService_GetUserInfoByEmail_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(UserServiceServer).GetUserInfoByEmail(ctx, req.(*GetUserInfoByEmailReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _UserService_GetUserInfoByNickname_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetUserInfoByNicknameReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(UserServiceServer).GetUserInfoByNickname(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: UserService_GetUserInfoByNickname_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(UserServiceServer).GetUserInfoByNickname(ctx, req.(*GetUserInfoByNicknameReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _UserService_UpdateUserInfoProfile_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateUserInfoProfileReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(UserServiceServer).UpdateUserInfoProfile(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: UserService_UpdateUserInfoProfile_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(UserServiceServer).UpdateUserInfoProfile(ctx, req.(*UpdateUserInfoProfileReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _UserService_UpdateUserInfoStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateUserInfoStatusReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(UserServiceServer).UpdateUserInfoStatus(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: UserService_UpdateUserInfoStatus_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(UserServiceServer).UpdateUserInfoStatus(ctx, req.(*UpdateUserInfoStatusReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _UserService_SearchUserInfoByNickname_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SearchUserInfoByNicknameReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(UserServiceServer).SearchUserInfoByNickname(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: UserService_SearchUserInfoByNickname_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(UserServiceServer).SearchUserInfoByNickname(ctx, req.(*SearchUserInfoByNicknameReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// UserService_ServiceDesc is the grpc.ServiceDesc for UserService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var UserService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "logic.UserService",
+	HandlerType: (*UserServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "CreateUserInfo",
+			Handler:    _UserService_CreateUserInfo_Handler,
+		},
+		{
+			MethodName: "GetUserInfo",
+			Handler:    _UserService_GetUserInfo_Handler,
+		},
+		{
+			MethodName: "GetUserInfoByEmail",
+			Handler:    _UserService_GetUserInfoByEmail_Handler,
+		},
+		{
+			MethodName: "GetUserInfoByNickname",
+			Handler:    _UserService_GetUserInfoByNickname_Handler,
+		},
+		{
+			MethodName: "UpdateUserInfoProfile",
+			Handler:    _UserService_UpdateUserInfoProfile_Handler,
+		},
+		{
+			MethodName: "UpdateUserInfoStatus",
+			Handler:    _UserService_UpdateUserInfoStatus_Handler,
+		},
+		{
+			MethodName: "SearchUserInfoByNickname",
+			Handler:    _UserService_SearchUserInfoByNickname_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "logic.proto",
 }

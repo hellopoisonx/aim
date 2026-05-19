@@ -1,21 +1,48 @@
 Name: logic.rpc
 ListenOn: 0.0.0.0:8080
-Etcd:
-  Hosts:
-  - 127.0.0.1:2379
-  Key: logic.rpc
+Telemetry:
+  Name: logic.rpc
+  Endpoint: jaeger:4318
+  Sampler: 1.0
+  Batcher: otlphttp
+  OtlpHttpPath: /v1/traces
+Nacos:
+  ServerAddr: nacos:8848
+  NamespaceID: ""
+  Group: DEFAULT_GROUP
+  Cluster: DEFAULT
+  ServiceName: logic.rpc
+  AdvertiseIP: aim-logic
+  AdvertisePort: 8080
+  Ephemeral: true
+  Weight: 1
+  TimeoutMs: 5000
+  Username: ""
+  Password: ""
+  LogDir: /app/log/nacos
+  CacheDir: /tmp/nacos/cache
+  LogLevel: info
 Postgres:
-  DataSource: postgres://aim:aim@127.0.0.1:5432/aim_logic?sslmode=disable
-Redis:
-  Addr: 127.0.0.1:6379
+  DataSource: postgres://user:password@postgres:5432/aim_logic?sslmode=disable
+CacheRedis:
+  Addr: redis:6379
   Password: ""
   DB: 0
 KqConsumerConf:
   Name: logic-archive-consumer
   Brokers:
-    - 127.0.0.1:9092
+    - kafka:9092
   Group: aim-logic-archive
   Topic: aim-message-transfer
+  Offset: first
+  Consumers: 1
+  Processors: 1
+UserCreatedConsumerConf:
+  Name: logic-user-created-consumer
+  Brokers:
+    - kafka:9092
+  Group: aim-logic-user-created
+  Topic: aim.user.events
   Offset: first
   Consumers: 1
   Processors: 1

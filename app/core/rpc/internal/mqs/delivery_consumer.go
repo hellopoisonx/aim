@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 
 	"github.com/hellopoisonx/aim/app/core/rpc/internal/svc"
+	"github.com/hellopoisonx/aim/app/shared/tracing"
 	gwpb "github.com/hellopoisonx/aim/shared/proto/gateway/pb"
 
 	"github.com/zeromicro/go-zero/core/logx"
@@ -12,6 +13,8 @@ import (
 
 // transferEvent represents the Kafka message format published by TransferLogic.
 type transferEvent struct {
+	tracing.TraceContextFields
+
 	MessageID      int64    `json:"message_id"`
 	SenderID       int64    `json:"sender_id"`
 	DeviceID       string   `json:"device_id"`
@@ -43,6 +46,11 @@ func (c *DeliveryConsumer) Consume(ctx context.Context, key string, value string
 		return err
 	}
 
+	ctx = tracing.ExtractTraceContext(ctx, event.TraceContextFields)
+
+	ctx, span := tracing.StartKafkaConsumerSpan(ctx, "core.kafka.delivery.consume")
+	defer span.End()
+
 	logx.WithContext(ctx).Infof("delivery event: msg_id=%d sender=%d conv=%d type=%s",
 		event.MessageID, event.SenderID, event.ConversationID, event.MessageType)
 
@@ -71,5 +79,6 @@ func (c *DeliveryConsumer) Consume(ctx context.Context, key string, value string
 	}
 
 	logx.WithContext(ctx).Infof("message pushed to user %d, success=%v", targetUserID, resp.Success)
+
 	return nil
 }

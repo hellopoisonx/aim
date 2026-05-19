@@ -17,22 +17,24 @@ import (
 // --- Fake querier ---
 
 type fakeQuerier struct {
-	conversations        map[int64]model.GetConversationRow
-	members             map[string]model.GetMemberRow // key: "convID:userID"
-	friendships         map[string][]model.GetFriendshipBidirectionalRow
-	getConvErr         error
-	getMemberErr       error
-	getFriendshipErr   error
+	conversations    map[int64]model.GetConversationRow
+	members          map[string]model.GetMemberRow // key: "convID:userID"
+	friendships      map[string][]model.GetFriendshipBidirectionalRow
+	getConvErr       error
+	getMemberErr     error
+	getFriendshipErr error
 }
 
 func (f *fakeQuerier) GetConversation(ctx context.Context, id int64) (model.GetConversationRow, error) {
 	if f.getConvErr != nil {
 		return model.GetConversationRow{}, f.getConvErr
 	}
+
 	conv, ok := f.conversations[id]
 	if !ok {
 		return model.GetConversationRow{}, pgx.ErrNoRows
 	}
+
 	return conv, nil
 }
 
@@ -40,11 +42,14 @@ func (f *fakeQuerier) GetMember(ctx context.Context, arg model.GetMemberParams) 
 	if f.getMemberErr != nil {
 		return model.GetMemberRow{}, f.getMemberErr
 	}
+
 	key := convUserKey(arg.ConversationID, arg.UserID)
+
 	member, ok := f.members[key]
 	if !ok {
 		return model.GetMemberRow{}, pgx.ErrNoRows
 	}
+
 	return member, nil
 }
 
@@ -52,7 +57,9 @@ func (f *fakeQuerier) GetFriendshipBidirectional(ctx context.Context, arg model.
 	if f.getFriendshipErr != nil {
 		return nil, f.getFriendshipErr
 	}
+
 	key := friendshipKey(arg.UserID, arg.FriendID)
+
 	return f.friendships[key], nil
 }
 
@@ -67,6 +74,34 @@ func (f *fakeQuerier) IsMemberMuted(ctx context.Context, arg model.IsMemberMuted
 
 func (f *fakeQuerier) InsertMessage(ctx context.Context, arg model.InsertMessageParams) error {
 	return nil
+}
+
+func (f *fakeQuerier) CreateUserInfo(ctx context.Context, arg model.CreateUserInfoParams) (model.UserInfo, error) {
+	return model.UserInfo{}, nil
+}
+
+func (f *fakeQuerier) GetUserInfoByID(ctx context.Context, id int64) (model.UserInfo, error) {
+	return model.UserInfo{}, nil
+}
+
+func (f *fakeQuerier) GetUserInfoByEmail(ctx context.Context, email string) (model.UserInfo, error) {
+	return model.UserInfo{}, nil
+}
+
+func (f *fakeQuerier) GetUserInfoByNickname(ctx context.Context, nickname string) (model.UserInfo, error) {
+	return model.UserInfo{}, nil
+}
+
+func (f *fakeQuerier) UpdateUserInfoProfile(ctx context.Context, arg model.UpdateUserInfoProfileParams) (model.UserInfo, error) {
+	return model.UserInfo{}, nil
+}
+
+func (f *fakeQuerier) UpdateUserInfoStatus(ctx context.Context, arg model.UpdateUserInfoStatusParams) (model.UserInfo, error) {
+	return model.UserInfo{}, nil
+}
+
+func (f *fakeQuerier) SearchUserInfoByNickname(ctx context.Context, arg model.SearchUserInfoByNicknameParams) ([]model.UserInfo, error) {
+	return nil, nil
 }
 
 func convUserKey(convID, userID int64) string {
@@ -114,8 +149,8 @@ func TestDatabasePermissionChecker_GroupNotMember(t *testing.T) {
 		conversations: map[int64]model.GetConversationRow{
 			1: {ID: 1, ConversationType: "group", IsActive: true},
 		},
-		members:       map[string]model.GetMemberRow{},
-		friendships:   map[string][]model.GetFriendshipBidirectionalRow{},
+		members:     map[string]model.GetMemberRow{},
+		friendships: map[string][]model.GetFriendshipBidirectionalRow{},
 	}
 	checker := NewDatabasePermissionChecker(fq)
 
@@ -296,8 +331,8 @@ func TestDatabasePermissionChecker_ConversationInactive(t *testing.T) {
 		conversations: map[int64]model.GetConversationRow{
 			1: {ID: 1, ConversationType: "group", IsActive: false},
 		},
-		members:       map[string]model.GetMemberRow{},
-		friendships:   map[string][]model.GetFriendshipBidirectionalRow{},
+		members:     map[string]model.GetMemberRow{},
+		friendships: map[string][]model.GetFriendshipBidirectionalRow{},
 	}
 	checker := NewDatabasePermissionChecker(fq)
 
@@ -317,7 +352,7 @@ func TestDatabasePermissionChecker_DBError(t *testing.T) {
 		conversations: map[int64]model.GetConversationRow{},
 		members:       map[string]model.GetMemberRow{},
 		friendships:   map[string][]model.GetFriendshipBidirectionalRow{},
-		getConvErr:   errors.New("database connection error"),
+		getConvErr:    errors.New("database connection error"),
 	}
 	checker := NewDatabasePermissionChecker(fq)
 
@@ -355,4 +390,3 @@ func TestDatabasePermissionChecker_DirectBidirectionalFriendship(t *testing.T) {
 	assert.True(t, decision.Allowed)
 	assert.Equal(t, CodeOK, decision.Code)
 }
-

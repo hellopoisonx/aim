@@ -26,6 +26,13 @@ linters:
   settings:
     goconst:
       ignore-tests: true
+  exclusions:
+    rules:
+      # go-zero 配置结构使用 json tag option 表达默认值/可选项，这是框架约定。
+      - linters:
+          - staticcheck
+        text: "SA5008: (invalid appearance of unknown `.*` tag option|malformed `json` tag:)"
+        path: "app/.*/internal/config/config.go"
 
 issues:
   # 不限制每类问题的数量

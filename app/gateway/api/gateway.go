@@ -6,7 +6,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"net"
 
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/config"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/handler"
@@ -15,7 +14,9 @@ import (
 	gwpb "github.com/hellopoisonx/aim/shared/proto/gateway/pb"
 
 	"github.com/zeromicro/go-zero/core/conf"
+	"github.com/zeromicro/go-zero/core/service"
 	"github.com/zeromicro/go-zero/rest"
+	"github.com/zeromicro/go-zero/zrpc"
 	"google.golang.org/grpc"
 )
 
@@ -30,27 +31,22 @@ func main() {
 	ctx := svc.NewServiceContext(c)
 	defer ctx.Close()
 
-	server := rest.MustNewServer(c.RestConf)
-	defer server.Stop()
+	restServer := rest.MustNewServer(c.RestConf)
+	defer restServer.Stop()
 
-	handler.RegisterHandlers(server, ctx)
+	handler.RegisterHandlers(restServer, ctx)
 
-	// Start gRPC server for GatewayService on a separate port.
-	grpcServer := grpc.NewServer()
-	gwpb.RegisterGatewayServiceServer(grpcServer, ws.NewGatewayServer(ctx.WsManager))
+	rpcServer := zrpc.MustNewServer(c.GatewayRpc, func(grpcServer *grpc.Server) {
+		gwpb.RegisterGatewayServiceServer(grpcServer, ws.NewGatewayServer(ctx.WsManager))
+	})
+	defer rpcServer.Stop()
 
-	go func() {
-		lis, err := net.Listen("tcp", c.GatewayRpc.ListenOn)
-		if err != nil {
-			fmt.Printf("failed to listen for gRPC server on %s: %v\n", c.GatewayRpc.ListenOn, err)
-			return
-		}
-		fmt.Printf("Starting gRPC GatewayService server at %s\n", c.GatewayRpc.ListenOn)
-		if err := grpcServer.Serve(lis); err != nil {
-			fmt.Printf("gRPC server error: %v\n", err)
-		}
-	}()
+	group := service.NewServiceGroup()
+	group.Add(restServer)
 
-	fmt.Printf("Starting REST server at %s:%d...\n", c.Host, c.Port)
-	server.Start()
+	group.Add(rpcServer)
+	defer group.Stop()
+
+	fmt.Printf("Starting REST server at %s:%d and GatewayService RPC server at %s...\n", c.Host, c.Port, c.GatewayRpc.ListenOn)
+	group.Start()
 }

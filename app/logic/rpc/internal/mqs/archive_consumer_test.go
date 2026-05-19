@@ -9,11 +9,13 @@ import (
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/config"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/model"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
+	"github.com/hellopoisonx/aim/app/shared/tracing"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/stretchr/testify/require"
 	"github.com/zeromicro/go-queue/kq"
 	"github.com/zeromicro/go-zero/core/service"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // --- Fake pool for testing ---
@@ -21,13 +23,17 @@ import (
 type fakePool struct {
 	execErr error
 	calls   []string
+	traceID trace.TraceID
 }
 
 func (f *fakePool) Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error) {
 	f.calls = append(f.calls, sql)
+
+	f.traceID = trace.SpanContextFromContext(ctx).TraceID()
 	if f.execErr != nil {
 		return pgconn.CommandTag{}, f.execErr
 	}
+
 	return pgconn.NewCommandTag("INSERT 0 1"), nil
 }
 
@@ -117,6 +123,32 @@ func TestArchiveConsumer_Consume_ValidEvent(t *testing.T) {
 	err = consumer.Consume(context.Background(), "200", string(value))
 	require.NoError(t, err)
 	require.Len(t, pool.calls, 1)
+}
+
+func TestArchiveConsumer_Consume_PropagatesTraceContext(t *testing.T) {
+	pool := &fakePool{}
+	svcCtx := newTestServiceContextWithFakePool(pool)
+	consumer := NewArchiveConsumer(context.Background(), svcCtx)
+	traceID, err := trace.TraceIDFromHex("4bf92f3577b34da6a3ce929d0e0e4736")
+	require.NoError(t, err)
+
+	event := transferEvent{
+		TraceContextFields: tracing.TraceContextFields{TraceParent: "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"},
+		MessageID:          12345,
+		SenderID:           100,
+		ConversationID:     200,
+		MessageType:        "text",
+		Content:            "hello world",
+		ClientMsgID:        "client-msg-1",
+		Timestamp:          1700000000000,
+	}
+	value, err := json.Marshal(event)
+	require.NoError(t, err)
+
+	err = consumer.Consume(context.Background(), "200", string(value))
+	require.NoError(t, err)
+	require.Len(t, pool.calls, 1)
+	require.Equal(t, traceID, pool.traceID)
 }
 
 func TestArchiveConsumer_Consume_EmptyClientMsgID(t *testing.T) {
@@ -266,13 +298,70 @@ func TestConsumers_ReturnsQueueService(t *testing.T) {
 					Name: "test-archive-consumer",
 					Mode: "dev",
 				},
-				Brokers:   []string{"127.0.0.1:9092"},
-				Group:     "test-group",
-				Topic:     "test-topic",
-				Offset:    "first",
-				Consumers: 1,
+				Brokers:    []string{"127.0.0.1:9092"},
+				Group:      "test-group",
+				Topic:      "test-topic",
+				Offset:     "first",
+				Consumers:  1,
 				Processors: 1,
 			},
+		},
+	}
+
+	services := Consumers(context.Background(), svcCtx)
+	require.Len(t, services, 1)
+}
+
+func TestConsumers_ReturnsTwoQueuesWhenBothConfigsSet(t *testing.T) {
+	svcCtx := &svc.ServiceContext{
+		Config: config.Config{
+			KqConsumerConf: kq.KqConf{
+				ServiceConf: service.ServiceConf{
+					Name: "test-archive-consumer",
+					Mode: "dev",
+				},
+				Brokers:    []string{"127.0.0.1:9092"},
+				Group:      "test-group-archive",
+				Topic:      "test-topic-archive",
+				Offset:     "first",
+				Consumers:  1,
+				Processors: 1,
+			},
+			UserCreatedConsumerConf: kq.KqConf{
+				ServiceConf: service.ServiceConf{
+					Name: "test-user-created-consumer",
+					Mode: "dev",
+				},
+				Brokers:    []string{"127.0.0.1:9092"},
+				Group:      "test-group-user-created",
+				Topic:      "test-topic-user-created",
+				Offset:     "first",
+				Consumers:  1,
+				Processors: 1,
+			},
+		},
+	}
+
+	services := Consumers(context.Background(), svcCtx)
+	require.Len(t, services, 2)
+}
+
+func TestConsumers_ReturnsOneQueueWhenUserCreatedNotConfigured(t *testing.T) {
+	svcCtx := &svc.ServiceContext{
+		Config: config.Config{
+			KqConsumerConf: kq.KqConf{
+				ServiceConf: service.ServiceConf{
+					Name: "test-archive-consumer",
+					Mode: "dev",
+				},
+				Brokers:    []string{"127.0.0.1:9092"},
+				Group:      "test-group",
+				Topic:      "test-topic",
+				Offset:     "first",
+				Consumers:  1,
+				Processors: 1,
+			},
+			// UserCreatedConsumerConf not set
 		},
 	}
 

@@ -38,6 +38,16 @@
 
 `logout` 使用 `internal/authctx` 将 HTTP `Authorization` header 传入 logic，`internal/logic/auth/logout_logic.go` 本地验证 JWT 后调用 `aim-auth Logout`。
 
+### 代理转发 `logic` - `/api/users`
+
+- `GET /api/users/by-name/:name` 通过 `LogicRpc` 连接 `aim-logic`，调用 `UserService.GetUserInfoByNickname` 做昵称精确查询。
+- `LogicRpc` 配置位于 `app/gateway/api/etc/gateway-api.yaml`，配置结构为 `app/gateway/api/internal/config/config.go` 的 `LogicRpc aimnacos.Config`。
+- `app/gateway/api/internal/svc/service_context.go` 通过 Nacos resolver 使用 `nacos:///logic.rpc` 创建 `userservice.UserService` 客户端。
+
+| Method | Path | Auth | Handler |
+| --- | --- | --- | --- |
+| GET | `/api/users/by-name/:name` | 暂无 REST JWT 鉴权中间件 | `internal/handler/users/get_user_by_name_handler.go` |
+
 重新生成 REST 脚手架：
 
 ```bash

@@ -56,6 +56,7 @@ func (s *GatewayServer) PushMessage(ctx context.Context, req *pb.PushMessageReq)
 
 	// Push to all connections concurrently.
 	var pushErr error
+
 	for _, conn := range connections {
 		if err := conn.WriteFrame(ctx, wspb.FrameType_FRAME_TYPE_PUSH_MESSAGE, payload); err != nil {
 			logx.WithContext(ctx).Errorf("PushMessage: failed to write to user_id=%d device_id=%s: %v",
@@ -70,6 +71,7 @@ func (s *GatewayServer) PushMessage(ctx context.Context, req *pb.PushMessageReq)
 	if pushErr != nil {
 		return &pb.PushMessageResp{Success: false}, nil
 	}
+
 	return &pb.PushMessageResp{Success: true}, nil
 }
 
@@ -88,6 +90,7 @@ func (s *GatewayServer) PushPresence(ctx context.Context, req *pb.PushPresenceRe
 
 	// Deliver to all connections of the target user.
 	var pushErr error
+
 	s.manager.ForEachUser(req.UserId, func(conn *Connection) {
 		if err := conn.WriteFrame(ctx, wspb.FrameType_FRAME_TYPE_PUSH_PRESENCE, payload); err != nil {
 			logx.WithContext(ctx).Errorf("PushPresence: failed to write to user_id=%d device_id=%s: %v",
@@ -99,6 +102,7 @@ func (s *GatewayServer) PushPresence(ctx context.Context, req *pb.PushPresenceRe
 	if pushErr != nil {
 		return &pb.PushPresenceResp{Success: false}, nil
 	}
+
 	return &pb.PushPresenceResp{Success: true}, nil
 }
 
@@ -122,6 +126,7 @@ func (s *GatewayServer) KickUser(ctx context.Context, req *pb.KickUserReq) (*pb.
 			if reason == "" {
 				reason = "kicked by server"
 			}
+
 			_ = conn.Conn.Close(websocket.StatusPolicyViolation, reason)
 		}
 
@@ -131,6 +136,7 @@ func (s *GatewayServer) KickUser(ctx context.Context, req *pb.KickUserReq) (*pb.
 		}
 
 		kicked++
+
 		logx.WithContext(ctx).Infof("KickUser: kicked user_id=%d device_id=%s reason=%q",
 			conn.Identity.UserID, conn.Identity.DeviceID, req.Reason)
 	})
@@ -151,6 +157,7 @@ func (s *GatewayServer) DrainNotify(ctx context.Context, req *pb.DrainNotifyReq)
 	}
 
 	connections := s.manager.All()
+
 	var affected int32
 
 	for _, conn := range connections {
@@ -158,15 +165,18 @@ func (s *GatewayServer) DrainNotify(ctx context.Context, req *pb.DrainNotifyReq)
 		if err := conn.WriteFrame(ctx, wspb.FrameType_FRAME_TYPE_RECONNECT, payload); err != nil {
 			logx.WithContext(ctx).Errorf("DrainNotify: failed to send reconnect to user_id=%d device_id=%s: %v",
 				conn.Identity.UserID, conn.Identity.DeviceID, err)
+
 			continue
 		}
 
 		// Schedule close after drain timeout.
 		go func(c *Connection, timeoutMs int64) {
 			time.Sleep(time.Duration(timeoutMs) * time.Millisecond)
+
 			if c.Conn != nil {
 				_ = c.Conn.Close(websocket.StatusNormalClosure, "drain timeout")
 			}
+
 			if c.Cancel != nil {
 				c.Cancel()
 			}
@@ -193,6 +203,7 @@ func (c *Connection) WriteFrame(ctx context.Context, frameType wspb.FrameType, p
 	}
 
 	wsframe := BuildFrame(frameType, 0, payloadBytes)
+
 	data, err := EncodeFrame(wsframe)
 	if err != nil {
 		return fmt.Errorf("encode frame: %w", err)

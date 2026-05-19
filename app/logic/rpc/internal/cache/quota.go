@@ -2,6 +2,7 @@ package cache
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync/atomic"
 	"time"
@@ -14,7 +15,7 @@ type QuotaStore struct {
 	client      *redis.Client
 	windowSize  time.Duration
 	maxRequests int64
-	counter     int64 // atomic counter for unique member
+	counter     atomic.Int64 // atomic counter for unique member
 }
 
 func NewQuotaStore(client *redis.Client, windowSeconds int, maxRequests int64) *QuotaStore {
@@ -35,7 +36,7 @@ func (s *QuotaStore) CheckQuota(ctx context.Context, userID int64, conversationI
 	key := fmt.Sprintf("quota:%d:%d", userID, conversationID)
 
 	// Use atomic counter + timestamp for unique member to avoid collisions
-	seq := atomic.AddInt64(&s.counter, 1)
+	seq := s.counter.Add(1)
 	member := fmt.Sprintf("%d-%d", nowMs, seq)
 
 	pipe := s.client.Pipeline()
@@ -50,7 +51,7 @@ func (s *QuotaStore) CheckQuota(ctx context.Context, userID int64, conversationI
 	pipe.Expire(ctx, key, s.windowSize+time.Second)
 
 	_, err := pipe.Exec(ctx)
-	if err != nil && err != redis.Nil {
+	if err != nil && !errors.Is(err, redis.Nil) {
 		return false, 0, fmt.Errorf("quota check failed: %w", err)
 	}
 
@@ -65,10 +66,7 @@ func (s *QuotaStore) CheckQuota(ctx context.Context, userID int64, conversationI
 	}
 
 	// remaining = max - (count + 1) = max - count - 1
-	remaining := s.maxRequests - count - 1
-	if remaining < 0 {
-		remaining = 0
-	}
+	remaining := max(s.maxRequests-count-1, 0)
 
 	return true, remaining, nil
 }

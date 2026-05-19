@@ -2,7 +2,7 @@
 // versions:
 // 	protoc-gen-go v1.36.11
 // 	protoc        v3.19.4
-// source: app/logic/rpc/logic.proto
+// source: logic.proto
 
 package pb
 
@@ -35,7 +35,7 @@ type CheckMessagePermissionReq struct {
 
 func (x *CheckMessagePermissionReq) Reset() {
 	*x = CheckMessagePermissionReq{}
-	mi := &file_app_logic_rpc_logic_proto_msgTypes[0]
+	mi := &file_logic_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -47,7 +47,7 @@ func (x *CheckMessagePermissionReq) String() string {
 func (*CheckMessagePermissionReq) ProtoMessage() {}
 
 func (x *CheckMessagePermissionReq) ProtoReflect() protoreflect.Message {
-	mi := &file_app_logic_rpc_logic_proto_msgTypes[0]
+	mi := &file_logic_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -60,7 +60,7 @@ func (x *CheckMessagePermissionReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CheckMessagePermissionReq.ProtoReflect.Descriptor instead.
 func (*CheckMessagePermissionReq) Descriptor() ([]byte, []int) {
-	return file_app_logic_rpc_logic_proto_rawDescGZIP(), []int{0}
+	return file_logic_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *CheckMessagePermissionReq) GetSenderId() int64 {
@@ -102,7 +102,7 @@ type CheckMessagePermissionResp struct {
 
 func (x *CheckMessagePermissionResp) Reset() {
 	*x = CheckMessagePermissionResp{}
-	mi := &file_app_logic_rpc_logic_proto_msgTypes[1]
+	mi := &file_logic_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -114,7 +114,7 @@ func (x *CheckMessagePermissionResp) String() string {
 func (*CheckMessagePermissionResp) ProtoMessage() {}
 
 func (x *CheckMessagePermissionResp) ProtoReflect() protoreflect.Message {
-	mi := &file_app_logic_rpc_logic_proto_msgTypes[1]
+	mi := &file_logic_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -127,7 +127,7 @@ func (x *CheckMessagePermissionResp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CheckMessagePermissionResp.ProtoReflect.Descriptor instead.
 func (*CheckMessagePermissionResp) Descriptor() ([]byte, []int) {
-	return file_app_logic_rpc_logic_proto_rawDescGZIP(), []int{1}
+	return file_logic_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *CheckMessagePermissionResp) GetAllowed() bool {
@@ -151,11 +151,687 @@ func (x *CheckMessagePermissionResp) GetReason() string {
 	return ""
 }
 
-var File_app_logic_rpc_logic_proto protoreflect.FileDescriptor
+type UserInfoResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	Email         string                 `protobuf:"bytes,2,opt,name=email,proto3" json:"email,omitempty"`
+	Status        int32                  `protobuf:"varint,3,opt,name=status,proto3" json:"status,omitempty"`
+	Nickname      string                 `protobuf:"bytes,4,opt,name=nickname,proto3" json:"nickname,omitempty"`
+	Avatar        string                 `protobuf:"bytes,5,opt,name=avatar,proto3" json:"avatar,omitempty"`
+	CreatedAt     int64                  `protobuf:"varint,6,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"` // unix timestamp
+	UpdatedAt     int64                  `protobuf:"varint,7,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"` // unix timestamp
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
 
-const file_app_logic_rpc_logic_proto_rawDesc = "" +
+func (x *UserInfoResponse) Reset() {
+	*x = UserInfoResponse{}
+	mi := &file_logic_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UserInfoResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UserInfoResponse) ProtoMessage() {}
+
+func (x *UserInfoResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_logic_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UserInfoResponse.ProtoReflect.Descriptor instead.
+func (*UserInfoResponse) Descriptor() ([]byte, []int) {
+	return file_logic_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *UserInfoResponse) GetId() int64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+func (x *UserInfoResponse) GetEmail() string {
+	if x != nil {
+		return x.Email
+	}
+	return ""
+}
+
+func (x *UserInfoResponse) GetStatus() int32 {
+	if x != nil {
+		return x.Status
+	}
+	return 0
+}
+
+func (x *UserInfoResponse) GetNickname() string {
+	if x != nil {
+		return x.Nickname
+	}
+	return ""
+}
+
+func (x *UserInfoResponse) GetAvatar() string {
+	if x != nil {
+		return x.Avatar
+	}
+	return ""
+}
+
+func (x *UserInfoResponse) GetCreatedAt() int64 {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return 0
+}
+
+func (x *UserInfoResponse) GetUpdatedAt() int64 {
+	if x != nil {
+		return x.UpdatedAt
+	}
+	return 0
+}
+
+type CreateUserInfoReq struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	Email         string                 `protobuf:"bytes,2,opt,name=email,proto3" json:"email,omitempty"`
+	Nickname      string                 `protobuf:"bytes,3,opt,name=nickname,proto3" json:"nickname,omitempty"`
+	Avatar        string                 `protobuf:"bytes,4,opt,name=avatar,proto3" json:"avatar,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateUserInfoReq) Reset() {
+	*x = CreateUserInfoReq{}
+	mi := &file_logic_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateUserInfoReq) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateUserInfoReq) ProtoMessage() {}
+
+func (x *CreateUserInfoReq) ProtoReflect() protoreflect.Message {
+	mi := &file_logic_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateUserInfoReq.ProtoReflect.Descriptor instead.
+func (*CreateUserInfoReq) Descriptor() ([]byte, []int) {
+	return file_logic_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *CreateUserInfoReq) GetId() int64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+func (x *CreateUserInfoReq) GetEmail() string {
+	if x != nil {
+		return x.Email
+	}
+	return ""
+}
+
+func (x *CreateUserInfoReq) GetNickname() string {
+	if x != nil {
+		return x.Nickname
+	}
+	return ""
+}
+
+func (x *CreateUserInfoReq) GetAvatar() string {
+	if x != nil {
+		return x.Avatar
+	}
+	return ""
+}
+
+type CreateUserInfoResp struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	User          *UserInfoResponse      `protobuf:"bytes,1,opt,name=user,proto3" json:"user,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateUserInfoResp) Reset() {
+	*x = CreateUserInfoResp{}
+	mi := &file_logic_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateUserInfoResp) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateUserInfoResp) ProtoMessage() {}
+
+func (x *CreateUserInfoResp) ProtoReflect() protoreflect.Message {
+	mi := &file_logic_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateUserInfoResp.ProtoReflect.Descriptor instead.
+func (*CreateUserInfoResp) Descriptor() ([]byte, []int) {
+	return file_logic_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *CreateUserInfoResp) GetUser() *UserInfoResponse {
+	if x != nil {
+		return x.User
+	}
+	return nil
+}
+
+type GetUserInfoReq struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetUserInfoReq) Reset() {
+	*x = GetUserInfoReq{}
+	mi := &file_logic_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetUserInfoReq) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetUserInfoReq) ProtoMessage() {}
+
+func (x *GetUserInfoReq) ProtoReflect() protoreflect.Message {
+	mi := &file_logic_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetUserInfoReq.ProtoReflect.Descriptor instead.
+func (*GetUserInfoReq) Descriptor() ([]byte, []int) {
+	return file_logic_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *GetUserInfoReq) GetId() int64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+type GetUserInfoByEmailReq struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Email         string                 `protobuf:"bytes,1,opt,name=email,proto3" json:"email,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetUserInfoByEmailReq) Reset() {
+	*x = GetUserInfoByEmailReq{}
+	mi := &file_logic_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetUserInfoByEmailReq) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetUserInfoByEmailReq) ProtoMessage() {}
+
+func (x *GetUserInfoByEmailReq) ProtoReflect() protoreflect.Message {
+	mi := &file_logic_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetUserInfoByEmailReq.ProtoReflect.Descriptor instead.
+func (*GetUserInfoByEmailReq) Descriptor() ([]byte, []int) {
+	return file_logic_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *GetUserInfoByEmailReq) GetEmail() string {
+	if x != nil {
+		return x.Email
+	}
+	return ""
+}
+
+type GetUserInfoByNicknameReq struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Nickname      string                 `protobuf:"bytes,1,opt,name=nickname,proto3" json:"nickname,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetUserInfoByNicknameReq) Reset() {
+	*x = GetUserInfoByNicknameReq{}
+	mi := &file_logic_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetUserInfoByNicknameReq) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetUserInfoByNicknameReq) ProtoMessage() {}
+
+func (x *GetUserInfoByNicknameReq) ProtoReflect() protoreflect.Message {
+	mi := &file_logic_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetUserInfoByNicknameReq.ProtoReflect.Descriptor instead.
+func (*GetUserInfoByNicknameReq) Descriptor() ([]byte, []int) {
+	return file_logic_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *GetUserInfoByNicknameReq) GetNickname() string {
+	if x != nil {
+		return x.Nickname
+	}
+	return ""
+}
+
+type GetUserInfoResp struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	User          *UserInfoResponse      `protobuf:"bytes,1,opt,name=user,proto3" json:"user,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetUserInfoResp) Reset() {
+	*x = GetUserInfoResp{}
+	mi := &file_logic_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetUserInfoResp) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetUserInfoResp) ProtoMessage() {}
+
+func (x *GetUserInfoResp) ProtoReflect() protoreflect.Message {
+	mi := &file_logic_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetUserInfoResp.ProtoReflect.Descriptor instead.
+func (*GetUserInfoResp) Descriptor() ([]byte, []int) {
+	return file_logic_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *GetUserInfoResp) GetUser() *UserInfoResponse {
+	if x != nil {
+		return x.User
+	}
+	return nil
+}
+
+type UpdateUserInfoProfileReq struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	Nickname      string                 `protobuf:"bytes,2,opt,name=nickname,proto3" json:"nickname,omitempty"`
+	Avatar        string                 `protobuf:"bytes,3,opt,name=avatar,proto3" json:"avatar,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateUserInfoProfileReq) Reset() {
+	*x = UpdateUserInfoProfileReq{}
+	mi := &file_logic_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateUserInfoProfileReq) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateUserInfoProfileReq) ProtoMessage() {}
+
+func (x *UpdateUserInfoProfileReq) ProtoReflect() protoreflect.Message {
+	mi := &file_logic_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateUserInfoProfileReq.ProtoReflect.Descriptor instead.
+func (*UpdateUserInfoProfileReq) Descriptor() ([]byte, []int) {
+	return file_logic_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *UpdateUserInfoProfileReq) GetId() int64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+func (x *UpdateUserInfoProfileReq) GetNickname() string {
+	if x != nil {
+		return x.Nickname
+	}
+	return ""
+}
+
+func (x *UpdateUserInfoProfileReq) GetAvatar() string {
+	if x != nil {
+		return x.Avatar
+	}
+	return ""
+}
+
+type UpdateUserInfoProfileResp struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	User          *UserInfoResponse      `protobuf:"bytes,1,opt,name=user,proto3" json:"user,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateUserInfoProfileResp) Reset() {
+	*x = UpdateUserInfoProfileResp{}
+	mi := &file_logic_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateUserInfoProfileResp) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateUserInfoProfileResp) ProtoMessage() {}
+
+func (x *UpdateUserInfoProfileResp) ProtoReflect() protoreflect.Message {
+	mi := &file_logic_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateUserInfoProfileResp.ProtoReflect.Descriptor instead.
+func (*UpdateUserInfoProfileResp) Descriptor() ([]byte, []int) {
+	return file_logic_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *UpdateUserInfoProfileResp) GetUser() *UserInfoResponse {
+	if x != nil {
+		return x.User
+	}
+	return nil
+}
+
+type UpdateUserInfoStatusReq struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	Status        int32                  `protobuf:"varint,2,opt,name=status,proto3" json:"status,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateUserInfoStatusReq) Reset() {
+	*x = UpdateUserInfoStatusReq{}
+	mi := &file_logic_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateUserInfoStatusReq) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateUserInfoStatusReq) ProtoMessage() {}
+
+func (x *UpdateUserInfoStatusReq) ProtoReflect() protoreflect.Message {
+	mi := &file_logic_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateUserInfoStatusReq.ProtoReflect.Descriptor instead.
+func (*UpdateUserInfoStatusReq) Descriptor() ([]byte, []int) {
+	return file_logic_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *UpdateUserInfoStatusReq) GetId() int64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+func (x *UpdateUserInfoStatusReq) GetStatus() int32 {
+	if x != nil {
+		return x.Status
+	}
+	return 0
+}
+
+type UpdateUserInfoStatusResp struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	User          *UserInfoResponse      `protobuf:"bytes,1,opt,name=user,proto3" json:"user,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateUserInfoStatusResp) Reset() {
+	*x = UpdateUserInfoStatusResp{}
+	mi := &file_logic_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateUserInfoStatusResp) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateUserInfoStatusResp) ProtoMessage() {}
+
+func (x *UpdateUserInfoStatusResp) ProtoReflect() protoreflect.Message {
+	mi := &file_logic_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateUserInfoStatusResp.ProtoReflect.Descriptor instead.
+func (*UpdateUserInfoStatusResp) Descriptor() ([]byte, []int) {
+	return file_logic_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *UpdateUserInfoStatusResp) GetUser() *UserInfoResponse {
+	if x != nil {
+		return x.User
+	}
+	return nil
+}
+
+type SearchUserInfoByNicknameReq struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Nickname      string                 `protobuf:"bytes,1,opt,name=nickname,proto3" json:"nickname,omitempty"`
+	Limit         int32                  `protobuf:"varint,2,opt,name=limit,proto3" json:"limit,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SearchUserInfoByNicknameReq) Reset() {
+	*x = SearchUserInfoByNicknameReq{}
+	mi := &file_logic_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SearchUserInfoByNicknameReq) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SearchUserInfoByNicknameReq) ProtoMessage() {}
+
+func (x *SearchUserInfoByNicknameReq) ProtoReflect() protoreflect.Message {
+	mi := &file_logic_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SearchUserInfoByNicknameReq.ProtoReflect.Descriptor instead.
+func (*SearchUserInfoByNicknameReq) Descriptor() ([]byte, []int) {
+	return file_logic_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *SearchUserInfoByNicknameReq) GetNickname() string {
+	if x != nil {
+		return x.Nickname
+	}
+	return ""
+}
+
+func (x *SearchUserInfoByNicknameReq) GetLimit() int32 {
+	if x != nil {
+		return x.Limit
+	}
+	return 0
+}
+
+type SearchUserInfoByNicknameResp struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Users         []*UserInfoResponse    `protobuf:"bytes,1,rep,name=users,proto3" json:"users,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SearchUserInfoByNicknameResp) Reset() {
+	*x = SearchUserInfoByNicknameResp{}
+	mi := &file_logic_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SearchUserInfoByNicknameResp) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SearchUserInfoByNicknameResp) ProtoMessage() {}
+
+func (x *SearchUserInfoByNicknameResp) ProtoReflect() protoreflect.Message {
+	mi := &file_logic_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SearchUserInfoByNicknameResp.ProtoReflect.Descriptor instead.
+func (*SearchUserInfoByNicknameResp) Descriptor() ([]byte, []int) {
+	return file_logic_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *SearchUserInfoByNicknameResp) GetUsers() []*UserInfoResponse {
+	if x != nil {
+		return x.Users
+	}
+	return nil
+}
+
+var File_logic_proto protoreflect.FileDescriptor
+
+const file_logic_proto_rawDesc = "" +
 	"\n" +
-	"\x19app/logic/rpc/logic.proto\x12\x05logic\"\xa0\x01\n" +
+	"\vlogic.proto\x12\x05logic\"\xa0\x01\n" +
 	"\x19CheckMessagePermissionReq\x12\x1b\n" +
 	"\tsender_id\x18\x01 \x01(\x03R\bsenderId\x12'\n" +
 	"\x0fconversation_id\x18\x02 \x01(\x03R\x0econversationId\x12!\n" +
@@ -164,57 +840,138 @@ const file_app_logic_rpc_logic_proto_rawDesc = "" +
 	"\x1aCheckMessagePermissionResp\x12\x18\n" +
 	"\aallowed\x18\x01 \x01(\bR\aallowed\x12\x19\n" +
 	"\bbiz_code\x18\x02 \x01(\x05R\abizCode\x12\x16\n" +
-	"\x06reason\x18\x03 \x01(\tR\x06reason2r\n" +
+	"\x06reason\x18\x03 \x01(\tR\x06reason\"\xc2\x01\n" +
+	"\x10UserInfoResponse\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x14\n" +
+	"\x05email\x18\x02 \x01(\tR\x05email\x12\x16\n" +
+	"\x06status\x18\x03 \x01(\x05R\x06status\x12\x1a\n" +
+	"\bnickname\x18\x04 \x01(\tR\bnickname\x12\x16\n" +
+	"\x06avatar\x18\x05 \x01(\tR\x06avatar\x12\x1d\n" +
+	"\n" +
+	"created_at\x18\x06 \x01(\x03R\tcreatedAt\x12\x1d\n" +
+	"\n" +
+	"updated_at\x18\a \x01(\x03R\tupdatedAt\"m\n" +
+	"\x11CreateUserInfoReq\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x14\n" +
+	"\x05email\x18\x02 \x01(\tR\x05email\x12\x1a\n" +
+	"\bnickname\x18\x03 \x01(\tR\bnickname\x12\x16\n" +
+	"\x06avatar\x18\x04 \x01(\tR\x06avatar\"A\n" +
+	"\x12CreateUserInfoResp\x12+\n" +
+	"\x04user\x18\x01 \x01(\v2\x17.logic.UserInfoResponseR\x04user\" \n" +
+	"\x0eGetUserInfoReq\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\x03R\x02id\"-\n" +
+	"\x15GetUserInfoByEmailReq\x12\x14\n" +
+	"\x05email\x18\x01 \x01(\tR\x05email\"6\n" +
+	"\x18GetUserInfoByNicknameReq\x12\x1a\n" +
+	"\bnickname\x18\x01 \x01(\tR\bnickname\">\n" +
+	"\x0fGetUserInfoResp\x12+\n" +
+	"\x04user\x18\x01 \x01(\v2\x17.logic.UserInfoResponseR\x04user\"^\n" +
+	"\x18UpdateUserInfoProfileReq\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x1a\n" +
+	"\bnickname\x18\x02 \x01(\tR\bnickname\x12\x16\n" +
+	"\x06avatar\x18\x03 \x01(\tR\x06avatar\"H\n" +
+	"\x19UpdateUserInfoProfileResp\x12+\n" +
+	"\x04user\x18\x01 \x01(\v2\x17.logic.UserInfoResponseR\x04user\"A\n" +
+	"\x17UpdateUserInfoStatusReq\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x16\n" +
+	"\x06status\x18\x02 \x01(\x05R\x06status\"G\n" +
+	"\x18UpdateUserInfoStatusResp\x12+\n" +
+	"\x04user\x18\x01 \x01(\v2\x17.logic.UserInfoResponseR\x04user\"O\n" +
+	"\x1bSearchUserInfoByNicknameReq\x12\x1a\n" +
+	"\bnickname\x18\x01 \x01(\tR\bnickname\x12\x14\n" +
+	"\x05limit\x18\x02 \x01(\x05R\x05limit\"M\n" +
+	"\x1cSearchUserInfoByNicknameResp\x12-\n" +
+	"\x05users\x18\x01 \x03(\v2\x17.logic.UserInfoResponseR\x05users2r\n" +
 	"\x11PermissionService\x12]\n" +
-	"\x16CheckMessagePermission\x12 .logic.CheckMessagePermissionReq\x1a!.logic.CheckMessagePermissionRespB\x06Z\x04./pbb\x06proto3"
+	"\x16CheckMessagePermission\x12 .logic.CheckMessagePermissionReq\x1a!.logic.CheckMessagePermissionResp2\xca\x04\n" +
+	"\vUserService\x12E\n" +
+	"\x0eCreateUserInfo\x12\x18.logic.CreateUserInfoReq\x1a\x19.logic.CreateUserInfoResp\x12<\n" +
+	"\vGetUserInfo\x12\x15.logic.GetUserInfoReq\x1a\x16.logic.GetUserInfoResp\x12J\n" +
+	"\x12GetUserInfoByEmail\x12\x1c.logic.GetUserInfoByEmailReq\x1a\x16.logic.GetUserInfoResp\x12P\n" +
+	"\x15GetUserInfoByNickname\x12\x1f.logic.GetUserInfoByNicknameReq\x1a\x16.logic.GetUserInfoResp\x12Z\n" +
+	"\x15UpdateUserInfoProfile\x12\x1f.logic.UpdateUserInfoProfileReq\x1a .logic.UpdateUserInfoProfileResp\x12W\n" +
+	"\x14UpdateUserInfoStatus\x12\x1e.logic.UpdateUserInfoStatusReq\x1a\x1f.logic.UpdateUserInfoStatusResp\x12c\n" +
+	"\x18SearchUserInfoByNickname\x12\".logic.SearchUserInfoByNicknameReq\x1a#.logic.SearchUserInfoByNicknameRespB\x06Z\x04./pbb\x06proto3"
 
 var (
-	file_app_logic_rpc_logic_proto_rawDescOnce sync.Once
-	file_app_logic_rpc_logic_proto_rawDescData []byte
+	file_logic_proto_rawDescOnce sync.Once
+	file_logic_proto_rawDescData []byte
 )
 
-func file_app_logic_rpc_logic_proto_rawDescGZIP() []byte {
-	file_app_logic_rpc_logic_proto_rawDescOnce.Do(func() {
-		file_app_logic_rpc_logic_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_app_logic_rpc_logic_proto_rawDesc), len(file_app_logic_rpc_logic_proto_rawDesc)))
+func file_logic_proto_rawDescGZIP() []byte {
+	file_logic_proto_rawDescOnce.Do(func() {
+		file_logic_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_logic_proto_rawDesc), len(file_logic_proto_rawDesc)))
 	})
-	return file_app_logic_rpc_logic_proto_rawDescData
+	return file_logic_proto_rawDescData
 }
 
-var file_app_logic_rpc_logic_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
-var file_app_logic_rpc_logic_proto_goTypes = []any{
-	(*CheckMessagePermissionReq)(nil),  // 0: logic.CheckMessagePermissionReq
-	(*CheckMessagePermissionResp)(nil), // 1: logic.CheckMessagePermissionResp
+var file_logic_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
+var file_logic_proto_goTypes = []any{
+	(*CheckMessagePermissionReq)(nil),    // 0: logic.CheckMessagePermissionReq
+	(*CheckMessagePermissionResp)(nil),   // 1: logic.CheckMessagePermissionResp
+	(*UserInfoResponse)(nil),             // 2: logic.UserInfoResponse
+	(*CreateUserInfoReq)(nil),            // 3: logic.CreateUserInfoReq
+	(*CreateUserInfoResp)(nil),           // 4: logic.CreateUserInfoResp
+	(*GetUserInfoReq)(nil),               // 5: logic.GetUserInfoReq
+	(*GetUserInfoByEmailReq)(nil),        // 6: logic.GetUserInfoByEmailReq
+	(*GetUserInfoByNicknameReq)(nil),     // 7: logic.GetUserInfoByNicknameReq
+	(*GetUserInfoResp)(nil),              // 8: logic.GetUserInfoResp
+	(*UpdateUserInfoProfileReq)(nil),     // 9: logic.UpdateUserInfoProfileReq
+	(*UpdateUserInfoProfileResp)(nil),    // 10: logic.UpdateUserInfoProfileResp
+	(*UpdateUserInfoStatusReq)(nil),      // 11: logic.UpdateUserInfoStatusReq
+	(*UpdateUserInfoStatusResp)(nil),     // 12: logic.UpdateUserInfoStatusResp
+	(*SearchUserInfoByNicknameReq)(nil),  // 13: logic.SearchUserInfoByNicknameReq
+	(*SearchUserInfoByNicknameResp)(nil), // 14: logic.SearchUserInfoByNicknameResp
 }
-var file_app_logic_rpc_logic_proto_depIdxs = []int32{
-	0, // 0: logic.PermissionService.CheckMessagePermission:input_type -> logic.CheckMessagePermissionReq
-	1, // 1: logic.PermissionService.CheckMessagePermission:output_type -> logic.CheckMessagePermissionResp
-	1, // [1:2] is the sub-list for method output_type
-	0, // [0:1] is the sub-list for method input_type
-	0, // [0:0] is the sub-list for extension type_name
-	0, // [0:0] is the sub-list for extension extendee
-	0, // [0:0] is the sub-list for field type_name
+var file_logic_proto_depIdxs = []int32{
+	2,  // 0: logic.CreateUserInfoResp.user:type_name -> logic.UserInfoResponse
+	2,  // 1: logic.GetUserInfoResp.user:type_name -> logic.UserInfoResponse
+	2,  // 2: logic.UpdateUserInfoProfileResp.user:type_name -> logic.UserInfoResponse
+	2,  // 3: logic.UpdateUserInfoStatusResp.user:type_name -> logic.UserInfoResponse
+	2,  // 4: logic.SearchUserInfoByNicknameResp.users:type_name -> logic.UserInfoResponse
+	0,  // 5: logic.PermissionService.CheckMessagePermission:input_type -> logic.CheckMessagePermissionReq
+	3,  // 6: logic.UserService.CreateUserInfo:input_type -> logic.CreateUserInfoReq
+	5,  // 7: logic.UserService.GetUserInfo:input_type -> logic.GetUserInfoReq
+	6,  // 8: logic.UserService.GetUserInfoByEmail:input_type -> logic.GetUserInfoByEmailReq
+	7,  // 9: logic.UserService.GetUserInfoByNickname:input_type -> logic.GetUserInfoByNicknameReq
+	9,  // 10: logic.UserService.UpdateUserInfoProfile:input_type -> logic.UpdateUserInfoProfileReq
+	11, // 11: logic.UserService.UpdateUserInfoStatus:input_type -> logic.UpdateUserInfoStatusReq
+	13, // 12: logic.UserService.SearchUserInfoByNickname:input_type -> logic.SearchUserInfoByNicknameReq
+	1,  // 13: logic.PermissionService.CheckMessagePermission:output_type -> logic.CheckMessagePermissionResp
+	4,  // 14: logic.UserService.CreateUserInfo:output_type -> logic.CreateUserInfoResp
+	8,  // 15: logic.UserService.GetUserInfo:output_type -> logic.GetUserInfoResp
+	8,  // 16: logic.UserService.GetUserInfoByEmail:output_type -> logic.GetUserInfoResp
+	8,  // 17: logic.UserService.GetUserInfoByNickname:output_type -> logic.GetUserInfoResp
+	10, // 18: logic.UserService.UpdateUserInfoProfile:output_type -> logic.UpdateUserInfoProfileResp
+	12, // 19: logic.UserService.UpdateUserInfoStatus:output_type -> logic.UpdateUserInfoStatusResp
+	14, // 20: logic.UserService.SearchUserInfoByNickname:output_type -> logic.SearchUserInfoByNicknameResp
+	13, // [13:21] is the sub-list for method output_type
+	5,  // [5:13] is the sub-list for method input_type
+	5,  // [5:5] is the sub-list for extension type_name
+	5,  // [5:5] is the sub-list for extension extendee
+	0,  // [0:5] is the sub-list for field type_name
 }
 
-func init() { file_app_logic_rpc_logic_proto_init() }
-func file_app_logic_rpc_logic_proto_init() {
-	if File_app_logic_rpc_logic_proto != nil {
+func init() { file_logic_proto_init() }
+func file_logic_proto_init() {
+	if File_logic_proto != nil {
 		return
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_app_logic_rpc_logic_proto_rawDesc), len(file_app_logic_rpc_logic_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_logic_proto_rawDesc), len(file_logic_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   2,
+			NumMessages:   15,
 			NumExtensions: 0,
-			NumServices:   1,
+			NumServices:   2,
 		},
-		GoTypes:           file_app_logic_rpc_logic_proto_goTypes,
-		DependencyIndexes: file_app_logic_rpc_logic_proto_depIdxs,
-		MessageInfos:      file_app_logic_rpc_logic_proto_msgTypes,
+		GoTypes:           file_logic_proto_goTypes,
+		DependencyIndexes: file_logic_proto_depIdxs,
+		MessageInfos:      file_logic_proto_msgTypes,
 	}.Build()
-	File_app_logic_rpc_logic_proto = out.File
-	file_app_logic_rpc_logic_proto_goTypes = nil
-	file_app_logic_rpc_logic_proto_depIdxs = nil
+	File_logic_proto = out.File
+	file_logic_proto_goTypes = nil
+	file_logic_proto_depIdxs = nil
 }

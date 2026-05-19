@@ -24,6 +24,7 @@ func (c *DatabasePermissionChecker) CheckMessagePermission(ctx context.Context, 
 		if errors.Is(err, pgx.ErrNoRows) {
 			return PermissionDecision{Allowed: false, Code: CodeNotFound, Reason: "conversation not found"}, nil
 		}
+
 		return PermissionDecision{}, err
 	}
 
@@ -35,6 +36,7 @@ func (c *DatabasePermissionChecker) CheckMessagePermission(ctx context.Context, 
 	if conv.ConversationType == "group" {
 		return c.checkGroupPermission(ctx, check)
 	}
+
 	return c.checkDirectPermission(ctx, check)
 }
 
@@ -48,6 +50,7 @@ func (c *DatabasePermissionChecker) checkGroupPermission(ctx context.Context, ch
 		if errors.Is(err, pgx.ErrNoRows) {
 			return PermissionDecision{Allowed: false, Code: CodePermissionDenied, Reason: "sender is not a member of this group"}, nil
 		}
+
 		return PermissionDecision{}, err
 	}
 
@@ -58,10 +61,12 @@ func (c *DatabasePermissionChecker) checkGroupPermission(ctx context.Context, ch
 			// Mute expired, allow
 			return PermissionDecision{Allowed: true, Code: CodeOK}, nil
 		}
+
 		if !member.MutedUntil.Valid {
 			// Permanent mute
 			return PermissionDecision{Allowed: false, Code: CodePermissionDenied, Reason: "sender is muted"}, nil
 		}
+
 		if member.MutedUntil.Time.After(time.Now()) {
 			return PermissionDecision{Allowed: false, Code: CodePermissionDenied, Reason: "sender is muted"}, nil
 		}
@@ -95,6 +100,7 @@ func (c *DatabasePermissionChecker) checkDirectPermission(ctx context.Context, c
 	if hasBlocked {
 		return PermissionDecision{Allowed: false, Code: CodePermissionDenied, Reason: "blocked"}, nil
 	}
+
 	if !hasAccepted {
 		return PermissionDecision{Allowed: false, Code: CodePermissionDenied, Reason: "not friends"}, nil
 	}

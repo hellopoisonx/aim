@@ -45,6 +45,24 @@ type LogoutResponse {
 	Success bool `json:"success"`
 }
 
+type GetUserByNameRequest {
+	Name string `path:"name" validate:"required"`
+}
+
+type UserInfo {
+	Id        int64  `json:"id"`
+	Email     string `json:"email"`
+	Status    int32  `json:"status"`
+	Nickname  string `json:"nickname"`
+	Avatar    string `json:"avatar"`
+	CreatedAt int64  `json:"created_at"`
+	UpdatedAt int64  `json:"updated_at"`
+}
+
+type GetUserByNameResponse {
+	User UserInfo `json:"user"`
+}
+
 @server (
 	prefix: /api/auth
 	group:  auth
@@ -61,5 +79,14 @@ service gateway-api {
 
 	@handler Logout
 	post /logout returns (LogoutResponse)
+}
+
+@server (
+	prefix: /api/users
+	group:  users
+)
+service gateway-api {
+	@handler GetUserByName
+	get /by-name/:name (GetUserByNameRequest) returns (GetUserByNameResponse)
 }
 

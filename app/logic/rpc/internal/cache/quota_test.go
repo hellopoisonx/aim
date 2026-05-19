@@ -17,7 +17,7 @@ func TestQuotaStore_WithinLimit(t *testing.T) {
 	ctx := context.Background()
 
 	// All 5 requests should be allowed
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		allowed, _, err := store.CheckQuota(ctx, 1, 100)
 		require.NoError(t, err)
 		require.True(t, allowed, "request %d should be allowed", i+1)
@@ -32,7 +32,7 @@ func TestQuotaStore_ExceedingLimit(t *testing.T) {
 	ctx := context.Background()
 
 	// First 3 requests allowed
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		allowed, _, err := store.CheckQuota(ctx, 1, 100)
 		require.NoError(t, err)
 		require.True(t, allowed, "request %d should be allowed", i+1)
@@ -53,7 +53,7 @@ func TestQuotaStore_SlidingWindow(t *testing.T) {
 	ctx := context.Background()
 
 	// First 3 requests allowed
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		allowed, _, err := store.CheckQuota(ctx, 1, 100)
 		require.NoError(t, err)
 		require.True(t, allowed)
@@ -77,13 +77,20 @@ func TestQuotaStore_DifferentUsersIsolation(t *testing.T) {
 	ctx := context.Background()
 
 	// User 1 uses up their quota (2 requests)
-	store.CheckQuota(ctx, 1, 100)
-	store.CheckQuota(ctx, 1, 100)
-	allowed, _, _ := store.CheckQuota(ctx, 1, 100)
+	allowed, _, err := store.CheckQuota(ctx, 1, 100)
+	require.NoError(t, err)
+	require.True(t, allowed)
+
+	allowed, _, err = store.CheckQuota(ctx, 1, 100)
+	require.NoError(t, err)
+	require.True(t, allowed)
+
+	allowed, _, err = store.CheckQuota(ctx, 1, 100)
+	require.NoError(t, err)
 	require.False(t, allowed, "user 1 should be denied after 2 requests")
 
 	// User 2 should still be allowed (different user)
-	allowed, _, err := store.CheckQuota(ctx, 2, 100)
+	allowed, _, err = store.CheckQuota(ctx, 2, 100)
 	require.NoError(t, err)
 	require.True(t, allowed, "user 2 should be allowed")
 
@@ -101,13 +108,20 @@ func TestQuotaStore_DifferentConversationsIsolation(t *testing.T) {
 	ctx := context.Background()
 
 	// User 1 uses up quota in conversation 100
-	store.CheckQuota(ctx, 1, 100)
-	store.CheckQuota(ctx, 1, 100)
-	allowed, _, _ := store.CheckQuota(ctx, 1, 100)
+	allowed, _, err := store.CheckQuota(ctx, 1, 100)
+	require.NoError(t, err)
+	require.True(t, allowed)
+
+	allowed, _, err = store.CheckQuota(ctx, 1, 100)
+	require.NoError(t, err)
+	require.True(t, allowed)
+
+	allowed, _, err = store.CheckQuota(ctx, 1, 100)
+	require.NoError(t, err)
 	require.False(t, allowed)
 
 	// Same user in conversation 200 should still be allowed (different key)
-	allowed, _, err := store.CheckQuota(ctx, 1, 200)
+	allowed, _, err = store.CheckQuota(ctx, 1, 200)
 	require.NoError(t, err)
 	require.True(t, allowed)
 }

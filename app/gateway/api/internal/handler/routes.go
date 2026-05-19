@@ -7,7 +7,7 @@ import (
 	"net/http"
 
 	auth "github.com/hellopoisonx/aim/app/gateway/api/internal/handler/auth"
-	wsHandler "github.com/hellopoisonx/aim/app/gateway/api/internal/handler/ws"
+	users "github.com/hellopoisonx/aim/app/gateway/api/internal/handler/users"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 
 	"github.com/zeromicro/go-zero/rest"
@@ -40,11 +40,14 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 		rest.WithPrefix("/api/auth"),
 	)
 
-	server.AddRoutes([]rest.Route{
-		{
-			Method:  http.MethodGet,
-			Path:    "/ws",
-			Handler: wsHandler.NewWsHandler(serverCtx, serverCtx.WsManager).ServeWS,
+	server.AddRoutes(
+		[]rest.Route{
+			{
+				Method:  http.MethodGet,
+				Path:    "/by-name/:name",
+				Handler: users.GetUserByNameHandler(serverCtx),
+			},
 		},
-	})
+		rest.WithPrefix("/api/users"),
+	)
 }

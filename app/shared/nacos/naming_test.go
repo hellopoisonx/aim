@@ -35,7 +35,9 @@ func (f *fakeNamingClient) Subscribe(param *vo.SubscribeParam) error {
 	if f.subscribeErr != nil {
 		return f.subscribeErr
 	}
+
 	f.subscribeCB = param.SubscribeCallback
+
 	return nil
 }
 

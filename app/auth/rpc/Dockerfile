@@ -1,8 +1,12 @@
+# syntax=docker/dockerfile:1.7
+
 FROM golang:1.26-alpine AS builder
 
 LABEL stage=gobuilder
 
-ENV CGO_ENABLED 0
+ENV CGO_ENABLED=0 \
+    GOCACHE=/root/.cache/go-build \
+    GOMODCACHE=/go/pkg/mod
 
 
 RUN apk update --no-cache && apk add --no-cache tzdata
@@ -11,10 +15,12 @@ WORKDIR /build
 
 ADD go.mod .
 ADD go.sum .
-RUN go mod download
+RUN --mount=type=cache,target=/go/pkg/mod go mod download
 COPY . .
 
-RUN go build -ldflags="-s -w" -o /app/auth app/auth/rpc/auth.go
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    go build -ldflags="-s -w" -o /app/auth app/auth/rpc/auth.go
 
 
 FROM alpine

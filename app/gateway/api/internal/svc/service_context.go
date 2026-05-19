@@ -10,6 +10,7 @@ import (
 	"github.com/hellopoisonx/aim/app/core/rpc/pb"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/config"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/ws"
+	"github.com/hellopoisonx/aim/app/logic/rpc/client/userservice"
 	aimnacos "github.com/hellopoisonx/aim/app/shared/nacos"
 
 	"github.com/redis/go-redis/v9"
@@ -32,14 +33,16 @@ func (noopPresencePublisher) PublishPresence(ctx context.Context, userID int64, 
 }
 
 type ServiceContext struct {
-	Config           config.Config
-	AuthClient       authservice.AuthService
-	CoreClient       pb.TransferServiceClient
-	namingClient     aimnacos.NamingClient
-	coreNamingClient aimnacos.NamingClient
-	RedisClient      *redis.Client
-	PresencePub      PresencePublisher
-	WsManager        *ws.Manager
+	Config            config.Config
+	AuthClient        authservice.AuthService
+	CoreClient        pb.TransferServiceClient
+	LogicUserClient   userservice.UserService
+	namingClient      aimnacos.NamingClient
+	coreNamingClient  aimnacos.NamingClient
+	logicNamingClient aimnacos.NamingClient
+	RedisClient       *redis.Client
+	PresencePub       PresencePublisher
+	WsManager         *ws.Manager
 }
 
 func NewServiceContext(c config.Config) *ServiceContext {
@@ -70,6 +73,16 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	coreClient, err := zrpc.NewClientWithTarget("nacos:///" + c.CoreRpc.ServiceName)
 	logx.Must(err)
 
+	logx.Must(c.LogicRpc.ApplyDefaults("logic.rpc", "127.0.0.1:8080"))
+
+	logicNamingClient, err := aimnacos.NewNamingClient(c.LogicRpc)
+	logx.Must(err)
+
+	aimnacos.RegisterResolver(logicNamingClient, c.LogicRpc)
+
+	logicClient, err := zrpc.NewClientWithTarget("nacos:///" + c.LogicRpc.ServiceName)
+	logx.Must(err)
+
 	// Create Redis client for presence heartbeat state management.
 	redisClient := redis.NewClient(&redis.Options{
 		Addr:     c.Redis.Addr,
@@ -87,14 +100,16 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	wsManager := ws.NewManager()
 
 	return &ServiceContext{
-		Config:           c,
-		AuthClient:       authservice.NewAuthService(client),
-		CoreClient:       pb.NewTransferServiceClient(coreClient.Conn()),
-		namingClient:     namingClient,
-		coreNamingClient: coreNamingClient,
-		RedisClient:      redisClient,
-		PresencePub:      &noopPresencePublisher{},
-		WsManager:        wsManager,
+		Config:            c,
+		AuthClient:        authservice.NewAuthService(client),
+		CoreClient:        pb.NewTransferServiceClient(coreClient.Conn()),
+		LogicUserClient:   userservice.NewUserService(logicClient),
+		namingClient:      namingClient,
+		coreNamingClient:  coreNamingClient,
+		logicNamingClient: logicNamingClient,
+		RedisClient:       redisClient,
+		PresencePub:       &noopPresencePublisher{},
+		WsManager:         wsManager,
 	}
 }
 
@@ -104,11 +119,19 @@ func (s *ServiceContext) Close() {
 	if s.namingClient != nil {
 		s.namingClient.CloseClient()
 	}
+
 	if s.coreNamingClient != nil {
 		s.coreNamingClient.CloseClient()
 	}
+
+	if s.logicNamingClient != nil {
+		s.logicNamingClient.CloseClient()
+	}
+
 	if s.RedisClient != nil {
-		s.RedisClient.Close()
+		if err := s.RedisClient.Close(); err != nil {
+			logx.Errorf("failed to close Redis client: %v", err)
+		}
 	}
 }
 
@@ -120,6 +143,16 @@ func NewServiceContextWithAuth(c config.Config, authClient authservice.AuthServi
 		RedisClient: nil,
 		PresencePub: nil,
 		WsManager:   ws.NewManager(),
+	}
+}
+
+func NewServiceContextWithLogic(c config.Config, logicUserClient userservice.UserService) *ServiceContext {
+	return &ServiceContext{
+		Config:          c,
+		LogicUserClient: logicUserClient,
+		RedisClient:     nil,
+		PresencePub:     nil,
+		WsManager:       ws.NewManager(),
 	}
 }
 

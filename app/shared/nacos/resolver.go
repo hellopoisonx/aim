@@ -43,6 +43,7 @@ func (b *ResolverBuilder) Build(target resolver.Target, cc resolver.ClientConn, 
 				logx.Errorf("nacos subscribe callback error for %q: %v", b.Config.ServiceName, err)
 				return
 			}
+
 			r.updateAddrs(instances)
 		},
 	}
@@ -50,6 +51,7 @@ func (b *ResolverBuilder) Build(target resolver.Target, cc resolver.ClientConn, 
 	if err := b.Client.Subscribe(param); err != nil {
 		return nil, fmt.Errorf("nacos subscribe %q: %w", b.Config.ServiceName, err)
 	}
+
 	r.unsubscribe = func() {
 		_ = b.Client.Unsubscribe(param)
 	}
@@ -91,6 +93,7 @@ func (r *nacosResolver) updateAddrs(instances []model.Instance) {
 		if !inst.Enable || !inst.Healthy || inst.Weight <= 0 {
 			continue
 		}
+
 		addrs = append(addrs, resolver.Address{Addr: fmt.Sprintf("%s:%d", inst.Ip, inst.Port)})
 	}
 
@@ -114,9 +117,11 @@ func subset[T any](set []T, n int) []T {
 	rand.Shuffle(len(set), func(i, j int) {
 		set[i], set[j] = set[j], set[i]
 	})
+
 	if len(set) <= n {
 		return set
 	}
+
 	return set[:n]
 }
 

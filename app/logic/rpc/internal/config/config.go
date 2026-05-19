@@ -1,16 +1,21 @@
 package config
 
+//lint:file-ignore SA5008 go-zero conf uses json tag options for defaults.
+
 import (
+	"github.com/hellopoisonx/aim/app/shared/nacos"
 	"github.com/zeromicro/go-queue/kq"
 	"github.com/zeromicro/go-zero/zrpc"
 )
 
 type Config struct {
 	zrpc.RpcServerConf
-	Postgres       PostgresConf `json:",optional"`
-	KqConsumerConf kq.KqConf    `json:",optional"`
-	Redis          RedisConf    `json:",optional"`
-	Quota          QuotaConf    `json:",optional"`
+	Nacos                   nacos.Config
+	Postgres                PostgresConf `json:",optional"`
+	KqConsumerConf          kq.KqConf    `json:",optional"`
+	UserCreatedConsumerConf kq.KqConf    `json:",optional"`
+	CacheRedis              RedisConf    `json:",optional"`
+	Quota                   QuotaConf    `json:",optional"`
 }
 
 type PostgresConf struct {
@@ -26,4 +31,9 @@ type RedisConf struct {
 type QuotaConf struct {
 	WindowSeconds int   `json:",default=60"`
 	MaxRequests   int64 `json:",default=100"`
+}
+
+// IsUserCreatedConsumerConfigured returns true if the user-created consumer is properly configured.
+func (c *Config) IsUserCreatedConsumerConfigured() bool {
+	return c.UserCreatedConsumerConf.Topic != "" && len(c.UserCreatedConsumerConf.Brokers) > 0
 }

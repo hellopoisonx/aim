@@ -19,6 +19,7 @@ func TestManagerRegister(t *testing.T) {
 	t.Parallel()
 
 	mgr := ws.NewManager()
+
 	_, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -34,6 +35,7 @@ func TestManagerRegisterDuplicate(t *testing.T) {
 	t.Parallel()
 
 	mgr := ws.NewManager()
+
 	_, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -51,6 +53,7 @@ func TestManagerUnregister(t *testing.T) {
 	t.Parallel()
 
 	mgr := ws.NewManager()
+
 	_, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -79,6 +82,7 @@ func TestManagerGet(t *testing.T) {
 	t.Parallel()
 
 	mgr := ws.NewManager()
+
 	_, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -147,6 +151,7 @@ func TestManagerConcurrent(t *testing.T) {
 	t.Parallel()
 
 	mgr := ws.NewManager()
+
 	var wg sync.WaitGroup
 
 	// Concurrent registrations
@@ -154,6 +159,7 @@ func TestManagerConcurrent(t *testing.T) {
 		wg.Add(1)
 		go func(userID int64) {
 			defer wg.Done()
+
 			_, cancel := context.WithCancel(context.Background())
 			identity := ws.Identity{UserID: userID, DeviceID: "device-1"}
 			_ = mgr.Register(identity, nil, cancel)
@@ -168,6 +174,7 @@ func TestManagerConcurrentSameUser(t *testing.T) {
 	t.Parallel()
 
 	mgr := ws.NewManager()
+
 	var wg sync.WaitGroup
 
 	// Same user, different devices
@@ -175,6 +182,7 @@ func TestManagerConcurrentSameUser(t *testing.T) {
 		wg.Add(1)
 		go func(deviceID string) {
 			defer wg.Done()
+
 			_, cancel := context.WithCancel(context.Background())
 			identity := ws.Identity{UserID: 1, DeviceID: deviceID}
 			_ = mgr.Register(identity, nil, cancel)

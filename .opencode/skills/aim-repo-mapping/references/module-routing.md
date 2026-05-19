@@ -10,3 +10,8 @@
 ## 交接信号
 
 - 需求同时涉及一个域的 API 和另一个域的配置，说明已经越过总路由层，应该切到对应领域 Skill。
+
+## 基础设施 / 运维
+
+- Kafka topic 创建、consumer group 诊断、#PARTITIONS=0 排查：参考 `references/kafka-ops.md`
+- Docker 构建约定：参考 `references/docker-build.md`

@@ -41,3 +41,13 @@ type Message struct {
 	Mentions       []byte             `json:"mentions"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 }
+
+type UserInfo struct {
+	ID        int64              `json:"id"`
+	Email     string             `json:"email"`
+	Status    int16              `json:"status"`
+	Nickname  string             `json:"nickname"`
+	Avatar    string             `json:"avatar"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+}

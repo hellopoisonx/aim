@@ -1,21 +1,56 @@
 Name: core.rpc
 ListenOn: 0.0.0.0:8080
+Telemetry:
+  Name: core.rpc
+  Endpoint: jaeger:4318
+  Sampler: 1.0
+  Batcher: otlphttp
+  OtlpHttpPath: /v1/traces
+Nacos:
+  ServerAddr: nacos:8848
+  NamespaceID: ""
+  Group: DEFAULT_GROUP
+  Cluster: DEFAULT
+  ServiceName: core.rpc
+  AdvertiseIP: aim-core
+  AdvertisePort: 8080
+  Ephemeral: true
+  Weight: 1
+  TimeoutMs: 5000
+  Username: ""
+  Password: ""
+  LogDir: /app/log/nacos
+  CacheDir: /tmp/nacos/cache
+  LogLevel: info
 SnowflakeMachineID: 1
-Redis:
-  Addr: 127.0.0.1:6379
+CacheRedis:
+  Addr: redis:6379
   Password: ""
   DB: 0
 LogicRpc:
   ServerAddr: nacos:8848
+  NamespaceID: ""
+  Group: DEFAULT_GROUP
+  Cluster: DEFAULT
   ServiceName: logic.rpc
+  AdvertiseIP: ""
+  AdvertisePort: 0
+  Ephemeral: true
+  Weight: 1
+  TimeoutMs: 5000
+  Username: ""
+  Password: ""
+  LogDir: /app/log/nacos
+  CacheDir: /tmp/nacos/cache
+  LogLevel: info
 KqPusherConf:
   Brokers:
-    - 127.0.0.1:9092
+    - kafka:9092
   Topic: aim-message-transfer
 KqConsumerConf:
   Name: core-delivery-consumer
   Brokers:
-    - 127.0.0.1:9092
+    - kafka:9092
   Group: aim-core-delivery
   Topic: aim-message-transfer
   Offset: first
@@ -23,6 +58,6 @@ KqConsumerConf:
   Processors: 1
 GatewayRpc:
   ServiceName: gateway.rpc
-  Target: 127.0.0.1:9090
+  Target: aim-gateway:9090
 Presence:
   TTLSeconds: 30

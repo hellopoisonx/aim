@@ -31,4 +31,11 @@ func TestConfigLoadsGatewayYAML(t *testing.T) {
 	require.Equal(t, int64(1024), c.WebSocket.MaxMsgSize)
 	require.Equal(t, 5, c.WebSocket.ServerAckDelay)
 	require.Equal(t, 30, c.WebSocket.HeartbeatInterv)
+	require.Equal(t, "gateway.rpc", c.GatewayRpc.Name)
+	require.Equal(t, "127.0.0.1:9090", c.GatewayRpc.ListenOn)
+	require.Equal(t, "gateway.rpc", c.GatewayRpc.Telemetry.Name)
+	require.Equal(t, "jaeger:4318", c.GatewayRpc.Telemetry.Endpoint)
+	require.InEpsilon(t, 1.0, c.GatewayRpc.Telemetry.Sampler, 0.0001)
+	require.Equal(t, "otlphttp", c.GatewayRpc.Telemetry.Batcher)
+	require.Equal(t, "/v1/traces", c.GatewayRpc.Telemetry.OtlpHttpPath)
 }
