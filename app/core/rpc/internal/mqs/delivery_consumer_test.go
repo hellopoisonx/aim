@@ -17,6 +17,9 @@ import (
 	"github.com/zeromicro/go-queue/kq"
 	"github.com/zeromicro/go-zero/core/service"
 	"go.opentelemetry.io/otel/trace"
+	tracesdk "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
+	"go.opentelemetry.io/otel"
 )
 
 // --- Fake implementations ---
@@ -159,6 +162,29 @@ func TestDeliveryConsumer_Consume_GatewayPushFailure(t *testing.T) {
 	err = consumer.Consume(context.Background(), "200", string(value))
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "gateway unavailable")
+}
+
+func TestDeliveryConsumer_Consume_RecordsSpanError(t *testing.T) {
+	spans := tracetest.NewSpanRecorder()
+	tp := tracesdk.NewTracerProvider(tracesdk.WithSpanProcessor(spans))
+	prev := otel.GetTracerProvider()
+	otel.SetTracerProvider(tp)
+	t.Cleanup(func() { otel.SetTracerProvider(prev) })
+
+	fakeGw := &fakeGatewayClient{pushErr: errors.New("gateway unavailable")}
+	svcCtx := newTestServiceContext(t, fakeGw)
+	consumer := NewDeliveryConsumer(context.Background(), svcCtx)
+
+	event := transferEvent{MessageID: 12345, SenderID: 100, ConversationID: 200, MessageType: "text", Content: "hello", ClientMsgID: "client-1", Timestamp: 1700000000000}
+	value, err := json.Marshal(event)
+	require.NoError(t, err)
+
+	err = consumer.Consume(context.Background(), "200", string(value))
+	require.Error(t, err)
+
+	ended := spans.Ended()
+	require.NotEmpty(t, ended)
+	require.NotEmpty(t, ended[0].Events())
 }
 
 func TestDeliveryConsumer_Consume_AllFields(t *testing.T) {

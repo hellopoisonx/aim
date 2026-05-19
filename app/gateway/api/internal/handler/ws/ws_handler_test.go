@@ -588,6 +588,12 @@ func TestMapTransferToAckRejected(t *testing.T) {
 			wantBiz:  errorx.CodeRateLimit,
 			wantMsg:  "rate limit",
 		},
+		{
+			name:     "already exists → conflict",
+			grpcCode: codes.AlreadyExists,
+			wantBiz:  errorx.CodeConflict,
+			wantMsg:  "conflict",
+		},
 	}
 
 	for _, tt := range tests {

@@ -47,6 +47,7 @@ func (c *UserCreatedConsumer) Consume(ctx context.Context, key string, value str
 
 	_, err := c.svcCtx.UserInfoService.CreateUserInfo(ctx, event.UserID, event.Email, event.Nickname, event.Avatar)
 	if err != nil {
+		span.RecordError(err)
 		if errors.Is(err, service.ErrUserExists) {
 			logx.WithContext(ctx).Infof("user %d already exists, skipping (idempotent)", event.UserID)
 			return nil

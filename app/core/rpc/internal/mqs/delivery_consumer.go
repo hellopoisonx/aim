@@ -74,6 +74,7 @@ func (c *DeliveryConsumer) Consume(ctx context.Context, key string, value string
 
 	resp, err := c.svcCtx.GatewayClient.PushMessage(ctx, req)
 	if err != nil {
+		span.RecordError(err)
 		logx.WithContext(ctx).Errorf("failed to push message to user %d: %v", targetUserID, err)
 		return err
 	}

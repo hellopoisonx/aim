@@ -12,6 +12,9 @@ description: aim 的认证域。对应 `auth` 模块。
 
 ## 参考资料
 
-- `references/schema.md`
 - `references/detail.md`
 - `references/api.md`
+
+## 最近变更
+
+- 2026-05-19: 接入 RPC 统一错误拦截器，清洗非业务错误并记录追踪事件。

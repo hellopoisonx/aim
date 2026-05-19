@@ -8,10 +8,12 @@ import (
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/config"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/mqs"
 	serverpermissionservice "github.com/hellopoisonx/aim/app/logic/rpc/internal/server/permissionservice"
+	serverconversationservice "github.com/hellopoisonx/aim/app/logic/rpc/internal/server/conversationservice"
 	serveruserservice "github.com/hellopoisonx/aim/app/logic/rpc/internal/server/userservice"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	aimnacos "github.com/hellopoisonx/aim/app/shared/nacos"
+	rpcutil "github.com/hellopoisonx/aim/app/shared/rpc"
 
 	"github.com/zeromicro/go-zero/core/conf"
 	"github.com/zeromicro/go-zero/core/logx"
@@ -46,11 +48,13 @@ func main() {
 	s := zrpc.MustNewServer(c.RpcServerConf, func(grpcServer *grpc.Server) {
 		pb.RegisterPermissionServiceServer(grpcServer, serverpermissionservice.NewPermissionServiceServer(ctx))
 		pb.RegisterUserServiceServer(grpcServer, serveruserservice.NewUserServiceServer(ctx))
+		pb.RegisterConversationServiceServer(grpcServer, serverconversationservice.NewConversationServiceServer(ctx))
 
 		if c.Mode == service.DevMode || c.Mode == service.TestMode {
 			reflection.Register(grpcServer)
 		}
 	})
+	s.AddUnaryInterceptors(rpcutil.UnaryErrorInterceptor())
 	defer s.Stop()
 
 	// Run Kafka consumer alongside the RPC server via ServiceGroup

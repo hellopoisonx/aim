@@ -9,6 +9,7 @@ import (
 	"github.com/hellopoisonx/aim/app/auth/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/auth/rpc/pb"
 	aimnacos "github.com/hellopoisonx/aim/app/shared/nacos"
+	rpcutil "github.com/hellopoisonx/aim/app/shared/rpc"
 
 	"github.com/zeromicro/go-zero/core/conf"
 	"github.com/zeromicro/go-zero/core/logx"
@@ -47,6 +48,7 @@ func main() {
 			reflection.Register(grpcServer)
 		}
 	})
+	s.AddUnaryInterceptors(rpcutil.UnaryErrorInterceptor())
 	defer s.Stop()
 
 	fmt.Printf("Starting rpc server at %s...\n", c.ListenOn)

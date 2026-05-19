@@ -6,9 +6,11 @@ package main
 import (
 	"flag"
 	"fmt"
+	"net/http"
 
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/config"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/handler"
+	handlersws "github.com/hellopoisonx/aim/app/gateway/api/internal/handler/ws"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/ws"
 	gwpb "github.com/hellopoisonx/aim/shared/proto/gateway/pb"
@@ -35,6 +37,8 @@ func main() {
 	defer restServer.Stop()
 
 	handler.RegisterHandlers(restServer, ctx)
+	wsHandler := handlersws.NewWsHandler(ctx, ctx.WsManager)
+	restServer.AddRoute(rest.Route{Method: http.MethodGet, Path: "/ws", Handler: wsHandler.ServeWS})
 
 	rpcServer := zrpc.MustNewServer(c.GatewayRpc, func(grpcServer *grpc.Server) {
 		gwpb.RegisterGatewayServiceServer(grpcServer, ws.NewGatewayServer(ctx.WsManager))

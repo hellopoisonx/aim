@@ -12,6 +12,9 @@ import (
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/shared/events"
 	"github.com/hellopoisonx/aim/app/shared/tracing"
+	"go.opentelemetry.io/otel"
+	tracesdk "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	"github.com/stretchr/testify/require"
 	"github.com/zeromicro/go-queue/kq"
 	"go.opentelemetry.io/otel/trace"
@@ -155,6 +158,29 @@ func TestUserCreatedConsumer_Consume_ServiceError(t *testing.T) {
 	err = consumer.Consume(context.Background(), "12345", string(value))
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "database error")
+}
+
+func TestUserCreatedConsumer_Consume_RecordsSpanError(t *testing.T) {
+	spans := tracetest.NewSpanRecorder()
+	tp := tracesdk.NewTracerProvider(tracesdk.WithSpanProcessor(spans))
+	prev := otel.GetTracerProvider()
+	otel.SetTracerProvider(tp)
+	t.Cleanup(func() { otel.SetTracerProvider(prev) })
+
+	userSvc := &fakeUserInfoService{err: errors.New("database error")}
+	svcCtx := newTestSvcCtxWithUserSvc(userSvc)
+	consumer := NewUserCreatedConsumer(context.Background(), svcCtx)
+
+	event := events.UserCreatedEvent{UserID: 12345, Email: "ada@example.com", Nickname: "Ada", Avatar: "", CreatedAt: 1700000000000}
+	value, err := json.Marshal(event)
+	require.NoError(t, err)
+
+	err = consumer.Consume(context.Background(), "12345", string(value))
+	require.Error(t, err)
+
+	ended := spans.Ended()
+	require.NotEmpty(t, ended)
+	require.NotEmpty(t, ended[0].Events())
 }
 
 func TestUserCreatedConsumer_Consume_DuplicateIdempotentSuccess(t *testing.T) {

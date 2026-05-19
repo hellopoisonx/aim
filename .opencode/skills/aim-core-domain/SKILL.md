@@ -13,3 +13,7 @@ description: aim 的核心域。对应 `core` 模块。
 
 - `references/detail.md`
 - `references/api.md`
+
+## 最近变更
+
+- 2026-05-19: 为 core Kafka delivery consumer 补充 span.RecordError 观测；接入 RPC 统一 unary 错误拦截器。

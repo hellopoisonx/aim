@@ -12,6 +12,9 @@ import (
 	"github.com/hellopoisonx/aim/app/shared/tracing"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"go.opentelemetry.io/otel"
+	tracesdk "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	"github.com/stretchr/testify/require"
 	"github.com/zeromicro/go-queue/kq"
 	"github.com/zeromicro/go-zero/core/service"
@@ -250,6 +253,29 @@ func TestArchiveConsumer_Consume_DBInsertError(t *testing.T) {
 	err = consumer.Consume(context.Background(), "200", string(value))
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "database error")
+}
+
+func TestArchiveConsumer_Consume_RecordsSpanError(t *testing.T) {
+	spans := tracetest.NewSpanRecorder()
+	tp := tracesdk.NewTracerProvider(tracesdk.WithSpanProcessor(spans))
+	prev := otel.GetTracerProvider()
+	otel.SetTracerProvider(tp)
+	t.Cleanup(func() { otel.SetTracerProvider(prev) })
+
+	pool := &fakePool{execErr: errors.New("database error")}
+	svcCtx := newTestServiceContextWithFakePool(pool)
+	consumer := NewArchiveConsumer(context.Background(), svcCtx)
+
+	event := transferEvent{MessageID: 12345, SenderID: 100, ConversationID: 200, MessageType: "text", Content: "hello", ClientMsgID: "client-1", Timestamp: 1700000000000}
+	value, err := json.Marshal(event)
+	require.NoError(t, err)
+
+	err = consumer.Consume(context.Background(), "200", string(value))
+	require.Error(t, err)
+
+	ended := spans.Ended()
+	require.NotEmpty(t, ended)
+	require.NotEmpty(t, ended[0].Events())
 }
 
 func TestArchiveConsumer_Consume_InvalidJSON(t *testing.T) {

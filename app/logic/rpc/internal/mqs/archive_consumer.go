@@ -83,6 +83,7 @@ func (c *ArchiveConsumer) Consume(ctx context.Context, key string, value string)
 		Mentions:       mentionsJSON,
 	})
 	if err != nil {
+		span.RecordError(err)
 		logx.WithContext(ctx).Errorf("failed to insert message %d: %v", event.MessageID, err)
 		return err
 	}

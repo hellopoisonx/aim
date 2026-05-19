@@ -346,7 +346,7 @@ func mapTransferToAck(ackSeq int64, clientMsgID string, seq int64, resp *corepb.
 	var status pb.AckStatus
 
 	switch codeErr.Code {
-	case errorx.CodeBadInput, errorx.CodeAuth, errorx.CodeForbidden, errorx.CodeNotFound, errorx.CodeRateLimit:
+	case errorx.CodeBadInput, errorx.CodeAuth, errorx.CodeForbidden, errorx.CodeNotFound, errorx.CodeConflict, errorx.CodeRateLimit:
 		status = pb.AckStatus_ACK_STATUS_REJECTED
 	default:
 		// CodeInternal (50000) and unknown codes → RETRYABLE

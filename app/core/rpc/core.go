@@ -11,6 +11,7 @@ import (
 	"github.com/hellopoisonx/aim/app/core/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/core/rpc/pb"
 	aimnacos "github.com/hellopoisonx/aim/app/shared/nacos"
+	rpcutil "github.com/hellopoisonx/aim/app/shared/rpc"
 
 	"github.com/zeromicro/go-zero/core/conf"
 	"github.com/zeromicro/go-zero/core/logx"
@@ -50,6 +51,7 @@ func main() {
 			reflection.Register(grpcServer)
 		}
 	})
+	s.AddUnaryInterceptors(rpcutil.UnaryErrorInterceptor())
 	defer s.Stop()
 
 	// Run Kafka consumer alongside the RPC server via ServiceGroup
