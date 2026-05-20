@@ -1,24 +1,39 @@
 # AIM
 
-`AIM` 是一个面向多人在线的即时通讯系统，内置可自部署的 AI 助手，将大模型能力深度集成到聊天场景中，实现"通讯 + AI"的深度融合。
+`AIM` 是一个面向多人在线的即时通讯系统，内置可自部署的 AI 助手，将大模型能力深度集成到聊天场景中。
 
 ## 文档
 
-本项目采用 agent + skills 的方式维护技术文档，保证文档不腐化、不过时。详见项目根目录 `/.opencode/skills`
+技术文档由 agent + skills 维护，详见 `.opencode/skills/`：
+
+| 技能 | 对应模块 |
+|------|----------|
+| `aim-repo-mapping` | 仓库导航（模块边界、入口、影响面） |
+| `aim-auth-domain` | 认证服务 |
+| `aim-core-domain` | 消息投递域 |
+| `aim-gateway-domain` | 网关/连接层 |
+| `aim-logic-domain` | 业务上下文域 |
+| `aim-frontend-domain` | 桌面客户端 |
+| `aim-shared-domain` | 进程内共享包 |
+| `aim-proto-domain` | Protobuf 协议 |
+| `aim-database-migration` | 数据库迁移 |
+| `zero-skills` | go-zero 框架 |
 
 ## 技术栈
 
-| 技术        | 依赖库                                        | 目标                     |
-|-----------|--------------------------------------------|------------------------|
-| WebSocket | `github.com/coder/websocket`               | 全双工长连接通信               |
-| 微服务框架     | `github.com/zeromicro/go-zero`             | HTTP/gRPC 微服务骨架        |
-| 序列化       | `protobuf`                                 | 前后端 WS 通信格式 / 服务内部调用格式 |
-| 桌面客户端     | `wails` + `vue3` + `element-plus` + `vite` | 桌面端 UI                 |
-| 消息队列      | `kafka`                                    | 异步消息投递、服务解耦            |
-| 缓存/分布式锁   | `redis`                                    | 在线状态、会话路由、实时限额、分布式锁    |
-| 配置/注册中心   | `github.com/nacos-group/nacos-sdk-go/v2`   | 服务发现、配置管理              |
-| 持久化       | `postgresql` + `pgvector`                  | 关系数据 / JSONB 文档 / 向量检索 |
-| 容器化       | `docker`                                   | 部署                     |
+| 层 | 技术 | 说明 |
+|----|------|------|
+| 微服务框架 | `go-zero` v1.10 | HTTP/gRPC 骨架 + goctl 代码生成 |
+| WebSocket | `coder/websocket` | Protobuf 帧协议 |
+| 消息队列 | Kafka（`go-queue` → `segmentio/kafka-go`） | `conversation_id` 分区保序 |
+| 缓存 | Redis Stack（`go-redis/v9`） | 在线状态、网关路由、滑动窗口限频 |
+| 持久化 | PostgreSQL 17 + pgvector | JSONB 文档存储、向量检索（扩展） |
+| 注册中心 | Nacos v2 | 服务发现与配置管理 |
+| 链路追踪 | OpenTelemetry → Jaeger | gRPC + Kafka trace 传播 |
+| 数据模型 | sqlc | 类型安全的 SQL 生成 |
+| 序列化 | Protobuf + gRPC | WS 帧协议 / 服务间通信 |
+| 桌面客户端 | Wails v2 + Vue 3 + Element Plus + Vite | 桌面端 UI |
+| 容器化 | Docker Compose | 本地基础设施 + 服务编排 |
 
 ## 架构总览
 
@@ -31,104 +46,83 @@
      └─────────┬─────────┘
                │
        ┌───────▼────────┐
-       │  aim-gateway    │  一致性哈希 + 虚拟节点 + 会话 drain
-       │  (有状态网关)    │
+       │  aim-gateway   │  WebSocket + 会话管理 + drain
+       │   (有状态网关)  │
        └───────┬────────┘
                │  gRPC
      ┌─────────▼──────────────┐
      │                         │
  ┌───▼────┐             ┌──────▼─────┐
  │aim-auth│             │  aim-core  │
- │(认证)   │             │ (消息投递域) │
+ │ (认证) │             │ (消息投递域) │
  └───┬────┘             └──────┬─────┘
-     │                        │  gRPC（缓存 aim-logic 数据）
+     │                        │  gRPC
      │              ┌─────────▼──────────┐
      │              │      Kafka          │
      │              └────┬──────────┬─────┘
      │                   │          │
      │           ┌───────▼──┐  ┌────▼──────┐
      │           │aim-logic │  │  aim-ai   │
-     │           │(业务上下文)│  │(AI 能力域) │
+     │           │(业务上下文)│  │  (规划中)  │
      │           └──────────┘  └───────────┘
      │                ▲
-     └────────────────┘  （aim-logic 不依赖 aim-core 内部状态）
+     └────────────────┘  aim-core → aim-logic（单向依赖）
 ```
 
-**依赖方向**：aim-core → aim-logic（单向）。aim-core 通过缓存（Redis TTL）查询 aim-logic 的好友/群组关系来路由消息，aim-logic 不反向依赖 aim-core。
+**依赖方向**：aim-core → aim-logic（单向）。aim-core 通过 gRPC + Redis 缓存查询 aim-logic 的关系数据，aim-logic 不反向依赖 aim-core。
 
-## 模块划分
+## 模块
 
-### aim-gateway — 连接层
+> 详细接口定义和实现指南见 `.opencode/skills/` 对应技能。
 
-维护长连接（WebSocket / TCP）、Protobuf 协议解析、心跳保活。
+### aim-gateway — 连接层 `aim-gateway-domain`
 
-- 有状态服务，根据 User_ID 做一致性哈希，确保同一用户落在固定网关节点
-- 使用 150+ 虚拟节点/物理节点，减少 rebalancing 影响
-- 节点下线前推送 `reconnect` 帧，提供 5-10s drain 窗口，避免惊群重连
+WebSocket 长连接管理、Protobuf 帧解析、心跳保活。通过 Redis 维护用户→网关节点映射，支持 PushMessage/PushPresence/KickUser 等内部 gRPC 操作，节点下线时推送 `reconnect` 帧做 drain。
 
-### aim-auth — 认证服务
+### aim-auth — 认证服务 `aim-auth-domain`
 
-独立的认证服务，位于网关之后、业务服务之前。
+JWT 签发/验证/刷新，基于 Redis SessionStore 的多设备登录管理。
 
-- JWT 签发与刷新
-- 多设备登录策略（单设备踢下线 / 多设备共存）
+### aim-core — 消息投递域 `aim-core-domain`
 
-### aim-core — 消息投递域
+消息路由与投递：Transfer（gRPC → Kafka 发布）→ Delivery Consumer（Kafka 消费 → 查目标节点 → gRPC 推送）。PresenceStore 维护 Redis 在线状态。
 
-只负责一件事：**把消息送到对的人**。
+### aim-logic — 业务上下文域 `aim-logic-domain`
 
-- **Transfer Service（消息路由）**：消息流向判断（单聊/群聊）、查询接收方所在网关节点、投递至 Kafka
-- **Presence Service（在线状态）**：Redis heartbeat 维护用户在线/离线/输入中状态，向好友推送状态变更
-- **Delivery Consumer（投递消费者）**：从 Kafka 消费消息，查找目标用户所在网关并投递
+提供投递判断依据：用户/好友/群组管理、消息持久化（Kafka 消费 → PostgreSQL JSONB）、历史回溯（cursor-based）、Redis 滑动窗口限频。内容审核作为共享库接口供 core 同步调用。
 
-> 依赖方向：aim-core → aim-logic（gRPC 查询好友/群组关系，本地 Redis 缓存短期 TTL）
+### aim-ai — AI 能力域（规划中）
 
-### aim-logic — 业务上下文域
+Bot 控制、LLM 适配、RAG 知识库、工具执行。通过 Kafka 与 core 解耦。
 
-提供消息投递的判断依据和业务逻辑支撑。
+### app/shared — 共享包 `aim-shared-domain`
 
-- **User/Relationship Service（用户与社交）**：好友申请、黑名单、群组元数据、群成员禁言/转让
-- **Message Archive Service（消息持久化）**：从 Kafka 异步消费消息，写入 PostgreSQL 分区表 + JSONB；提供 `tsvector` 全文搜索、历史回溯接口
-- **Billing & Quota Service（计费管理）**：平台点数扣费、计费流水审计（PostgreSQL 持久化）；**实时限额**通过 Redis 滑动窗口实现，避免 PostgreSQL 往返延迟
-- **Content Moderation（内容审核）**：作为**共享库**（in-process）供 aim-core 和 aim-ai 同步调用；异步审计日志由独立 worker 处理
-
-### aim-ai — AI 能力域
-
-通过 Kafka 与 aim-core 解耦；LLM 供应商宕机不影响消息投递。
-
-- **Bot Controller（机器人大脑）**：管理 Bot 人设、多 Bot 协作路由，通过 MQ 消费 @消息，决定调用哪个 Bot
-- **LLM Connector（模型适配器）**：屏蔽 OpenAI / Anthropic 等厂商接口差异，处理流式输出（SSE / WS 回传）、Token 计数
-- **RAG & Vector Service（知识库服务）**：文档切片、向量化（Embedding）、pgvector 存储与相似度检索
-- **Task/MCP Service（工具执行器）**：执行工具调用
-
-### 暂不考虑
-
-- ~~Push Service（离线推送）~~：对接 FCM / APNs 的系统通知
+进程内共享库：`errorx`（业务错误码）、`jwt`、`events`、`nacos`（注册/发现）、`tracing`（W3C 传播）、`tools`（snowflake ID）、`moderation`（审核接口）。
 
 ## 关键设计决策
 
-| 决策            | 选择                         | 理由                                   |
-|---------------|----------------------------|--------------------------------------|
-| core/logic 边界 | 按领域所有权划分（非实时/非实时）          | 避免双向依赖；aim-core 只管投递，aim-logic 提供上下文 |
-| 内容审核          | 共享库 + async worker（非独立服务）  | 热路径同步调用避免 RPC 延迟，审计异步解耦              |
-| 消息持久化         | PostgreSQL 分区表 + JSONB     | MVP 阶段零额外组件；分区按月滚动，JSONB 存非结构化字段     |
-| 向量检索          | pgvector 扩展                | 零运维增量，无需单独部署向量数据库                    |
-| 实时限额          | Redis 滑动窗口                 | PostgreSQL 往返不满足逐条消息拦截的延迟要求          |
-| 消息顺序          | Kafka 按 conversation_id 分区 | 保证同一会话内消息有序，跨会话并行消费                  |
-| 一致性哈希         | 150+ 虚拟节点 + 会话 drain       | 减少节点增减时的连接迁移风暴                       |
+| 决策 | 选择 | 理由 |
+|------|------|------|
+| core/logic 边界 | 按领域所有权划分 | 单向依赖，core 只投递，logic 提供上下文 |
+| 内容审核 | 共享库（进程内同步调用） | 避免 RPC 延迟，热路径同步 |
+| 消息持久化 | PostgreSQL JSONB | 零额外组件，灵活 schema |
+| 向量检索 | pgvector 扩展 | 零运维增量 |
+| 实时限额 | Redis 滑动窗口 | PostgreSQL 往返不满足逐消息拦截的延迟 |
+| 消息顺序 | Kafka 按 `conversation_id` 分区 | 同会话有序，跨会话并行 |
+| 链路追踪 | OpenTelemetry → Jaeger | gRPC + Kafka trace context 全链路传播 |
 
-## 消息投递流程（单聊示例）
+## 消息投递流程（单聊）
 
 ```
-1. 客户端 → aim-gateway（WS 发送 Protobuf 消息）
-2. aim-gateway → aim-auth（校验 token & 权限）
-3. aim-gateway → aim-core/Transfer（gRPC 转发消息）
-4. Transfer → aim-logic（缓存查询：A 和 B 是否好友？）
-5. Transfer → Kafka（投递消息，key = conversation_id）
-6. Delivery Consumer → Kafka（消费消息）
-7. Delivery Consumer → Redis（查询 B 在哪个网关节点）
-8. Delivery Consumer → aim-gateway（gRPC 投递至 B 的连接节点）
+1. 客户端 → aim-gateway（WS Protobuf 帧）
+2. aim-gateway → aim-auth（Token 校验）
+3. aim-gateway → aim-core/Transfer（gRPC）
+4. Transfer → aim-logic（权限检查：是否好友/被拉黑）
+5. Transfer → Kafka（发布，key=conversation_id）
+6. Delivery Consumer ← Kafka（消费）
+7. Delivery Consumer → Redis（查目标用户网关节点）
+8. Delivery Consumer → aim-gateway（gRPC PushMessage）
 9. aim-gateway → 客户端 B（WS 推送）
-10. Transfer → aim-logic/Message Archive（异步持久化）
+10. Archive Consumer ← Kafka（异步持久化至 PostgreSQL）
 ```
 
