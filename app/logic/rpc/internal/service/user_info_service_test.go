@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/hellopoisonx/aim/app/logic/rpc/internal/model"
+	"github.com/hellopoisonx/aim/app/logic/rpc/model"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/stretchr/testify/assert"

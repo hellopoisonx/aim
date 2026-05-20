@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 
 	"github.com/hellopoisonx/aim/app/core/rpc/internal/svc"
+	logicpb "github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/tracing"
 	gwpb "github.com/hellopoisonx/aim/shared/proto/gateway/pb"
 
@@ -39,7 +40,6 @@ func NewDeliveryConsumer(ctx context.Context, svcCtx *svc.ServiceContext) *Deliv
 func (c *DeliveryConsumer) Consume(ctx context.Context, key string, value string) error {
 	logx.WithContext(ctx).Infof("consuming delivery event, key=%s", key)
 
-	// Parse the transfer event
 	var event transferEvent
 	if err := json.Unmarshal([]byte(value), &event); err != nil {
 		logx.WithContext(ctx).Errorf("failed to unmarshal delivery event: %v", err)
@@ -54,32 +54,72 @@ func (c *DeliveryConsumer) Consume(ctx context.Context, key string, value string
 	logx.WithContext(ctx).Infof("delivery event: msg_id=%d sender=%d conv=%d type=%s",
 		event.MessageID, event.SenderID, event.ConversationID, event.MessageType)
 
-	// For MVP: push to the sender as acknowledgment
-	// In production: query conversation members, get their gateway nodes, push to each
-	targetUserID := event.SenderID
-
-	// Build the PushMessage request matching the proto
-	req := &gwpb.PushMessageReq{
-		MessageId:        event.MessageID,
-		ConversationId:   event.ConversationID,
-		ConversationType: "single", // TODO: derive from conversation type
-		MessageType:      event.MessageType,
-		Content:          event.Content,
-		SenderId:         event.SenderID,
-		SentAt:           event.Timestamp,
-		ClientMsgId:      event.ClientMsgID,
-		Mentions:         event.Mentions,
-		TargetUserId:     targetUserID,
-	}
-
-	resp, err := c.svcCtx.GatewayClient.PushMessage(ctx, req)
+	targetUserIDs, err := c.targetUserIDs(ctx, event)
 	if err != nil {
 		span.RecordError(err)
-		logx.WithContext(ctx).Errorf("failed to push message to user %d: %v", targetUserID, err)
 		return err
 	}
 
-	logx.WithContext(ctx).Infof("message pushed to user %d, success=%v", targetUserID, resp.Success)
+	for _, targetUserID := range targetUserIDs {
+		req := &gwpb.PushMessageReq{
+			MessageId:        event.MessageID,
+			ConversationId:   event.ConversationID,
+			ConversationType: "direct",
+			MessageType:      event.MessageType,
+			Content:          event.Content,
+			SenderId:         event.SenderID,
+			SentAt:           event.Timestamp,
+			ClientMsgId:      event.ClientMsgID,
+			Mentions:         event.Mentions,
+			TargetUserId:     targetUserID,
+		}
+
+		resp, err := c.svcCtx.GatewayClient.PushMessage(ctx, req)
+		if err != nil {
+			span.RecordError(err)
+			logx.WithContext(ctx).Errorf("failed to push message to user %d: %v", targetUserID, err)
+			return err
+		}
+
+		logx.WithContext(ctx).Infof("message pushed to user %d, success=%v", targetUserID, resp.Success)
+	}
 
 	return nil
+}
+
+func (c *DeliveryConsumer) targetUserIDs(ctx context.Context, event transferEvent) ([]int64, error) {
+	if c.svcCtx.LogicConversationClient == nil {
+		return []int64{event.SenderID}, nil
+	}
+
+	resp, err := c.svcCtx.LogicConversationClient.GetConversationMembers(ctx, &logicpb.GetConversationMembersReq{
+		ConversationId: event.ConversationID,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	memberIDs := resp.GetMemberIds()
+	if len(memberIDs) == 0 {
+		return []int64{event.SenderID}, nil
+	}
+
+	seen := make(map[int64]struct{}, len(memberIDs))
+	targets := make([]int64, 0, len(memberIDs))
+	for _, memberID := range memberIDs {
+		if memberID <= 0 {
+			continue
+		}
+		if _, ok := seen[memberID]; ok {
+			continue
+		}
+		seen[memberID] = struct{}{}
+		targets = append(targets, memberID)
+	}
+
+	if len(targets) == 0 {
+		return []int64{event.SenderID}, nil
+	}
+
+	return targets, nil
 }

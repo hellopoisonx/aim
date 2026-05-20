@@ -106,6 +106,43 @@ func (s *GatewayServer) PushPresence(ctx context.Context, req *pb.PushPresenceRe
 	return &pb.PushPresenceResp{Success: true}, nil
 }
 
+
+
+// PushFriendApplication delivers a friend application to all connections of the target user on this gateway node.
+func (s *GatewayServer) PushFriendApplication(ctx context.Context, req *pb.PushFriendApplicationReq) (*pb.PushFriendApplicationResp, error) {
+	if req.TargetUserId == 0 {
+		return nil, status.Errorf(codes.InvalidArgument, "target_user_id is required")
+	}
+
+	payload := &wspb.PushFriendApplicationPayload{
+		UserId:    req.UserId,
+		FriendId:  req.FriendId,
+		Status:    req.Status,
+		CreatedAt: req.CreatedAt,
+		UpdatedAt: req.UpdatedAt,
+	}
+
+	connections := s.manager.GetByUserID(req.TargetUserId)
+	if len(connections) == 0 {
+		logx.WithContext(ctx).Debugf("PushFriendApplication: no local connections for user_id=%d", req.TargetUserId)
+		return &pb.PushFriendApplicationResp{Success: true}, nil
+	}
+
+	var pushErr error
+	for _, conn := range connections {
+		if err := conn.WriteFrame(ctx, wspb.FrameType_FRAME_TYPE_PUSH_FRIEND_APPLICATION, payload); err != nil {
+			logx.WithContext(ctx).Errorf("PushFriendApplication: failed to write to user_id=%d device_id=%s: %v", conn.Identity.UserID, conn.Identity.DeviceID, err)
+			pushErr = err
+		}
+	}
+
+	if pushErr != nil {
+		return &pb.PushFriendApplicationResp{Success: false}, nil
+	}
+
+	return &pb.PushFriendApplicationResp{Success: true}, nil
+}
+
 // KickUser closes connections for a user, optionally filtered by device.
 func (s *GatewayServer) KickUser(ctx context.Context, req *pb.KickUserReq) (*pb.KickUserResp, error) {
 	if req.UserId == 0 {

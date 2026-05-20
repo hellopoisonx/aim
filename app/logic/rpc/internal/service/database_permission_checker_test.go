@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hellopoisonx/aim/app/logic/rpc/internal/model"
+	"github.com/hellopoisonx/aim/app/logic/rpc/model"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/stretchr/testify/assert"
@@ -17,22 +17,23 @@ import (
 // --- Fake querier ---
 
 type fakeQuerier struct {
-	conversations    map[int64]model.GetConversationRow
+	conversations    map[int64]model.Conversation
 	members          map[string]model.GetMemberRow // key: "convID:userID"
 	friendships      map[string][]model.GetFriendshipBidirectionalRow
+	messageCounts    map[int64]int64
 	getConvErr       error
 	getMemberErr     error
 	getFriendshipErr error
 }
 
-func (f *fakeQuerier) GetConversation(ctx context.Context, id int64) (model.GetConversationRow, error) {
+func (f *fakeQuerier) GetConversation(ctx context.Context, id int64) (model.Conversation, error) {
 	if f.getConvErr != nil {
-		return model.GetConversationRow{}, f.getConvErr
+		return model.Conversation{}, f.getConvErr
 	}
 
 	conv, ok := f.conversations[id]
 	if !ok {
-		return model.GetConversationRow{}, pgx.ErrNoRows
+		return model.Conversation{}, pgx.ErrNoRows
 	}
 
 	return conv, nil
@@ -66,6 +67,14 @@ func (f *fakeQuerier) GetFriendshipBidirectional(ctx context.Context, arg model.
 // Unused methods - implement to satisfy interface
 func (f *fakeQuerier) GetFriendship(ctx context.Context, arg model.GetFriendshipParams) (model.GetFriendshipRow, error) {
 	return model.GetFriendshipRow{}, nil
+}
+
+func (f *fakeQuerier) GetFriendshipByPair(ctx context.Context, arg model.GetFriendshipByPairParams) (model.Friendship, error) {
+	return model.Friendship{}, nil
+}
+
+func (f *fakeQuerier) UpsertFriendship(ctx context.Context, arg model.UpsertFriendshipParams) (model.Friendship, error) {
+	return model.Friendship{}, nil
 }
 
 func (f *fakeQuerier) IsMemberMuted(ctx context.Context, arg model.IsMemberMutedParams) (model.IsMemberMutedRow, error) {
@@ -104,6 +113,38 @@ func (f *fakeQuerier) SearchUserInfoByNickname(ctx context.Context, arg model.Se
 	return nil, nil
 }
 
+func (f *fakeQuerier) CreateConversation(ctx context.Context, arg model.CreateConversationParams) (model.Conversation, error) {
+	return model.Conversation{}, nil
+}
+
+func (f *fakeQuerier) AddConversationMembers(ctx context.Context, arg model.AddConversationMembersParams) (int64, error) {
+	return 0, nil
+}
+
+func (f *fakeQuerier) GetConversationMembers(ctx context.Context, conversationID int64) ([]model.ConversationMember, error) {
+	return nil, nil
+}
+
+func (f *fakeQuerier) GetConversationsByUserID(ctx context.Context, userID int64) ([]model.Conversation, error) {
+	return nil, nil
+}
+
+func (f *fakeQuerier) ListMessagesByConversation(ctx context.Context, arg model.ListMessagesByConversationParams) ([]model.Message, error) {
+	return nil, nil
+}
+
+func (f *fakeQuerier) ListMessagesByConversationInitial(ctx context.Context, arg model.ListMessagesByConversationInitialParams) ([]model.Message, error) {
+	return nil, nil
+}
+
+func (f *fakeQuerier) ListPendingFriendApplications(ctx context.Context, friendID int64) ([]model.Friendship, error) {
+	return nil, nil
+}
+
+func (f *fakeQuerier) CountMessagesByConversation(ctx context.Context, conversationID int64) (int64, error) {
+	return f.messageCounts[conversationID], nil
+}
+
 func convUserKey(convID, userID int64) string {
 	return fmt.Sprintf("%d:%d", convID, userID)
 }
@@ -124,7 +165,7 @@ func newFutureTime() pgtype.Timestamptz {
 
 func TestDatabasePermissionChecker_GroupMember(t *testing.T) {
 	fq := &fakeQuerier{
-		conversations: map[int64]model.GetConversationRow{
+		conversations: map[int64]model.Conversation{
 			1: {ID: 1, ConversationType: "group", IsActive: true},
 		},
 		members: map[string]model.GetMemberRow{
@@ -146,7 +187,7 @@ func TestDatabasePermissionChecker_GroupMember(t *testing.T) {
 
 func TestDatabasePermissionChecker_GroupNotMember(t *testing.T) {
 	fq := &fakeQuerier{
-		conversations: map[int64]model.GetConversationRow{
+		conversations: map[int64]model.Conversation{
 			1: {ID: 1, ConversationType: "group", IsActive: true},
 		},
 		members:     map[string]model.GetMemberRow{},
@@ -167,7 +208,7 @@ func TestDatabasePermissionChecker_GroupNotMember(t *testing.T) {
 
 func TestDatabasePermissionChecker_GroupMuted(t *testing.T) {
 	fq := &fakeQuerier{
-		conversations: map[int64]model.GetConversationRow{
+		conversations: map[int64]model.Conversation{
 			1: {ID: 1, ConversationType: "group", IsActive: true},
 		},
 		members: map[string]model.GetMemberRow{
@@ -190,7 +231,7 @@ func TestDatabasePermissionChecker_GroupMuted(t *testing.T) {
 
 func TestDatabasePermissionChecker_GroupMuteExpired(t *testing.T) {
 	fq := &fakeQuerier{
-		conversations: map[int64]model.GetConversationRow{
+		conversations: map[int64]model.Conversation{
 			1: {ID: 1, ConversationType: "group", IsActive: true},
 		},
 		members: map[string]model.GetMemberRow{
@@ -212,7 +253,7 @@ func TestDatabasePermissionChecker_GroupMuteExpired(t *testing.T) {
 
 func TestDatabasePermissionChecker_GroupMuteNotExpired(t *testing.T) {
 	fq := &fakeQuerier{
-		conversations: map[int64]model.GetConversationRow{
+		conversations: map[int64]model.Conversation{
 			1: {ID: 1, ConversationType: "group", IsActive: true},
 		},
 		members: map[string]model.GetMemberRow{
@@ -235,7 +276,7 @@ func TestDatabasePermissionChecker_GroupMuteNotExpired(t *testing.T) {
 
 func TestDatabasePermissionChecker_DirectFriend(t *testing.T) {
 	fq := &fakeQuerier{
-		conversations: map[int64]model.GetConversationRow{
+		conversations: map[int64]model.Conversation{
 			200: {ID: 200, ConversationType: "direct", IsActive: true},
 		},
 		members: map[string]model.GetMemberRow{},
@@ -257,9 +298,9 @@ func TestDatabasePermissionChecker_DirectFriend(t *testing.T) {
 	assert.Equal(t, CodeOK, decision.Code)
 }
 
-func TestDatabasePermissionChecker_DirectNotFriend(t *testing.T) {
+func TestDatabasePermissionChecker_DirectNotFriendUsesTemporaryConversation(t *testing.T) {
 	fq := &fakeQuerier{
-		conversations: map[int64]model.GetConversationRow{
+		conversations: map[int64]model.Conversation{
 			200: {ID: 200, ConversationType: "direct", IsActive: true},
 		},
 		members: map[string]model.GetMemberRow{},
@@ -277,14 +318,41 @@ func TestDatabasePermissionChecker_DirectNotFriend(t *testing.T) {
 	})
 
 	require.NoError(t, err)
+	assert.True(t, decision.Allowed)
+	assert.Equal(t, CodeOK, decision.Code)
+	assert.Contains(t, decision.Reason, "temporary conversation")
+}
+
+
+func TestDatabasePermissionChecker_DirectTemporaryConversationLimitReached(t *testing.T) {
+	fq := &fakeQuerier{
+		conversations: map[int64]model.Conversation{
+			200: {ID: 200, ConversationType: "direct", IsActive: true},
+		},
+		members: map[string]model.GetMemberRow{},
+		friendships: map[string][]model.GetFriendshipBidirectionalRow{
+			friendshipKey(100, 200): {
+				{UserID: 100, FriendID: 200, Status: "pending"},
+			},
+		},
+		messageCounts: map[int64]int64{200: temporaryConversationMessageLimit},
+	}
+	checker := NewDatabasePermissionChecker(fq)
+
+	decision, err := checker.CheckMessagePermission(context.Background(), PermissionCheck{
+		SenderID:       100,
+		ConversationID: 200,
+	})
+
+	require.NoError(t, err)
 	assert.False(t, decision.Allowed)
 	assert.Equal(t, CodePermissionDenied, decision.Code)
-	assert.Contains(t, decision.Reason, "not friends")
+	assert.Contains(t, decision.Reason, "temporary conversation message limit reached")
 }
 
 func TestDatabasePermissionChecker_DirectBlocked(t *testing.T) {
 	fq := &fakeQuerier{
-		conversations: map[int64]model.GetConversationRow{
+		conversations: map[int64]model.Conversation{
 			200: {ID: 200, ConversationType: "direct", IsActive: true},
 		},
 		members: map[string]model.GetMemberRow{},
@@ -309,7 +377,7 @@ func TestDatabasePermissionChecker_DirectBlocked(t *testing.T) {
 
 func TestDatabasePermissionChecker_ConversationNotFound(t *testing.T) {
 	fq := &fakeQuerier{
-		conversations: map[int64]model.GetConversationRow{},
+		conversations: map[int64]model.Conversation{},
 		members:       map[string]model.GetMemberRow{},
 		friendships:   map[string][]model.GetFriendshipBidirectionalRow{},
 	}
@@ -328,7 +396,7 @@ func TestDatabasePermissionChecker_ConversationNotFound(t *testing.T) {
 
 func TestDatabasePermissionChecker_ConversationInactive(t *testing.T) {
 	fq := &fakeQuerier{
-		conversations: map[int64]model.GetConversationRow{
+		conversations: map[int64]model.Conversation{
 			1: {ID: 1, ConversationType: "group", IsActive: false},
 		},
 		members:     map[string]model.GetMemberRow{},
@@ -349,7 +417,7 @@ func TestDatabasePermissionChecker_ConversationInactive(t *testing.T) {
 
 func TestDatabasePermissionChecker_DBError(t *testing.T) {
 	fq := &fakeQuerier{
-		conversations: map[int64]model.GetConversationRow{},
+		conversations: map[int64]model.Conversation{},
 		members:       map[string]model.GetMemberRow{},
 		friendships:   map[string][]model.GetFriendshipBidirectionalRow{},
 		getConvErr:    errors.New("database connection error"),
@@ -368,7 +436,7 @@ func TestDatabasePermissionChecker_DBError(t *testing.T) {
 
 func TestDatabasePermissionChecker_DirectBidirectionalFriendship(t *testing.T) {
 	fq := &fakeQuerier{
-		conversations: map[int64]model.GetConversationRow{
+		conversations: map[int64]model.Conversation{
 			200: {ID: 200, ConversationType: "direct", IsActive: true},
 		},
 		members: map[string]model.GetMemberRow{},

@@ -19,6 +19,9 @@
 
 - Headers.Authorization: Bearer <Token>
 - payload: user_id && device_id
+- REST 受保护端点（`/api/conversations`、`/api/users`）通过 `Auth` 中间件（`app/gateway/api/internal/middleware/auth_middleware.go`）验签 JWT token，成功后将 `ws.Identity{UserID, DeviceID}` 注入 `ws.WithIdentity` 上下文；失败返回 401 JSON `{code, msg}`。
+- WS `/ws` 端点通过 `wsauth.ExtractAndValidate` 验签，独立于 REST 中间件。
+- 中间件使用 `Config.Auth.AccessSecret` 密钥，与 auth 服务签发 token 使用相同密钥。
 
 ### 代理转发  `auth` - `/api/auth`
 
@@ -42,13 +45,20 @@
 
 - `GET /api/users/by-name/:name` 通过 `LogicRpc` 连接 `aim-logic`，调用 `UserService.SearchUserInfoByNickname` 做昵称模糊查询，返回用户列表项 `id/email/avatar`。nickname 不唯一，不要在 REST 层把 by-name 当作单用户详情查询。
 - `GET /api/users/by-id/:id` 通过 `LogicRpc` 连接 `aim-logic`，调用 `UserService.GetUserInfo` 查询单个用户详情。
+- `POST /api/users/friends/:id` 通过 `LogicRpc` 连接 `aim-logic`，调用 `FriendshipService.AddFriend`，将认证用户 `user_id` 与路径参数 `id` 建立好友关系请求；认证用户来自 `ws.IdentityFromContext(l.ctx)`，路径 `id` 必须为正数。
 - `LogicRpc` 配置位于 `app/gateway/api/etc/gateway-api.yaml`，配置结构为 `app/gateway/api/internal/config/config.go` 的 `LogicRpc aimnacos.Config`。
-- `app/gateway/api/internal/svc/service_context.go` 通过 Nacos resolver 使用 `nacos:///logic.rpc` 创建 `userservice.UserService` 客户端。
+- `app/gateway/api/internal/svc/service_context.go` 通过 Nacos resolver 使用 `nacos:///logic.rpc` 创建 `userservice.UserService`、`friendshipservice.FriendshipService` 客户端。
+- 用户端点均受 `Auth` 中间件保护，需要有效的 Bearer JWT token。
 
 | Method | Path | Auth | Handler |
 | --- | --- | --- | --- |
-| GET | `/api/users/by-name/:name` | 暂无 REST JWT 鉴权中间件 | `internal/handler/users/get_user_by_name_handler.go` |
-| GET | `/api/users/by-id/:id` | 暂无 REST JWT 鉴权中间件 | `internal/handler/users/get_user_by_id_handler.go` |
+| POST | `/api/users/friends/:id` | `Auth` 中间件（JWT Bearer token） | `internal/handler/users/add_friend_handler.go` |
+
+### 代理转发 `logic` - `/api/friends`
+
+| Method | Path | Auth | Handler |
+| --- | --- | --- | --- |
+| GET | `/api/friends/applications` | `Auth` 中间件（JWT Bearer token） | `internal/handler/friends/get_friend_applications_handler.go` |
 
 重新生成 REST 脚手架：
 
@@ -90,6 +100,10 @@ service GatewayService {
   // DrainNotify 通知网关节点进行优雅迁移（会话 drain）。
   // 调用方：Nacos 服务发现 / 运维管理工具，在网关节点下线前通知其推送 reconnect 帧给客户端。
   rpc DrainNotify(DrainNotifyReq) returns (DrainNotifyResp);
+
+  // PushFriendApplication 推送好友申请通知给目标用户。
+  // 调用方：aim-logic/FriendshipService 在好友申请创建后调用此方法通知被申请方。
+  rpc PushFriendApplication(PushFriendApplicationReq) returns (PushFriendApplicationResp);
 }
 
 // ============================================================
@@ -152,6 +166,22 @@ message DrainNotifyReq {
 message DrainNotifyResp {
   bool success = 1;
 }
+
+// ============================================================
+// 推送好友申请通知
+// ============================================================
+
+message PushFriendApplicationReq {
+  int64  user_id       = 1; // 接收通知的目标用户 ID
+  int64  application_id = 2; // 好友申请 ID
+  int64  from_user_id   = 3; // 发送请求的用户 ID
+  string from_nickname  = 4; // 发送请求的用户昵称
+  int64  created_at      = 5; // 申请时间戳 Unix ms
+}
+
+message PushFriendApplicationResp {
+  bool success = 1;
+}
 ```
 
 ## CoreRpc 配置
@@ -193,11 +223,12 @@ enum FrameType {
   // ---- 网关 → 客户端 ----
   FRAME_TYPE_PUSH_MESSAGE      = 101; // 推送聊天消息
   FRAME_TYPE_PUSH_PRESENCE     = 102; // 推送在线状态
-  FRAME_TYPE_PUSH_NOTIFICATION  = 103; // 推送系统通知
+  FRAME_TYPE_PUSH_NOTIFICATION = 103; // 推送系统通知
   FRAME_TYPE_PUSH_TYPING       = 104; // 推送输入状态
   FRAME_TYPE_RECONNECT        = 105; // 网关要求重连（drain 窗口）
   FRAME_TYPE_SERVER_ACK       = 106; // 服务端确认
-}
+  FRAME_TYPE_TOKEN_EXPIRED    = 107; // Token 过期通知
+  FRAME_TYPE_PUSH_FRIEND_APPLICATION = 108; // 推送好友申请通知
 
 // ============================================================
 // WsFrame — 所有 WebSocket 通信统一使用此帧格式封装。
@@ -292,6 +323,14 @@ message PushNotificationPayload {
 message PushTypingPayload {
   int64 user_id         = 1; // 正在输入的用户 ID
   int64 conversation_id = 2; // 会话 ID
+}
+
+// PushFriendApplicationPayload — 推送好友申请通知
+message PushFriendApplicationPayload {
+  int64 application_id = 1; // 好友申请 ID
+  int64 from_user_id    = 2; // 发送请求的用户 ID
+  string from_nickname  = 3; // 发送请求的用户昵称
+  int64 created_at      = 4; // 申请时间戳 Unix ms
 }
 
 // ReconnectPayload — 网关要求客户端重连（drain 窗口）

@@ -10,6 +10,7 @@ import (
 	serverpermissionservice "github.com/hellopoisonx/aim/app/logic/rpc/internal/server/permissionservice"
 	serverconversationservice "github.com/hellopoisonx/aim/app/logic/rpc/internal/server/conversationservice"
 	serveruserservice "github.com/hellopoisonx/aim/app/logic/rpc/internal/server/userservice"
+	serverfriendshipservice "github.com/hellopoisonx/aim/app/logic/rpc/internal/server/friendshipservice"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	aimnacos "github.com/hellopoisonx/aim/app/shared/nacos"
@@ -49,6 +50,7 @@ func main() {
 		pb.RegisterPermissionServiceServer(grpcServer, serverpermissionservice.NewPermissionServiceServer(ctx))
 		pb.RegisterUserServiceServer(grpcServer, serveruserservice.NewUserServiceServer(ctx))
 		pb.RegisterConversationServiceServer(grpcServer, serverconversationservice.NewConversationServiceServer(ctx))
+		pb.RegisterFriendshipServiceServer(grpcServer, serverfriendshipservice.NewFriendshipServiceServer(ctx))
 
 		if c.Mode == service.DevMode || c.Mode == service.TestMode {
 			reflection.Register(grpcServer)

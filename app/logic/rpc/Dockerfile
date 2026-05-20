@@ -33,6 +33,6 @@ WORKDIR /app
 COPY --from=builder /app/logic /app/logic
 COPY app/logic/rpc/etc /app/etc
 
-EXPOSE 8080
+EXPOSE 8082
 
 CMD ["./logic", "-f", "etc/logic.yaml"]

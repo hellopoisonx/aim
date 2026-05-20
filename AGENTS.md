@@ -1,83 +1,72 @@
 # AGENTS.md
 
-## 必须在所有操作之前先阅读此文档
+**Generated:** 2026-05-20 | **Commit:** 9ee4acf | **Branch:** main
 
-## 主/从 agent 必须将 `简体中文` 作为首选的自然语言
+## 语言
 
-## 项目概览
+- 主/从 agent 必须默认使用 `简体中文` 作为自然语言。
+- 写文档、总结、计划、问题澄清时优先中文；代码标识符和命令保持原文。
 
-AIM — multi-user real-time IM system with self-deployed AI assistant. Go-zero microservices (gateway/auth/core/logic/ai) + Kafka + Redis + PostgreSQL/pgvector + Nacos.
+## 概览
 
-## 工作流程
-1. 理解需求
-2. 定位代码
-3. 生成计划
-4. 执行代码审查
-5. 更新仓库 skills
-6. 总结工作区更改并进行 `git commit`
+AIM 是多人在线即时通讯系统，内置可自部署 AI 助手。后端为 go-zero 微服务（gateway/auth/core/logic），桌面端为 Wails + Vue3 + Element Plus，基础设施包含 Kafka、Redis/Redis Stack、PostgreSQL/pgvector、Nacos、Jaeger。
 
-## 约束
+## 结构
 
-- **golangci-lint**: Refer to `golang-lint` skill
-- **Spec-first development**: Always create `.api` spec before code; validate with `goctl api validate`
-- **TDD**: Refer to `test-driven-development` and `golang-testing` skill, the coverage should be above 80%
-- **goctl for generation**: Use `goctl api go` / `goctl rpc protoc` / `goctl docker` — never handwritten scaffolding
-- **model**: Use `sqlc` — never handwritten scaffolding
-- **Post-generation**: Always `go mod tidy` → verify imports → `go build ./...`
-- **Naming style**: `--style go_zero` (snake_case filenames, go_zero naming)
-- **Error pattern**: `errorx.NewCodeError(code, msg)` — not `fmt.Errorf`
-- **Validation**: `validate:"required,email"` tags on request structs
-- **Context first**: `func(ctx context.Context, req *types.Request)`
-- **Config**: `json:",default=value"` for config defaults
-- **Dependency direction**: aim-core → aim-logic (unidirectional); logic never imports core
-
-## 反设计的模式
-
-- 一定要执行测试覆盖率检查 至少80%以上
-- 永远采用 `TDD` 开发模式
-- 虽然本项目的模块路径为 `github.com/hellopoisonx/aim`，但是对于 `goctl` 生成的文件路径不应出现冗余的 `github.com/hellopoisonx/aim` 路径
-- 必须参考 `golang-modernize` 去除传统风格的 API
-- 对于 `Request` 请求类型不要遗漏 `validation` tags
-- 对于 API errors 不要使用 `fmt.Errorf`, 应当使用 `errorx.NewCodeError`
-- 不要手动展开 go-zero 相关的代码, 使用 `goctl`
-- 代码生成或修改后不要跳过 mod tidy, build verify, test, coverage test, vet test, lint
-- 不要造成循环依赖
-- 不要生成毫无根据、无法溯源的代码。每此生成/更改代码后必须在 `.opencode/skills/` 目录下生成/更新对应的文档
-- 不要假设 Redis/RedisBloom 命令在不同协议版本下的返回类型固定。例如 `BF.EXISTS` 在 RESP2 下可能返回 `int64(0/1)`，在 RESP3/go-redis 下可能返回 `bool`；必须用类型分支兼容并添加回归测试，避免将本地解码错误折叠成难排查的 `internal error`
-
-## UNIQUE STYLES
-
-- Content moderation = shared library (in-process), NOT separate microservice
-- Real-time quota enforcement via Redis sliding window (not PostgreSQL)
-- Consistent hashing with 150+ virtual nodes for gateway routing
-- Session drain: 5-10s reconnect window on gateway node shutdown
-- Message ordering: Kafka keyed by `conversation_id` partition
-- PostgreSQL partitioned tables + JSONB for message archive
-- pgvector extension for RAG/vector search (no separate vector DB)
-
-## COMMANDS
-
-```bash
-# Scaffolding
-goctl api new <service> --style go_zero     # New API service
-goctl rpc new <service> --style go_zero     # New RPC service
-goctl api go -api <file>.api -dir . --style go_zero  # Gen from spec
-goctl rpc protoc <file>.proto --go_out=. --go-grpc_out=. --zrpc_out=. --style go_zero
-
-# Build
-go mod tidy && go build ./...
-
-# Validate
-goctl api validate -api <file>.api
-
-# test
-go test ./...
-
-# coverage test
-go test -cover ./...
+```text
+aim/
+├── app/auth/rpc/       # 认证
+├── app/core/rpc/        # 消息投递
+├── app/gateway/api/     # 对外入口
+├── app/logic/rpc/       # 业务上下文
+├── app/frontend/        # 桌面客户端
+├── app/shared/          # 共享库
+├── shared/proto/        # Protobuf 协议
+├── .opencode/skills/    # 领域 Skill
+└── docker-compose.yaml  # 本地基础设施
 ```
 
-## NOTES
+## 领域 Skill 导航
 
-- `go.mod` declares `go 1.26` — verify Go version compatibility
-- `.gitignore` excludes `/AGENTS.md` — this file is for local AI context only
+领域知识查阅 `.opencode/skills/` 下对应 Skill：
+
+- aim-repo-mapping: 仓库路由
+- aim-auth-domain: 认证域
+- aim-core-domain: 消息投递域
+- aim-gateway-domain: 网关域
+- aim-logic-domain: 业务上下文域
+- aim-frontend-domain: 桌面客户端域
+- aim-shared-domain: 共享包域
+- aim-proto-domain: Protobuf 协议域
+- aim-database-migration: 数据库迁移
+- zero-skills: go-zero 框架
+
+## 约定
+
+- Spec-first：REST 先改 `.api` 并 `goctl api validate`；RPC 先改 `.proto` 并用 goctl/protoc 生成。
+- go-zero 代码生成使用 `--style go_zero`；不要手写 scaffold，不要让生成路径出现冗余 `github.com/hellopoisonx/aim`。
+- 数据模型使用 `sqlc`；SQL 源文件在 `model/{migrations,queries}`，生成代码在 `model/`。
+- API/RPC 业务错误使用 `errorx.NewCodeError` / `NewCodeErrorf`；对外基础设施错误清洗为 `internal error`。
+- Request 类型必须带 `validate` tag；配置结构体用 `json:",default=value"` / `json:",optional"`。
+- core 可以通过 gRPC 调 logic；logic 绝不导入 core，也不负责消息投递。
+- Kafka 消息顺序靠 `conversation_id` 作为 key；跨 Kafka 链路通过 payload 中的 `traceparent`/`tracestate` 传播。
+- 前端只和 gateway 通信；Vue 不直接实现 REST/WS transport，调用 Wails 生成绑定。
+
+## 反模式
+
+- 不要编辑 `*.pb.go`、sqlc 生成文件、goctl 生成的 routes/types/server/client 文件，除非重新生成。
+- 不要把内容审核拆成独立微服务；它是 `app/shared/moderation` 进程内共享库。
+- 不要用 PostgreSQL 做实时配额拦截；热路径使用 Redis 滑动窗口。
+- 不要引入独立向量数据库；RAG/向量检索规划使用 PostgreSQL `pgvector`。
+- 不要假设 Redis/RedisBloom 返回类型固定；RESP2/RESP3 可能不同，必须类型分支并加回归测试。
+- 不要新增循环依赖；特别是 `app/logic` 不能导入 `app/core`。
+- 不要在用户端 UI 暴露 token、raw frame、协议调试面板或假会话/假消息。
+- 任务完成后必须清理临时文件（如覆盖率输出 `coverage.out`、`coverage.html`、`*.tmp`、`*.bak` 等），不要将它们留在工作目录或提交到版本控制。
+
+## 命令
+
+```bash
+go mod tidy
+go build ./...
+docker compose up -d postgres redis kafka nacos jaeger
+```

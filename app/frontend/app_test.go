@@ -1,15 +1,18 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/coder/websocket"
 	"github.com/hellopoisonx/aim/app/frontend/client"
+	"github.com/hellopoisonx/aim/app/frontend/device"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 	"github.com/hellopoisonx/aim/shared/proto/ws/pb"
 	"google.golang.org/protobuf/proto"
@@ -30,12 +33,120 @@ func TestConfigureAndProtocolCatalog(t *testing.T) {
 	}
 
 	catalog := app.ProtocolCatalog()
-	if len(catalog.REST) != 5 {
-		t.Fatalf("REST endpoints = %d, want 5", len(catalog.REST))
+	if len(catalog.REST) != 11 {
+		t.Fatalf("REST endpoints = %d, want 11", len(catalog.REST))
 	}
 
-	if len(catalog.Frames) != 12 {
-		t.Fatalf("frames = %d, want 12", len(catalog.Frames))
+	if len(catalog.Frames) != 13 {
+		t.Fatalf("frames = %d, want 13", len(catalog.Frames))
+	}
+}
+
+func TestAppLifecycleAndDeviceID(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(t.TempDir(), "device.json")
+	device.SetConfigPath(path)
+	defer device.ResetConfigPath()
+
+	app := NewApp()
+	app.startup(context.Background())
+	app.shutdown(context.Background())
+
+	first, err := app.DeviceID()
+	if err != nil {
+		t.Fatalf("DeviceID first returned error: %v", err)
+	}
+
+	second, err := app.DeviceID()
+	if err != nil {
+		t.Fatalf("DeviceID second returned error: %v", err)
+	}
+
+	if first == "" || second != first {
+		t.Fatalf("device ids = %q, %q", first, second)
+	}
+
+	state := app.SessionState()
+	if state.DeviceID != first {
+		t.Fatalf("session device id = %q, want %q", state.DeviceID, first)
+	}
+}
+
+func TestAppAuthInjectsDeviceID(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(t.TempDir(), "device.json")
+	device.SetConfigPath(path)
+	defer device.ResetConfigPath()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/auth/register":
+			var req client.RegisterRequest
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				t.Fatalf("decode register request: %v", err)
+			}
+			if req.DeviceId == "" {
+				t.Fatal("register device_id is empty")
+			}
+			writeEnvelope(t, w, map[string]any{"user_id": int64(7)})
+		case "/api/auth/login":
+			var req client.LoginRequest
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				t.Fatalf("decode login request: %v", err)
+			}
+			if req.DeviceId == "" {
+				t.Fatal("login device_id is empty")
+			}
+			writeEnvelope(t, w, map[string]any{"user_id": int64(7), "access_token": "access-1", "refresh_token": "refresh-1", "expires_at": int64(99)})
+		default:
+			t.Fatalf("unexpected path %s", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	app := NewApp()
+	app.Configure(AppConfig{GatewayHTTP: server.URL, GatewayWS: "ws://example.test/ws"})
+
+	if _, err := app.Register(client.RegisterRequest{Email: "a@example.com", Password: "password123"}); err != nil {
+		t.Fatalf("Register returned error: %v", err)
+	}
+
+	if _, err := app.Login(client.LoginRequest{Email: "a@example.com", Password: "password123"}); err != nil {
+		t.Fatalf("Login returned error: %v", err)
+	}
+}
+
+func TestSendWithoutWebSocketReturnsCodeErrorForAllFrameMethods(t *testing.T) {
+	t.Parallel()
+
+	app := NewApp()
+	tests := []struct {
+		name string
+		err  error
+	}{
+		{name: "message", err: app.SendMessage(SendMessageRequest{ConversationID: 1, Content: "hello"})},
+		{name: "typing", err: app.SendTyping(1)},
+		{name: "read receipt", err: app.SendReadReceipt(1, 2)},
+		{name: "ack", err: app.SendAck(1)},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.err == nil {
+				t.Fatal("error is nil")
+			}
+
+			codeErr := &errorx.CodeError{}
+			if !errors.As(tt.err, &codeErr) {
+				t.Fatalf("error type = %T", tt.err)
+			}
+
+			if codeErr.Code != errorx.CodeAuth {
+				t.Fatalf("code = %d", codeErr.Code)
+			}
+		})
 	}
 }
 
@@ -217,6 +328,376 @@ func TestLogoutWithoutToken(t *testing.T) {
 
 	codeErr := &errorx.CodeError{}
 
+	ok := errors.As(err, &codeErr)
+	if !ok {
+		t.Fatalf("error type = %T", err)
+	}
+
+	if codeErr.Code != errorx.CodeAuth {
+		t.Fatalf("code = %d", codeErr.Code)
+	}
+}
+
+func TestSearchUsersByNameWithoutToken(t *testing.T) {
+	t.Parallel()
+
+	_, err := NewApp().SearchUsersByName("Alice")
+	if err == nil {
+		t.Fatal("SearchUsersByName returned nil error")
+	}
+
+	codeErr := &errorx.CodeError{}
+	ok := errors.As(err, &codeErr)
+	if !ok {
+		t.Fatalf("error type = %T", err)
+	}
+
+	if codeErr.Code != errorx.CodeAuth {
+		t.Fatalf("code = %d", codeErr.Code)
+	}
+}
+
+func TestCreateDirectConversationWithoutToken(t *testing.T) {
+	t.Parallel()
+
+	_, err := NewApp().CreateDirectConversation(42)
+	if err == nil {
+		t.Fatal("CreateDirectConversation returned nil error")
+	}
+
+	codeErr := &errorx.CodeError{}
+	ok := errors.As(err, &codeErr)
+	if !ok {
+		t.Fatalf("error type = %T", err)
+	}
+
+	if codeErr.Code != errorx.CodeAuth {
+		t.Fatalf("code = %d", codeErr.Code)
+	}
+}
+
+func TestAppSearchUsersByName(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/users/by-name/Alice" {
+			t.Fatalf("path = %s", r.URL.Path)
+		}
+
+		if got := r.Header.Get("Authorization"); got != "Bearer access-search" {
+			t.Fatalf("Authorization = %q", got)
+		}
+
+		writeEnvelope(t, w, map[string]any{
+			"users": []map[string]any{
+				{"id": int64(1001), "email": "alice@example.com", "avatar": "https://example.com/alice.png"},
+				{"id": int64(1002), "email": "alice2@example.com", "avatar": "https://example.com/alice2.png"},
+			},
+		})
+	}))
+	defer server.Close()
+
+	app := NewApp()
+	app.accessToken = "access-search"
+	app.Configure(AppConfig{GatewayHTTP: server.URL, GatewayWS: "ws://example.test/ws"})
+
+	users, err := app.SearchUsersByName("Alice")
+	if err != nil {
+		t.Fatalf("SearchUsersByName returned error: %v", err)
+	}
+
+	if len(users) != 2 {
+		t.Fatalf("users count = %d, want 2", len(users))
+	}
+
+	if users[0].ID != 1001 || users[0].Email != "alice@example.com" {
+		t.Fatalf("first user = %+v", users[0])
+	}
+}
+
+func TestAppCreateDirectConversation(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/conversations" {
+			t.Fatalf("path = %s", r.URL.Path)
+		}
+
+		if got := r.Header.Get("Authorization"); got != "Bearer access-create" {
+			t.Fatalf("Authorization = %q", got)
+		}
+
+		var req client.CreateConversationRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+
+		if req.ConversationType != "direct" || len(req.MemberIDs) != 1 || req.MemberIDs[0] != 42 {
+			t.Fatalf("request = %+v", req)
+		}
+
+		writeEnvelope(t, w, map[string]any{
+			"conversation_id":   int64(12345),
+			"conversation_type": "direct",
+			"is_active":         true,
+			"created_at":        int64(1715678900000),
+			"member_ids":        []int64{7, 42},
+		})
+	}))
+	defer server.Close()
+
+	app := NewApp()
+	app.accessToken = "access-create"
+	app.Configure(AppConfig{GatewayHTTP: server.URL, GatewayWS: "ws://example.test/ws"})
+
+	resp, err := app.CreateDirectConversation(42)
+	if err != nil {
+		t.Fatalf("CreateDirectConversation returned error: %v", err)
+	}
+
+	if resp.ConversationID != 12345 || resp.ConversationType != "direct" || !resp.IsActive {
+		t.Fatalf("response = %+v", resp)
+	}
+
+	if len(resp.MemberIDs) != 2 {
+		t.Fatalf("member_ids count = %d, want 2", len(resp.MemberIDs))
+	}
+}
+
+func TestAppSearchUsersByNameEnvelopeError(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(client.Envelope{Code: errorx.CodeAuth, Msg: "auth failure"})
+	}))
+	defer server.Close()
+
+	app := NewApp()
+	app.accessToken = "bad-token"
+	app.Configure(AppConfig{GatewayHTTP: server.URL, GatewayWS: "ws://example.test/ws"})
+
+	_, err := app.SearchUsersByName("Alice")
+	if err == nil {
+		t.Fatal("SearchUsersByName returned nil error")
+	}
+
+	codeErr := &errorx.CodeError{}
+	ok := errors.As(err, &codeErr)
+	if !ok {
+		t.Fatalf("error type = %T", err)
+	}
+
+	if codeErr.Code != errorx.CodeAuth {
+		t.Fatalf("code = %d", codeErr.Code)
+	}
+}
+
+func TestGetUserByIdWithoutToken(t *testing.T) {
+	t.Parallel()
+
+	_, err := NewApp().GetUserById(1001)
+	if err == nil {
+		t.Fatal("GetUserById returned nil error")
+	}
+
+	codeErr := &errorx.CodeError{}
+	ok := errors.As(err, &codeErr)
+	if !ok {
+		t.Fatalf("error type = %T", err)
+	}
+
+	if codeErr.Code != errorx.CodeAuth {
+		t.Fatalf("code = %d", codeErr.Code)
+	}
+}
+
+func TestGetConversationHistoryWithoutToken(t *testing.T) {
+	t.Parallel()
+
+	_, err := NewApp().GetConversationHistory(12345, 0, 0, 0)
+	if err == nil {
+		t.Fatal("GetConversationHistory returned nil error")
+	}
+
+	codeErr := &errorx.CodeError{}
+	ok := errors.As(err, &codeErr)
+	if !ok {
+		t.Fatalf("error type = %T", err)
+	}
+
+	if codeErr.Code != errorx.CodeAuth {
+		t.Fatalf("code = %d", codeErr.Code)
+	}
+}
+
+func TestAppGetUserById(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/users/by-id/1001" {
+			t.Fatalf("path = %s", r.URL.Path)
+		}
+
+		if got := r.Header.Get("Authorization"); got != "Bearer access-get-user" {
+			t.Fatalf("Authorization = %q", got)
+		}
+
+		writeEnvelope(t, w, map[string]any{
+			"user": map[string]any{
+				"id":         int64(1001),
+				"email":      "alice@example.com",
+				"status":     int32(1),
+				"nickname":   "Alice",
+				"avatar":     "https://example.com/alice.png",
+				"created_at": int64(1715678900),
+				"updated_at": int64(1715678900),
+			},
+		})
+	}))
+	defer server.Close()
+
+	app := NewApp()
+	app.accessToken = "access-get-user"
+	app.Configure(AppConfig{GatewayHTTP: server.URL, GatewayWS: "ws://example.test/ws"})
+
+	resp, err := app.GetUserById(1001)
+	if err != nil {
+		t.Fatalf("GetUserById returned error: %v", err)
+	}
+
+	if resp.User.ID != 1001 || resp.User.Email != "alice@example.com" || resp.User.Status != 1 {
+		t.Fatalf("response = %+v", resp)
+	}
+}
+
+func TestAppGetUserByIdEnvelopeError(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(client.Envelope{Code: errorx.CodeAuth, Msg: "auth failure"})
+	}))
+	defer server.Close()
+
+	app := NewApp()
+	app.accessToken = "bad-token"
+	app.Configure(AppConfig{GatewayHTTP: server.URL, GatewayWS: "ws://example.test/ws"})
+
+	_, err := app.GetUserById(1001)
+	if err == nil {
+		t.Fatal("GetUserById returned nil error")
+	}
+
+	codeErr := &errorx.CodeError{}
+	ok := errors.As(err, &codeErr)
+	if !ok {
+		t.Fatalf("error type = %T", err)
+	}
+
+	if codeErr.Code != errorx.CodeAuth {
+		t.Fatalf("code = %d", codeErr.Code)
+	}
+}
+
+func TestAppGetConversationHistory(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/conversations/history/12345" {
+			t.Fatalf("path = %s", r.URL.Path)
+		}
+
+		if got := r.Header.Get("Authorization"); got != "Bearer access-history" {
+			t.Fatalf("Authorization = %q", got)
+		}
+
+		writeEnvelope(t, w, map[string]any{
+			"messages": []map[string]any{
+				{"id": int64(98765), "conversation_id": int64(12345), "sender_id": int64(1001), "message_type": "text", "content": "Hello!", "client_msg_id": "msg-uuid-001", "created_at": int64(1715678900000)},
+			},
+			"next_cursor_created_at": int64(1715678890000),
+			"next_cursor_id":         int64(98764),
+			"has_more":               true,
+		})
+	}))
+	defer server.Close()
+
+	app := NewApp()
+	app.accessToken = "access-history"
+	app.Configure(AppConfig{GatewayHTTP: server.URL, GatewayWS: "ws://example.test/ws"})
+
+	resp, err := app.GetConversationHistory(12345, 0, 0, 0)
+	if err != nil {
+		t.Fatalf("GetConversationHistory returned error: %v", err)
+	}
+
+	if len(resp.Messages) != 1 || resp.Messages[0].ID != 98765 {
+		t.Fatalf("response = %+v", resp)
+	}
+
+	if resp.NextCursorCreatedAt != 1715678890000 || resp.NextCursorID != 98764 || !resp.HasMore {
+		t.Fatalf("cursor fields = %+v", resp)
+	}
+}
+
+func TestAppGetConversationHistoryWithCursors(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/conversations/history/12345" {
+			t.Fatalf("path = %s", r.URL.Path)
+		}
+
+		if got := r.Header.Get("Authorization"); got != "Bearer access-history-cursors" {
+			t.Fatalf("Authorization = %q", got)
+		}
+
+		if r.URL.Query().Get("cursor_created_at") != "1715678900000" {
+			t.Fatalf("cursor_created_at = %s", r.URL.Query().Get("cursor_created_at"))
+		}
+		if r.URL.Query().Get("cursor_id") != "98765" {
+			t.Fatalf("cursor_id = %s", r.URL.Query().Get("cursor_id"))
+		}
+		if r.URL.Query().Get("limit") != "50" {
+			t.Fatalf("limit = %s", r.URL.Query().Get("limit"))
+		}
+
+		writeEnvelope(t, w, map[string]any{
+			"messages":               []map[string]any{},
+			"next_cursor_created_at": int64(0),
+			"next_cursor_id":         int64(0),
+			"has_more":               false,
+		})
+	}))
+	defer server.Close()
+
+	app := NewApp()
+	app.accessToken = "access-history-cursors"
+	app.Configure(AppConfig{GatewayHTTP: server.URL, GatewayWS: "ws://example.test/ws"})
+
+	_, err := app.GetConversationHistory(12345, 1715678900000, 98765, 50)
+	if err != nil {
+		t.Fatalf("GetConversationHistory returned error: %v", err)
+	}
+}
+
+func TestAppGetConversationHistoryEnvelopeError(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(client.Envelope{Code: errorx.CodeAuth, Msg: "auth failure"})
+	}))
+	defer server.Close()
+
+	app := NewApp()
+	app.accessToken = "bad-token"
+	app.Configure(AppConfig{GatewayHTTP: server.URL, GatewayWS: "ws://example.test/ws"})
+
+	_, err := app.GetConversationHistory(12345, 0, 0, 0)
+	if err == nil {
+		t.Fatal("GetConversationHistory returned nil error")
+	}
+
+	codeErr := &errorx.CodeError{}
 	ok := errors.As(err, &codeErr)
 	if !ok {
 		t.Fatalf("error type = %T", err)

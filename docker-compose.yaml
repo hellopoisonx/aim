@@ -38,8 +38,13 @@ services:
     environment:
       PGPASSWORD: password
     volumes:
-      - ./app/auth/rpc/model/schema.sql:/schema.sql:ro
-    command: ["sh", "-c", "psql -h postgres -U user -d aim_auth -f /schema.sql"]
+      - ./app/auth/rpc/model/migrations:/migrations:ro
+    command:
+      - sh
+      - -c
+      - |
+        psql -h postgres -U user -d postgres -tc "SELECT 1 FROM pg_database WHERE datname = 'aim_auth'" | grep -q 1 || psql -h postgres -U user -d postgres -c "CREATE DATABASE aim_auth"
+        psql -h postgres -U user -d aim_auth -f /migrations/000_init.sql
     networks:
       - aim-network
 
@@ -103,8 +108,16 @@ services:
     environment:
       PGPASSWORD: password
     volumes:
-      - ./app/logic/rpc/sql/migrations:/migrations:ro
-    command: ["sh", "-c", "psql -h postgres -U user -d postgres -c \"SELECT 1 FROM pg_database WHERE datname = 'aim_logic'\" | grep -q 1 || psql -h postgres -U user -d postgres -c \"CREATE DATABASE aim_logic\" && psql -h postgres -U user -d aim_logic -f /migrations/000_extensions.sql && psql -h postgres -U user -d aim_logic -f /migrations/001_initial_permission.sql && psql -h postgres -U user -d aim_logic -f /migrations/002_messages.sql && psql -h postgres -U user -d aim_logic -f /migrations/003_user_info.sql"]
+      - ./app/logic/rpc/model/migrations:/migrations:ro
+    command:
+      - sh
+      - -c
+      - |
+        psql -h postgres -U user -d postgres -tc "SELECT 1 FROM pg_database WHERE datname = 'aim_logic'" | grep -q 1 || psql -h postgres -U user -d postgres -c "CREATE DATABASE aim_logic"
+        psql -h postgres -U user -d aim_logic -f /migrations/000_extensions.sql
+        psql -h postgres -U user -d aim_logic -f /migrations/001_initial_permission.sql
+        psql -h postgres -U user -d aim_logic -f /migrations/002_messages.sql
+        psql -h postgres -U user -d aim_logic -f /migrations/003_user_info.sql
     networks:
       - aim-network
 

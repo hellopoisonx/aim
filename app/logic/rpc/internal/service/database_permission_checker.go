@@ -5,9 +5,11 @@ import (
 	"errors"
 	"time"
 
-	"github.com/hellopoisonx/aim/app/logic/rpc/internal/model"
+	"github.com/hellopoisonx/aim/app/logic/rpc/model"
 	"github.com/jackc/pgx/v5"
 )
+
+const temporaryConversationMessageLimit int64 = 10
 
 type DatabasePermissionChecker struct {
 	queries model.Querier
@@ -102,7 +104,16 @@ func (c *DatabasePermissionChecker) checkDirectPermission(ctx context.Context, c
 	}
 
 	if !hasAccepted {
-		return PermissionDecision{Allowed: false, Code: CodePermissionDenied, Reason: "not friends"}, nil
+		count, err := c.queries.CountMessagesByConversation(ctx, check.ConversationID)
+		if err != nil {
+			return PermissionDecision{}, err
+		}
+
+		if count >= temporaryConversationMessageLimit {
+			return PermissionDecision{Allowed: false, Code: CodePermissionDenied, Reason: "temporary conversation message limit reached"}, nil
+		}
+
+		return PermissionDecision{Allowed: true, Code: CodeOK, Reason: "temporary conversation"}, nil
 	}
 
 	return PermissionDecision{Allowed: true, Code: CodeOK}, nil

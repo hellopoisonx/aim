@@ -1,5 +1,5 @@
 Name: logic.rpc
-ListenOn: 0.0.0.0:8080
+ListenOn: 0.0.0.0:8082
 Telemetry:
   Name: logic.rpc
   Endpoint: jaeger:4318
@@ -13,7 +13,7 @@ Nacos:
   Cluster: DEFAULT
   ServiceName: logic.rpc
   AdvertiseIP: aim-logic
-  AdvertisePort: 8080
+  AdvertisePort: 8082
   Ephemeral: true
   Weight: 1
   TimeoutMs: 5000

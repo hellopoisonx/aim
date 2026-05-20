@@ -103,6 +103,13 @@ func DecodePayload(frame *pb.WsFrame) (proto.Message, error) {
 		}
 
 		return &payload, nil
+	case pb.FrameType_FRAME_TYPE_PUSH_FRIEND_APPLICATION:
+		var payload pb.PushFriendApplicationPayload
+		if err := proto.Unmarshal(frame.GetPayload(), &payload); err != nil {
+			return nil, fmt.Errorf("decode pushfriendapplication: %w", err)
+		}
+
+		return &payload, nil
 	case pb.FrameType_FRAME_TYPE_PUSH_TYPING:
 		var payload pb.PushTypingPayload
 		if err := proto.Unmarshal(frame.GetPayload(), &payload); err != nil {

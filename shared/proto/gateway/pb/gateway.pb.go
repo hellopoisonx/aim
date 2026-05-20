@@ -289,6 +289,134 @@ func (x *PushPresenceResp) GetSuccess() bool {
 	return false
 }
 
+type PushFriendApplicationReq struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	TargetUserId  int64                  `protobuf:"varint,1,opt,name=target_user_id,json=targetUserId,proto3" json:"target_user_id,omitempty"`
+	UserId        int64                  `protobuf:"varint,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	FriendId      int64                  `protobuf:"varint,3,opt,name=friend_id,json=friendId,proto3" json:"friend_id,omitempty"`
+	Status        string                 `protobuf:"bytes,4,opt,name=status,proto3" json:"status,omitempty"`
+	CreatedAt     int64                  `protobuf:"varint,5,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	UpdatedAt     int64                  `protobuf:"varint,6,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PushFriendApplicationReq) Reset() {
+	*x = PushFriendApplicationReq{}
+	mi := &file_gateway_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PushFriendApplicationReq) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PushFriendApplicationReq) ProtoMessage() {}
+
+func (x *PushFriendApplicationReq) ProtoReflect() protoreflect.Message {
+	mi := &file_gateway_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PushFriendApplicationReq.ProtoReflect.Descriptor instead.
+func (*PushFriendApplicationReq) Descriptor() ([]byte, []int) {
+	return file_gateway_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *PushFriendApplicationReq) GetTargetUserId() int64 {
+	if x != nil {
+		return x.TargetUserId
+	}
+	return 0
+}
+
+func (x *PushFriendApplicationReq) GetUserId() int64 {
+	if x != nil {
+		return x.UserId
+	}
+	return 0
+}
+
+func (x *PushFriendApplicationReq) GetFriendId() int64 {
+	if x != nil {
+		return x.FriendId
+	}
+	return 0
+}
+
+func (x *PushFriendApplicationReq) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *PushFriendApplicationReq) GetCreatedAt() int64 {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return 0
+}
+
+func (x *PushFriendApplicationReq) GetUpdatedAt() int64 {
+	if x != nil {
+		return x.UpdatedAt
+	}
+	return 0
+}
+
+type PushFriendApplicationResp struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PushFriendApplicationResp) Reset() {
+	*x = PushFriendApplicationResp{}
+	mi := &file_gateway_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PushFriendApplicationResp) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PushFriendApplicationResp) ProtoMessage() {}
+
+func (x *PushFriendApplicationResp) ProtoReflect() protoreflect.Message {
+	mi := &file_gateway_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PushFriendApplicationResp.ProtoReflect.Descriptor instead.
+func (*PushFriendApplicationResp) Descriptor() ([]byte, []int) {
+	return file_gateway_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *PushFriendApplicationResp) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
 // KickUserReq — 踢出用户请求
 type KickUserReq struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -301,7 +429,7 @@ type KickUserReq struct {
 
 func (x *KickUserReq) Reset() {
 	*x = KickUserReq{}
-	mi := &file_gateway_proto_msgTypes[4]
+	mi := &file_gateway_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -313,7 +441,7 @@ func (x *KickUserReq) String() string {
 func (*KickUserReq) ProtoMessage() {}
 
 func (x *KickUserReq) ProtoReflect() protoreflect.Message {
-	mi := &file_gateway_proto_msgTypes[4]
+	mi := &file_gateway_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -326,7 +454,7 @@ func (x *KickUserReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use KickUserReq.ProtoReflect.Descriptor instead.
 func (*KickUserReq) Descriptor() ([]byte, []int) {
-	return file_gateway_proto_rawDescGZIP(), []int{4}
+	return file_gateway_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *KickUserReq) GetUserId() int64 {
@@ -360,7 +488,7 @@ type KickUserResp struct {
 
 func (x *KickUserResp) Reset() {
 	*x = KickUserResp{}
-	mi := &file_gateway_proto_msgTypes[5]
+	mi := &file_gateway_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -372,7 +500,7 @@ func (x *KickUserResp) String() string {
 func (*KickUserResp) ProtoMessage() {}
 
 func (x *KickUserResp) ProtoReflect() protoreflect.Message {
-	mi := &file_gateway_proto_msgTypes[5]
+	mi := &file_gateway_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -385,7 +513,7 @@ func (x *KickUserResp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use KickUserResp.ProtoReflect.Descriptor instead.
 func (*KickUserResp) Descriptor() ([]byte, []int) {
-	return file_gateway_proto_rawDescGZIP(), []int{5}
+	return file_gateway_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *KickUserResp) GetKickedCount() int32 {
@@ -406,7 +534,7 @@ type DrainNotifyReq struct {
 
 func (x *DrainNotifyReq) Reset() {
 	*x = DrainNotifyReq{}
-	mi := &file_gateway_proto_msgTypes[6]
+	mi := &file_gateway_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -418,7 +546,7 @@ func (x *DrainNotifyReq) String() string {
 func (*DrainNotifyReq) ProtoMessage() {}
 
 func (x *DrainNotifyReq) ProtoReflect() protoreflect.Message {
-	mi := &file_gateway_proto_msgTypes[6]
+	mi := &file_gateway_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -431,7 +559,7 @@ func (x *DrainNotifyReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DrainNotifyReq.ProtoReflect.Descriptor instead.
 func (*DrainNotifyReq) Descriptor() ([]byte, []int) {
-	return file_gateway_proto_rawDescGZIP(), []int{6}
+	return file_gateway_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *DrainNotifyReq) GetDrainTimeoutMs() int64 {
@@ -458,7 +586,7 @@ type DrainNotifyResp struct {
 
 func (x *DrainNotifyResp) Reset() {
 	*x = DrainNotifyResp{}
-	mi := &file_gateway_proto_msgTypes[7]
+	mi := &file_gateway_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -470,7 +598,7 @@ func (x *DrainNotifyResp) String() string {
 func (*DrainNotifyResp) ProtoMessage() {}
 
 func (x *DrainNotifyResp) ProtoReflect() protoreflect.Message {
-	mi := &file_gateway_proto_msgTypes[7]
+	mi := &file_gateway_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -483,7 +611,7 @@ func (x *DrainNotifyResp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DrainNotifyResp.ProtoReflect.Descriptor instead.
 func (*DrainNotifyResp) Descriptor() ([]byte, []int) {
-	return file_gateway_proto_rawDescGZIP(), []int{7}
+	return file_gateway_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *DrainNotifyResp) GetAffectedCount() int32 {
@@ -519,6 +647,17 @@ const file_gateway_proto_rawDesc = "" +
 	"\n" +
 	"updated_at\x18\x03 \x01(\x03R\tupdatedAt\",\n" +
 	"\x10PushPresenceResp\x12\x18\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\"\xcc\x01\n" +
+	"\x18PushFriendApplicationReq\x12$\n" +
+	"\x0etarget_user_id\x18\x01 \x01(\x03R\ftargetUserId\x12\x17\n" +
+	"\auser_id\x18\x02 \x01(\x03R\x06userId\x12\x1b\n" +
+	"\tfriend_id\x18\x03 \x01(\x03R\bfriendId\x12\x16\n" +
+	"\x06status\x18\x04 \x01(\tR\x06status\x12\x1d\n" +
+	"\n" +
+	"created_at\x18\x05 \x01(\x03R\tcreatedAt\x12\x1d\n" +
+	"\n" +
+	"updated_at\x18\x06 \x01(\x03R\tupdatedAt\"5\n" +
+	"\x19PushFriendApplicationResp\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\"[\n" +
 	"\vKickUserReq\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\x03R\x06userId\x12\x1b\n" +
@@ -530,10 +669,11 @@ const file_gateway_proto_rawDesc = "" +
 	"\x10drain_timeout_ms\x18\x01 \x01(\x03R\x0edrainTimeoutMs\x12&\n" +
 	"\x0fgateway_node_id\x18\x02 \x01(\tR\rgatewayNodeId\"8\n" +
 	"\x0fDrainNotifyResp\x12%\n" +
-	"\x0eaffected_count\x18\x01 \x01(\x05R\raffectedCount2\x92\x02\n" +
+	"\x0eaffected_count\x18\x01 \x01(\x05R\raffectedCount2\xf2\x02\n" +
 	"\x0eGatewayService\x12@\n" +
 	"\vPushMessage\x12\x17.gateway.PushMessageReq\x1a\x18.gateway.PushMessageResp\x12C\n" +
-	"\fPushPresence\x12\x18.gateway.PushPresenceReq\x1a\x19.gateway.PushPresenceResp\x127\n" +
+	"\fPushPresence\x12\x18.gateway.PushPresenceReq\x1a\x19.gateway.PushPresenceResp\x12^\n" +
+	"\x15PushFriendApplication\x12!.gateway.PushFriendApplicationReq\x1a\".gateway.PushFriendApplicationResp\x127\n" +
 	"\bKickUser\x12\x14.gateway.KickUserReq\x1a\x15.gateway.KickUserResp\x12@\n" +
 	"\vDrainNotify\x12\x17.gateway.DrainNotifyReq\x1a\x18.gateway.DrainNotifyRespB5Z3github.com/hellopoisonx/aim/shared/proto/gateway/pbb\x06proto3"
 
@@ -549,28 +689,32 @@ func file_gateway_proto_rawDescGZIP() []byte {
 	return file_gateway_proto_rawDescData
 }
 
-var file_gateway_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
+var file_gateway_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
 var file_gateway_proto_goTypes = []any{
-	(*PushMessageReq)(nil),   // 0: gateway.PushMessageReq
-	(*PushMessageResp)(nil),  // 1: gateway.PushMessageResp
-	(*PushPresenceReq)(nil),  // 2: gateway.PushPresenceReq
-	(*PushPresenceResp)(nil), // 3: gateway.PushPresenceResp
-	(*KickUserReq)(nil),      // 4: gateway.KickUserReq
-	(*KickUserResp)(nil),     // 5: gateway.KickUserResp
-	(*DrainNotifyReq)(nil),   // 6: gateway.DrainNotifyReq
-	(*DrainNotifyResp)(nil),  // 7: gateway.DrainNotifyResp
+	(*PushMessageReq)(nil),            // 0: gateway.PushMessageReq
+	(*PushMessageResp)(nil),           // 1: gateway.PushMessageResp
+	(*PushPresenceReq)(nil),           // 2: gateway.PushPresenceReq
+	(*PushPresenceResp)(nil),          // 3: gateway.PushPresenceResp
+	(*PushFriendApplicationReq)(nil),  // 4: gateway.PushFriendApplicationReq
+	(*PushFriendApplicationResp)(nil), // 5: gateway.PushFriendApplicationResp
+	(*KickUserReq)(nil),               // 6: gateway.KickUserReq
+	(*KickUserResp)(nil),              // 7: gateway.KickUserResp
+	(*DrainNotifyReq)(nil),            // 8: gateway.DrainNotifyReq
+	(*DrainNotifyResp)(nil),           // 9: gateway.DrainNotifyResp
 }
 var file_gateway_proto_depIdxs = []int32{
 	0, // 0: gateway.GatewayService.PushMessage:input_type -> gateway.PushMessageReq
 	2, // 1: gateway.GatewayService.PushPresence:input_type -> gateway.PushPresenceReq
-	4, // 2: gateway.GatewayService.KickUser:input_type -> gateway.KickUserReq
-	6, // 3: gateway.GatewayService.DrainNotify:input_type -> gateway.DrainNotifyReq
-	1, // 4: gateway.GatewayService.PushMessage:output_type -> gateway.PushMessageResp
-	3, // 5: gateway.GatewayService.PushPresence:output_type -> gateway.PushPresenceResp
-	5, // 6: gateway.GatewayService.KickUser:output_type -> gateway.KickUserResp
-	7, // 7: gateway.GatewayService.DrainNotify:output_type -> gateway.DrainNotifyResp
-	4, // [4:8] is the sub-list for method output_type
-	0, // [0:4] is the sub-list for method input_type
+	4, // 2: gateway.GatewayService.PushFriendApplication:input_type -> gateway.PushFriendApplicationReq
+	6, // 3: gateway.GatewayService.KickUser:input_type -> gateway.KickUserReq
+	8, // 4: gateway.GatewayService.DrainNotify:input_type -> gateway.DrainNotifyReq
+	1, // 5: gateway.GatewayService.PushMessage:output_type -> gateway.PushMessageResp
+	3, // 6: gateway.GatewayService.PushPresence:output_type -> gateway.PushPresenceResp
+	5, // 7: gateway.GatewayService.PushFriendApplication:output_type -> gateway.PushFriendApplicationResp
+	7, // 8: gateway.GatewayService.KickUser:output_type -> gateway.KickUserResp
+	9, // 9: gateway.GatewayService.DrainNotify:output_type -> gateway.DrainNotifyResp
+	5, // [5:10] is the sub-list for method output_type
+	0, // [0:5] is the sub-list for method input_type
 	0, // [0:0] is the sub-list for extension type_name
 	0, // [0:0] is the sub-list for extension extendee
 	0, // [0:0] is the sub-list for field type_name
@@ -587,7 +731,7 @@ func file_gateway_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_gateway_proto_rawDesc), len(file_gateway_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   8,
+			NumMessages:   10,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

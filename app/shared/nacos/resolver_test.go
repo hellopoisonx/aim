@@ -12,15 +12,18 @@ import (
 )
 
 type fakeClientConn struct {
-	state resolver.State
+	state       resolver.State
+	updateCount int
+	err         error
 }
 
 func (c *fakeClientConn) UpdateState(state resolver.State) error {
 	c.state = state
+	c.updateCount++
 	return nil
 }
 
-func (c *fakeClientConn) ReportError(err error)                                  {}
+func (c *fakeClientConn) ReportError(err error)                                  { c.err = err }
 func (c *fakeClientConn) NewAddress(_ []resolver.Address)                        {}
 func (c *fakeClientConn) ParseServiceConfig(_ string) *serviceconfig.ParseResult { return nil }
 
@@ -45,8 +48,10 @@ func TestResolverBuilder_Build_EmptyInstances(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, r)
 
-	// No instances yet — address list should be empty, NOT a panic.
+	// No instances yet - report the resolver error without pushing an empty address list.
 	assert.Empty(t, cc.state.Addresses)
+	assert.Zero(t, cc.updateCount)
+	assert.Error(t, cc.err)
 
 	// Verify subscription was started.
 	require.NotNil(t, client.subscribeCB)
@@ -138,12 +143,14 @@ func TestResolverBuilder_SubscribeCallback_RemovesInstances(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, cc.state.Addresses, 1)
 
-	// Simulate auth going unhealthy.
+	// Simulate auth going unhealthy. Keep the last known-good list instead of
+	// pushing an empty address list into grpc-go.
 	client.subscribeCB([]model.Instance{
 		{Ip: "10.0.0.1", Port: 8080, Healthy: false, Enable: true, Weight: 1},
 	}, nil)
 
-	assert.Empty(t, cc.state.Addresses)
+	assert.Len(t, cc.state.Addresses, 1)
+	assert.Error(t, cc.err)
 
 	r.Close()
 }

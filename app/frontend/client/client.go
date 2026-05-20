@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -76,6 +78,87 @@ type RefreshResponse struct {
 // LogoutResponse mirrors gateway.api LogoutResponse.
 type LogoutResponse struct {
 	Success bool `json:"success"`
+}
+
+// UserListItem represents a user entry in search results.
+type UserListItem struct {
+	ID     int64  `json:"id"`
+	Email  string `json:"email"`
+	Avatar string `json:"avatar"`
+}
+
+// SearchUsersResponse mirrors gateway.api GetUserByNameResponse.
+type SearchUsersResponse struct {
+	Users []UserListItem `json:"users"`
+}
+
+// CreateConversationRequest mirrors gateway.api CreateConversationRequest.
+type CreateConversationRequest struct {
+	ConversationType string  `json:"conversation_type"`
+	MemberIDs        []int64 `json:"member_ids"`
+}
+
+// CreateConversationResponse mirrors gateway.api CreateConversationResponse.
+type CreateConversationResponse struct {
+	ConversationID   int64   `json:"conversation_id"`
+	ConversationType string  `json:"conversation_type"`
+	IsActive         bool    `json:"is_active"`
+	CreatedAt        int64   `json:"created_at"`
+	MemberIDs        []int64 `json:"member_ids"`
+}
+
+// UserInfo mirrors gateway.api UserInfo.
+type UserInfo struct {
+	ID        int64  `json:"id"`
+	Email     string `json:"email"`
+	Status    int32  `json:"status"`
+	Nickname  string `json:"nickname"`
+	Avatar    string `json:"avatar"`
+	CreatedAt int64  `json:"created_at"`
+	UpdatedAt int64  `json:"updated_at"`
+}
+
+// GetUserByIdResponse mirrors gateway.api GetUserByIdResponse.
+type GetUserByIdResponse struct {
+	User UserInfo `json:"user"`
+}
+
+// MessageItem mirrors gateway.api MessageItem.
+type MessageItem struct {
+	ID             int64  `json:"id"`
+	ConversationID int64  `json:"conversation_id"`
+	SenderID       int64  `json:"sender_id"`
+	MessageType    string `json:"message_type"`
+	Content        string `json:"content"`
+	ClientMsgID    string `json:"client_msg_id"`
+	CreatedAt      int64  `json:"created_at"`
+}
+
+// GetConversationHistoryResponse mirrors gateway.api GetConversationHistoryResponse.
+type GetConversationHistoryResponse struct {
+	Messages            []MessageItem `json:"messages"`
+	NextCursorCreatedAt int64         `json:"next_cursor_created_at"`
+	NextCursorID        int64         `json:"next_cursor_id"`
+	HasMore             bool          `json:"has_more"`
+}
+
+// FriendshipItem mirrors gateway.api FriendshipItem.
+type FriendshipItem struct {
+	UserID    int64  `json:"user_id"`
+	FriendID  int64  `json:"friend_id"`
+	Status    string `json:"status"`
+	CreatedAt int64  `json:"created_at"`
+	UpdatedAt int64  `json:"updated_at"`
+}
+
+// AddFriendResponse mirrors gateway.api AddFriendResponse.
+type AddFriendResponse struct {
+	Friendship FriendshipItem `json:"friendship"`
+}
+
+// ListFriendApplicationsResponse mirrors gateway.api ListFriendApplicationsResponse.
+type ListFriendApplicationsResponse struct {
+	Applications []FriendshipItem `json:"applications"`
 }
 
 // RESTClient handles HTTP communication with the gateway.
@@ -196,3 +279,82 @@ func (c *RESTClient) Logout(ctx context.Context, accessToken string) (*LogoutRes
 
 	return &resp, nil
 }
+
+// SearchUsersByName calls GET /api/users/by-name/{name} with Bearer access token.
+func (c *RESTClient) SearchUsersByName(ctx context.Context, name string, accessToken string) (*SearchUsersResponse, error) {
+	var resp SearchUsersResponse
+	path := "/api/users/by-name/" + url.PathEscape(name)
+	if err := c.doRequest(ctx, http.MethodGet, path, nil, &resp, accessToken); err != nil {
+		return nil, err
+	}
+
+	return &resp, nil
+}
+
+// CreateConversation calls POST /api/conversations with Bearer access token.
+func (c *RESTClient) CreateConversation(ctx context.Context, req *CreateConversationRequest, accessToken string) (*CreateConversationResponse, error) {
+	var resp CreateConversationResponse
+	if err := c.doRequest(ctx, http.MethodPost, "/api/conversations", req, &resp, accessToken); err != nil {
+		return nil, err
+	}
+
+	return &resp, nil
+}
+
+// GetUserById calls GET /api/users/by-id/{id} with Bearer access token.
+func (c *RESTClient) GetUserById(ctx context.Context, id int64, accessToken string) (*GetUserByIdResponse, error) {
+	var resp GetUserByIdResponse
+	path := "/api/users/by-id/" + strconv.FormatInt(id, 10)
+	if err := c.doRequest(ctx, http.MethodGet, path, nil, &resp, accessToken); err != nil {
+		return nil, err
+	}
+
+	return &resp, nil
+}
+
+// GetConversationHistory calls GET /api/conversations/history/{id} with Bearer access token.
+// cursorCreatedAt and cursorID are optional; pass 0 to skip. limit is optional; pass 0 to use server default.
+func (c *RESTClient) GetConversationHistory(ctx context.Context, conversationID, cursorCreatedAt, cursorID int64, limit int32, accessToken string) (*GetConversationHistoryResponse, error) {
+	var resp GetConversationHistoryResponse
+	path := "/api/conversations/history/" + strconv.FormatInt(conversationID, 10)
+
+	query := url.Values{}
+	if cursorCreatedAt > 0 {
+		query.Set("cursor_created_at", strconv.FormatInt(cursorCreatedAt, 10))
+	}
+	if cursorID > 0 {
+		query.Set("cursor_id", strconv.FormatInt(cursorID, 10))
+	}
+	if limit > 0 {
+		query.Set("limit", strconv.FormatInt(int64(limit), 10))
+	}
+
+	if len(query) > 0 {
+		path += "?" + query.Encode()
+	}
+
+	if err := c.doRequest(ctx, http.MethodGet, path, nil, &resp, accessToken); err != nil {
+		return nil, err
+	}
+
+	return &resp, nil
+}
+// AddFriend calls POST /api/users/friends/{id} with Bearer access token.
+func (c *RESTClient) AddFriend(ctx context.Context, id int64, accessToken string) (*AddFriendResponse, error) {
+	var resp AddFriendResponse
+	path := "/api/users/friends/" + strconv.FormatInt(id, 10)
+	if err := c.doRequest(ctx, http.MethodPost, path, nil, &resp, accessToken); err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+
+// ListFriendApplications calls GET /api/friends/applications with Bearer access token.
+func (c *RESTClient) ListFriendApplications(ctx context.Context, accessToken string) (*ListFriendApplicationsResponse, error) {
+	var resp ListFriendApplicationsResponse
+	if err := c.doRequest(ctx, http.MethodGet, "/api/friends/applications", nil, &resp, accessToken); err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+

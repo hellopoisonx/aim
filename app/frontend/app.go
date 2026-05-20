@@ -165,6 +165,31 @@ func (a *App) Refresh(req client.RefreshRequest) (*client.RefreshResponse, error
 	return resp, nil
 }
 
+
+func (a *App) AddFriend(id int64) (*client.AddFriendResponse, error) {
+	a.mu.RLock()
+	accessToken := a.accessToken
+	a.mu.RUnlock()
+
+	if accessToken == "" {
+		return nil, errorx.NewCodeError(errorx.CodeAuth, "missing access token")
+	}
+
+	return a.restClient().AddFriend(a.callContext(), id, accessToken)
+}
+
+func (a *App) ListFriendApplications() (*client.ListFriendApplicationsResponse, error) {
+	a.mu.RLock()
+	accessToken := a.accessToken
+	a.mu.RUnlock()
+
+	if accessToken == "" {
+		return nil, errorx.NewCodeError(errorx.CodeAuth, "missing access token")
+	}
+
+	return a.restClient().ListFriendApplications(a.callContext(), accessToken)
+}
+
 func (a *App) Logout() (*client.LogoutResponse, error) {
 	a.mu.RLock()
 	accessToken := a.accessToken
@@ -186,6 +211,64 @@ func (a *App) Logout() (*client.LogoutResponse, error) {
 	_ = a.DisconnectWS()
 
 	return resp, nil
+}
+
+func (a *App) SearchUsersByName(name string) ([]client.UserListItem, error) {
+	a.mu.RLock()
+	accessToken := a.accessToken
+	a.mu.RUnlock()
+
+	if accessToken == "" {
+		return nil, errorx.NewCodeError(errorx.CodeAuth, "missing access token")
+	}
+
+	resp, err := a.restClient().SearchUsersByName(a.callContext(), name, accessToken)
+	if err != nil {
+		return nil, err
+	}
+
+	return resp.Users, nil
+}
+
+func (a *App) CreateDirectConversation(memberID int64) (*client.CreateConversationResponse, error) {
+	a.mu.RLock()
+	accessToken := a.accessToken
+	a.mu.RUnlock()
+
+	if accessToken == "" {
+		return nil, errorx.NewCodeError(errorx.CodeAuth, "missing access token")
+	}
+
+	req := &client.CreateConversationRequest{
+		ConversationType: "direct",
+		MemberIDs:        []int64{memberID},
+	}
+
+	return a.restClient().CreateConversation(a.callContext(), req, accessToken)
+}
+
+func (a *App) GetUserById(id int64) (*client.GetUserByIdResponse, error) {
+	a.mu.RLock()
+	accessToken := a.accessToken
+	a.mu.RUnlock()
+
+	if accessToken == "" {
+		return nil, errorx.NewCodeError(errorx.CodeAuth, "missing access token")
+	}
+
+	return a.restClient().GetUserById(a.callContext(), id, accessToken)
+}
+
+func (a *App) GetConversationHistory(conversationID, cursorCreatedAt, cursorID int64, limit int32) (*client.GetConversationHistoryResponse, error) {
+	a.mu.RLock()
+	accessToken := a.accessToken
+	a.mu.RUnlock()
+
+	if accessToken == "" {
+		return nil, errorx.NewCodeError(errorx.CodeAuth, "missing access token")
+	}
+
+	return a.restClient().GetConversationHistory(a.callContext(), conversationID, cursorCreatedAt, cursorID, limit, accessToken)
 }
 
 func (a *App) ConnectWS() error {
@@ -293,6 +376,12 @@ func (a *App) ProtocolCatalog() ProtocolCatalog {
 			"POST /api/auth/login",
 			"POST /api/auth/refresh",
 			"POST /api/auth/logout",
+			"GET /api/users/by-name/{name}",
+			"GET /api/users/by-id/{id}",
+			"POST /api/users/friends/{id}",
+			"POST /api/conversations",
+			"GET /api/conversations/history/{id}",
+			"GET /api/friends/applications",
 			"GET /ws",
 		},
 		Frames: []ProtocolFrame{
@@ -304,6 +393,7 @@ func (a *App) ProtocolCatalog() ProtocolCatalog {
 			{Name: pb.FrameType_FRAME_TYPE_PUSH_MESSAGE.String(), Value: int32(pb.FrameType_FRAME_TYPE_PUSH_MESSAGE), Direction: gatewayToClient, Payload: "PushMessagePayload"},
 			{Name: pb.FrameType_FRAME_TYPE_PUSH_PRESENCE.String(), Value: int32(pb.FrameType_FRAME_TYPE_PUSH_PRESENCE), Direction: gatewayToClient, Payload: "PushPresencePayload"},
 			{Name: pb.FrameType_FRAME_TYPE_PUSH_NOTIFICATION.String(), Value: int32(pb.FrameType_FRAME_TYPE_PUSH_NOTIFICATION), Direction: gatewayToClient, Payload: "PushNotificationPayload"},
+			{Name: pb.FrameType_FRAME_TYPE_PUSH_FRIEND_APPLICATION.String(), Value: int32(pb.FrameType_FRAME_TYPE_PUSH_FRIEND_APPLICATION), Direction: gatewayToClient, Payload: "PushFriendApplicationPayload"},
 			{Name: pb.FrameType_FRAME_TYPE_PUSH_TYPING.String(), Value: int32(pb.FrameType_FRAME_TYPE_PUSH_TYPING), Direction: gatewayToClient, Payload: "PushTypingPayload"},
 			{Name: pb.FrameType_FRAME_TYPE_RECONNECT.String(), Value: int32(pb.FrameType_FRAME_TYPE_RECONNECT), Direction: gatewayToClient, Payload: "ReconnectPayload"},
 			{Name: pb.FrameType_FRAME_TYPE_SERVER_ACK.String(), Value: int32(pb.FrameType_FRAME_TYPE_SERVER_ACK), Direction: gatewayToClient, Payload: "ServerAckPayload"},

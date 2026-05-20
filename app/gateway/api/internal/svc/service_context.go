@@ -9,12 +9,16 @@ import (
 	"github.com/hellopoisonx/aim/app/auth/rpc/authservice"
 	"github.com/hellopoisonx/aim/app/core/rpc/pb"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/config"
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/middleware"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/ws"
+	"github.com/hellopoisonx/aim/app/logic/rpc/client/conversationservice"
+	"github.com/hellopoisonx/aim/app/logic/rpc/client/friendshipservice"
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/userservice"
 	aimnacos "github.com/hellopoisonx/aim/app/shared/nacos"
 
 	"github.com/redis/go-redis/v9"
 	"github.com/zeromicro/go-zero/core/logx"
+	"github.com/zeromicro/go-zero/rest"
 	"github.com/zeromicro/go-zero/zrpc"
 )
 
@@ -33,16 +37,19 @@ func (noopPresencePublisher) PublishPresence(ctx context.Context, userID int64, 
 }
 
 type ServiceContext struct {
-	Config            config.Config
-	AuthClient        authservice.AuthService
-	CoreClient        pb.TransferServiceClient
-	LogicUserClient   userservice.UserService
-	namingClient      aimnacos.NamingClient
-	coreNamingClient  aimnacos.NamingClient
-	logicNamingClient aimnacos.NamingClient
-	RedisClient       *redis.Client
-	PresencePub       PresencePublisher
-	WsManager         *ws.Manager
+	Config                  config.Config
+	AuthClient              authservice.AuthService
+	CoreClient              pb.TransferServiceClient
+	LogicUserClient         userservice.UserService
+	LogicConversationClient conversationservice.ConversationService
+	LogicFriendshipClient   friendshipservice.FriendshipService
+	Auth                    rest.Middleware
+	namingClient            aimnacos.NamingClient
+	coreNamingClient        aimnacos.NamingClient
+	logicNamingClient       aimnacos.NamingClient
+	RedisClient             *redis.Client
+	PresencePub             PresencePublisher
+	WsManager               *ws.Manager
 }
 
 func NewServiceContext(c config.Config) *ServiceContext {
@@ -50,7 +57,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		c.Auth.AccessSecret = "aim-dev-access-secret"
 	}
 
-	logx.Must(c.AuthRpc.ApplyDefaults("auth.rpc", "127.0.0.1:8080"))
+	logx.Must(c.AuthRpc.ApplyDefaults("auth.rpc", "127.0.0.1:8989"))
 
 	namingClient, err := aimnacos.NewNamingClient(c.AuthRpc)
 	logx.Must(err)
@@ -73,7 +80,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	coreClient, err := zrpc.NewClientWithTarget("nacos:///" + c.CoreRpc.ServiceName)
 	logx.Must(err)
 
-	logx.Must(c.LogicRpc.ApplyDefaults("logic.rpc", "127.0.0.1:8080"))
+	logx.Must(c.LogicRpc.ApplyDefaults("logic.rpc", "127.0.0.1:8082"))
 
 	logicNamingClient, err := aimnacos.NewNamingClient(c.LogicRpc)
 	logx.Must(err)
@@ -100,16 +107,19 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	wsManager := ws.NewManager()
 
 	return &ServiceContext{
-		Config:            c,
-		AuthClient:        authservice.NewAuthService(client),
-		CoreClient:        pb.NewTransferServiceClient(coreClient.Conn()),
-		LogicUserClient:   userservice.NewUserService(logicClient),
-		namingClient:      namingClient,
-		coreNamingClient:  coreNamingClient,
-		logicNamingClient: logicNamingClient,
-		RedisClient:       redisClient,
-		PresencePub:       &noopPresencePublisher{},
-		WsManager:         wsManager,
+		Config:                  c,
+		AuthClient:              authservice.NewAuthService(client),
+		CoreClient:              pb.NewTransferServiceClient(coreClient.Conn()),
+		LogicUserClient:         userservice.NewUserService(logicClient),
+		LogicConversationClient: conversationservice.NewConversationService(logicClient),
+		LogicFriendshipClient:   friendshipservice.NewFriendshipService(logicClient),
+		Auth:                    middleware.NewAuthMiddleware(c.Auth.AccessSecret).Handle,
+		namingClient:            namingClient,
+		coreNamingClient:        coreNamingClient,
+		logicNamingClient:       logicNamingClient,
+		RedisClient:             redisClient,
+		PresencePub:             &noopPresencePublisher{},
+		WsManager:               wsManager,
 	}
 }
 
@@ -139,6 +149,7 @@ func NewServiceContextWithAuth(c config.Config, authClient authservice.AuthServi
 	return &ServiceContext{
 		Config:      c,
 		AuthClient:  authClient,
+		Auth:        middleware.NewAuthMiddleware(c.Auth.AccessSecret).Handle,
 		CoreClient:  nil,
 		RedisClient: nil,
 		PresencePub: nil,
@@ -150,6 +161,7 @@ func NewServiceContextWithLogic(c config.Config, logicUserClient userservice.Use
 	return &ServiceContext{
 		Config:          c,
 		LogicUserClient: logicUserClient,
+		Auth:            middleware.NewAuthMiddleware(c.Auth.AccessSecret).Handle,
 		RedisClient:     nil,
 		PresencePub:     nil,
 		WsManager:       ws.NewManager(),
@@ -162,6 +174,7 @@ func NewServiceContextWithCore(c config.Config, authClient authservice.AuthServi
 		Config:      c,
 		AuthClient:  authClient,
 		CoreClient:  coreClient,
+		Auth:        middleware.NewAuthMiddleware(c.Auth.AccessSecret).Handle,
 		RedisClient: nil,
 		PresencePub: nil,
 		WsManager:   ws.NewManager(),

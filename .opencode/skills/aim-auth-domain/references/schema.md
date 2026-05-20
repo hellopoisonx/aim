@@ -33,8 +33,8 @@ CREATE INDEX idx_user_credentials_email ON user_credentials (email);
 
 ## 当前实现
 
-- schema：`app/auth/rpc/model/schema.sql`
-- query：`app/auth/rpc/model/query.sql`
+- schema：`app/auth/rpc/model/migrations/000_init.sql`
+- query：`app/auth/rpc/model/queries/auth.sql`
 - sqlc 配置：`app/auth/rpc/model/sqlc.yaml`
 - 生成包：`app/auth/rpc/model`
 

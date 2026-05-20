@@ -3,6 +3,49 @@
 
 package types
 
+type AddFriendRequest struct {
+	Id int64 `path:"id" validate:"required"`
+}
+
+type AddFriendResponse struct {
+	Friendship FriendshipItem `json:"friendship"`
+}
+
+type CreateConversationRequest struct {
+	ConversationType string  `json:"conversation_type" validate:"required,oneof=direct group"`
+	MemberIds        []int64 `json:"member_ids" validate:"required,min=1"`
+}
+
+type CreateConversationResponse struct {
+	ConversationId   int64   `json:"conversation_id"`
+	ConversationType string  `json:"conversation_type"`
+	IsActive         bool    `json:"is_active"`
+	CreatedAt        int64   `json:"created_at"`
+	MemberIds        []int64 `json:"member_ids"`
+}
+
+type FriendshipItem struct {
+	UserId    int64  `json:"user_id"`
+	FriendId  int64  `json:"friend_id"`
+	Status    string `json:"status"`
+	CreatedAt int64  `json:"created_at"`
+	UpdatedAt int64  `json:"updated_at"`
+}
+
+type GetConversationHistoryRequest struct {
+	Id              int64 `path:"id" validate:"required"`
+	CursorCreatedAt int64 `form:"cursor_created_at,optional"`
+	CursorId        int64 `form:"cursor_id,optional"`
+	Limit           int32 `form:"limit,default=50,optional"`
+}
+
+type GetConversationHistoryResponse struct {
+	Messages            []MessageItem `json:"messages"`
+	NextCursorCreatedAt int64         `json:"next_cursor_created_at"`
+	NextCursorId        int64         `json:"next_cursor_id"`
+	HasMore             bool          `json:"has_more"`
+}
+
 type GetUserByIdRequest struct {
 	Id int64 `path:"id" validate:"required"`
 }
@@ -17,6 +60,10 @@ type GetUserByNameRequest struct {
 
 type GetUserByNameResponse struct {
 	Users []UserListItem `json:"users"`
+}
+
+type ListFriendApplicationsResponse struct {
+	Applications []FriendshipItem `json:"applications"`
 }
 
 type LoginRequest struct {
@@ -34,6 +81,16 @@ type LoginResponse struct {
 
 type LogoutResponse struct {
 	Success bool `json:"success"`
+}
+
+type MessageItem struct {
+	Id             int64  `json:"id"`
+	ConversationId int64  `json:"conversation_id"`
+	SenderId       int64  `json:"sender_id"`
+	MessageType    string `json:"message_type"`
+	Content        string `json:"content"`
+	ClientMsgId    string `json:"client_msg_id"`
+	CreatedAt      int64  `json:"created_at"`
 }
 
 type RefreshRequest struct {

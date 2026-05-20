@@ -53,10 +53,28 @@ type GetUserByIdRequest {
 	Id int64 `path:"id" validate:"required"`
 }
 
-type UserListItem {
-	Id     int64  `json:"id"`
-	Email  string `json:"email"`
-	Avatar string `json:"avatar"`
+type GetUserByIdResponse {
+	User UserInfo `json:"user"`
+}
+
+type AddFriendRequest {
+	Id int64 `path:"id" validate:"required"`
+}
+
+type FriendshipItem {
+	UserId    int64  `json:"user_id"`
+	FriendId  int64  `json:"friend_id"`
+	Status    string `json:"status"`
+	CreatedAt int64  `json:"created_at"`
+	UpdatedAt int64  `json:"updated_at"`
+}
+
+type AddFriendResponse {
+	Friendship FriendshipItem `json:"friendship"`
+}
+
+type ListFriendApplicationsResponse {
+	Applications []FriendshipItem `json:"applications"`
 }
 
 type UserInfo {
@@ -73,8 +91,47 @@ type GetUserByNameResponse {
 	Users []UserListItem `json:"users"`
 }
 
-type GetUserByIdResponse {
-	User UserInfo `json:"user"`
+type UserListItem {
+	Id     int64  `json:"id"`
+	Email  string `json:"email"`
+	Avatar string `json:"avatar"`
+}
+
+type CreateConversationRequest {
+	ConversationType string  `json:"conversation_type" validate:"required,oneof=direct group"`
+	MemberIds        []int64 `json:"member_ids" validate:"required,min=1"`
+}
+
+type CreateConversationResponse {
+	ConversationId   int64   `json:"conversation_id"`
+	ConversationType string  `json:"conversation_type"`
+	IsActive         bool    `json:"is_active"`
+	CreatedAt        int64   `json:"created_at"`
+	MemberIds        []int64 `json:"member_ids"`
+}
+
+type GetConversationHistoryRequest {
+	Id              int64 `path:"id" validate:"required"`
+	CursorCreatedAt int64 `form:"cursor_created_at,optional"`
+	CursorId        int64 `form:"cursor_id,optional"`
+	Limit           int32 `form:"limit,default=50,optional"`
+}
+
+type MessageItem {
+	Id             int64  `json:"id"`
+	ConversationId int64  `json:"conversation_id"`
+	SenderId       int64  `json:"sender_id"`
+	MessageType    string `json:"message_type"`
+	Content        string `json:"content"`
+	ClientMsgId    string `json:"client_msg_id"`
+	CreatedAt      int64  `json:"created_at"`
+}
+
+type GetConversationHistoryResponse {
+	Messages            []MessageItem `json:"messages"`
+	NextCursorCreatedAt int64         `json:"next_cursor_created_at"`
+	NextCursorId        int64         `json:"next_cursor_id"`
+	HasMore             bool          `json:"has_more"`
 }
 
 @server (
@@ -96,8 +153,9 @@ service gateway-api {
 }
 
 @server (
-	prefix: /api/users
-	group:  users
+	middleware: Auth
+	prefix:     /api/users
+	group:      users
 )
 service gateway-api {
 	@handler GetUserByName
@@ -105,5 +163,31 @@ service gateway-api {
 
 	@handler GetUserById
 	get /by-id/:id (GetUserByIdRequest) returns (GetUserByIdResponse)
+
+	@handler AddFriend
+	post /friends/:id (AddFriendRequest) returns (AddFriendResponse)
+}
+
+@server (
+	middleware: Auth
+	prefix:     /api/conversations
+	group:      conversations
+)
+service gateway-api {
+	@handler CreateConversation
+	post / (CreateConversationRequest) returns (CreateConversationResponse)
+
+	@handler GetConversationHistory
+	get /history/:id (GetConversationHistoryRequest) returns (GetConversationHistoryResponse)
+}
+
+@server (
+	middleware: Auth
+	prefix:     /api/friends
+	group:      friends
+)
+service gateway-api {
+	@handler ListFriendApplications
+	get /applications returns (ListFriendApplicationsResponse)
 }
 

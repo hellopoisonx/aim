@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/hellopoisonx/aim/app/logic/rpc/internal/model"
+	"github.com/hellopoisonx/aim/app/logic/rpc/model"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/shared/tracing"
 

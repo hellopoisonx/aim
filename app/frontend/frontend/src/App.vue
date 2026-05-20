@@ -3,18 +3,21 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import {
   ConnectWS,
+  CreateDirectConversation,
   DeviceID,
   DisconnectWS,
+  GetConversationHistory,
   Login,
   Logout,
   Register,
+  SearchUsersByName,
   SendMessage,
   SendTyping,
   SessionState,
 } from '../wailsjs/go/main/App'
 import { EventsOn } from '../wailsjs/runtime/runtime'
 import type { client, main } from '../wailsjs/go/models'
-import type { ChatMessage, Conversation } from './components/types'
+import type { ChatMessage, Conversation, SearchUserItem } from './components/types'
 import LoginView from './views/LoginView.vue'
 import RegisterView from './views/RegisterView.vue'
 import ConversationList from './components/ConversationList.vue'
@@ -36,6 +39,16 @@ const connectionState = ref<ConnectionState>('disconnected')
 const conversations = ref<Conversation[]>([])
 const activeConversationId = ref<number | null>(null)
 const messagesMap = ref<Map<number, ChatMessage[]>>(new Map())
+const historyLoadedSet = ref<Set<number>>(new Set())
+const historyLoading = ref(false)
+
+// ─── User search / direct conversation ────────────────────────────────────────
+const searchKeyword = ref('')
+const searchResults = ref<SearchUserItem[]>([])
+const searchLoading = ref(false)
+const createLoading = ref(false)
+const creatingUserId = ref<number | null>(null)
+const searchError = ref('')
 
 // ─── Derived helpers ──────────────────────────────────────────────────────────
 
@@ -52,6 +65,50 @@ const activeMessages = computed<ChatMessage[]>(() => {
 const isAuthenticated = computed(() => currentUserId.value > 0 && deviceId.value !== '')
 const isConnected = computed(() => connectionState.value === 'connected')
 
+// ─── Conversation history loader ──────────────────────────────────────────────
+
+async function loadConversationHistory(conversationId: number) {
+  // Skip if already loaded or currently loading
+  if (historyLoadedSet.value.has(conversationId) || historyLoading.value) return
+  // Skip if messages already exist for this conversation (already populated)
+  if ((messagesMap.value.get(conversationId)?.length ?? 0) > 0) return
+
+  historyLoading.value = true
+  try {
+    const resp = await GetConversationHistory(conversationId, 0, 0, 50)
+    if (!resp?.messages?.length) {
+      historyLoadedSet.value.add(conversationId)
+      return
+    }
+
+    const conv = conversations.value.find((c) => c.id === conversationId)
+    const remoteName = conv?.title ?? '未知用户'
+
+    const hist: ChatMessage[] = resp.messages.map((m: client.MessageItem) => ({
+      id: m.id,
+      conversationId: m.conversation_id,
+      senderId: m.sender_id,
+      senderName: m.sender_id === currentUserId.value ? currentUserLabel.value : remoteName,
+      senderAvatar: '',
+      content: m.content,
+      timestamp: new Date(m.created_at).toISOString(),
+      isMine: m.sender_id === currentUserId.value,
+    }))
+
+    if (!messagesMap.value.has(conversationId)) {
+      messagesMap.value.set(conversationId, [])
+    }
+    // Prepend history (oldest first) before optimistic/real-time messages
+    const existing = messagesMap.value.get(conversationId)!
+    messagesMap.value.set(conversationId, [...hist, ...existing])
+    historyLoadedSet.value.add(conversationId)
+  } catch {
+    ElMessage.error('加载历史消息失败')
+  } finally {
+    historyLoading.value = false
+  }
+}
+
 // ─── Wails event handlers ─────────────────────────────────────────────────────
 
 const offHandlers: Array<() => void> = []
@@ -62,7 +119,10 @@ interface FramePayload {
   sender_name?: string
   content?: string
   timestamp?: string
-  msg_id?: string
+  message_id?: number
+  sent_at?: number
+  client_msg_id?: string
+  conversation_type?: string
   message_type?: string
 }
 
@@ -87,7 +147,10 @@ function toFramePayload(val: unknown): FramePayload | null {
     sender_name: typeof source.sender_name === 'string' ? source.sender_name : undefined,
     content: typeof source.content === 'string' ? source.content : undefined,
     timestamp: typeof source.timestamp === 'string' ? source.timestamp : undefined,
-    msg_id: typeof source.msg_id === 'string' ? source.msg_id : undefined,
+    message_id: typeof source.message_id === 'number' ? source.message_id : undefined,
+    sent_at: typeof source.sent_at === 'number' ? source.sent_at : undefined,
+    client_msg_id: typeof source.client_msg_id === 'string' ? source.client_msg_id : undefined,
+    conversation_type: typeof source.conversation_type === 'string' ? source.conversation_type : undefined,
     message_type: typeof source.message_type === 'string' ? source.message_type : undefined,
   } : null
 }
@@ -118,14 +181,15 @@ onMounted(async () => {
       if (!payload.content) return
 
       const conversationId = payload.conversation_id
-      const msgId = payload.msg_id ? parseInt(payload.msg_id, 10) : Date.now()
+      const msgId = payload.message_id ?? Date.now()
       const senderId = payload.sender_id ?? 0
-      const senderName = payload.sender_name ?? '未知用户'
-      const timestamp = payload.timestamp ?? new Date().toISOString()
+      const senderName = payload.sender_name ?? (senderId === currentUserId.value ? currentUserLabel.value : `用户 ${senderId}`)
+      const timestamp = payload.timestamp ?? (payload.sent_at ? new Date(payload.sent_at).toISOString() : new Date().toISOString())
 
-      // Avoid duplicates from optimistic updates
       const existing = messagesMap.value.get(conversationId)
-      if (existing?.some((m) => m.id === msgId)) return
+      const existingIndex = existing?.findIndex((m) =>
+        (payload.client_msg_id && m.clientMsgId === payload.client_msg_id) || m.id === msgId
+      ) ?? -1
 
       const newMsg: ChatMessage = {
         id: msgId,
@@ -136,21 +200,35 @@ onMounted(async () => {
         content: payload.content,
         timestamp,
         isMine: senderId === currentUserId.value,
+        clientMsgId: payload.client_msg_id,
       }
 
       if (!messagesMap.value.has(conversationId)) {
         messagesMap.value.set(conversationId, [])
       }
-      messagesMap.value.get(conversationId)!.push(newMsg)
-
-      // Update conversation preview
-      const conv = conversations.value.find((c) => c.id === conversationId)
-      if (conv) {
-        conv.lastMessage = payload.content
-        conv.lastMessageAt = timestamp
-        if (newMsg.isMine) conv.unreadCount = 0
-        else conv.unreadCount++
+      if (existingIndex >= 0) {
+        messagesMap.value.get(conversationId)!.splice(existingIndex, 1, newMsg)
+      } else {
+        messagesMap.value.get(conversationId)!.push(newMsg)
       }
+
+      let conv = conversations.value.find((c) => c.id === conversationId)
+      if (!conv) {
+        conv = {
+          id: conversationId,
+          title: senderId === currentUserId.value ? '我' : senderName,
+          avatar: '',
+          lastMessage: '',
+          lastMessageAt: '',
+          unreadCount: 0,
+          isOnline: false,
+        }
+        conversations.value.unshift(conv)
+      }
+      conv.lastMessage = payload.content
+      conv.lastMessageAt = timestamp
+      if (newMsg.isMine || activeConversationId.value === conversationId) conv.unreadCount = 0
+      else conv.unreadCount++
     }),
     EventsOn('aim:error', (_error: unknown) => {
       // Surface errors as user-friendly messages, not raw logs
@@ -221,6 +299,7 @@ async function handleLogout() {
   currentUserLabel.value = ''
   conversations.value = []
   messagesMap.value.clear()
+  historyLoadedSet.value.clear()
   activeConversationId.value = null
   connectionState.value = 'disconnected'
   authView.value = 'login'
@@ -233,6 +312,8 @@ function handleSelectConversation(id: number) {
   // Clear unread for selected conversation
   const conv = conversations.value.find((c) => c.id === id)
   if (conv) conv.unreadCount = 0
+  // Load history if not yet loaded and no messages present
+  loadConversationHistory(id)
 }
 
 async function handleSendMessage(content: string) {
@@ -254,6 +335,7 @@ async function handleSendMessage(content: string) {
     content,
     timestamp: new Date().toISOString(),
     isMine: true,
+    clientMsgId,
   }
 
   try {
@@ -289,6 +371,69 @@ function handleTyping() {
     // typing errors should not surface as debug logs
   })
 }
+
+// ─── Search / start direct conversation ───────────────────────────────────────
+
+async function handleSearchUsers(keyword: string) {
+  searchKeyword.value = keyword
+  searchError.value = ''
+  if (!keyword.trim()) {
+    searchResults.value = []
+    return
+  }
+  searchLoading.value = true
+  try {
+    searchResults.value = await SearchUsersByName(keyword.trim())
+  } catch {
+    searchError.value = '搜索失败，请稍后重试'
+    searchResults.value = []
+  } finally {
+    searchLoading.value = false
+  }
+}
+
+async function handleStartDirect(userId: number) {
+  const user = searchResults.value.find((item) => item.id === userId)
+  createLoading.value = true
+  creatingUserId.value = userId
+  try {
+    const resp = await CreateDirectConversation(userId)
+    const title = user ? displayUserName(user) : `用户 ${userId}`
+    const newConv: Conversation = {
+      id: resp.conversation_id,
+      title,
+      avatar: user?.avatar ?? '',
+      lastMessage: '',
+      lastMessageAt: '',
+      unreadCount: 0,
+      isOnline: false,
+    }
+    // upsert: avoid duplicates if already exists
+    const idx = conversations.value.findIndex((c) => c.id === resp.conversation_id)
+    if (idx >= 0) {
+      conversations.value.splice(idx, 1, newConv)
+    } else {
+      conversations.value.unshift(newConv)
+    }
+    messagesMap.value.set(resp.conversation_id, [])
+    activeConversationId.value = resp.conversation_id
+    searchResults.value = []
+    searchKeyword.value = ''
+    // Load history for the newly created conversation
+    loadConversationHistory(resp.conversation_id)
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : '创建会话失败'
+    ElMessage.error(msg)
+  } finally {
+    createLoading.value = false
+    creatingUserId.value = null
+  }
+}
+
+function displayUserName(user: SearchUserItem): string {
+  const atIndex = user.email.indexOf('@')
+  return atIndex > 0 ? user.email.slice(0, atIndex) : user.email
+}
 </script>
 
 <template>
@@ -320,8 +465,16 @@ function handleTyping() {
         :active-conversation-id="activeConversationId"
         :current-user-label="currentUserLabel"
         :connected="isConnected"
+        :search-keyword="searchKeyword"
+        :search-results="searchResults"
+        :search-loading="searchLoading"
+        :create-loading="createLoading"
+        :creating-user-id="creatingUserId"
+        :search-error="searchError"
         @select="handleSelectConversation"
         @logout="handleLogout"
+        @search-user="handleSearchUsers"
+        @start-direct="handleStartDirect"
       />
     </div>
     <div class="chat-main">

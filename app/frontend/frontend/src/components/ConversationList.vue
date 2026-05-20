@@ -1,6 +1,7 @@
 <script lang="ts" setup>
-import { ElAvatar, ElBadge, ElEmpty } from 'element-plus'
-import type { Conversation } from './types'
+import { ElAvatar, ElBadge, ElEmpty, ElInput } from 'element-plus'
+import { ref, watch } from 'vue'
+import type { Conversation, SearchUserItem } from './types'
 
 interface Props {
   conversations: Conversation[]
@@ -8,15 +9,31 @@ interface Props {
   currentUserLabel: string
   connected: boolean
   loading?: boolean
+  historyLoading?: boolean
+  searchKeyword?: string
+  searchResults?: SearchUserItem[]
+  searchLoading?: boolean
+  createLoading?: boolean
+  creatingUserId?: number | null
+  searchError?: string
 }
 
 const props = withDefaults(defineProps<Props>(), {
   loading: false,
+  historyLoading: false,
+  searchKeyword: '',
+  searchResults: () => [],
+  searchLoading: false,
+  createLoading: false,
+  creatingUserId: null,
+  searchError: '',
 })
 
 const emit = defineEmits<{
   select: [conversationId: number]
   logout: []
+  'search-user': [keyword: string]
+  'start-direct': [userId: number]
 }>()
 
 function formatTime(isoString: string | undefined): string {
@@ -29,6 +46,32 @@ function formatTime(isoString: string | undefined): string {
   if (diffSec < 3600) return `${Math.floor(diffSec / 60)}分钟前`
   if (diffSec < 86400) return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
   return date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })
+}
+
+const localSearchKeyword = ref(props.searchKeyword)
+
+watch(() => props.searchKeyword, (value) => {
+  localSearchKeyword.value = value
+})
+
+let searchTimer: ReturnType<typeof setTimeout> | null = null
+
+function onSearchInput(value: string) {
+  localSearchKeyword.value = value
+  if (searchTimer) clearTimeout(searchTimer)
+  searchTimer = setTimeout(() => {
+    emit('search-user', value)
+  }, 300)
+}
+
+function clearSearch() {
+  localSearchKeyword.value = ''
+  emit('search-user', '')
+}
+
+function getDisplayName(user: SearchUserItem): string {
+  const idx = user.email.indexOf('@')
+  return idx > 0 ? user.email.substring(0, idx) : user.email
 }
 </script>
 
@@ -43,6 +86,38 @@ function formatTime(isoString: string | undefined): string {
         </span>
       </div>
       <button class="cl-logout" title="退出登录" @click="emit('logout')">退出</button>
+    </div>
+
+    <!-- Search -->
+    <div class="cl-search">
+      <ElInput
+        :model-value="localSearchKeyword"
+        placeholder="搜索用户..."
+        clearable
+        size="small"
+        @input="onSearchInput"
+        @clear="clearSearch"
+      />
+      <div v-if="searchLoading" class="cl-search-tip">搜索中...</div>
+      <div v-else-if="searchError" class="cl-search-tip cl-search-error">{{ searchError }}</div>
+      <div v-else-if="searchResults.length > 0" class="cl-search-results">
+        <div
+          v-for="user in searchResults"
+          :key="user.id"
+          class="cl-search-item"
+          role="button"
+          tabindex="0"
+          :class="{ 'cl-search-item--loading': createLoading && creatingUserId === user.id }"
+          @click="!createLoading && emit('start-direct', user.id)"
+          @keydown.enter="!createLoading && emit('start-direct', user.id)"
+        >
+          <ElAvatar :src="user.avatar" :size="28" class="cl-search-avatar">
+            {{ getDisplayName(user).slice(0, 1) }}
+          </ElAvatar>
+          <span class="cl-search-name">{{ getDisplayName(user) }}</span>
+          <span v-if="createLoading && creatingUserId === user.id" class="cl-search-action">创建中</span>
+        </div>
+      </div>
     </div>
 
     <!-- Loading skeleton -->
@@ -248,5 +323,75 @@ function formatTime(isoString: string | undefined): string {
   overflow: hidden;
   text-overflow: ellipsis;
   margin: 0;
+}
+
+/* Search */
+.cl-search {
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--aim-border);
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.cl-search-tip {
+  font-size: 10px;
+  color: var(--aim-text-muted);
+  padding: 2px 0;
+}
+
+.cl-search-error {
+  color: var(--aim-danger);
+}
+
+.cl-search-results {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.cl-search-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 6px var(--space-2);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.cl-search-item:hover {
+  background: var(--aim-surface-2);
+}
+
+.cl-search-item--loading {
+  opacity: 0.72;
+  cursor: progress;
+}
+
+.cl-search-action {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--aim-text-muted);
+}
+
+.cl-search-avatar {
+  flex-shrink: 0;
+  background: var(--aim-surface-2);
+  color: var(--aim-primary);
+  font-weight: 700;
+  font-size: 12px;
+  border: 1px solid var(--aim-border);
+}
+
+.cl-search-name {
+  font-size: 12px;
+  color: var(--aim-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 </style>

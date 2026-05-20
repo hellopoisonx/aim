@@ -29,7 +29,7 @@
 - 接口规格：`app/auth/rpc/auth.proto`，通过 `goctl rpc protoc ... --style go_zero` 生成。
 - 业务逻辑：`app/auth/rpc/internal/logic`。
 - 领域服务：`app/auth/rpc/internal/service/auth_service.go`。
-- 数据访问：`app/auth/rpc/model`，由 `sqlc` 根据 `schema.sql` 和 `query.sql` 生成。
+- 数据访问：`app/auth/rpc/model`，由 `sqlc` 根据 `model/migrations/` 和 `model/queries/` 生成。
 - 网关调用客户端：`app/auth/rpc/authservice`。
 - 服务注册：`app/auth/rpc/auth.go` 启动时通过 `app/shared/nacos` 使用 `github.com/nacos-group/nacos-sdk-go/v2` 注册 Nacos v2 临时实例；`app/auth/rpc/etc/auth.yaml` 的 `Nacos` 块维护 `ServerAddr`、`Group`、`Cluster`、`ServiceName`、`AdvertiseIP`、`AdvertisePort` 等注册参数，不再使用 go-zero 默认 `Etcd` 注册。
 - Docker Compose 配置：`app/auth/rpc/etc/auth.yaml` 面向 `docker-compose.yaml` 内部网络，`ListenOn` 为 `0.0.0.0:8989`，`Nacos.ServerAddr` 为 `nacos:8848`，`Nacos.AdvertiseIP` 为 `aim-auth`，PostgreSQL 使用 `postgres:5432`，Redis 使用 `redis:6379`。

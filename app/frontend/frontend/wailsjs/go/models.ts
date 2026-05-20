@@ -1,5 +1,220 @@
 export namespace client {
 	
+	export class FriendshipItem {
+	    user_id: number;
+	    friend_id: number;
+	    status: string;
+	    created_at: number;
+	    updated_at: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new FriendshipItem(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.user_id = source["user_id"];
+	        this.friend_id = source["friend_id"];
+	        this.status = source["status"];
+	        this.created_at = source["created_at"];
+	        this.updated_at = source["updated_at"];
+	    }
+	}
+	export class AddFriendResponse {
+	    friendship: FriendshipItem;
+	
+	    static createFrom(source: any = {}) {
+	        return new AddFriendResponse(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.friendship = this.convertValues(source["friendship"], FriendshipItem);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class CreateConversationResponse {
+	    conversation_id: number;
+	    conversation_type: string;
+	    is_active: boolean;
+	    created_at: number;
+	    member_ids: number[];
+	
+	    static createFrom(source: any = {}) {
+	        return new CreateConversationResponse(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.conversation_id = source["conversation_id"];
+	        this.conversation_type = source["conversation_type"];
+	        this.is_active = source["is_active"];
+	        this.created_at = source["created_at"];
+	        this.member_ids = source["member_ids"];
+	    }
+	}
+	
+	export class MessageItem {
+	    id: number;
+	    conversation_id: number;
+	    sender_id: number;
+	    message_type: string;
+	    content: string;
+	    client_msg_id: string;
+	    created_at: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new MessageItem(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.conversation_id = source["conversation_id"];
+	        this.sender_id = source["sender_id"];
+	        this.message_type = source["message_type"];
+	        this.content = source["content"];
+	        this.client_msg_id = source["client_msg_id"];
+	        this.created_at = source["created_at"];
+	    }
+	}
+	export class GetConversationHistoryResponse {
+	    messages: MessageItem[];
+	    next_cursor_created_at: number;
+	    next_cursor_id: number;
+	    has_more: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new GetConversationHistoryResponse(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.messages = this.convertValues(source["messages"], MessageItem);
+	        this.next_cursor_created_at = source["next_cursor_created_at"];
+	        this.next_cursor_id = source["next_cursor_id"];
+	        this.has_more = source["has_more"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class UserInfo {
+	    id: number;
+	    email: string;
+	    status: number;
+	    nickname: string;
+	    avatar: string;
+	    created_at: number;
+	    updated_at: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new UserInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.email = source["email"];
+	        this.status = source["status"];
+	        this.nickname = source["nickname"];
+	        this.avatar = source["avatar"];
+	        this.created_at = source["created_at"];
+	        this.updated_at = source["updated_at"];
+	    }
+	}
+	export class GetUserByIdResponse {
+	    user: UserInfo;
+	
+	    static createFrom(source: any = {}) {
+	        return new GetUserByIdResponse(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.user = this.convertValues(source["user"], UserInfo);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class ListFriendApplicationsResponse {
+	    applications: FriendshipItem[];
+	
+	    static createFrom(source: any = {}) {
+	        return new ListFriendApplicationsResponse(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.applications = this.convertValues(source["applications"], FriendshipItem);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class LoginRequest {
 	    email: string;
 	    password: string;
@@ -46,6 +261,7 @@ export namespace client {
 	        this.success = source["success"];
 	    }
 	}
+	
 	export class RefreshRequest {
 	    refresh_token: string;
 	
@@ -104,6 +320,23 @@ export namespace client {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.user_id = source["user_id"];
+	    }
+	}
+	
+	export class UserListItem {
+	    id: number;
+	    email: string;
+	    avatar: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new UserListItem(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.email = source["email"];
+	        this.avatar = source["avatar"];
 	    }
 	}
 

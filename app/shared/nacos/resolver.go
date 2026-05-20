@@ -104,6 +104,11 @@ func (r *nacosResolver) updateAddrs(instances []model.Instance) {
 
 	addrs = subset(addrs, maxSubsetSize)
 
+	if len(addrs) == 0 {
+		r.cc.ReportError(fmt.Errorf("no healthy nacos instances found for service discovery"))
+		return
+	}
+
 	if err := r.cc.UpdateState(resolver.State{Addresses: addrs}); err != nil {
 		logx.Errorf("nacos resolver UpdateState: %v", err)
 	}

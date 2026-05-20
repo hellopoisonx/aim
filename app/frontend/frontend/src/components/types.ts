@@ -23,4 +23,12 @@ export interface ChatMessage {
   content: string
   timestamp: string
   isMine: boolean
+  clientMsgId?: string
+}
+
+/** Search user result item, derived from client.UserListItem */
+export interface SearchUserItem {
+  id: number
+  email: string
+  avatar?: string
 }

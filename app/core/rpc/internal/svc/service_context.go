@@ -17,14 +17,15 @@ import (
 )
 
 type ServiceContext struct {
-	Config                config.Config
-	RedisClient           *redis.Client
-	Snowflake             *tools.Snowflake
-	KqPusher              *kq.Pusher
-	LogicPermissionClient logicpb.PermissionServiceClient
-	GatewayClient         rpc.GatewayPusher
-	PresenceStore         *cache.PresenceStore
-	namingClient          nacos.NamingClient
+	Config                  config.Config
+	RedisClient             *redis.Client
+	Snowflake               *tools.Snowflake
+	KqPusher                *kq.Pusher
+	LogicPermissionClient   logicpb.PermissionServiceClient
+	LogicConversationClient logicpb.ConversationServiceClient
+	GatewayClient           rpc.GatewayPusher
+	PresenceStore           *cache.PresenceStore
+	namingClient            nacos.NamingClient
 }
 
 func (s *ServiceContext) Close() {
@@ -68,11 +69,12 @@ func NewServiceContext(c config.Config) *ServiceContext {
 
 	// Logic RPC client (if configured)
 	var logicClient logicpb.PermissionServiceClient
+	var logicConversationClient logicpb.ConversationServiceClient
 
 	var namingClient nacos.NamingClient
 
 	if c.LogicRpc.ServiceName != "" {
-		if err := c.LogicRpc.ApplyDefaults("logic.rpc", "127.0.0.1:8080"); err != nil {
+		if err := c.LogicRpc.ApplyDefaults("logic.rpc", "127.0.0.1:8082"); err != nil {
 			logx.Errorf("failed to apply LogicRpc defaults: %v", err)
 		} else {
 			namingClient, err = nacos.NewNamingClient(c.LogicRpc)
@@ -86,6 +88,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 					logx.Errorf("failed to create RPC client for LogicRpc: %v", err)
 				} else {
 					logicClient = logicpb.NewPermissionServiceClient(client.Conn())
+					logicConversationClient = logicpb.NewConversationServiceClient(client.Conn())
 				}
 			}
 		}
@@ -108,13 +111,14 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	}
 
 	return &ServiceContext{
-		Config:                c,
-		RedisClient:           redisClient,
-		Snowflake:             sf,
-		KqPusher:              kqPusher,
-		LogicPermissionClient: logicClient,
-		GatewayClient:         gatewayClient,
-		PresenceStore:         presenceStore,
-		namingClient:          namingClient,
+		Config:                  c,
+		RedisClient:             redisClient,
+		Snowflake:               sf,
+		KqPusher:                kqPusher,
+		LogicPermissionClient:   logicClient,
+		LogicConversationClient: logicConversationClient,
+		GatewayClient:           gatewayClient,
+		PresenceStore:           presenceStore,
+		namingClient:            namingClient,
 	}
 }

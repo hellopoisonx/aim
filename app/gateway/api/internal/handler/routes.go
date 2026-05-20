@@ -7,6 +7,8 @@ import (
 	"net/http"
 
 	auth "github.com/hellopoisonx/aim/app/gateway/api/internal/handler/auth"
+	conversations "github.com/hellopoisonx/aim/app/gateway/api/internal/handler/conversations"
+	friends "github.com/hellopoisonx/aim/app/gateway/api/internal/handler/friends"
 	users "github.com/hellopoisonx/aim/app/gateway/api/internal/handler/users"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 
@@ -41,18 +43,59 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 	)
 
 	server.AddRoutes(
-		[]rest.Route{
-			{
-				Method:  http.MethodGet,
-				Path:    "/by-id/:id",
-				Handler: users.GetUserByIdHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodGet,
-				Path:    "/by-name/:name",
-				Handler: users.GetUserByNameHandler(serverCtx),
-			},
-		},
+		rest.WithMiddlewares(
+			[]rest.Middleware{serverCtx.Auth},
+			[]rest.Route{
+				{
+					Method:  http.MethodPost,
+					Path:    "/",
+					Handler: conversations.CreateConversationHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodGet,
+					Path:    "/history/:id",
+					Handler: conversations.GetConversationHistoryHandler(serverCtx),
+				},
+			}...,
+		),
+		rest.WithPrefix("/api/conversations"),
+	)
+
+	server.AddRoutes(
+		rest.WithMiddlewares(
+			[]rest.Middleware{serverCtx.Auth},
+			[]rest.Route{
+				{
+					Method:  http.MethodGet,
+					Path:    "/applications",
+					Handler: friends.ListFriendApplicationsHandler(serverCtx),
+				},
+			}...,
+		),
+		rest.WithPrefix("/api/friends"),
+	)
+
+	server.AddRoutes(
+		rest.WithMiddlewares(
+			[]rest.Middleware{serverCtx.Auth},
+			[]rest.Route{
+				{
+					Method:  http.MethodGet,
+					Path:    "/by-id/:id",
+					Handler: users.GetUserByIdHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodGet,
+					Path:    "/by-name/:name",
+					Handler: users.GetUserByNameHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/friends/:id",
+					Handler: users.AddFriendHandler(serverCtx),
+				},
+			}...,
+		),
 		rest.WithPrefix("/api/users"),
 	)
 }

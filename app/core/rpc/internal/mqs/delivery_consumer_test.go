@@ -10,16 +10,18 @@ import (
 	"github.com/hellopoisonx/aim/app/core/rpc/internal/config"
 	"github.com/hellopoisonx/aim/app/core/rpc/internal/rpc"
 	"github.com/hellopoisonx/aim/app/core/rpc/internal/svc"
+	logicpb "github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/tracing"
 	gwpb "github.com/hellopoisonx/aim/shared/proto/gateway/pb"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/require"
 	"github.com/zeromicro/go-queue/kq"
 	"github.com/zeromicro/go-zero/core/service"
-	"go.opentelemetry.io/otel/trace"
+	"go.opentelemetry.io/otel"
 	tracesdk "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
-	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace"
+	"google.golang.org/grpc"
 )
 
 // --- Fake implementations ---
@@ -54,6 +56,28 @@ func newFakeGatewayClient() *fakeGatewayClient {
 
 // Ensure fakeGatewayClient implements rpc.GatewayPusher
 var _ rpc.GatewayPusher = (*fakeGatewayClient)(nil)
+
+type fakeConversationClient struct {
+	memberIDs []int64
+	err       error
+}
+
+func (f *fakeConversationClient) CreateConversation(context.Context, *logicpb.CreateConversationReq, ...grpc.CallOption) (*logicpb.CreateConversationResp, error) {
+	return nil, errors.New("CreateConversation not implemented")
+}
+
+func (f *fakeConversationClient) GetConversationHistory(context.Context, *logicpb.GetConversationHistoryReq, ...grpc.CallOption) (*logicpb.GetConversationHistoryResp, error) {
+	return nil, errors.New("GetConversationHistory not implemented")
+}
+
+func (f *fakeConversationClient) GetConversationMembers(context.Context, *logicpb.GetConversationMembersReq, ...grpc.CallOption) (*logicpb.GetConversationMembersResp, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	return &logicpb.GetConversationMembersResp{MemberIds: f.memberIDs}, nil
+}
+
+var _ logicpb.ConversationServiceClient = (*fakeConversationClient)(nil)
 
 // --- Test helpers ---
 
@@ -292,6 +316,46 @@ func TestDeliveryConsumer_Consume_MultipleMessages(t *testing.T) {
 	require.Len(t, fakeGw.pushes, 2)
 	require.Equal(t, int64(1), fakeGw.pushes[0].req.MessageId)
 	require.Equal(t, int64(2), fakeGw.pushes[1].req.MessageId)
+}
+
+func TestDeliveryConsumer_Consume_FanoutToConversationMembers(t *testing.T) {
+	fakeGw := newFakeGatewayClient()
+	svcCtx := newTestServiceContext(t, fakeGw)
+	svcCtx.LogicConversationClient = &fakeConversationClient{memberIDs: []int64{100, 200, 200}}
+	consumer := NewDeliveryConsumer(context.Background(), svcCtx)
+
+	event := transferEvent{
+		MessageID:      12345,
+		SenderID:       100,
+		ConversationID: 200,
+		MessageType:    "text",
+		Content:        "hello world",
+		ClientMsgID:    "client-msg-1",
+		Timestamp:      1700000000000,
+	}
+	value, err := json.Marshal(event)
+	require.NoError(t, err)
+
+	err = consumer.Consume(context.Background(), "200", string(value))
+	require.NoError(t, err)
+	require.Len(t, fakeGw.pushes, 2)
+	require.Equal(t, int64(100), fakeGw.pushes[0].req.TargetUserId)
+	require.Equal(t, int64(200), fakeGw.pushes[1].req.TargetUserId)
+}
+
+func TestDeliveryConsumer_Consume_MemberLookupFailure(t *testing.T) {
+	fakeGw := newFakeGatewayClient()
+	svcCtx := newTestServiceContext(t, fakeGw)
+	svcCtx.LogicConversationClient = &fakeConversationClient{err: errors.New("logic unavailable")}
+	consumer := NewDeliveryConsumer(context.Background(), svcCtx)
+
+	event := transferEvent{MessageID: 12345, SenderID: 100, ConversationID: 200, MessageType: "text", Content: "hello", ClientMsgID: "client-1", Timestamp: 1700000000000}
+	value, err := json.Marshal(event)
+	require.NoError(t, err)
+
+	err = consumer.Consume(context.Background(), "200", string(value))
+	require.Error(t, err)
+	require.Empty(t, fakeGw.pushes)
 }
 
 // --- Consumers registration test ---

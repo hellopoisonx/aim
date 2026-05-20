@@ -32,13 +32,14 @@ const (
 	FrameType_FRAME_TYPE_READ_RECEIPT FrameType = 4 // 已读回执
 	FrameType_FRAME_TYPE_ACK          FrameType = 5 // 客户端消息确认
 	// ---- 网关 → 客户端 ----
-	FrameType_FRAME_TYPE_PUSH_MESSAGE      FrameType = 101 // 推送聊天消息
-	FrameType_FRAME_TYPE_PUSH_PRESENCE     FrameType = 102 // 推送在线状态
-	FrameType_FRAME_TYPE_PUSH_NOTIFICATION FrameType = 103 // 推送系统通知
-	FrameType_FRAME_TYPE_PUSH_TYPING       FrameType = 104 // 推送输入状态
-	FrameType_FRAME_TYPE_RECONNECT         FrameType = 105 // 网关要求重连（drain 窗口）
-	FrameType_FRAME_TYPE_SERVER_ACK        FrameType = 106 // 服务端确认
-	FrameType_FRAME_TYPE_TOKEN_EXPIRED     FrameType = 107 // Token 已过期
+	FrameType_FRAME_TYPE_PUSH_MESSAGE            FrameType = 101 // 推送聊天消息
+	FrameType_FRAME_TYPE_PUSH_PRESENCE           FrameType = 102 // 推送在线状态
+	FrameType_FRAME_TYPE_PUSH_NOTIFICATION       FrameType = 103 // 推送系统通知
+	FrameType_FRAME_TYPE_PUSH_TYPING             FrameType = 104 // 推送输入状态
+	FrameType_FRAME_TYPE_RECONNECT               FrameType = 105 // 网关要求重连（drain 窗口）
+	FrameType_FRAME_TYPE_SERVER_ACK              FrameType = 106 // 服务端确认
+	FrameType_FRAME_TYPE_TOKEN_EXPIRED           FrameType = 107 // Token 已过期
+	FrameType_FRAME_TYPE_PUSH_FRIEND_APPLICATION FrameType = 108 // 推送好友申请
 )
 
 // Enum value maps for FrameType.
@@ -57,21 +58,23 @@ var (
 		105: "FRAME_TYPE_RECONNECT",
 		106: "FRAME_TYPE_SERVER_ACK",
 		107: "FRAME_TYPE_TOKEN_EXPIRED",
+		108: "FRAME_TYPE_PUSH_FRIEND_APPLICATION",
 	}
 	FrameType_value = map[string]int32{
-		"FRAME_TYPE_UNSPECIFIED":       0,
-		"FRAME_TYPE_SEND_MESSAGE":      1,
-		"FRAME_TYPE_HEARTBEAT":         2,
-		"FRAME_TYPE_TYPING":            3,
-		"FRAME_TYPE_READ_RECEIPT":      4,
-		"FRAME_TYPE_ACK":               5,
-		"FRAME_TYPE_PUSH_MESSAGE":      101,
-		"FRAME_TYPE_PUSH_PRESENCE":     102,
-		"FRAME_TYPE_PUSH_NOTIFICATION": 103,
-		"FRAME_TYPE_PUSH_TYPING":       104,
-		"FRAME_TYPE_RECONNECT":         105,
-		"FRAME_TYPE_SERVER_ACK":        106,
-		"FRAME_TYPE_TOKEN_EXPIRED":     107,
+		"FRAME_TYPE_UNSPECIFIED":             0,
+		"FRAME_TYPE_SEND_MESSAGE":            1,
+		"FRAME_TYPE_HEARTBEAT":               2,
+		"FRAME_TYPE_TYPING":                  3,
+		"FRAME_TYPE_READ_RECEIPT":            4,
+		"FRAME_TYPE_ACK":                     5,
+		"FRAME_TYPE_PUSH_MESSAGE":            101,
+		"FRAME_TYPE_PUSH_PRESENCE":           102,
+		"FRAME_TYPE_PUSH_NOTIFICATION":       103,
+		"FRAME_TYPE_PUSH_TYPING":             104,
+		"FRAME_TYPE_RECONNECT":               105,
+		"FRAME_TYPE_SERVER_ACK":              106,
+		"FRAME_TYPE_TOKEN_EXPIRED":           107,
+		"FRAME_TYPE_PUSH_FRIEND_APPLICATION": 108,
 	}
 )
 
@@ -156,7 +159,7 @@ func (AckStatus) EnumDescriptor() ([]byte, []int) {
 
 type WsFrame struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Type          FrameType              `protobuf:"varint,1,opt,name=type,proto3,enum=pb.FrameType" json:"type,omitempty"`
+	Type          FrameType              `protobuf:"varint,1,opt,name=type,proto3,enum=ws.FrameType" json:"type,omitempty"`
 	Seq           int64                  `protobuf:"varint,2,opt,name=seq,proto3" json:"seq,omitempty"`
 	Payload       []byte                 `protobuf:"bytes,3,opt,name=payload,proto3" json:"payload,omitempty"`
 	Timestamp     int64                  `protobuf:"varint,4,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
@@ -718,6 +721,83 @@ func (x *PushNotificationPayload) GetRelatedId() int64 {
 	return 0
 }
 
+// PushFriendApplicationPayload - friend application push
+type PushFriendApplicationPayload struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	UserId        int64                  `protobuf:"varint,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	FriendId      int64                  `protobuf:"varint,2,opt,name=friend_id,json=friendId,proto3" json:"friend_id,omitempty"`
+	Status        string                 `protobuf:"bytes,3,opt,name=status,proto3" json:"status,omitempty"`
+	CreatedAt     int64                  `protobuf:"varint,4,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	UpdatedAt     int64                  `protobuf:"varint,5,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PushFriendApplicationPayload) Reset() {
+	*x = PushFriendApplicationPayload{}
+	mi := &file_ws_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PushFriendApplicationPayload) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PushFriendApplicationPayload) ProtoMessage() {}
+
+func (x *PushFriendApplicationPayload) ProtoReflect() protoreflect.Message {
+	mi := &file_ws_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PushFriendApplicationPayload.ProtoReflect.Descriptor instead.
+func (*PushFriendApplicationPayload) Descriptor() ([]byte, []int) {
+	return file_ws_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *PushFriendApplicationPayload) GetUserId() int64 {
+	if x != nil {
+		return x.UserId
+	}
+	return 0
+}
+
+func (x *PushFriendApplicationPayload) GetFriendId() int64 {
+	if x != nil {
+		return x.FriendId
+	}
+	return 0
+}
+
+func (x *PushFriendApplicationPayload) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *PushFriendApplicationPayload) GetCreatedAt() int64 {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return 0
+}
+
+func (x *PushFriendApplicationPayload) GetUpdatedAt() int64 {
+	if x != nil {
+		return x.UpdatedAt
+	}
+	return 0
+}
+
 // PushTypingPayload — 推送输入状态
 type PushTypingPayload struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
@@ -729,7 +809,7 @@ type PushTypingPayload struct {
 
 func (x *PushTypingPayload) Reset() {
 	*x = PushTypingPayload{}
-	mi := &file_ws_proto_msgTypes[9]
+	mi := &file_ws_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -741,7 +821,7 @@ func (x *PushTypingPayload) String() string {
 func (*PushTypingPayload) ProtoMessage() {}
 
 func (x *PushTypingPayload) ProtoReflect() protoreflect.Message {
-	mi := &file_ws_proto_msgTypes[9]
+	mi := &file_ws_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -754,7 +834,7 @@ func (x *PushTypingPayload) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PushTypingPayload.ProtoReflect.Descriptor instead.
 func (*PushTypingPayload) Descriptor() ([]byte, []int) {
-	return file_ws_proto_rawDescGZIP(), []int{9}
+	return file_ws_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *PushTypingPayload) GetUserId() int64 {
@@ -782,7 +862,7 @@ type ReconnectPayload struct {
 
 func (x *ReconnectPayload) Reset() {
 	*x = ReconnectPayload{}
-	mi := &file_ws_proto_msgTypes[10]
+	mi := &file_ws_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -794,7 +874,7 @@ func (x *ReconnectPayload) String() string {
 func (*ReconnectPayload) ProtoMessage() {}
 
 func (x *ReconnectPayload) ProtoReflect() protoreflect.Message {
-	mi := &file_ws_proto_msgTypes[10]
+	mi := &file_ws_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -807,7 +887,7 @@ func (x *ReconnectPayload) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReconnectPayload.ProtoReflect.Descriptor instead.
 func (*ReconnectPayload) Descriptor() ([]byte, []int) {
-	return file_ws_proto_rawDescGZIP(), []int{10}
+	return file_ws_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *ReconnectPayload) GetReconnectDelayMs() int64 {
@@ -835,7 +915,7 @@ type TokenExpiredPayload struct {
 
 func (x *TokenExpiredPayload) Reset() {
 	*x = TokenExpiredPayload{}
-	mi := &file_ws_proto_msgTypes[11]
+	mi := &file_ws_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -847,7 +927,7 @@ func (x *TokenExpiredPayload) String() string {
 func (*TokenExpiredPayload) ProtoMessage() {}
 
 func (x *TokenExpiredPayload) ProtoReflect() protoreflect.Message {
-	mi := &file_ws_proto_msgTypes[11]
+	mi := &file_ws_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -860,7 +940,7 @@ func (x *TokenExpiredPayload) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TokenExpiredPayload.ProtoReflect.Descriptor instead.
 func (*TokenExpiredPayload) Descriptor() ([]byte, []int) {
-	return file_ws_proto_rawDescGZIP(), []int{11}
+	return file_ws_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *TokenExpiredPayload) GetExpiredAt() int64 {
@@ -884,7 +964,7 @@ type ServerAckPayload struct {
 	ClientMsgId   string                 `protobuf:"bytes,2,opt,name=client_msg_id,json=clientMsgId,proto3" json:"client_msg_id,omitempty"`
 	Code          int32                  `protobuf:"varint,3,opt,name=code,proto3" json:"code,omitempty"`
 	Msg           string                 `protobuf:"bytes,4,opt,name=msg,proto3" json:"msg,omitempty"`
-	Status        AckStatus              `protobuf:"varint,5,opt,name=status,proto3,enum=pb.AckStatus" json:"status,omitempty"`
+	Status        AckStatus              `protobuf:"varint,5,opt,name=status,proto3,enum=ws.AckStatus" json:"status,omitempty"`
 	MessageId     int64                  `protobuf:"varint,6,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -892,7 +972,7 @@ type ServerAckPayload struct {
 
 func (x *ServerAckPayload) Reset() {
 	*x = ServerAckPayload{}
-	mi := &file_ws_proto_msgTypes[12]
+	mi := &file_ws_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -904,7 +984,7 @@ func (x *ServerAckPayload) String() string {
 func (*ServerAckPayload) ProtoMessage() {}
 
 func (x *ServerAckPayload) ProtoReflect() protoreflect.Message {
-	mi := &file_ws_proto_msgTypes[12]
+	mi := &file_ws_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -917,7 +997,7 @@ func (x *ServerAckPayload) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ServerAckPayload.ProtoReflect.Descriptor instead.
 func (*ServerAckPayload) Descriptor() ([]byte, []int) {
-	return file_ws_proto_rawDescGZIP(), []int{12}
+	return file_ws_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *ServerAckPayload) GetAckSeq() int64 {
@@ -968,7 +1048,7 @@ const file_ws_proto_rawDesc = "" +
 	"\n" +
 	"\bws.proto\x12\x02ws\"v\n" +
 	"\aWsFrame\x12!\n" +
-	"\x04type\x18\x01 \x01(\x0e2\r.pb.FrameTypeR\x04type\x12\x10\n" +
+	"\x04type\x18\x01 \x01(\x0e2\r.ws.FrameTypeR\x04type\x12\x10\n" +
 	"\x03seq\x18\x02 \x01(\x03R\x03seq\x12\x18\n" +
 	"\apayload\x18\x03 \x01(\fR\apayload\x12\x1c\n" +
 	"\ttimestamp\x18\x04 \x01(\x03R\ttimestamp\"\xba\x01\n" +
@@ -1007,7 +1087,15 @@ const file_ws_proto_rawDesc = "" +
 	"\x05title\x18\x02 \x01(\tR\x05title\x12\x12\n" +
 	"\x04body\x18\x03 \x01(\tR\x04body\x12\x1d\n" +
 	"\n" +
-	"related_id\x18\x04 \x01(\x03R\trelatedId\"U\n" +
+	"related_id\x18\x04 \x01(\x03R\trelatedId\"\xaa\x01\n" +
+	"\x1cPushFriendApplicationPayload\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\x03R\x06userId\x12\x1b\n" +
+	"\tfriend_id\x18\x02 \x01(\x03R\bfriendId\x12\x16\n" +
+	"\x06status\x18\x03 \x01(\tR\x06status\x12\x1d\n" +
+	"\n" +
+	"created_at\x18\x04 \x01(\x03R\tcreatedAt\x12\x1d\n" +
+	"\n" +
+	"updated_at\x18\x05 \x01(\x03R\tupdatedAt\"U\n" +
 	"\x11PushTypingPayload\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\x03R\x06userId\x12'\n" +
 	"\x0fconversation_id\x18\x02 \x01(\x03R\x0econversationId\"h\n" +
@@ -1023,9 +1111,9 @@ const file_ws_proto_rawDesc = "" +
 	"\rclient_msg_id\x18\x02 \x01(\tR\vclientMsgId\x12\x12\n" +
 	"\x04code\x18\x03 \x01(\x05R\x04code\x12\x10\n" +
 	"\x03msg\x18\x04 \x01(\tR\x03msg\x12%\n" +
-	"\x06status\x18\x05 \x01(\x0e2\r.pb.AckStatusR\x06status\x12\x1d\n" +
+	"\x06status\x18\x05 \x01(\x0e2\r.ws.AckStatusR\x06status\x12\x1d\n" +
 	"\n" +
-	"message_id\x18\x06 \x01(\x03R\tmessageId*\xf2\x02\n" +
+	"message_id\x18\x06 \x01(\x03R\tmessageId*\x9a\x03\n" +
 	"\tFrameType\x12\x1a\n" +
 	"\x16FRAME_TYPE_UNSPECIFIED\x10\x00\x12\x1b\n" +
 	"\x17FRAME_TYPE_SEND_MESSAGE\x10\x01\x12\x18\n" +
@@ -1039,12 +1127,13 @@ const file_ws_proto_rawDesc = "" +
 	"\x16FRAME_TYPE_PUSH_TYPING\x10h\x12\x18\n" +
 	"\x14FRAME_TYPE_RECONNECT\x10i\x12\x19\n" +
 	"\x15FRAME_TYPE_SERVER_ACK\x10j\x12\x1c\n" +
-	"\x18FRAME_TYPE_TOKEN_EXPIRED\x10k*s\n" +
+	"\x18FRAME_TYPE_TOKEN_EXPIRED\x10k\x12&\n" +
+	"\"FRAME_TYPE_PUSH_FRIEND_APPLICATION\x10l*s\n" +
 	"\tAckStatus\x12\x1a\n" +
 	"\x16ACK_STATUS_UNSPECIFIED\x10\x00\x12\x17\n" +
 	"\x13ACK_STATUS_ACCEPTED\x10\x01\x12\x17\n" +
 	"\x13ACK_STATUS_REJECTED\x10\x02\x12\x18\n" +
-	"\x14ACK_STATUS_RETRYABLE\x10\x03B-Z+github.com/hellopoisonx/aim/shared/proto/wsb\x06proto3"
+	"\x14ACK_STATUS_RETRYABLE\x10\x03B0Z.github.com/hellopoisonx/aim/shared/proto/ws/pbb\x06proto3"
 
 var (
 	file_ws_proto_rawDescOnce sync.Once
@@ -1059,27 +1148,28 @@ func file_ws_proto_rawDescGZIP() []byte {
 }
 
 var file_ws_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_ws_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
+var file_ws_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
 var file_ws_proto_goTypes = []any{
-	(FrameType)(0),                  // 0: pb.FrameType
-	(AckStatus)(0),                  // 1: pb.AckStatus
-	(*WsFrame)(nil),                 // 2: ws.WsFrame
-	(*SendMessagePayload)(nil),      // 3: ws.SendMessagePayload
-	(*HeartbeatPayload)(nil),        // 4: ws.HeartbeatPayload
-	(*TypingPayload)(nil),           // 5: ws.TypingPayload
-	(*ReadReceiptPayload)(nil),      // 6: ws.ReadReceiptPayload
-	(*ClientAckPayload)(nil),        // 7: ws.ClientAckPayload
-	(*PushMessagePayload)(nil),      // 8: ws.PushMessagePayload
-	(*PushPresencePayload)(nil),     // 9: ws.PushPresencePayload
-	(*PushNotificationPayload)(nil), // 10: ws.PushNotificationPayload
-	(*PushTypingPayload)(nil),       // 11: ws.PushTypingPayload
-	(*ReconnectPayload)(nil),        // 12: ws.ReconnectPayload
-	(*TokenExpiredPayload)(nil),     // 13: ws.TokenExpiredPayload
-	(*ServerAckPayload)(nil),        // 14: ws.ServerAckPayload
+	(FrameType)(0),                       // 0: ws.FrameType
+	(AckStatus)(0),                       // 1: ws.AckStatus
+	(*WsFrame)(nil),                      // 2: ws.WsFrame
+	(*SendMessagePayload)(nil),           // 3: ws.SendMessagePayload
+	(*HeartbeatPayload)(nil),             // 4: ws.HeartbeatPayload
+	(*TypingPayload)(nil),                // 5: ws.TypingPayload
+	(*ReadReceiptPayload)(nil),           // 6: ws.ReadReceiptPayload
+	(*ClientAckPayload)(nil),             // 7: ws.ClientAckPayload
+	(*PushMessagePayload)(nil),           // 8: ws.PushMessagePayload
+	(*PushPresencePayload)(nil),          // 9: ws.PushPresencePayload
+	(*PushNotificationPayload)(nil),      // 10: ws.PushNotificationPayload
+	(*PushFriendApplicationPayload)(nil), // 11: ws.PushFriendApplicationPayload
+	(*PushTypingPayload)(nil),            // 12: ws.PushTypingPayload
+	(*ReconnectPayload)(nil),             // 13: ws.ReconnectPayload
+	(*TokenExpiredPayload)(nil),          // 14: ws.TokenExpiredPayload
+	(*ServerAckPayload)(nil),             // 15: ws.ServerAckPayload
 }
 var file_ws_proto_depIdxs = []int32{
-	0, // 0: ws.WsFrame.type:type_name -> pb.FrameType
-	1, // 1: ws.ServerAckPayload.status:type_name -> pb.AckStatus
+	0, // 0: ws.WsFrame.type:type_name -> ws.FrameType
+	1, // 1: ws.ServerAckPayload.status:type_name -> ws.AckStatus
 	2, // [2:2] is the sub-list for method output_type
 	2, // [2:2] is the sub-list for method input_type
 	2, // [2:2] is the sub-list for extension type_name
@@ -1098,7 +1188,7 @@ func file_ws_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_ws_proto_rawDesc), len(file_ws_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   13,
+			NumMessages:   14,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

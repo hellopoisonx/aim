@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/config"
-	"github.com/hellopoisonx/aim/app/logic/rpc/internal/model"
+	"github.com/hellopoisonx/aim/app/logic/rpc/model"
 	logicsvc "github.com/hellopoisonx/aim/app/logic/rpc/internal/service"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/shared/events"

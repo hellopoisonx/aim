@@ -77,7 +77,7 @@ Kafka:
   PresenceTopic: aim.presence.events
 GatewayRpc:
   Name: gateway.rpc
-  ListenOn: 127.0.0.1:9090
+  ListenOn: 0.0.0.0:9090
   Telemetry:
     Name: gateway.rpc
     Endpoint: jaeger:4318

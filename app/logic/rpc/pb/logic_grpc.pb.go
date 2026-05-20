@@ -467,3 +467,333 @@ var UserService_ServiceDesc = grpc.ServiceDesc{
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "logic.proto",
 }
+
+const (
+	ConversationService_CreateConversation_FullMethodName     = "/logic.ConversationService/CreateConversation"
+	ConversationService_GetConversationHistory_FullMethodName = "/logic.ConversationService/GetConversationHistory"
+	ConversationService_GetConversationMembers_FullMethodName = "/logic.ConversationService/GetConversationMembers"
+)
+
+// ConversationServiceClient is the client API for ConversationService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+type ConversationServiceClient interface {
+	// CreateConversation creates a new conversation (direct or group).
+	CreateConversation(ctx context.Context, in *CreateConversationReq, opts ...grpc.CallOption) (*CreateConversationResp, error)
+	// GetConversationHistory retrieves message history for a conversation with cursor-based pagination.
+	GetConversationHistory(ctx context.Context, in *GetConversationHistoryReq, opts ...grpc.CallOption) (*GetConversationHistoryResp, error)
+	// GetConversationMembers retrieves the member IDs for a conversation.
+	GetConversationMembers(ctx context.Context, in *GetConversationMembersReq, opts ...grpc.CallOption) (*GetConversationMembersResp, error)
+}
+
+type conversationServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewConversationServiceClient(cc grpc.ClientConnInterface) ConversationServiceClient {
+	return &conversationServiceClient{cc}
+}
+
+func (c *conversationServiceClient) CreateConversation(ctx context.Context, in *CreateConversationReq, opts ...grpc.CallOption) (*CreateConversationResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateConversationResp)
+	err := c.cc.Invoke(ctx, ConversationService_CreateConversation_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *conversationServiceClient) GetConversationHistory(ctx context.Context, in *GetConversationHistoryReq, opts ...grpc.CallOption) (*GetConversationHistoryResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetConversationHistoryResp)
+	err := c.cc.Invoke(ctx, ConversationService_GetConversationHistory_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *conversationServiceClient) GetConversationMembers(ctx context.Context, in *GetConversationMembersReq, opts ...grpc.CallOption) (*GetConversationMembersResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetConversationMembersResp)
+	err := c.cc.Invoke(ctx, ConversationService_GetConversationMembers_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// ConversationServiceServer is the server API for ConversationService service.
+// All implementations must embed UnimplementedConversationServiceServer
+// for forward compatibility.
+type ConversationServiceServer interface {
+	// CreateConversation creates a new conversation (direct or group).
+	CreateConversation(context.Context, *CreateConversationReq) (*CreateConversationResp, error)
+	// GetConversationHistory retrieves message history for a conversation with cursor-based pagination.
+	GetConversationHistory(context.Context, *GetConversationHistoryReq) (*GetConversationHistoryResp, error)
+	// GetConversationMembers retrieves the member IDs for a conversation.
+	GetConversationMembers(context.Context, *GetConversationMembersReq) (*GetConversationMembersResp, error)
+	mustEmbedUnimplementedConversationServiceServer()
+}
+
+// UnimplementedConversationServiceServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedConversationServiceServer struct{}
+
+func (UnimplementedConversationServiceServer) CreateConversation(context.Context, *CreateConversationReq) (*CreateConversationResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CreateConversation not implemented")
+}
+func (UnimplementedConversationServiceServer) GetConversationHistory(context.Context, *GetConversationHistoryReq) (*GetConversationHistoryResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetConversationHistory not implemented")
+}
+func (UnimplementedConversationServiceServer) GetConversationMembers(context.Context, *GetConversationMembersReq) (*GetConversationMembersResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetConversationMembers not implemented")
+}
+func (UnimplementedConversationServiceServer) mustEmbedUnimplementedConversationServiceServer() {}
+func (UnimplementedConversationServiceServer) testEmbeddedByValue()                             {}
+
+// UnsafeConversationServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to ConversationServiceServer will
+// result in compilation errors.
+type UnsafeConversationServiceServer interface {
+	mustEmbedUnimplementedConversationServiceServer()
+}
+
+func RegisterConversationServiceServer(s grpc.ServiceRegistrar, srv ConversationServiceServer) {
+	// If the following call pancis, it indicates UnimplementedConversationServiceServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&ConversationService_ServiceDesc, srv)
+}
+
+func _ConversationService_CreateConversation_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateConversationReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ConversationServiceServer).CreateConversation(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ConversationService_CreateConversation_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ConversationServiceServer).CreateConversation(ctx, req.(*CreateConversationReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ConversationService_GetConversationHistory_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetConversationHistoryReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ConversationServiceServer).GetConversationHistory(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ConversationService_GetConversationHistory_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ConversationServiceServer).GetConversationHistory(ctx, req.(*GetConversationHistoryReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ConversationService_GetConversationMembers_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetConversationMembersReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ConversationServiceServer).GetConversationMembers(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ConversationService_GetConversationMembers_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ConversationServiceServer).GetConversationMembers(ctx, req.(*GetConversationMembersReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// ConversationService_ServiceDesc is the grpc.ServiceDesc for ConversationService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var ConversationService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "logic.ConversationService",
+	HandlerType: (*ConversationServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "CreateConversation",
+			Handler:    _ConversationService_CreateConversation_Handler,
+		},
+		{
+			MethodName: "GetConversationHistory",
+			Handler:    _ConversationService_GetConversationHistory_Handler,
+		},
+		{
+			MethodName: "GetConversationMembers",
+			Handler:    _ConversationService_GetConversationMembers_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "logic.proto",
+}
+
+const (
+	FriendshipService_AddFriend_FullMethodName              = "/logic.FriendshipService/AddFriend"
+	FriendshipService_ListFriendApplications_FullMethodName = "/logic.FriendshipService/ListFriendApplications"
+)
+
+// FriendshipServiceClient is the client API for FriendshipService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+type FriendshipServiceClient interface {
+	// AddFriend sends a friend request or accepts an existing pending one.
+	// Idempotent: if already friends (accepted or pending), returns the existing record.
+	AddFriend(ctx context.Context, in *AddFriendReq, opts ...grpc.CallOption) (*AddFriendResp, error)
+	// ListFriendApplications lists pending friend applications received by the user.
+	ListFriendApplications(ctx context.Context, in *ListFriendApplicationsReq, opts ...grpc.CallOption) (*ListFriendApplicationsResp, error)
+}
+
+type friendshipServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewFriendshipServiceClient(cc grpc.ClientConnInterface) FriendshipServiceClient {
+	return &friendshipServiceClient{cc}
+}
+
+func (c *friendshipServiceClient) AddFriend(ctx context.Context, in *AddFriendReq, opts ...grpc.CallOption) (*AddFriendResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AddFriendResp)
+	err := c.cc.Invoke(ctx, FriendshipService_AddFriend_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *friendshipServiceClient) ListFriendApplications(ctx context.Context, in *ListFriendApplicationsReq, opts ...grpc.CallOption) (*ListFriendApplicationsResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListFriendApplicationsResp)
+	err := c.cc.Invoke(ctx, FriendshipService_ListFriendApplications_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// FriendshipServiceServer is the server API for FriendshipService service.
+// All implementations must embed UnimplementedFriendshipServiceServer
+// for forward compatibility.
+type FriendshipServiceServer interface {
+	// AddFriend sends a friend request or accepts an existing pending one.
+	// Idempotent: if already friends (accepted or pending), returns the existing record.
+	AddFriend(context.Context, *AddFriendReq) (*AddFriendResp, error)
+	// ListFriendApplications lists pending friend applications received by the user.
+	ListFriendApplications(context.Context, *ListFriendApplicationsReq) (*ListFriendApplicationsResp, error)
+	mustEmbedUnimplementedFriendshipServiceServer()
+}
+
+// UnimplementedFriendshipServiceServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedFriendshipServiceServer struct{}
+
+func (UnimplementedFriendshipServiceServer) AddFriend(context.Context, *AddFriendReq) (*AddFriendResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method AddFriend not implemented")
+}
+func (UnimplementedFriendshipServiceServer) ListFriendApplications(context.Context, *ListFriendApplicationsReq) (*ListFriendApplicationsResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListFriendApplications not implemented")
+}
+func (UnimplementedFriendshipServiceServer) mustEmbedUnimplementedFriendshipServiceServer() {}
+func (UnimplementedFriendshipServiceServer) testEmbeddedByValue()                           {}
+
+// UnsafeFriendshipServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to FriendshipServiceServer will
+// result in compilation errors.
+type UnsafeFriendshipServiceServer interface {
+	mustEmbedUnimplementedFriendshipServiceServer()
+}
+
+func RegisterFriendshipServiceServer(s grpc.ServiceRegistrar, srv FriendshipServiceServer) {
+	// If the following call pancis, it indicates UnimplementedFriendshipServiceServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&FriendshipService_ServiceDesc, srv)
+}
+
+func _FriendshipService_AddFriend_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AddFriendReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FriendshipServiceServer).AddFriend(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: FriendshipService_AddFriend_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FriendshipServiceServer).AddFriend(ctx, req.(*AddFriendReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _FriendshipService_ListFriendApplications_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListFriendApplicationsReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FriendshipServiceServer).ListFriendApplications(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: FriendshipService_ListFriendApplications_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FriendshipServiceServer).ListFriendApplications(ctx, req.(*ListFriendApplicationsReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// FriendshipService_ServiceDesc is the grpc.ServiceDesc for FriendshipService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var FriendshipService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "logic.FriendshipService",
+	HandlerType: (*FriendshipServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "AddFriend",
+			Handler:    _FriendshipService_AddFriend_Handler,
+		},
+		{
+			MethodName: "ListFriendApplications",
+			Handler:    _FriendshipService_ListFriendApplications_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "logic.proto",
+}

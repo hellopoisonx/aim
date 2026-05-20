@@ -5,7 +5,7 @@ import (
 
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/cache"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/config"
-	"github.com/hellopoisonx/aim/app/logic/rpc/internal/model"
+	"github.com/hellopoisonx/aim/app/logic/rpc/model"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/service"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -14,11 +14,12 @@ import (
 )
 
 type ServiceContext struct {
-	Config            config.Config
-	PermissionChecker service.PermissionChecker
-	UserInfoService   service.UserInfoQuerier
-	DB                model.DBTX
-	QuotaStore        *cache.QuotaStore
+	Config                config.Config
+	PermissionChecker     service.PermissionChecker
+	UserInfoService       service.UserInfoQuerier
+	ConversationService   service.ConversationQuerier
+	DB                    model.DBTX
+	QuotaStore            *cache.QuotaStore
 }
 
 func NewServiceContext(c config.Config) *ServiceContext {
@@ -44,8 +45,9 @@ func NewServiceContext(c config.Config) *ServiceContext {
 			queries := model.New(pool)
 			svcCtx.PermissionChecker = service.NewDatabasePermissionChecker(queries)
 			svcCtx.UserInfoService = service.NewUserInfoService(queries)
+			svcCtx.ConversationService = service.NewConversationService(queries)
 
-			logx.Infof("Postgres connected, using DatabasePermissionChecker and UserInfoService")
+			logx.Infof("Postgres connected, using DatabasePermissionChecker, UserInfoService and ConversationService")
 		}
 	}
 

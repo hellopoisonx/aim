@@ -17,8 +17,12 @@
 - Docker Compose 配置：`docker-compose.yaml` 将 `app/gateway/api/etc/gateway-api.yaml` 挂载到容器内 `/app/etc/gateway-api.yaml`，与 `app/gateway/api/gateway.go` 默认 `-f etc/gateway-api.yaml` 保持一致；`AuthRpc.ServerAddr` 在 Compose 网络内使用 `nacos:8848`。
 - JWT 本地验签：`app/shared/jwt`。
 - `Authorization` header 上下文传递：`app/gateway/api/internal/authctx`。
+- REST Auth 中间件：`app/gateway/api/internal/middleware/auth_middleware.go`，对 `/api/conversations` 和 `/api/users` 路由组生效。中间件通过 `wsauth.ExtractAndValidate` 验签 Bearer token，成功后将 `ws.Identity{UserID, DeviceID}` 注入 `ws.WithIdentity` 上下文。失败返回 401 JSON `{code, msg}`。
+- REST 认证路由组在 `gateway.api` 的 `@server` 块中声明 `middleware: Auth`，goctl 自动在 `routes.go` 中注册 `serverCtx.Auth` 中间件。`ServiceContext.Auth` 字段类型为 `rest.Middleware`，在 `NewServiceContext` 中初始化为 `middleware.NewAuthMiddleware(c.Auth.AccessSecret).Handle`。
+- 逻辑层通过 `ws.IdentityFromContext(l.ctx)` 获取认证用户身份；未认证时返回 `errorx.CodeAuth/"unauthorized"`。
 - REST 统一响应包装：`app/gateway/api/internal/handler/response.go` 通过 go-zero `httpx.SetOkHandler` / `httpx.SetErrorHandlerCtx` 输出 `{code,msg,body}`。
-- 用户查询 REST 代理：`GET /api/users/by-name/:name` 位于 `app/gateway/api/internal/logic/users/get_user_by_name_logic.go`，通过 `LogicRpc` 调用 `aim-logic UserService.SearchUserInfoByNickname` 做 PostgreSQL `pg_trgm`/GIN 支撑的昵称模糊查询，返回 `users(id,email,avatar)` 列表；nickname 不唯一，不要对外返回单个用户详情。`GET /api/users/by-id/:id` 位于 `app/gateway/api/internal/logic/users/get_user_by_id_logic.go`，通过 `UserService.GetUserInfo` 返回单个用户详情。非 gRPC 客户端错误必须记录日志并对外返回 `50000/"internal error"`。
+- 用户 REST 代理：`GET /api/users/by-name/:name` 位于 `app/gateway/api/internal/logic/users/get_user_by_name_logic.go`，通过 `LogicRpc` 调用 `aim-logic UserService.SearchUserInfoByNickname` 做 PostgreSQL `pg_trgm`/GIN 支撑的昵称模糊查询，返回 `users(id,email,avatar)` 列表；nickname 不唯一，不要对外返回单个用户详情。`GET /api/users/by-id/:id` 位于 `app/gateway/api/internal/logic/users/get_user_by_id_logic.go`，通过 `UserService.GetUserInfo` 返回单个用户详情。`POST /api/users/friends/:id` 位于 `app/gateway/api/internal/logic/users/add_friend_logic.go`，从 `ws.IdentityFromContext` 读取认证用户 ID 后调用 `aim-logic FriendshipService.AddFriend`。非 gRPC 客户端错误必须记录日志并对外返回 `50000/"internal error"`。AddFriend 成功后，如目标用户当前连接在本地网关节点，gateway 通过 `GatewayService.PushFriendApplication` 推送 `FRAME_TYPE_PUSH_FRIEND_APPLICATION` 帧通知目标用户。
+- 目录结构决策：gateway 作为 go-zero API 服务保留 `app/gateway/api` 布局；auth/core/logic 作为 go-zero RPC 服务保留 `app/{module}/rpc` 布局。不要为了“统一”机械搬迁 `api/`/`rpc/`，新增 REST handler/logic 应按 `gateway.api` 的 `group` 生成到对应分组目录（如 `internal/handler/users`、`internal/logic/users`）。
 - go-zero OTel/Jaeger：`app/gateway/api/etc/gateway-api.yaml` 的顶层 `Telemetry` 块覆盖 REST 服务，`GatewayRpc.Telemetry` 块覆盖 GatewayService RPC 服务；两者均使用 `Batcher: otlphttp`、`Endpoint: jaeger:4318`、`OtlpHttpPath: /v1/traces`。REST 依赖 `rest.RestConf` 内嵌的 `service.ServiceConf.Telemetry` 自动启动 trace agent，GatewayService 依赖 `zrpc.RpcServerConf.Telemetry` 自动接入 go-zero RPC tracing interceptor。
 - Core → GatewayService 的客户端位于 `app/core/rpc/internal/rpc/gateway_client.go`，不是 go-zero `zrpc` client；该 raw gRPC client 必须保留自定义 unary interceptor 注入 W3C trace metadata，使 `core.kafka.delivery.consume` 后续的 `PushMessage` 调用能进入 GatewayService trace。
 
@@ -40,7 +44,7 @@
 - 配置加载测试：`app/gateway/api/internal/config/config_test.go` 覆盖 REST Telemetry 字段和 `GatewayRpc` zrpc/Telemetry 字段。
 - Nacos 注册/发现适配测试：`app/shared/nacos`，包括 register、deregister、BuildDirectTarget、gRPC resolver 构建、按 target 服务名订阅、空实例回调、实例上线/下线动态更新。
 - 关键覆盖率目标：`app/gateway/api/internal/logic/auth` 保持 80% 以上。
-- 用户查询代理测试：`app/gateway/api/internal/logic/users/get_user_by_name_logic_test.go` 覆盖 by-name 模糊列表响应与 by-id 详情响应。
+- 用户代理测试：`app/gateway/api/internal/logic/users/get_user_by_name_logic_test.go` 覆盖 by-name 模糊列表响应与 by-id 详情响应；好友新增代理逻辑位于 `app/gateway/api/internal/logic/users/add_friend_logic.go`，需保持 `LogicFriendshipClient` 注入和 `ws.Identity` 鉴权路径可测。
 - 关键验证命令：`goctl api validate -api app/gateway/api/gateway.api`、`go mod tidy`、`go build ./...`、`go test -coverprofile=count.out ./...`、`go vet ./...`、`golangci-lint run ./...`。
 
 ## 已实现 WebSocket 端点
@@ -90,6 +94,7 @@ Proto 定义：`shared/proto/gateway/gateway.proto`，生成的 pb 代码在 `sh
 | `PushPresence` | 推送用户在线状态变更通知给目标用户的好友 | aim-core/Presence Service |
 | `KickUser` | 踢下线指定用户设备（多设备管理/被迫下线） | aim-auth / 管理员后台 |
 | `DrainNotify` | 通知网关节点进行优雅迁移（会话 drain） | Nacos 服务发现 / 运维工具 |
+| `PushFriendApplication` | 推送好友申请通知给目标用户 | aim-logic/FriendshipService |
 
 ### PushMessage
 
@@ -116,6 +121,13 @@ Proto 定义：`shared/proto/gateway/gateway.proto`，生成的 pb 代码在 `sh
 - 请求：`DrainNotifyReq`（drain_timeout_ms, gateway_node_id）
 - 响应：`DrainNotifyResp`（affected_count）
 - 内部实现：向所有连接推送 `FRAME_TYPE_RECONNECT` 帧，等待 drain_timeout_ms 后关闭连接
+
+### PushFriendApplication
+
+- 请求：`PushFriendApplicationReq`（user_id, application_id, from_user_id, from_nickname, created_at）
+- 响应：`PushFriendApplicationResp`（success）
+- 内部实现：查找 `user_id` 对应的本地 WebSocket 连接，写入 `FRAME_TYPE_PUSH_FRIEND_APPLICATION` 帧
+- 调用方：aim-logic/FriendshipService 在好友申请创建后通过 gRPC 调用
 
 ## 已实现 CoreRpc 客户端
 

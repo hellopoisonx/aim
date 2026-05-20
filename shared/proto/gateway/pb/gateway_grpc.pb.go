@@ -19,10 +19,11 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	GatewayService_PushMessage_FullMethodName  = "/gateway.GatewayService/PushMessage"
-	GatewayService_PushPresence_FullMethodName = "/gateway.GatewayService/PushPresence"
-	GatewayService_KickUser_FullMethodName     = "/gateway.GatewayService/KickUser"
-	GatewayService_DrainNotify_FullMethodName  = "/gateway.GatewayService/DrainNotify"
+	GatewayService_PushMessage_FullMethodName           = "/gateway.GatewayService/PushMessage"
+	GatewayService_PushPresence_FullMethodName          = "/gateway.GatewayService/PushPresence"
+	GatewayService_PushFriendApplication_FullMethodName = "/gateway.GatewayService/PushFriendApplication"
+	GatewayService_KickUser_FullMethodName              = "/gateway.GatewayService/KickUser"
+	GatewayService_DrainNotify_FullMethodName           = "/gateway.GatewayService/DrainNotify"
 )
 
 // GatewayServiceClient is the client API for GatewayService service.
@@ -41,6 +42,8 @@ type GatewayServiceClient interface {
 	//   - 用户上线 / 下线 / 输入中时，通知其他好友
 	//   - 由 aim-core Presence Service 调用，投递到所有在线好友的网关节点
 	PushPresence(ctx context.Context, in *PushPresenceReq, opts ...grpc.CallOption) (*PushPresenceResp, error)
+	// PushFriendApplication pushes a friend application to connected clients.
+	PushFriendApplication(ctx context.Context, in *PushFriendApplicationReq, opts ...grpc.CallOption) (*PushFriendApplicationResp, error)
 	// KickUser — 踢出用户连接
 	//
 	// 使用场景：
@@ -83,6 +86,16 @@ func (c *gatewayServiceClient) PushPresence(ctx context.Context, in *PushPresenc
 	return out, nil
 }
 
+func (c *gatewayServiceClient) PushFriendApplication(ctx context.Context, in *PushFriendApplicationReq, opts ...grpc.CallOption) (*PushFriendApplicationResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PushFriendApplicationResp)
+	err := c.cc.Invoke(ctx, GatewayService_PushFriendApplication_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *gatewayServiceClient) KickUser(ctx context.Context, in *KickUserReq, opts ...grpc.CallOption) (*KickUserResp, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(KickUserResp)
@@ -119,6 +132,8 @@ type GatewayServiceServer interface {
 	//   - 用户上线 / 下线 / 输入中时，通知其他好友
 	//   - 由 aim-core Presence Service 调用，投递到所有在线好友的网关节点
 	PushPresence(context.Context, *PushPresenceReq) (*PushPresenceResp, error)
+	// PushFriendApplication pushes a friend application to connected clients.
+	PushFriendApplication(context.Context, *PushFriendApplicationReq) (*PushFriendApplicationResp, error)
 	// KickUser — 踢出用户连接
 	//
 	// 使用场景：
@@ -146,6 +161,9 @@ func (UnimplementedGatewayServiceServer) PushMessage(context.Context, *PushMessa
 }
 func (UnimplementedGatewayServiceServer) PushPresence(context.Context, *PushPresenceReq) (*PushPresenceResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PushPresence not implemented")
+}
+func (UnimplementedGatewayServiceServer) PushFriendApplication(context.Context, *PushFriendApplicationReq) (*PushFriendApplicationResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method PushFriendApplication not implemented")
 }
 func (UnimplementedGatewayServiceServer) KickUser(context.Context, *KickUserReq) (*KickUserResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method KickUser not implemented")
@@ -210,6 +228,24 @@ func _GatewayService_PushPresence_Handler(srv interface{}, ctx context.Context, 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _GatewayService_PushFriendApplication_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PushFriendApplicationReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GatewayServiceServer).PushFriendApplication(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GatewayService_PushFriendApplication_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GatewayServiceServer).PushFriendApplication(ctx, req.(*PushFriendApplicationReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _GatewayService_KickUser_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(KickUserReq)
 	if err := dec(in); err != nil {
@@ -260,6 +296,10 @@ var GatewayService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "PushPresence",
 			Handler:    _GatewayService_PushPresence_Handler,
+		},
+		{
+			MethodName: "PushFriendApplication",
+			Handler:    _GatewayService_PushFriendApplication_Handler,
 		},
 		{
 			MethodName: "KickUser",

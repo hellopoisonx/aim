@@ -29,6 +29,9 @@ service GatewayService {
   //   - 由 aim-core Presence Service 调用，投递到所有在线好友的网关节点
   rpc PushPresence(PushPresenceReq) returns (PushPresenceResp);
 
+  // PushFriendApplication pushes a friend application to connected clients.
+  rpc PushFriendApplication(PushFriendApplicationReq) returns (PushFriendApplicationResp);
+
   // KickUser — 踢出用户连接
   //
   // 使用场景：
@@ -81,6 +84,24 @@ message PushPresenceReq {
 // PushPresenceResp — 推送用户在线状态响应
 message PushPresenceResp {
   bool success = 1;  // 是否成功推送
+}
+
+
+// ============================================================
+// PushFriendApplication - friend application push
+// ============================================================
+
+message PushFriendApplicationReq {
+  int64 target_user_id = 1;
+  int64 user_id = 2;
+  int64 friend_id = 3;
+  string status = 4;
+  int64 created_at = 5;
+  int64 updated_at = 6;
+}
+
+message PushFriendApplicationResp {
+  bool success = 1;
 }
 
 // ============================================================

@@ -50,7 +50,8 @@ info:
 
     ### 认证方式
 
-    - **REST API**: 请求体传递认证参数（邮箱 + 密码），成功返回 JWT 令牌对
+    - **公开 REST API**: 注册、登录、刷新令牌通过请求体传递参数，成功返回 JWT 令牌对
+    - **受保护 REST API**: `/api/users/*`、`/api/conversations/*` 在 `Authorization` 头中携带 `Bearer <access_token>`
     - **WebSocket**: 在握手请求的 `Authorization` 头中携带 `Bearer <access_token>`
     - **令牌刷新**: 使用 `/api/auth/refresh` 接口，传入 `refresh_token` 获取新的令牌对
     - **登出**: 调用 `/api/auth/logout` 时需在 `Authorization` 头中携带当前 `access_token`
@@ -68,6 +69,8 @@ tags:
     description: 用户注册、登录、令牌刷新与登出相关接口
   - name: 用户
     description: 用户资料查询相关接口
+  - name: 会话
+    description: 会话创建与历史消息查询相关接口
   - name: WebSocket
     description: WebSocket 长连接端点，用于实时消息收发与状态同步
 
@@ -299,7 +302,11 @@ paths:
         通过用户昵称模糊查询用户列表。nickname 不唯一，该接口返回匹配用户列表，列表项仅包含 `id`、`email`、`avatar`。
 
         网关将请求代理到 aim-logic 的 `UserService.SearchUserInfoByNickname` RPC，底层使用 PostgreSQL `pg_trgm`/GIN 索引支撑模糊匹配。
+
+        该接口受 `Auth` 中间件保护，需要在请求头中携带 `Authorization: Bearer <access_token>`。
       operationId: getUserByName
+      security:
+        - BearerAuth: []
       parameters:
         - name: name
           in: path
@@ -354,7 +361,11 @@ paths:
         通过用户 ID 查询单个用户资料详情。
 
         网关将请求代理到 aim-logic 的 `UserService.GetUserInfo` RPC。
+
+        该接口受 `Auth` 中间件保护，需要在请求头中携带 `Authorization: Bearer <access_token>`。
       operationId: getUserById
+      security:
+        - BearerAuth: []
       parameters:
         - name: id
           in: path
@@ -402,6 +413,213 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
 
+
+  /api/friends/applications:
+    get:
+      tags:
+        - ??
+      summary: ?????????
+      description: |
+        ??????????? "pending" ??????????
+        ???? `Auth` ??????????????? `Authorization: Bearer <access_token>`?
+      operationId: listFriendApplications
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: ????
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ResponseEnvelope"
+                  - type: object
+                    properties:
+                      body:
+                        $ref: "#/components/schemas/ListFriendApplicationsResponse"
+              example:
+                code: 0
+                msg: "ok"
+                body:
+                  applications:
+                    - user_id: 1002
+                      friend_id: 1001
+                      status: "pending"
+                      created_at: 1715678900000
+                      updated_at: 1715678900000
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/conversations:
+    post:
+      tags:
+        - 会话
+      summary: 创建会话
+      description: |
+        创建新的单聊或群聊会话。
+
+        该接口受 `Auth` 中间件保护，需要在请求头中携带 `Authorization: Bearer <access_token>`。网关从 JWT 中解析创建者 `user_id`，并将请求代理到 aim-logic 的 `ConversationService.CreateConversation` RPC。
+
+        - `conversation_type`: `direct` 表示单聊，`group` 表示群聊
+        - `member_ids`: 会话成员用户 ID 列表，至少包含 1 个成员
+      operationId: createConversation
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateConversationRequest"
+            examples:
+              单聊:
+                summary: 创建单聊会话
+                value:
+                  conversation_type: "direct"
+                  member_ids: [1002]
+              群聊:
+                summary: 创建群聊会话
+                value:
+                  conversation_type: "group"
+                  member_ids: [1002, 1003, 1004]
+      responses:
+        "200":
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ResponseEnvelope"
+                  - type: object
+                    properties:
+                      body:
+                        $ref: "#/components/schemas/CreateConversationResponse"
+              example:
+                code: 0
+                msg: "ok"
+                body:
+                  conversation_id: 12345
+                  conversation_type: "direct"
+                  is_active: true
+                  created_at: 1715678900000
+                  member_ids: [1001, 1002]
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: 成员用户或相关资源不存在
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                code: 40400
+                msg: "user not found"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/conversations/history/{id}:
+    get:
+      tags:
+        - 会话
+      summary: 查询会话历史消息
+      description: |
+        按会话 ID 拉取历史消息，使用游标分页返回。
+
+        该接口受 `Auth` 中间件保护，需要在请求头中携带 `Authorization: Bearer <access_token>`。网关将请求代理到 aim-logic 的 `ConversationService.GetConversationHistory` RPC。
+
+        首次查询可省略 `cursor_created_at` 和 `cursor_id`；后续分页使用上一次响应中的 `next_cursor_created_at` 与 `next_cursor_id`。
+      operationId: getConversationHistory
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: 会话 ID
+          schema:
+            type: integer
+            format: int64
+            example: 12345
+        - name: cursor_created_at
+          in: query
+          required: false
+          description: 游标消息创建时间（Unix 毫秒）；首次查询可省略或传 0
+          schema:
+            type: integer
+            format: int64
+            default: 0
+            example: 1715678900000
+        - name: cursor_id
+          in: query
+          required: false
+          description: 游标消息 ID；首次查询可省略或传 0
+          schema:
+            type: integer
+            format: int64
+            default: 0
+            example: 98765
+        - name: limit
+          in: query
+          required: false
+          description: 返回条数，默认 50，服务端最大限制为 100
+          schema:
+            type: integer
+            format: int32
+            default: 50
+            minimum: 1
+            maximum: 100
+            example: 50
+      responses:
+        "200":
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ResponseEnvelope"
+                  - type: object
+                    properties:
+                      body:
+                        $ref: "#/components/schemas/GetConversationHistoryResponse"
+              example:
+                code: 0
+                msg: "ok"
+                body:
+                  messages:
+                    - id: 98765
+                      conversation_id: 12345
+                      sender_id: 1001
+                      message_type: "text"
+                      content: "Hello!"
+                      client_msg_id: "msg-uuid-001"
+                      created_at: 1715678900000
+                  next_cursor_created_at: 1715678900000
+                  next_cursor_id: 98765
+                  has_more: true
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: 会话不存在
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                code: 40400
+                msg: "conversation not found"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
   /ws:
     get:
       tags:
@@ -424,6 +642,7 @@ paths:
         - 每个 `user_id + device_id` 组合只能维持一个 WebSocket 连接
         - 连接空闲超过心跳周期（默认 30 秒）未收到客户端心跳帧，服务端将断开连接
         - 令牌过期时服务端主动推送 `TOKEN_EXPIRED` 帧后断开，客户端需重新登录获取新令牌
+        - 客户端必须使用二进制 Protobuf 帧；文本帧和 JSON 帧不属于该协议
 
         ## WebSocket 帧协议（Protobuf 二进制）
 
@@ -456,7 +675,7 @@ paths:
         ```json
         {
           "conversation_id": 12345,
-          "message_type": 1,
+          "message_type": "text",
           "content": "Hello!",
           "client_msg_id": "msg-uuid-001",
           "mentions": []
@@ -471,12 +690,21 @@ paths:
           "client_msg_id": "msg-uuid-001",
           "code": 0,
           "msg": "",
-          "status": 0,
+          "status": 1,
           "message_id": 56789
         }
         ```
 
-        `status` 取值: `0` = 已接受, `1` = 已拒绝, `2` = 可重试
+        `status` 取值: `0` = 未指定, `1` = 已接受, `2` = 已拒绝, `3` = 可重试
+
+        ### TOKEN_EXPIRED 帧载荷
+
+        ```json
+        {
+          "expired_at": 1715678900000,
+          "reason": "access_token_expired"
+        }
+        ```
 
         ### 认证失败
 
@@ -788,6 +1016,125 @@ components:
           description: 头像 URL
           example: "https://implement.me"
 
+    # ========== 会话 ==========
+
+    CreateConversationRequest:
+      type: object
+      description: 创建会话请求
+      required:
+        - conversation_type
+        - member_ids
+      properties:
+        conversation_type:
+          type: string
+          description: 会话类型
+          enum:
+            - direct
+            - group
+          example: "direct"
+        member_ids:
+          type: array
+          description: 会话成员用户 ID 列表
+          minItems: 1
+          items:
+            type: integer
+            format: int64
+          example: [1002]
+
+    CreateConversationResponse:
+      type: object
+      description: 创建会话响应
+      properties:
+        conversation_id:
+          type: integer
+          format: int64
+          description: 会话 ID
+          example: 12345
+        conversation_type:
+          type: string
+          description: 会话类型
+          enum:
+            - direct
+            - group
+          example: "direct"
+        is_active:
+          type: boolean
+          description: 会话是否处于活跃状态
+          example: true
+        created_at:
+          type: integer
+          format: int64
+          description: 创建时间（Unix 毫秒）
+          example: 1715678900000
+        member_ids:
+          type: array
+          description: 会话成员用户 ID 列表
+          items:
+            type: integer
+            format: int64
+          example: [1001, 1002]
+
+    GetConversationHistoryResponse:
+      type: object
+      description: 查询会话历史消息响应
+      properties:
+        messages:
+          type: array
+          description: 历史消息列表
+          items:
+            $ref: "#/components/schemas/MessageItem"
+        next_cursor_created_at:
+          type: integer
+          format: int64
+          description: 下一页游标消息创建时间（Unix 毫秒）；无更多数据时为 0
+          example: 1715678900000
+        next_cursor_id:
+          type: integer
+          format: int64
+          description: 下一页游标消息 ID；无更多数据时为 0
+          example: 98765
+        has_more:
+          type: boolean
+          description: 是否还有更多历史消息
+          example: true
+
+    MessageItem:
+      type: object
+      description: 历史消息列表项
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: 消息 ID
+          example: 98765
+        conversation_id:
+          type: integer
+          format: int64
+          description: 会话 ID
+          example: 12345
+        sender_id:
+          type: integer
+          format: int64
+          description: 发送者用户 ID
+          example: 1001
+        message_type:
+          type: string
+          description: 消息类型
+          example: "text"
+        content:
+          type: string
+          description: 消息内容；复杂消息可为 JSON 字符串
+          example: "Hello!"
+        client_msg_id:
+          type: string
+          description: 客户端消息 ID，可用于幂等与本地消息关联
+          example: "msg-uuid-001"
+        created_at:
+          type: integer
+          format: int64
+          description: 创建时间（Unix 毫秒）
+          example: 1715678900000
+
   responses:
     BadRequest:
       description: 请求参数错误
@@ -808,6 +1155,26 @@ components:
           example:
             code: 40100
             msg: "认证失败"
+
+    Forbidden:
+      description: 权限不足
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            code: 40300
+            msg: "权限不足"
+
+    Conflict:
+      description: 资源冲突
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            code: 40900
+            msg: "资源冲突"
 
     InternalError:
       description: 服务器内部错误
