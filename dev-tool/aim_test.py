@@ -16,6 +16,7 @@ Usage:
   python aim_test.py friend-reject --id 1
   python aim_test.py friend-list
   python aim_test.py friend-applications
+  python aim_test.py conversation-list
   python aim_test.py conversation-create --member-id 2
   python aim_test.py history --conversation-id 1
   python aim_test.py ws-connect
@@ -276,6 +277,9 @@ class RESTClient:
             params.append(f"limit={limit}")
         query = "?" + "&".join(params) if params else ""
         return self._get(f"/api/conversations/history/{conversation_id}{query}")
+
+    def list_conversations(self) -> list:
+        return self._get("/api/conversations")["conversations"]
 
 
 # ── WebSocket Client ────────────────────────────────────────────────────────────
@@ -577,6 +581,16 @@ def cmd_create_conversation(args):
         print(f"✗ Create conversation failed: {e}")
 
 
+def cmd_list_conversations(args):
+    client = RESTClient()
+    try:
+        convs = client.list_conversations()
+        print(f"✓ {len(convs)} conversation(s):")
+        print_json(convs)
+    except APIError as e:
+        print(f"✗ List conversations failed: {e}")
+
+
 def cmd_history(args):
     client = RESTClient()
     try:
@@ -695,6 +709,7 @@ def _print_help():
 │  friend-accept <id>     friend-reject <id>        │
 │  friend-list                                       │
 ├─ Conversations ──────────────────────────────────┤
+│  conv-list                                         │
 │  conv-create <member_id>  (or comma-sep for group) │
 │  history <conversation_id> [limit]                │
 ├─ WebSocket ───────────────────────────────────────┤
@@ -825,6 +840,10 @@ Type 'help' for commands, 'quit' to exit.
                 friends = client.list_friends()
                 print(f"✓ {len(friends)} friend(s):")
                 print_json(friends)
+            elif cmd == "conv-list" or cmd == "list-conversations" or cmd == "conversations":
+                convs = client.list_conversations()
+                print(f"✓ {len(convs)} conversation(s):")
+                print_json(convs)
             elif cmd == "conv-create" and len(parts) >= 2:
                 member_ids = [int(m.strip()) for m in parts[1].split(",")]
                 conv = client.create_conversation(member_ids)
@@ -1085,6 +1104,7 @@ Examples:
     sub.add_parser("friend-list", help="List friends")
 
     # Conversations
+    p = sub.add_parser("conv-list", help="List conversations")
     p = sub.add_parser("conv-create", help="Create conversation")
     p.add_argument("--member-id", type=int, help="Single member ID")
     p.add_argument("--member-ids", help="Comma-separated member IDs (e.g. 2,3,4)")
@@ -1131,6 +1151,7 @@ Examples:
         "friend-accept": cmd_accept_friend,
         "friend-reject": cmd_reject_friend,
         "friend-list": cmd_friend_list,
+        "conv-list": cmd_list_conversations,
         "conv-create": cmd_create_conversation,
         "history": cmd_history,
         "ws-connect": cmd_ws_connect,

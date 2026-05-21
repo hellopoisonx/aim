@@ -472,6 +472,7 @@ const (
 	ConversationService_CreateConversation_FullMethodName     = "/logic.ConversationService/CreateConversation"
 	ConversationService_GetConversationHistory_FullMethodName = "/logic.ConversationService/GetConversationHistory"
 	ConversationService_GetConversationMembers_FullMethodName = "/logic.ConversationService/GetConversationMembers"
+	ConversationService_GetUserConversations_FullMethodName   = "/logic.ConversationService/GetUserConversations"
 )
 
 // ConversationServiceClient is the client API for ConversationService service.
@@ -484,6 +485,8 @@ type ConversationServiceClient interface {
 	GetConversationHistory(ctx context.Context, in *GetConversationHistoryReq, opts ...grpc.CallOption) (*GetConversationHistoryResp, error)
 	// GetConversationMembers retrieves the member IDs for a conversation.
 	GetConversationMembers(ctx context.Context, in *GetConversationMembersReq, opts ...grpc.CallOption) (*GetConversationMembersResp, error)
+	// GetUserConversations retrieves all conversations the user is a member of.
+	GetUserConversations(ctx context.Context, in *GetUserConversationsReq, opts ...grpc.CallOption) (*GetUserConversationsResp, error)
 }
 
 type conversationServiceClient struct {
@@ -524,6 +527,16 @@ func (c *conversationServiceClient) GetConversationMembers(ctx context.Context, 
 	return out, nil
 }
 
+func (c *conversationServiceClient) GetUserConversations(ctx context.Context, in *GetUserConversationsReq, opts ...grpc.CallOption) (*GetUserConversationsResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetUserConversationsResp)
+	err := c.cc.Invoke(ctx, ConversationService_GetUserConversations_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ConversationServiceServer is the server API for ConversationService service.
 // All implementations must embed UnimplementedConversationServiceServer
 // for forward compatibility.
@@ -534,6 +547,8 @@ type ConversationServiceServer interface {
 	GetConversationHistory(context.Context, *GetConversationHistoryReq) (*GetConversationHistoryResp, error)
 	// GetConversationMembers retrieves the member IDs for a conversation.
 	GetConversationMembers(context.Context, *GetConversationMembersReq) (*GetConversationMembersResp, error)
+	// GetUserConversations retrieves all conversations the user is a member of.
+	GetUserConversations(context.Context, *GetUserConversationsReq) (*GetUserConversationsResp, error)
 	mustEmbedUnimplementedConversationServiceServer()
 }
 
@@ -552,6 +567,9 @@ func (UnimplementedConversationServiceServer) GetConversationHistory(context.Con
 }
 func (UnimplementedConversationServiceServer) GetConversationMembers(context.Context, *GetConversationMembersReq) (*GetConversationMembersResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetConversationMembers not implemented")
+}
+func (UnimplementedConversationServiceServer) GetUserConversations(context.Context, *GetUserConversationsReq) (*GetUserConversationsResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetUserConversations not implemented")
 }
 func (UnimplementedConversationServiceServer) mustEmbedUnimplementedConversationServiceServer() {}
 func (UnimplementedConversationServiceServer) testEmbeddedByValue()                             {}
@@ -628,6 +646,24 @@ func _ConversationService_GetConversationMembers_Handler(srv interface{}, ctx co
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ConversationService_GetUserConversations_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetUserConversationsReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ConversationServiceServer).GetUserConversations(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ConversationService_GetUserConversations_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ConversationServiceServer).GetUserConversations(ctx, req.(*GetUserConversationsReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ConversationService_ServiceDesc is the grpc.ServiceDesc for ConversationService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -646,6 +682,10 @@ var ConversationService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetConversationMembers",
 			Handler:    _ConversationService_GetConversationMembers_Handler,
+		},
+		{
+			MethodName: "GetUserConversations",
+			Handler:    _ConversationService_GetUserConversations_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

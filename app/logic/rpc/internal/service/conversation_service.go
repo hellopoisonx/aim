@@ -28,6 +28,7 @@ type ConversationQuerier interface {
 	GetConversationHistory(ctx context.Context, conversationID int64, cursorCreatedAt int64, cursorID int64, limit int32) ([]model.Message, error)
 	GetConversationHistoryInitial(ctx context.Context, conversationID int64, limit int32) ([]model.Message, error)
 	GetConversationMembers(ctx context.Context, conversationID int64) ([]model.ConversationMember, error)
+	GetUserConversations(ctx context.Context, userID int64) ([]model.Conversation, error)
 }
 
 // ConversationStore defines the store interface needed by ConversationService.
@@ -36,6 +37,7 @@ type ConversationStore interface {
 	GetConversation(ctx context.Context, id int64) (model.Conversation, error)
 	AddConversationMembers(ctx context.Context, arg model.AddConversationMembersParams) (int64, error)
 	GetConversationMembers(ctx context.Context, conversationID int64) ([]model.ConversationMember, error)
+	GetConversationsByUserID(ctx context.Context, userID int64) ([]model.Conversation, error)
 	ListMessagesByConversation(ctx context.Context, arg model.ListMessagesByConversationParams) ([]model.Message, error)
 	ListMessagesByConversationInitial(ctx context.Context, arg model.ListMessagesByConversationInitialParams) ([]model.Message, error)
 	CountMessagesByConversation(ctx context.Context, conversationID int64) (int64, error)
@@ -224,6 +226,20 @@ func (s ConversationService) IsMember(ctx context.Context, conversationID int64,
 	}
 
 	return false, nil
+}
+
+// GetUserConversations retrieves all conversations the user is a member of.
+func (s ConversationService) GetUserConversations(ctx context.Context, userID int64) ([]model.Conversation, error) {
+	conversations, err := s.store.GetConversationsByUserID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	if conversations == nil {
+		return []model.Conversation{}, nil
+	}
+
+	return conversations, nil
 }
 
 // ConversationToGRPCError converts domain errors to gRPC status errors.

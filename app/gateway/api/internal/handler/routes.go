@@ -53,6 +53,11 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				},
 				{
 					Method:  http.MethodGet,
+					Path:    "/",
+					Handler: conversations.ListConversationsHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodGet,
 					Path:    "/history/:id",
 					Handler: conversations.GetConversationHistoryHandler(serverCtx),
 				},

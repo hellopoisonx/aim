@@ -19,6 +19,14 @@ type AddFriendResponse struct {
 	Friendship FriendshipItem `json:"friendship"`
 }
 
+type ConversationItem struct {
+	ConversationId   int64   `json:"conversation_id"`
+	ConversationType string  `json:"conversation_type"`
+	IsActive         bool    `json:"is_active"`
+	CreatedAt        int64   `json:"created_at"`
+	MemberIds        []int64 `json:"member_ids"`
+}
+
 type CreateConversationRequest struct {
 	ConversationType string  `json:"conversation_type" validate:"required,oneof=direct group"`
 	MemberIds        []int64 `json:"member_ids" validate:"required,min=1"`
@@ -68,6 +76,10 @@ type GetUserByNameRequest struct {
 
 type GetUserByNameResponse struct {
 	Users []UserListItem `json:"users"`
+}
+
+type ListConversationsResponse struct {
+	Conversations []ConversationItem `json:"conversations"`
 }
 
 type ListFriendApplicationsResponse struct {

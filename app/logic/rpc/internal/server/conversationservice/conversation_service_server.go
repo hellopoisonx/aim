@@ -40,3 +40,9 @@ func (s *ConversationServiceServer) GetConversationMembers(ctx context.Context, 
 	l := conversationservicelogic.NewGetConversationMembersLogic(ctx, s.svcCtx)
 	return l.GetConversationMembers(in)
 }
+
+// GetUserConversations retrieves all conversations the user is a member of.
+func (s *ConversationServiceServer) GetUserConversations(ctx context.Context, in *pb.GetUserConversationsReq) (*pb.GetUserConversationsResp, error) {
+	l := conversationservicelogic.NewGetUserConversationsLogic(ctx, s.svcCtx)
+	return l.GetUserConversations(in)
+}

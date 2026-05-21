@@ -66,6 +66,18 @@ service ConversationService {
   rpc CreateConversation(CreateConversationReq) returns (CreateConversationResp);
   // GetConversationHistory retrieves message history for a conversation with cursor-based pagination.
   rpc GetConversationHistory(GetConversationHistoryReq) returns (GetConversationHistoryResp);
+  // GetConversationMembers retrieves the member IDs for a conversation.
+  rpc GetConversationMembers(GetConversationMembersReq) returns (GetConversationMembersResp);
+  // GetUserConversations retrieves all conversations the user is a member of.
+  rpc GetUserConversations(GetUserConversationsReq) returns (GetUserConversationsResp);
+}
+
+message GetUserConversationsReq {
+  int64 user_id = 1;
+}
+
+message GetUserConversationsResp {
+  repeated ConversationResponse conversations = 1;
 }
 ```
 
@@ -83,6 +95,22 @@ service ConversationService {
 - 响应：`GetConversationHistoryResp`（messages 列表、next_cursor_created_at、next_cursor_id、has_more）
 - 分页规则：当 `cursor_created_at=0 && cursor_id=0` 时返回最新一页；否则按 `(created_at, id)` 游标向前翻页；limit 默认 50，最大 100
 - 服务层：`ConversationService.GetConversationHistory` → sqlc `ListMessagesByConversationInitial` 或 `ListMessagesByConversation`
+- 错误码：40000（conversation_id 必须正数）、40400（会话不存在）、50000（基础设施错误）
+
+### GetUserConversations
+
+- 请求：`GetUserConversationsReq`（user_id）
+- 响应：`GetUserConversationsResp`（conversations 列表，每个元素为 `ConversationResponse` 类型）
+- 服务层：`ConversationService.GetUserConversations` → sqlc `GetConversationsByUserID`
+- 行为：查询 `conversation_members` 表关联 `conversations` 表，返回用户参与的所有会话（按 `created_at DESC` 排序）
+- 错误码：40000（user_id 必须正数）、50000（基础设施错误）
+
+### GetConversationMembers
+
+- 请求：`GetConversationMembersReq`（conversation_id）
+- 响应：`GetConversationMembersResp`（conversation_id 和 member_ids 列表）
+- 服务层：`ConversationService.GetConversationMembers` → sqlc `GetConversationMembers`
+- 行为：查询指定会话的成员列表
 - 错误码：40000（conversation_id 必须正数）、40400（会话不存在）、50000（基础设施错误）
 
 ### 数据与查询

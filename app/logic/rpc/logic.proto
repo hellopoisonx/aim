@@ -120,6 +120,8 @@ service ConversationService {
   rpc GetConversationHistory(GetConversationHistoryReq) returns (GetConversationHistoryResp);
   // GetConversationMembers retrieves the member IDs for a conversation.
   rpc GetConversationMembers(GetConversationMembersReq) returns (GetConversationMembersResp);
+  // GetUserConversations retrieves all conversations the user is a member of.
+  rpc GetUserConversations(GetUserConversationsReq) returns (GetUserConversationsResp);
 }
 
 message CreateConversationReq {
@@ -147,6 +149,14 @@ message GetConversationMembersReq {
 message GetConversationMembersResp {
   int64 conversation_id = 1;
   repeated int64 member_ids = 2;
+}
+
+message GetUserConversationsReq {
+  int64 user_id = 1;
+}
+
+message GetUserConversationsResp {
+  repeated ConversationResponse conversations = 1;
 }
 
 message GetConversationHistoryReq {

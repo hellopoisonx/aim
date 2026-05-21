@@ -14,12 +14,14 @@ import (
 )
 
 type (
-	CreateConversationReq      = pb.CreateConversationReq
-	CreateConversationResp     = pb.CreateConversationResp
-	GetConversationHistoryReq  = pb.GetConversationHistoryReq
-	GetConversationHistoryResp = pb.GetConversationHistoryResp
-	GetConversationMembersReq  = pb.GetConversationMembersReq
-	GetConversationMembersResp = pb.GetConversationMembersResp
+	CreateConversationReq       = pb.CreateConversationReq
+	CreateConversationResp      = pb.CreateConversationResp
+	GetConversationHistoryReq   = pb.GetConversationHistoryReq
+	GetConversationHistoryResp  = pb.GetConversationHistoryResp
+	GetConversationMembersReq   = pb.GetConversationMembersReq
+	GetConversationMembersResp  = pb.GetConversationMembersResp
+	GetUserConversationsReq     = pb.GetUserConversationsReq
+	GetUserConversationsResp    = pb.GetUserConversationsResp
 
 	ConversationService interface {
 		// CreateConversation creates a new conversation (direct or group).
@@ -28,6 +30,8 @@ type (
 		GetConversationHistory(ctx context.Context, in *GetConversationHistoryReq, opts ...grpc.CallOption) (*GetConversationHistoryResp, error)
 		// GetConversationMembers retrieves the member IDs for a conversation.
 		GetConversationMembers(ctx context.Context, in *GetConversationMembersReq, opts ...grpc.CallOption) (*GetConversationMembersResp, error)
+		// GetUserConversations retrieves all conversations the user is a member of.
+		GetUserConversations(ctx context.Context, in *GetUserConversationsReq, opts ...grpc.CallOption) (*GetUserConversationsResp, error)
 	}
 
 	defaultConversationService struct {
@@ -57,4 +61,10 @@ func (m *defaultConversationService) GetConversationHistory(ctx context.Context,
 func (m *defaultConversationService) GetConversationMembers(ctx context.Context, in *GetConversationMembersReq, opts ...grpc.CallOption) (*GetConversationMembersResp, error) {
 	client := pb.NewConversationServiceClient(m.cli.Conn())
 	return client.GetConversationMembers(ctx, in, opts...)
+}
+
+// GetUserConversations retrieves all conversations the user is a member of.
+func (m *defaultConversationService) GetUserConversations(ctx context.Context, in *GetUserConversationsReq, opts ...grpc.CallOption) (*GetUserConversationsResp, error) {
+	client := pb.NewConversationServiceClient(m.cli.Conn())
+	return client.GetUserConversations(ctx, in, opts...)
 }

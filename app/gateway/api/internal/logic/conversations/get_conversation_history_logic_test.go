@@ -22,6 +22,7 @@ type mockGetHistoryConversationService struct {
 	CreateConversationFunc     func(ctx context.Context, in *conversationservice.CreateConversationReq) (*conversationservice.CreateConversationResp, error)
 	GetConversationHistoryFunc func(ctx context.Context, in *conversationservice.GetConversationHistoryReq) (*conversationservice.GetConversationHistoryResp, error)
 	GetConversationMembersFunc func(ctx context.Context, in *conversationservice.GetConversationMembersReq) (*conversationservice.GetConversationMembersResp, error)
+	GetUserConversationsFunc   func(ctx context.Context, in *conversationservice.GetUserConversationsReq) (*conversationservice.GetUserConversationsResp, error)
 }
 
 func (m *mockGetHistoryConversationService) CreateConversation(ctx context.Context, in *conversationservice.CreateConversationReq, opts ...grpc.CallOption) (*conversationservice.CreateConversationResp, error) {
@@ -43,6 +44,13 @@ func (m *mockGetHistoryConversationService) GetConversationMembers(ctx context.C
 		return m.GetConversationMembersFunc(ctx, in)
 	}
 	return nil, errors.New("GetConversationMembers not implemented")
+}
+
+func (m *mockGetHistoryConversationService) GetUserConversations(ctx context.Context, in *conversationservice.GetUserConversationsReq, opts ...grpc.CallOption) (*conversationservice.GetUserConversationsResp, error) {
+	if m.GetUserConversationsFunc != nil {
+		return m.GetUserConversationsFunc(ctx, in)
+	}
+	return nil, errors.New("GetUserConversations not implemented")
 }
 
 func TestGetConversationHistory(t *testing.T) {

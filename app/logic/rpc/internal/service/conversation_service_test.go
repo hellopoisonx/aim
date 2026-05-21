@@ -83,6 +83,19 @@ func (f *fakeConversationStore) GetConversationMembers(ctx context.Context, conv
 	return f.members[conversationID], nil
 }
 
+func (f *fakeConversationStore) GetConversationsByUserID(ctx context.Context, userID int64) ([]model.Conversation, error) {
+	var result []model.Conversation
+	for convID, conv := range f.conversations {
+		for _, m := range f.members[convID] {
+			if m.UserID == userID {
+				result = append(result, conv)
+				break
+			}
+		}
+	}
+	return result, nil
+}
+
 func (f *fakeConversationStore) ListMessagesByConversation(ctx context.Context, arg model.ListMessagesByConversationParams) ([]model.Message, error) {
 	if f.listMessagesErr != nil {
 		return nil, f.listMessagesErr
