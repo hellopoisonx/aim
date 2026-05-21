@@ -73,8 +73,8 @@ service ConversationService {
 
 - 请求：`CreateConversationReq`（conversation_type: "direct" 或 "group"、creator_id、member_ids 列表）
 - 响应：`CreateConversationResp`（包含 `ConversationResponse`：id, conversation_type, is_active, created_at, member_ids）
-- 业务逻辑：验证对话类型（direct 必须 2 人、group 可多人）、自动将 creator 加入成员列表、创建对话记录并添加所有成员
-- 服务层：`ConversationService.CreateConversation` → sqlc `CreateConversation` + `AddConversationMembers`
+- 业务逻辑：验证对话类型（direct 必须 2 人、group 可多人）、自动将 creator 加入成员列表。**对于 direct 类型，先查找是否已有两名成员相同的活跃会话（Find-or-Create）**，存在则直接返回已有会话；不存在才创建新会话。group 类型不做去重（成员可动态变化）。
+- 服务层：`ConversationService.CreateConversation` → `GetDirectConversationByMembers`（direct 去重） → sqlc `CreateConversation` + `AddConversationMembers`
 - 错误码：40000（参数错误，如无效类型、空成员列表、direct 非 2 人）、40400（会话不存在）、40300（非成员）、50000（基础设施错误）
 
 ### GetConversationHistory
@@ -87,7 +87,7 @@ service ConversationService {
 
 ### 数据与查询
 
-- 对话创建：`app/logic/rpc/model/queries/conversation.sql` 包含 `CreateConversation`、`AddConversationMembers`、`GetConversationMembers`、`GetConversationsByUserID`
+- 对话创建：`app/logic/rpc/model/queries/conversation.sql` 包含 `CreateConversation`、`AddConversationMembers`、`GetConversationMembers`、`GetConversationsByUserID`、`GetDirectConversationByMembers`（direct 去重查询）
 - 消息历史：`app/logic/rpc/model/queries/message.sql` 包含 `ListMessagesByConversation`（游标分页）、`ListMessagesByConversationInitial`（首页）、`CountMessagesByConversation`
 - 服务封装：`app/logic/rpc/internal/service/conversation_service.go` 提供 `ConversationQuerier` 接口，封装 sqlc 查询和业务逻辑（验证、错误映射、分页规范化）
 - ID 生成：`app/logic/rpc/internal/service/conversation_helpers.go` 提供 `GenerateConversationID()`（时间戳+原子计数器，TODO: 替换为 snowflake）、`PGTimestamptzFromUnix`/`UnixFromPGTimestamptz` 时间戳转换
