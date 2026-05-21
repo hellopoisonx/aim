@@ -85,6 +85,18 @@ goctl api go -api app/gateway/api/gateway.api -dir app/gateway/api --style go_ze
 
 重新生成后需要检查 `logout_handler.go` 是否仍把 `Authorization` header 写入 `authctx`；goctl 可能覆盖 handler。
 
+### 好友在线状态快照 - `/api/presence`
+
+| Method | Path | Auth | Handler |
+| --- | --- | --- | --- |
+| GET | `/api/presence/friends` | `Auth` 中间件（JWT Bearer token） | `internal/handler/presence/get_friends_presence_handler.go` |
+
+- 实现位置：`app/gateway/api/internal/logic/presence/get_friends_presence_logic.go`
+- 从 `ws.IdentityFromContext` 提取当前用户 ID，调用 `LogicFriendshipClient.ListFriends` 获取好友列表
+- 通过 Redis pipeline 批量 SCARD `aim:presence:{friend_id}` 得到各好友设备数，`>0` 为 `online` 否则 `offline`
+- 返回 `[{user_id, status}]` 列表，用于客户端 WS 连接/重连后填充初始在线状态
+- 不在 Redis 中记录 `updated_at`，`PresenceItem.updated_at` 字段保留为 0；实时时间戳由 Kafka 事件侧维护
+
 ### `ws` 升级 - `/ws`
 
 将连接升级为 全双工 WebSocket
@@ -105,9 +117,13 @@ service GatewayService {
   // 调用方：aim-core/Delivery Consumer 从 Kafka 消费消息后，查找目标用户所在网关节点，调用此方法投递。
   rpc PushMessage(PushMessageReq) returns (PushMessageResp);
 
-  // PushPresence 推送用户在线状态变更通知给目标用户的好友。
-  // 调用方：aim-core/Presence Service 检测到用户状态变更后，通过此方法推送到相关网关。
+  // PushPresence 推送用户在线状态变更通知给目标用户。
+  // 调用方：aim-core/Presence Consumer 消费 presence 事件后，通过此方法推送到目标用户所在网关。
   rpc PushPresence(PushPresenceReq) returns (PushPresenceResp);
+
+  // PushTyping 推送输入状态给目标用户。
+  // 调用方：aim-core/Typing Consumer 消费 typing 事件后，通过此方法推送到目标用户所在网关。
+  rpc PushTyping(PushTypingReq) returns (PushTypingResp);
 
   // KickUser 踢下线指定用户设备。
   // 调用方：aim-auth 多端登录策略触发 / 管理员后台操作。
@@ -153,6 +169,21 @@ message PushPresenceReq {
 }
 
 message PushPresenceResp {
+  bool success = 1;
+}
+
+// ============================================================
+// 推送输入状态
+// ============================================================
+
+message PushTypingReq {
+  int64 target_user_id  = 1; // 目标用户 ID
+  int64 from_user_id    = 2; // 正在输入的用户 ID
+  int64 conversation_id = 3; // 会话 ID
+  int64 timestamp       = 4; // 事件时间戳 Unix ms
+}
+
+message PushTypingResp {
   bool success = 1;
 }
 

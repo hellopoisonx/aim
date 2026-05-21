@@ -219,6 +219,19 @@ func (a *App) ListFriends() (*client.ListFriendsResponse, error) {
 	return a.restClient().ListFriends(a.callContext(), accessToken)
 }
 
+// GetFriendsPresence calls GET /api/presence/friends.
+func (a *App) GetFriendsPresence() (*client.GetFriendsPresenceResponse, error) {
+	a.mu.RLock()
+	accessToken := a.accessToken
+	a.mu.RUnlock()
+
+	if accessToken == "" {
+		return nil, errorx.NewCodeError(errorx.CodeAuth, "missing access token")
+	}
+
+	return a.restClient().GetFriendsPresence(a.callContext(), accessToken)
+}
+
 func (a *App) ListFriendApplications() (*client.ListFriendApplicationsResponse, error) {
 	a.mu.RLock()
 	accessToken := a.accessToken

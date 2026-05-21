@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"math"
 	"net/http"
 	"sync/atomic"
@@ -82,12 +81,20 @@ func (h *WsHandler) ServeWS(w http.ResponseWriter, r *http.Request) {
 	// Inject identity into context for downstream handlers
 	ctx = ws.WithIdentity(ctx, identity)
 
-	if err := h.manager.Register(ctx, identity, conn, cancel); err != nil {
+	presResult, err := h.manager.Register(ctx, identity, conn, cancel)
+	if err != nil {
 		logx.WithContext(ctx).Errorf("ws register failed: %v", err)
 
 		_ = conn.Close(websocket.StatusInternalError, "registration failed")
 
 		return
+	}
+
+	// Publish presence event if user just came online.
+	if presResult != nil && presResult.Switched && h.srv.PresencePub != nil {
+		if err := h.srv.PresencePub.PublishPresence(ctx, identity.UserID, presResult.Status); err != nil {
+			logx.WithContext(ctx).Errorf("failed to publish presence event on register: %v", err)
+		}
 	}
 
 	// 5. Schedule token expiry timer
@@ -110,24 +117,16 @@ func (h *WsHandler) ServeWS(w http.ResponseWriter, r *http.Request) {
 
 	// 6. Ensure unregister on disconnect
 	defer func() {
-		// Write offline presence to Redis before unregistering
-		if h.srv.RedisClient != nil {
-			presenceKey := fmt.Sprintf("aim:presence:%d:%s", identity.UserID, identity.DeviceID)
-			// Use short TTL (5s) since this is cleanup - if Redis fails we still want to unregister
-			if err := h.srv.RedisClient.Set(ctx, presenceKey, "offline", 5*time.Second).Err(); err != nil {
-				logx.WithContext(ctx).Errorf("failed to set offline presence in Redis: %v", err)
-			}
-		}
-
-		// Publish offline presence event if publisher is available
-		if h.srv.PresencePub != nil {
-			if err := h.srv.PresencePub.PublishPresence(ctx, identity.UserID, "offline"); err != nil {
-				logx.WithContext(ctx).Errorf("failed to publish offline presence event: %v", err)
-			}
-		}
-
-		if err := h.manager.Unregister(ctx, identity); err != nil {
+		unregResult, err := h.manager.Unregister(ctx, identity)
+		if err != nil {
 			logx.WithContext(ctx).Errorf("ws unregister failed: %v", err)
+		}
+
+		// Publish presence event if user just went offline.
+		if unregResult != nil && unregResult.Switched && h.srv.PresencePub != nil {
+			if err := h.srv.PresencePub.PublishPresence(ctx, identity.UserID, unregResult.Status); err != nil {
+				logx.WithContext(ctx).Errorf("failed to publish presence event on unregister: %v", err)
+			}
 		}
 	}()
 
@@ -179,10 +178,50 @@ func (h *WsHandler) handleFrame(ctx context.Context, conn *websocket.Conn, data 
 		return h.handleHeartbeat(ctx, conn, frame)
 	case pb.FrameType_FRAME_TYPE_SEND_MESSAGE:
 		return h.handleSendMessage(ctx, conn, frame)
+	case pb.FrameType_FRAME_TYPE_TYPING:
+		return h.handleTyping(ctx, conn, frame)
 	default:
 		// Unknown frame type - just ACK without action
 		return nil
 	}
+}
+
+// handleTyping publishes a typing notice to Kafka for fan-out by core.
+func (h *WsHandler) handleTyping(ctx context.Context, conn *websocket.Conn, frame *pb.WsFrame) error {
+	tracer := otel.Tracer("github.com/hellopoisonx/aim/app/gateway/api")
+	ctx, span := tracer.Start(ctx, "ws.handle_typing")
+	defer span.End()
+
+	payload, err := ws.DecodePayload(frame)
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return err
+	}
+
+	typingPayload, ok := payload.(*pb.TypingPayload)
+	if !ok {
+		return errors.New("invalid typing payload")
+	}
+
+	identity, ok := ws.IdentityFromContext(ctx)
+	if !ok {
+		return errors.New("no identity in context")
+	}
+
+	span.SetAttributes(
+		attribute.Int64("ws.user_id", identity.UserID),
+		attribute.Int64("ws.conversation_id", typingPayload.GetConversationId()),
+	)
+
+	// Publish to Kafka via TypingPublisher (non-blocking best-effort; typing is transient).
+	if h.srv.TypingPub != nil {
+		if err := h.srv.TypingPub.PublishTyping(ctx, identity.UserID, typingPayload.GetConversationId()); err != nil {
+			logx.WithContext(ctx).Errorf("failed to publish typing event: %v", err)
+		}
+	}
+
+	return nil
 }
 
 // handleHeartbeat responds with SERVER_ACK to a client heartbeat.
@@ -199,22 +238,8 @@ func (h *WsHandler) handleHeartbeat(ctx context.Context, conn *websocket.Conn, f
 			attribute.Int64("ws.user_id", identity.UserID),
 			attribute.String("ws.device_id", identity.DeviceID),
 		)
-		presenceKey := fmt.Sprintf("aim:presence:%d:%s", identity.UserID, identity.DeviceID)
-
-		// Write presence state to Redis with TTL - failures are logged but do not block ACK
-		if h.srv.RedisClient != nil {
-			ttl := time.Duration(h.srv.Config.Redis.PresenceTTL) * time.Second
-			if err := h.srv.RedisClient.Set(ctx, presenceKey, "online", ttl).Err(); err != nil {
-				logx.WithContext(ctx).Errorf("failed to set presence in Redis: %v", err)
-			}
-		}
-
-		// Publish presence event - failures are logged but do not block ACK
-		if h.srv.PresencePub != nil {
-			if err := h.srv.PresencePub.PublishPresence(ctx, identity.UserID, "online"); err != nil {
-				logx.WithContext(ctx).Errorf("failed to publish presence event: %v", err)
-			}
-		}
+		// Renew TTL on the presence and gateway Sets (heartbeat keeps user alive).
+		h.manager.RenewPresenceTTL(ctx, identity.UserID)
 	}
 
 	ackFrame, err := ws.NewServerAck(frame.GetSeq(), "", h.nextSeq())

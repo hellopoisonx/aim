@@ -50,6 +50,14 @@ func (f *fakeGatewayClient) PushMessage(ctx context.Context, req *gwpb.PushMessa
 	return &gwpb.PushMessageResp{Success: true}, nil
 }
 
+func (f *fakeGatewayClient) PushPresence(ctx context.Context, req *gwpb.PushPresenceReq) (*gwpb.PushPresenceResp, error) {
+	return &gwpb.PushPresenceResp{Success: true}, nil
+}
+
+func (f *fakeGatewayClient) PushTyping(ctx context.Context, req *gwpb.PushTypingReq) (*gwpb.PushTypingResp, error) {
+	return &gwpb.PushTypingResp{Success: true}, nil
+}
+
 func newFakeGatewayClient() *fakeGatewayClient {
 	return &fakeGatewayClient{pushResp: &gwpb.PushMessageResp{Success: true}}
 }
@@ -75,6 +83,10 @@ func (f *fakeConversationClient) GetConversationMembers(context.Context, *logicp
 		return nil, f.err
 	}
 	return &logicpb.GetConversationMembersResp{MemberIds: f.memberIDs}, nil
+}
+
+func (f *fakeConversationClient) GetUserConversations(context.Context, *logicpb.GetUserConversationsReq, ...grpc.CallOption) (*logicpb.GetUserConversationsResp, error) {
+	return nil, errors.New("GetUserConversations not implemented")
 }
 
 var _ logicpb.ConversationServiceClient = (*fakeConversationClient)(nil)

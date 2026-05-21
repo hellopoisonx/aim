@@ -744,7 +744,10 @@ func TestHandleHeartbeatWritesPresenceToRedis(t *testing.T) {
 
 	presencePub := &mockPresencePublisher{}
 	sc, mr := newTestServiceContextWithRedis(t, presencePub)
-	handler := NewWsHandler(sc, wsmanager.NewManager())
+	// Use presence-aware manager so TTL renewal and Set-based presence work.
+	nodeID := "test-node-1"
+	mgr := wsmanager.NewManagerWithPresence(sc.RedisClient, nodeID, 45)
+	handler := NewWsHandler(sc, mgr)
 	server := httptest.NewServer(http.HandlerFunc(handler.ServeWS))
 	t.Cleanup(server.Close)
 
@@ -774,19 +777,20 @@ func TestHandleHeartbeatWritesPresenceToRedis(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, pb.FrameType_FRAME_TYPE_SERVER_ACK, ackFrame.GetType())
 
-	// Verify Redis key
-	presenceKey := fmt.Sprintf("aim:presence:%d:%s", userID, deviceID)
-	val, err := mr.Get(presenceKey)
+	// Verify presence Set key (aim:presence:{uid} with device as member).
+	presenceKey := fmt.Sprintf("aim:presence:%d", userID)
+	members, err := mr.SMembers(presenceKey)
 	require.NoError(t, err)
-	require.Equal(t, "online", val)
+	require.Contains(t, members, deviceID)
 
-	// Verify TTL is set (within 60s range, allow some tolerance)
+	// Verify TTL is set.
 	ttl := mr.TTL(presenceKey)
-	require.True(t, ttl > 0 && ttl <= 60*time.Second, "TTL should be positive and <= 60s, got %v", ttl)
+	require.True(t, ttl > 0 && ttl <= 45*time.Second, "TTL should be positive and <= 45s, got %v", ttl)
 
-	// Verify presence publisher called
+	// Heartbeat does NOT trigger presence publishing (only Register/Unregister transitions do).
+	// The first Register() call publishes "online", then heartbeat no-ops.
 	calls := presencePub.getCalls()
-	require.Len(t, calls, 1)
+	require.Len(t, calls, 1) // only the Register-triggered online event
 	require.Equal(t, userID, calls[0].UserID)
 	require.Equal(t, "online", calls[0].Status)
 }
@@ -845,7 +849,9 @@ func TestServeWSDisconnectWritesOfflinePresence(t *testing.T) {
 
 	presencePub := &mockPresencePublisher{}
 	sc, mr := newTestServiceContextWithRedis(t, presencePub)
-	handler := NewWsHandler(sc, wsmanager.NewManager())
+	nodeID := "test-node-1"
+	mgr := wsmanager.NewManagerWithPresence(sc.RedisClient, nodeID, 45)
+	handler := NewWsHandler(sc, mgr)
 	server := httptest.NewServer(http.HandlerFunc(handler.ServeWS))
 	t.Cleanup(server.Close)
 
@@ -858,7 +864,7 @@ func TestServeWSDisconnectWritesOfflinePresence(t *testing.T) {
 	conn, _, err := dialTestWebSocket(ctx, server.URL, token)
 	require.NoError(t, err)
 
-	// Send a heartbeat first so we have "online" set
+	// Send a heartbeat first (renews TTL after initial register)
 	payload, err := wsmanager.EncodePayload(&pb.HeartbeatPayload{LastSeq: 0})
 	require.NoError(t, err)
 
@@ -870,29 +876,27 @@ func TestServeWSDisconnectWritesOfflinePresence(t *testing.T) {
 	_, _, err = conn.Read(ctx) // get ACK
 	require.NoError(t, err)
 
-	// Verify online presence was written
-	presenceKey := fmt.Sprintf("aim:presence:%d:%s", userID, deviceID)
-	val, err := mr.Get(presenceKey)
+	// Verify presence Set has the device
+	presenceKey := fmt.Sprintf("aim:presence:%d", userID)
+	members, err := mr.SMembers(presenceKey)
 	require.NoError(t, err)
-	require.Equal(t, "online", val)
+	require.Contains(t, members, deviceID)
 
-	// Clear mock publisher calls to verify offline call
+	// Clear mock publisher calls (register already published online)
 	presencePub.Clear()
 
-	// Close connection - triggers defer block with offline write
+	// Close connection - triggers defer block which unregisters and publishes offline.
 	_ = conn.Close(websocket.StatusNormalClosure, "test complete")
 
 	// Give server time to process close and execute defer block
-	time.Sleep(50 * time.Millisecond)
+	time.Sleep(100 * time.Millisecond)
 
-	// Verify offline presence in Redis
-	val, err = mr.Get(presenceKey)
-	require.NoError(t, err)
-	require.Equal(t, "offline", val)
-
-	// Verify offline TTL is short (5s cleanup)
-	ttl := mr.TTL(presenceKey)
-	require.True(t, ttl > 0 && ttl <= 5*time.Second, "offline TTL should be <= 5s, got %v", ttl)
+	// Verify presence Set is now empty (device removed).
+	// miniredis may return error for SMEMBERS on non-existent key; treat as empty.
+	members, err = mr.SMembers(presenceKey)
+	if err == nil {
+		require.Empty(t, members)
+	}
 
 	// Verify presence publisher called with offline
 	calls := presencePub.getCalls()
@@ -902,12 +906,16 @@ func TestServeWSDisconnectWritesOfflinePresence(t *testing.T) {
 }
 
 // TestHandleHeartbeatPublishesPresenceEvent verifies heartbeat triggers presence event publishing.
+// TestHandleHeartbeatPublishesPresenceEvent verifies heartbeat does NOT publish;
+// only register/unregister transitions trigger presence events.
 func TestHandleHeartbeatPublishesPresenceEvent(t *testing.T) {
 	t.Parallel()
 
 	presencePub := &mockPresencePublisher{}
 	sc, _ := newTestServiceContextWithRedis(t, presencePub)
-	handler := NewWsHandler(sc, wsmanager.NewManager())
+	nodeID := "test-node-1"
+	mgr := wsmanager.NewManagerWithPresence(sc.RedisClient, nodeID, 45)
+	handler := NewWsHandler(sc, mgr)
 	server := httptest.NewServer(http.HandlerFunc(handler.ServeWS))
 	t.Cleanup(server.Close)
 
@@ -920,6 +928,14 @@ func TestHandleHeartbeatPublishesPresenceEvent(t *testing.T) {
 	conn, _, err := dialTestWebSocket(ctx, server.URL, token)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = conn.Close(websocket.StatusNormalClosure, "test complete") })
+
+	// Give server goroutine time to complete Register and publish.
+	time.Sleep(20 * time.Millisecond)
+
+	// Register publishes "online" once. Clear to check heartbeat doesn't publish.
+	require.Len(t, presencePub.getCalls(), 1)
+	require.Equal(t, "online", presencePub.getCalls()[0].Status)
+	presencePub.Clear()
 
 	// Send heartbeat
 	payload, err := wsmanager.EncodePayload(&pb.HeartbeatPayload{LastSeq: 0})
@@ -937,11 +953,9 @@ func TestHandleHeartbeatPublishesPresenceEvent(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, pb.FrameType_FRAME_TYPE_SERVER_ACK, ackFrame.GetType())
 
-	// Verify presence publisher was called
+	// Verify heartbeat did NOT publish a presence event.
 	calls := presencePub.getCalls()
-	require.Len(t, calls, 1)
-	require.Equal(t, userID, calls[0].UserID)
-	require.Equal(t, "online", calls[0].Status)
+	require.Len(t, calls, 0)
 }
 
 // generateShortLivedToken creates a JWT token that expires in the specified duration.

@@ -9,6 +9,7 @@ import (
 	auth "github.com/hellopoisonx/aim/app/gateway/api/internal/handler/auth"
 	conversations "github.com/hellopoisonx/aim/app/gateway/api/internal/handler/conversations"
 	friends "github.com/hellopoisonx/aim/app/gateway/api/internal/handler/friends"
+	presence "github.com/hellopoisonx/aim/app/gateway/api/internal/handler/presence"
 	users "github.com/hellopoisonx/aim/app/gateway/api/internal/handler/users"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 
@@ -93,6 +94,20 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 			}...,
 		),
 		rest.WithPrefix("/api/friends"),
+	)
+
+	server.AddRoutes(
+		rest.WithMiddlewares(
+			[]rest.Middleware{serverCtx.Auth},
+			[]rest.Route{
+				{
+					Method:  http.MethodGet,
+					Path:    "/friends",
+					Handler: presence.GetFriendsPresenceHandler(serverCtx),
+				},
+			}...,
+		),
+		rest.WithPrefix("/api/presence"),
 	)
 
 	server.AddRoutes(

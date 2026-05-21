@@ -67,9 +67,9 @@ const WS_FRAME = {
 | frameType | 值 | 处理逻辑 |
 |---|---|---|
 | `PUSH_MESSAGE` | 101 | 解析 `conversation_id`/`sender_id`/`content`/`message_id`/`sent_at`/`client_msg_id`。跳过自己的消息（`senderId === currentUserId`）。按 `client_msg_id` 替换乐观消息（去重）。未知 `conversation_id` 时通过 `ensureConversationForPush` 创建会话条目。活跃会话自动发送 `SendReadReceipt`。发送 `SendAck(seq)`。 |
-| `PUSH_PRESENCE` | 102 | 更新 `onlineUserIds` Set，更新对应会话的 `isOnline` 状态。 |
+| `PUSH_PRESENCE` | 102 | 仅接受 `online`/`offline` 状态，更新 `onlineUserIds` Set，更新对应会话的 `isOnline` 状态。连接/重连后通过 `GetFriendsPresence()` 拉快照补齐。 |
 | `PUSH_NOTIFICATION` | 103 | 解析 `notification_type`/`title`/`body`，用 `ElMessage.info()` 显示通知。 |
-| `PUSH_TYPING` | 104 | 设置 `typingInfo`，4 秒后自动清除。 |
+| `PUSH_TYPING` | 104 | 按 `conversation_id` 维度维护 `typingInfo` Map，4 秒后自动清除该条目。客户端发送 typing 帧时按 2.5s 节流。 |
 | `RECONNECT` | 105 | 设置 `connectionState = 'connecting'`，延迟 `reconnect_delay_ms` 后调用 `ConnectWS()`。 |
 | `SERVER_ACK` | 106 | 按 `client_msg_id` 找到对应消息，更新 `ackStatus`（`delivered`/`failed`）。发送 `SendAck(ackSeq)`。 |
 | `TOKEN_EXPIRED` | 107 | 调用 `Refresh()` 尝试刷新 token；成功后调用 `ConnectWS()` 重建 WS；失败则调用 `handleLogout()`。 |
@@ -152,7 +152,9 @@ case WS_FRAME.PUSH_NOTIFICATION: {
 
 ## 心跳机制
 
-- 每 30 秒通过 `setInterval` 发送 `SendHeartbeat(lastReadSeq)`。
+- 每 20 秒通过 `setInterval` 发送 `SendHeartbeat(lastReadSeq)`（`App.vue` `startHeartbeat()` 中 `20_000` ms）。
+- 心跳仅续约 Redis `aim:presence:{user_id}` 和 `aim:user_gateway:{user_id}` 两个 Set 的 TTL，不触发状态变更事件。
+- Redis TTL 默认 45s（配置 `Redis.PresenceTTL`），约为心跳间隔的 2 倍加缓冲。
 - `lastReadSeq` 在收到任何帧时更新为 `Math.max(seq, lastReadSeq)`。
 - 心跳在 WS 连接断开时自动停止（`stopHeartbeat`），重连成功后重新启动（`startHeartbeat`）。
 - `onUnmounted` 中 `stopHeartbeat()` 确保组件销毁后定时器清除。

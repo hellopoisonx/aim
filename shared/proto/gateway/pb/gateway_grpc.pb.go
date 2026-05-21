@@ -21,6 +21,7 @@ const _ = grpc.SupportPackageIsVersion9
 const (
 	GatewayService_PushMessage_FullMethodName           = "/gateway.GatewayService/PushMessage"
 	GatewayService_PushPresence_FullMethodName          = "/gateway.GatewayService/PushPresence"
+	GatewayService_PushTyping_FullMethodName            = "/gateway.GatewayService/PushTyping"
 	GatewayService_PushFriendApplication_FullMethodName = "/gateway.GatewayService/PushFriendApplication"
 	GatewayService_KickUser_FullMethodName              = "/gateway.GatewayService/KickUser"
 	GatewayService_DrainNotify_FullMethodName           = "/gateway.GatewayService/DrainNotify"
@@ -39,9 +40,15 @@ type GatewayServiceClient interface {
 	// PushPresence — 推送用户在线状态变更
 	//
 	// 使用场景：
-	//   - 用户上线 / 下线 / 输入中时，通知其他好友
-	//   - 由 aim-core Presence Service 调用，投递到所有在线好友的网关节点
+	//   - 用户上线 / 下线时，通知其他好友
+	//   - 由 aim-core Presence Consumer 调用，投递到目标用户所在网关节点
 	PushPresence(ctx context.Context, in *PushPresenceReq, opts ...grpc.CallOption) (*PushPresenceResp, error)
+	// PushTyping — 推送用户输入状态
+	//
+	// 使用场景：
+	//   - 由 aim-core Typing Consumer 调用，投递到会话成员所在网关节点
+	//   - 网关收到后按 target_user_id 把 FRAME_TYPE_PUSH_TYPING 投给该用户的所有连接
+	PushTyping(ctx context.Context, in *PushTypingReq, opts ...grpc.CallOption) (*PushTypingResp, error)
 	// PushFriendApplication pushes a friend application to connected clients.
 	PushFriendApplication(ctx context.Context, in *PushFriendApplicationReq, opts ...grpc.CallOption) (*PushFriendApplicationResp, error)
 	// KickUser — 踢出用户连接
@@ -80,6 +87,16 @@ func (c *gatewayServiceClient) PushPresence(ctx context.Context, in *PushPresenc
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(PushPresenceResp)
 	err := c.cc.Invoke(ctx, GatewayService_PushPresence_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *gatewayServiceClient) PushTyping(ctx context.Context, in *PushTypingReq, opts ...grpc.CallOption) (*PushTypingResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PushTypingResp)
+	err := c.cc.Invoke(ctx, GatewayService_PushTyping_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -129,9 +146,15 @@ type GatewayServiceServer interface {
 	// PushPresence — 推送用户在线状态变更
 	//
 	// 使用场景：
-	//   - 用户上线 / 下线 / 输入中时，通知其他好友
-	//   - 由 aim-core Presence Service 调用，投递到所有在线好友的网关节点
+	//   - 用户上线 / 下线时，通知其他好友
+	//   - 由 aim-core Presence Consumer 调用，投递到目标用户所在网关节点
 	PushPresence(context.Context, *PushPresenceReq) (*PushPresenceResp, error)
+	// PushTyping — 推送用户输入状态
+	//
+	// 使用场景：
+	//   - 由 aim-core Typing Consumer 调用，投递到会话成员所在网关节点
+	//   - 网关收到后按 target_user_id 把 FRAME_TYPE_PUSH_TYPING 投给该用户的所有连接
+	PushTyping(context.Context, *PushTypingReq) (*PushTypingResp, error)
 	// PushFriendApplication pushes a friend application to connected clients.
 	PushFriendApplication(context.Context, *PushFriendApplicationReq) (*PushFriendApplicationResp, error)
 	// KickUser — 踢出用户连接
@@ -161,6 +184,9 @@ func (UnimplementedGatewayServiceServer) PushMessage(context.Context, *PushMessa
 }
 func (UnimplementedGatewayServiceServer) PushPresence(context.Context, *PushPresenceReq) (*PushPresenceResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PushPresence not implemented")
+}
+func (UnimplementedGatewayServiceServer) PushTyping(context.Context, *PushTypingReq) (*PushTypingResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method PushTyping not implemented")
 }
 func (UnimplementedGatewayServiceServer) PushFriendApplication(context.Context, *PushFriendApplicationReq) (*PushFriendApplicationResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PushFriendApplication not implemented")
@@ -224,6 +250,24 @@ func _GatewayService_PushPresence_Handler(srv interface{}, ctx context.Context, 
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(GatewayServiceServer).PushPresence(ctx, req.(*PushPresenceReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _GatewayService_PushTyping_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PushTypingReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GatewayServiceServer).PushTyping(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GatewayService_PushTyping_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GatewayServiceServer).PushTyping(ctx, req.(*PushTypingReq))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -296,6 +340,10 @@ var GatewayService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "PushPresence",
 			Handler:    _GatewayService_PushPresence_Handler,
+		},
+		{
+			MethodName: "PushTyping",
+			Handler:    _GatewayService_PushTyping_Handler,
 		},
 		{
 			MethodName: "PushFriendApplication",

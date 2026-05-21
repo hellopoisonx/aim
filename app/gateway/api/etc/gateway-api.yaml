@@ -70,11 +70,12 @@ Redis:
   Addr: redis:6379
   Password: ""
   DB: 0
-  PresenceTTL: 60
+  PresenceTTL: 45
 Kafka:
   Brokers:
     - kafka:9092
   PresenceTopic: aim.presence.events
+  TypingTopic: aim.typing.events
 GatewayRpc:
   Name: gateway.rpc
   ListenOn: 0.0.0.0:9090

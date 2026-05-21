@@ -79,6 +79,34 @@ func (s *GatewayServer) PushMessage(ctx context.Context, req *pb.PushMessageReq)
 	return &pb.PushMessageResp{Success: true}, nil
 }
 
+// PushTyping delivers a typing notice to all connections of the target user on this gateway node.
+func (s *GatewayServer) PushTyping(ctx context.Context, req *pb.PushTypingReq) (*pb.PushTypingResp, error) {
+	if req.TargetUserId == 0 {
+		return nil, status.Errorf(codes.InvalidArgument, "target_user_id is required")
+	}
+
+	payload := &wspb.PushTypingPayload{
+		UserId:         req.FromUserId,
+		ConversationId: req.ConversationId,
+	}
+
+	var pushErr error
+
+	s.manager.ForEachUser(req.TargetUserId, func(conn *Connection) {
+		if err := conn.WriteFrame(ctx, wspb.FrameType_FRAME_TYPE_PUSH_TYPING, payload); err != nil {
+			logx.WithContext(ctx).Errorf("PushTyping: failed to write to user_id=%d device_id=%s: %v",
+				conn.Identity.UserID, conn.Identity.DeviceID, err)
+			pushErr = err
+		}
+	})
+
+	if pushErr != nil {
+		return &pb.PushTypingResp{Success: false}, nil
+	}
+
+	return &pb.PushTypingResp{Success: true}, nil
+}
+
 // PushPresence delivers a presence update to all connections of the target user.
 func (s *GatewayServer) PushPresence(ctx context.Context, req *pb.PushPresenceReq) (*pb.PushPresenceResp, error) {
 	if req.UserId == 0 {

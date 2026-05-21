@@ -38,6 +38,10 @@ export function GetConversationHistory(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['GetConversationHistory'](arg1, arg2, arg3, arg4);
 }
 
+export function GetFriendsPresence() {
+  return window['go']['main']['App']['GetFriendsPresence']();
+}
+
 export function GetUserById(arg1) {
   return window['go']['main']['App']['GetUserById'](arg1);
 }

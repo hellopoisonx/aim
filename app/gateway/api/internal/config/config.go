@@ -37,13 +37,18 @@ type Config struct {
 		// DB is the Redis database number.
 		DB int `json:",default=0"` //nolint:staticcheck // go-zero conf uses json tag options for defaults.
 		// PresenceTTL is the TTL for presence heartbeat in seconds.
-		PresenceTTL int `json:",default=60"` //nolint:staticcheck // go-zero conf uses json tag options for defaults.
+		PresenceTTL int `json:",default=45"` //nolint:staticcheck // go-zero conf uses json tag options for defaults.
 	}
 	Kafka struct {
 		// Brokers is the list of Kafka broker addresses.
 		Brokers []string `json:",default=127.0.0.1:9092"` //nolint:staticcheck // go-zero conf uses json tag options for defaults.
 		// PresenceTopic is the Kafka topic for presence events.
 		PresenceTopic string `json:",default=aim.presence.events"` //nolint:staticcheck // go-zero conf uses json tag options for defaults.
+		// TypingTopic is the Kafka topic for typing events.
+		TypingTopic string `json:",default=aim.typing.events"` //nolint:staticcheck // go-zero conf uses json tag options for defaults.
 	}
-	GatewayRpc zrpc.RpcServerConf
+	// GatewayNodeID identifies this gateway instance for the directory service.
+	// Populated from env AIM_GATEWAY_NODE_ID; startup fails if empty.
+	GatewayNodeID string `json:",optional"` //nolint:staticcheck // go-zero conf uses json tag options for defaults.
+	GatewayRpc    zrpc.RpcServerConf
 }

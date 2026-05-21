@@ -56,6 +56,24 @@ KqConsumerConf:
   Offset: first
   Consumers: 1
   Processors: 1
+PresenceConsumerConf:
+  Name: core-presence-consumer
+  Brokers:
+    - kafka:9092
+  Group: aim-core-presence
+  Topic: aim.presence.events
+  Offset: first
+  Consumers: 1
+  Processors: 1
+TypingConsumerConf:
+  Name: core-typing-consumer
+  Brokers:
+    - kafka:9092
+  Group: aim-core-typing
+  Topic: aim.typing.events
+  Offset: first
+  Consumers: 1
+  Processors: 1
 GatewayRpc:
   ServiceName: gateway.rpc
   Target: aim-gateway:9090

@@ -25,7 +25,7 @@ func TestManagerRegister(t *testing.T) {
 
 	identity := ws.Identity{UserID: 1, DeviceID: "device-1"}
 
-	err := 	mgr.Register(context.Background(), identity, nil, cancel)
+	_, err := mgr.Register(context.Background(), identity, nil, cancel)
 	require.NoError(t, err)
 
 	assert.Equal(t, 1, mgr.Count())
@@ -41,11 +41,11 @@ func TestManagerRegisterDuplicate(t *testing.T) {
 
 	identity := ws.Identity{UserID: 1, DeviceID: "device-1"}
 
-	err := 	mgr.Register(context.Background(), identity, nil, cancel)
+	_, err := mgr.Register(context.Background(), identity, nil, cancel)
 	require.NoError(t, err)
 
 	// Second registration should fail
-	err = 	mgr.Register(context.Background(), identity, nil, cancel)
+	_, err = mgr.Register(context.Background(), identity, nil, cancel)
 	assert.Error(t, err)
 }
 
@@ -59,10 +59,10 @@ func TestManagerUnregister(t *testing.T) {
 
 	identity := ws.Identity{UserID: 1, DeviceID: "device-1"}
 
-	err := 	mgr.Register(context.Background(), identity, nil, cancel)
+	_, err := mgr.Register(context.Background(), identity, nil, cancel)
 	require.NoError(t, err)
 
-	err = 	mgr.Unregister(context.Background(), identity)
+	_, err = mgr.Unregister(context.Background(), identity)
 	require.NoError(t, err)
 	assert.Equal(t, 0, mgr.Count())
 }
@@ -74,7 +74,7 @@ func TestManagerUnregisterNotFound(t *testing.T) {
 
 	identity := ws.Identity{UserID: 999, DeviceID: "nonexistent"}
 
-	err := 	mgr.Unregister(context.Background(), identity)
+	_, err := mgr.Unregister(context.Background(), identity)
 	assert.Error(t, err)
 }
 
@@ -88,7 +88,7 @@ func TestManagerGet(t *testing.T) {
 
 	identity := ws.Identity{UserID: 1, DeviceID: "device-1"}
 
-	err := 	mgr.Register(context.Background(), identity, nil, cancel)
+	_, err := mgr.Register(context.Background(), identity, nil, cancel)
 	require.NoError(t, err)
 
 	conn, err := mgr.Get(identity)
@@ -116,14 +116,14 @@ func TestManagerCountByUser(t *testing.T) {
 	_, cancel2 := context.WithCancel(context.Background())
 
 	// User 1 with two devices
-	err := mgr.Register(context.Background(), ws.Identity{UserID: 1, DeviceID: "device-1"}, nil, cancel1)
+	_, err := mgr.Register(context.Background(), ws.Identity{UserID: 1, DeviceID: "device-1"}, nil, cancel1)
 	require.NoError(t, err)
-	err = mgr.Register(context.Background(), ws.Identity{UserID: 1, DeviceID: "device-2"}, nil, cancel2)
+	_, err = mgr.Register(context.Background(), ws.Identity{UserID: 1, DeviceID: "device-2"}, nil, cancel2)
 	require.NoError(t, err)
 
 	// User 2 with one device
 	_, cancel3 := context.WithCancel(context.Background())
-	err = mgr.Register(context.Background(), ws.Identity{UserID: 2, DeviceID: "device-1"}, nil, cancel3)
+	_, err = mgr.Register(context.Background(), ws.Identity{UserID: 2, DeviceID: "device-1"}, nil, cancel3)
 	require.NoError(t, err)
 
 	assert.Equal(t, 2, mgr.CountByUser(1))
@@ -138,9 +138,9 @@ func TestManagerListIdentities(t *testing.T) {
 	_, cancel1 := context.WithCancel(context.Background())
 	_, cancel2 := context.WithCancel(context.Background())
 
-	err := mgr.Register(context.Background(), ws.Identity{UserID: 1, DeviceID: "device-1"}, nil, cancel1)
+	_, err := mgr.Register(context.Background(), ws.Identity{UserID: 1, DeviceID: "device-1"}, nil, cancel1)
 	require.NoError(t, err)
-	err = mgr.Register(context.Background(), ws.Identity{UserID: 2, DeviceID: "device-1"}, nil, cancel2)
+	_, err = mgr.Register(context.Background(), ws.Identity{UserID: 2, DeviceID: "device-1"}, nil, cancel2)
 	require.NoError(t, err)
 
 	identities := mgr.ListIdentities()
@@ -162,7 +162,7 @@ func TestManagerConcurrent(t *testing.T) {
 
 			_, cancel := context.WithCancel(context.Background())
 			identity := ws.Identity{UserID: userID, DeviceID: "device-1"}
-			_ = 	mgr.Register(context.Background(), identity, nil, cancel)
+			_, _ = mgr.Register(context.Background(), identity, nil, cancel)
 		}(i)
 	}
 
@@ -185,7 +185,7 @@ func TestManagerConcurrentSameUser(t *testing.T) {
 
 			_, cancel := context.WithCancel(context.Background())
 			identity := ws.Identity{UserID: 1, DeviceID: deviceID}
-			_ = 	mgr.Register(context.Background(), identity, nil, cancel)
+			_, _ = mgr.Register(context.Background(), identity, nil, cancel)
 		}("device-" + string(rune('a'+i-1)))
 	}
 
@@ -200,9 +200,9 @@ func TestManagerCloseAll(t *testing.T) {
 	_, cancel1 := context.WithCancel(context.Background())
 	_, cancel2 := context.WithCancel(context.Background())
 
-	err := mgr.Register(context.Background(), ws.Identity{UserID: 1, DeviceID: "device-1"}, nil, cancel1)
+	_, err := mgr.Register(context.Background(), ws.Identity{UserID: 1, DeviceID: "device-1"}, nil, cancel1)
 	require.NoError(t, err)
-	err = mgr.Register(context.Background(), ws.Identity{UserID: 2, DeviceID: "device-1"}, nil, cancel2)
+	_, err = mgr.Register(context.Background(), ws.Identity{UserID: 2, DeviceID: "device-1"}, nil, cancel2)
 	require.NoError(t, err)
 
 	mgr.CloseAll()

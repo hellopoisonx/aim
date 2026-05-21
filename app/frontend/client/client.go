@@ -431,3 +431,25 @@ func (c *RESTClient) ListFriends(ctx context.Context, accessToken string) (*List
 	return &resp, nil
 }
 
+// GetFriendsPresenceResponse mirrors gateway.api GetFriendsPresenceResponse.
+type GetFriendsPresenceResponse struct {
+	Presences []PresenceItem `json:"presences"`
+}
+
+// PresenceItem mirrors gateway.api PresenceItem.
+type PresenceItem struct {
+	UserId    int64  `json:"user_id"`
+	Status    string `json:"status"`
+	UpdatedAt int64  `json:"updated_at"`
+}
+
+// GetFriendsPresence calls GET /api/presence/friends.
+func (c *RESTClient) GetFriendsPresence(ctx context.Context, accessToken string) (*GetFriendsPresenceResponse, error) {
+	var resp GetFriendsPresenceResponse
+	if err := c.doRequest(ctx, http.MethodGet, "/api/presence/friends", nil, &resp, accessToken); err != nil {
+		return nil, err
+	}
+
+	return &resp, nil
+}
+

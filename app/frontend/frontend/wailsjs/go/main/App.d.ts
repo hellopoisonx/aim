@@ -21,6 +21,8 @@ export function DisconnectWS():Promise<void>;
 
 export function GetConversationHistory(arg1:number,arg2:number,arg3:number,arg4:number):Promise<client.GetConversationHistoryResponse>;
 
+export function GetFriendsPresence():Promise<client.GetFriendsPresenceResponse>;
+
 export function GetUserById(arg1:number):Promise<client.GetUserByIdResponse>;
 
 export function ListConversations():Promise<client.ListConversationsResponse>;

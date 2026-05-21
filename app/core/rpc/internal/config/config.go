@@ -10,14 +10,16 @@ import (
 
 type Config struct {
 	zrpc.RpcServerConf
-	Nacos              nacos.Config   `json:",optional"`
-	KqPusherConf       KqPusherConf   `json:",optional"`
-	KqConsumerConf     kq.KqConf      `json:",optional"`
-	LogicRpc           nacos.Config   `json:",optional"`
-	GatewayRpc         GatewayRpcConf `json:",optional"`
-	CacheRedis         RedisConf      `json:",optional"`
-	SnowflakeMachineID int64          `json:",default=1"`
-	Presence           PresenceConf   `json:",optional"`
+	Nacos                nacos.Config   `json:",optional"`
+	KqPusherConf         KqPusherConf   `json:",optional"`
+	KqConsumerConf       kq.KqConf      `json:",optional"`
+	PresenceConsumerConf kq.KqConf      `json:",optional"`
+	TypingConsumerConf   kq.KqConf      `json:",optional"`
+	LogicRpc             nacos.Config   `json:",optional"`
+	GatewayRpc           GatewayRpcConf `json:",optional"`
+	CacheRedis           RedisConf      `json:",optional"`
+	SnowflakeMachineID   int64          `json:",default=1"`
+	Presence             PresenceConf   `json:",optional"`
 }
 
 type RedisConf struct {

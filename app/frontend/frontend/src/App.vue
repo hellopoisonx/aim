@@ -63,9 +63,12 @@ const pendingFriendAppCount = ref(0)
 
 // ─── Presence / Typing / Heartbeat ────────────────────────────────────────────
 const onlineUserIds = ref<Set<number>>(new Set())
-const typingInfo = ref<{ conversationId: number; userId: number } | null>(null)
+// `typingInfo` is now a Map keyed by conversationId to support multiple simultaneous typing indicators.
+const typingInfo = ref<Map<number, { userId: number; timer: ReturnType<typeof setTimeout> }>>(new Map())
 const lastReadSeq = ref(0)
 let heartbeatTimer: ReturnType<typeof setInterval> | null = null
+// TYPING_TIMEOUT_MS mirrors the 4s clear timeout used on receipt of PUSH_TYPING.
+const TYPING_TIMEOUT_MS = 4000
 
 // ─── Auto-reconnect ───────────────────────────────────────────────────────────
 const intentionalDisconnect = ref(false)
@@ -87,11 +90,9 @@ const activeMessages = computed<ChatMessage[]>(() => {
 
 /** The user ID currently typing in the active conversation, or null */
 const typingUserId = computed<number | null>(() => {
-  if (!typingInfo.value || activeConversationId.value === null) return null
-  if (typingInfo.value.conversationId === activeConversationId.value) {
-    return typingInfo.value.userId
-  }
-  return null
+  if (activeConversationId.value === null) return null
+  const entry = typingInfo.value.get(activeConversationId.value)
+  return entry?.userId ?? null
 })
 
 const isAuthenticated = computed(() => currentUserId.value > 0 && deviceId.value !== '')
@@ -251,11 +252,13 @@ onMounted(async () => {
   } catch { /* ignore */ }
 
   offHandlers.push(
-    EventsOn('aim:connection_state', (state: main.SessionState) => {
+    EventsOn('aim:connection_state', async (state: main.SessionState) => {
       if (state.ws_connected) {
         connectionState.value = 'connected'
         reconnectAttempt = 0
         startHeartbeat()
+        // Refresh presence after reconnect.
+        refreshPresenceSnapshot()
       } else {
         connectionState.value = 'disconnected'
         stopHeartbeat()
@@ -363,12 +366,15 @@ onMounted(async () => {
           const status = (payload?.status as string) ?? ''
           if (userId == null) break
 
+          // Only accept strict online/offline states (aggregated by server).
           if (status === 'online') {
             onlineUserIds.value = new Set([...onlineUserIds.value, userId])
-          } else {
+          } else if (status === 'offline') {
             const next = new Set(onlineUserIds.value)
             next.delete(userId)
             onlineUserIds.value = next
+          } else {
+            break // ignore unknown statuses
           }
 
           // Update conversation online status
@@ -401,17 +407,20 @@ onMounted(async () => {
           const userId = payload?.user_id as number | undefined
           if (conversationId == null || userId == null) break
 
-          typingInfo.value = { conversationId, userId }
+          // Clear any previous timer for this conversation.
+          const prev = typingInfo.value.get(conversationId)
+          if (prev?.timer) clearTimeout(prev.timer)
 
-          // Clear typing indicator after 4 seconds
-          setTimeout(() => {
-            if (
-              typingInfo.value?.conversationId === conversationId &&
-              typingInfo.value?.userId === userId
-            ) {
-              typingInfo.value = null
-            }
-          }, 4000)
+          // Set new typing entry with auto-clear timer.
+          const timer = setTimeout(() => {
+            typingInfo.value.delete(conversationId)
+            // Trigger reactivity.
+            typingInfo.value = new Map(typingInfo.value)
+          }, TYPING_TIMEOUT_MS)
+
+          typingInfo.value.set(conversationId, { userId, timer })
+          // Trigger Vue reactivity for Map.
+          typingInfo.value = new Map(typingInfo.value)
           break
         }
 
@@ -512,6 +521,32 @@ onUnmounted(() => {
   clearReconnectTimer()
 })
 
+// ─── Presence snapshot ────────────────────────────────────────────────────────
+
+async function refreshPresenceSnapshot() {
+  if (currentUserId.value <= 0) return
+  try {
+    // Dynamic import; GetFriendsPresence is exposed via wails bindings (step 15).
+    const { GetFriendsPresence } = await import('../wailsjs/go/main/App')
+    const resp = await GetFriendsPresence()
+    if (!resp?.presences?.length) return
+    const next = new Set<number>()
+    for (const item of resp.presences) {
+      if (item.status === 'online') {
+        next.add(item.user_id)
+      }
+    }
+    onlineUserIds.value = next
+    // Also refresh conversation isOnline flags.
+    for (const conv of conversations.value) {
+      const otherIds = (conv.memberIds ?? []).filter((id) => id !== currentUserId.value)
+      conv.isOnline = otherIds.some((id) => next.has(id))
+    }
+  } catch {
+    // Best-effort; presence will be updated via PUSH_PRESENCE events.
+  }
+}
+
 // ─── Heartbeat ────────────────────────────────────────────────────────────────
 
 function startHeartbeat() {
@@ -520,7 +555,7 @@ function startHeartbeat() {
     if (connectionState.value === 'connected') {
       SendHeartbeat(lastReadSeq.value).catch(() => {})
     }
-  }, 30_000)
+  }, 20_000)
 }
 
 function stopHeartbeat() {
@@ -576,14 +611,11 @@ async function handleLogin(payload: { email: string; password: string; device_id
       conversations.value = []
       messagesMap.value = new Map()
       historyLoadedSet.value.clear()
-      onlineUserIds.value = new Set()
-      typingInfo.value = null
-      activeConversationId.value = null
-      friendsViewVisible.value = false
-      pendingFriendAppCount.value = 0
       try {
         await ConnectWS()
         connectionState.value = 'connected'
+        // Pull presence snapshot after connect.
+        refreshPresenceSnapshot()
       } catch {
         ElMessage.warning('已登录，但无法建立实时连接')
       }
@@ -674,9 +706,12 @@ async function handleLogout() {
   conversations.value = []
   messagesMap.value.clear()
   historyLoadedSet.value.clear()
-  onlineUserIds.value = new Set()
-  typingInfo.value = null
-  activeConversationId.value = null
+  // Clear typing timers.
+  for (const [, entry] of typingInfo.value) {
+    if (entry.timer) clearTimeout(entry.timer)
+  }
+  typingInfo.value.clear()
+  typingInfo.value = new Map()
   friendsViewVisible.value = false
   pendingFriendAppCount.value = 0
   connectionState.value = 'disconnected'

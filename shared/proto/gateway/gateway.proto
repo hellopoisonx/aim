@@ -25,9 +25,16 @@ service GatewayService {
   // PushPresence — 推送用户在线状态变更
   //
   // 使用场景：
-  //   - 用户上线 / 下线 / 输入中时，通知其他好友
-  //   - 由 aim-core Presence Service 调用，投递到所有在线好友的网关节点
+  //   - 用户上线 / 下线时，通知其他好友
+  //   - 由 aim-core Presence Consumer 调用，投递到目标用户所在网关节点
   rpc PushPresence(PushPresenceReq) returns (PushPresenceResp);
+
+  // PushTyping — 推送用户输入状态
+  //
+  // 使用场景：
+  //   - 由 aim-core Typing Consumer 调用，投递到会话成员所在网关节点
+  //   - 网关收到后按 target_user_id 把 FRAME_TYPE_PUSH_TYPING 投给该用户的所有连接
+  rpc PushTyping(PushTypingReq) returns (PushTypingResp);
 
   // PushFriendApplication pushes a friend application to connected clients.
   rpc PushFriendApplication(PushFriendApplicationReq) returns (PushFriendApplicationResp);
@@ -86,6 +93,22 @@ message PushPresenceResp {
   bool success = 1;  // 是否成功推送
 }
 
+// ============================================================
+// PushTyping — 输入状态推送
+// ============================================================
+
+// PushTypingReq — 推送输入状态请求
+message PushTypingReq {
+  int64 target_user_id = 1;   // 目标用户 ID（投递到此用户在本节点的所有连接）
+  int64 from_user_id = 2;     // 正在输入的用户 ID
+  int64 conversation_id = 3;  // 会话 ID
+  int64 timestamp = 4;        // 事件时间戳（毫秒）
+}
+
+// PushTypingResp — 推送输入状态响应
+message PushTypingResp {
+  bool success = 1;  // 是否成功推送
+}
 
 // ============================================================
 // PushFriendApplication - friend application push

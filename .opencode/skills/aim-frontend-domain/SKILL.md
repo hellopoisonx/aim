@@ -17,7 +17,7 @@ AIM desktop client domain. Use this skill when changing `app/frontend`, Wails bi
 
 The desktop client talks only to aim-gateway. 完整协议覆盖矩阵见 `references/frontend-coverage-matrix.md`。
 
-### REST 端点（14 个）
+### REST 端点（15 个）
 
 | Method | Path | 用途 | App 方法 |
 |---|---|---|---|
@@ -35,6 +35,7 @@ The desktop client talks only to aim-gateway. 完整协议覆盖矩阵见 `refer
 | POST | `/api/conversations` | 创建会话（直聊/群聊） | `CreateConversation()` / `CreateDirectConversation()` |
 | GET | `/api/conversations` | 会话列表 | `ListConversations()` |
 | GET | `/api/conversations/history/{id}` | 历史消息（游标分页） | `GetConversationHistory()` |
+| GET | `/api/presence/friends` | 好友在线状态快照 | `GetFriendsPresence()` |
 
 ### WebSocket
 
@@ -88,5 +89,6 @@ go build ./...
 go test ./...
 go test -cover ./app/frontend/...
 ```
+- 2026-05-22: 打通 presence/typing 推送链路：新增 `GetFriendsPresence()` REST 调用及快照接口；`typingInfo` 改为 Map 支持多会话同时输入；`MessageInput.vue` 加 2.5s 节流；PUSH_PRESENCE 严格 online/offline；连接/重连后拉快照；心跳从 30s 改 20s。
 - 2026-05-22: 新增 `CreateConversationRequest` 通用创建会话结构体（支持 direct/group + member_ids 数组）；`CreateConversation()` 参数校验统一返回 `errorx.CodeBadInput`（40000）；`CreateDirectConversation()` 改为薄包装；新增群聊创建测试和参数校验测试；Vue 新增自动重连（指数退避，最多 5 次）、历史消息游标分页（`historyCursor` + `load-more` emit）、活跃会话自动发送已读回执、TOKEN_EXPIRED 后自动重连 WS、ACK 状态图标显示；FriendsView 修复 key/id 错误；`ProtocolCatalog` 测试期望值修正为 15 REST + 13 帧；Wails 绑定重新生成。
 - 2026-05-20: 修复客户端消息回推处理：解析 PushMessagePayload 的 message_id/sent_at/client_msg_id，按 client_msg_id 替换乐观消息，并在未知 conversation_id 收到消息时创建真实会话条目。

@@ -17,15 +17,16 @@ import (
 )
 
 type ServiceContext struct {
-	Config                  config.Config
-	RedisClient             *redis.Client
-	Snowflake               *tools.Snowflake
-	KqPusher                *kq.Pusher
-	LogicPermissionClient   logicpb.PermissionServiceClient
-	LogicConversationClient logicpb.ConversationServiceClient
-	GatewayClient           rpc.GatewayPusher
-	PresenceStore           *cache.PresenceStore
-	namingClient            nacos.NamingClient
+	Config                   config.Config
+	RedisClient              *redis.Client
+	Snowflake                *tools.Snowflake
+	KqPusher                 *kq.Pusher
+	LogicPermissionClient    logicpb.PermissionServiceClient
+	LogicConversationClient  logicpb.ConversationServiceClient
+	LogicFriendshipClient    logicpb.FriendshipServiceClient
+	GatewayClient            rpc.GatewayPusher
+	PresenceStore            *cache.PresenceStore
+	namingClient             nacos.NamingClient
 }
 
 func (s *ServiceContext) Close() {
@@ -73,6 +74,8 @@ func NewServiceContext(c config.Config) *ServiceContext {
 
 	var namingClient nacos.NamingClient
 
+	var logicFriendshipClient logicpb.FriendshipServiceClient
+
 	if c.LogicRpc.ServiceName != "" {
 		if err := c.LogicRpc.ApplyDefaults("logic.rpc", "127.0.0.1:8082"); err != nil {
 			logx.Errorf("failed to apply LogicRpc defaults: %v", err)
@@ -89,6 +92,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 				} else {
 					logicClient = logicpb.NewPermissionServiceClient(client.Conn())
 					logicConversationClient = logicpb.NewConversationServiceClient(client.Conn())
+					logicFriendshipClient = logicpb.NewFriendshipServiceClient(client.Conn())
 				}
 			}
 		}
@@ -100,25 +104,30 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		presenceStore = cache.NewPresenceStore(redisClient, c.Presence.TTLSeconds)
 	}
 
-	// Gateway RPC client (nil if not configured)
+	// Gateway RPC client (nil if not configured).
+	// Uses GatewayRouter to support both single-gateway and multi-gateway routing.
 	var gatewayClient rpc.GatewayPusher
 
 	if c.GatewayRpc.Target != "" {
+		router := rpc.NewGatewayRouter()
 		gw := rpc.NewGatewayClient(c.GatewayRpc.Target)
-		gatewayClient = gw
+		// Register as both default (empty node ID) and any node for fallback.
+		router.RegisterNode("", gw)
+		gatewayClient = router
 
 		logx.Infof("gateway client initialized with target %s", c.GatewayRpc.Target)
 	}
 
 	return &ServiceContext{
-		Config:                  c,
-		RedisClient:             redisClient,
-		Snowflake:               sf,
-		KqPusher:                kqPusher,
-		LogicPermissionClient:   logicClient,
-		LogicConversationClient: logicConversationClient,
-		GatewayClient:           gatewayClient,
-		PresenceStore:           presenceStore,
-		namingClient:            namingClient,
+		Config:                   c,
+		RedisClient:              redisClient,
+		Snowflake:                sf,
+		KqPusher:                 kqPusher,
+		LogicPermissionClient:    logicClient,
+		LogicConversationClient:  logicConversationClient,
+		LogicFriendshipClient:    logicFriendshipClient,
+		GatewayClient:            gatewayClient,
+		PresenceStore:            presenceStore,
+		namingClient:             namingClient,
 	}
 }

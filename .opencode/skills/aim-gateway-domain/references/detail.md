@@ -84,14 +84,15 @@
 
 实现位置：`app/gateway/api` 内嵌的 `GatewayRpc` zrpc 服务；入口为 `app/gateway/api/gateway.go`，配置块为 `app/gateway/api/etc/gateway-api.yaml` 的 `GatewayRpc`。不要再使用手写 `grpc.NewServer` 启动 GatewayService，避免绕过 go-zero tracing interceptor、health check 和统一生命周期管理。
 
-### 四个 RPC 方法
+### 六个推送 RPC 方法
 
 Proto 定义：`shared/proto/gateway/gateway.proto`，生成的 pb 代码在 `shared/proto/gateway/pb/`。
 
 | RPC | 用途 | 调用方 |
 | --- | --- | --- |
 | `PushMessage` | 将聊天消息投递到目标用户的 WebSocket 连接 | aim-core/Delivery Consumer |
-| `PushPresence` | 推送用户在线状态变更通知给目标用户的好友 | aim-core/Presence Service |
+| `PushPresence` | 推送用户在线状态变更通知给目标用户的好友 | aim-core/Presence Consumer |
+| `PushTyping` | 推送输入状态给目标用户 | aim-core/Typing Consumer |
 | `KickUser` | 踢下线指定用户设备（多设备管理/被迫下线） | aim-auth / 管理员后台 |
 | `DrainNotify` | 通知网关节点进行优雅迁移（会话 drain） | Nacos 服务发现 / 运维工具 |
 | `PushFriendApplication` | 推送好友申请通知给目标用户 | aim-logic/FriendshipService |
@@ -190,17 +191,30 @@ message ServerAckPayload {
 `ACK_STATUS_REJECTED`：业务无效，不自动重试。
 `ACK_STATUS_RETRYABLE`：瞬时故障，客户端可用相同 client_msg_id 重试。
 
-## Presence Heartbeat 流程
+## Presence 在线状态流程
 
-WebSocket 心跳 `FRAME_TYPE_HEARTBEAT` 处理流程：
+### 连接管理（Manager）
 
-1. 收到心跳请求，更新 Redis 在线状态（`user_id + device_id` → 在线 + TTL）
-2. 发布 Kafka presence 事件（用户上线/状态变更），供 aim-core Presence Service 消费
-3. 返回 `FRAME_TYPE_SERVER_ACK`（heartbeat 单独 ACK，不走 core.Transfer）
+- `Manager.Register` 时 SADD `aim:user_gateway:{user_id}`（node_id）和 `aim:presence:{user_id}`（device_id），检测 SCARD 0→≥1 则触发 `online` 事件。
+- `Manager.Unregister` 时 SREM 对应 member，若本节点无该用户其他连接则 SREM gateway set，检测 SCARD ≥1→0 则触发 `offline` 事件。
+- 仅状态 0↔1 切换时发布 Kafka 事件（topic: `aim.presence.events`，key=`user_id`）。
 
-Redis key 格式：`presence:{user_id}:{device_id}`，TTL = `PingPeriod * 2`（约 60s）。
+### 心跳
 
-Kafka topic：`aim.presence`，key = `user_id`，用于保证同一用户状态变更有序。
+- `FRAME_TYPE_HEARTBEAT` 调用 `Manager.RenewPresenceTTL` 续约两个 Set 的 TTL，不发布事件。
+- 客户端心跳间隔 20s，Redis TTL 默认 45s（≈ 2× 心跳 + 缓冲）。
+
+### 状态快照
+
+- `GET /api/presence/friends`（Auth 保护）批量 SCARD `aim:presence:{friend_id}` 返回好友在线状态列表。
+- 客户端在 WS 连接建立 / 重连成功后调用此接口填充初始在线状态。
+
+### Typing 输入状态
+
+- `FRAME_TYPE_TYPING` 由网关直接发布到 Kafka（topic: `aim.typing.events`，key=`conversation_id`），不查成员。
+- core 的 `TypingConsumer` 消费后查会话成员 → 查 `aim:user_gateway:{member_id}` → 调 `gateway.PushTyping`。
+- 网关 `PushTyping` gRPC 按 `target_user_id` 将 `FRAME_TYPE_PUSH_TYPING` 投到本节点所有连接。
+- 客户端按 2.5s 节流发送 typing 帧；收到 PUSH_TYPING 后 4s 超时自动清除。
 
 ## Token 过期生命周期
 

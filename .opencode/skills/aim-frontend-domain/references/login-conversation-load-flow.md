@@ -9,10 +9,11 @@
 Vue `handleLogin()` 在以下步骤之后触发会话加载：
 
 1. `Login()` → 设置 `currentUserId` / `currentUserLabel`
-2. 清空本地状态（`conversations`、`messagesMap`、`historyLoadedSet`、`onlineUserIds` 等）
+2. 清空本地状态（`conversations`、`messagesMap`、`historyLoadedSet`）
 3. `ConnectWS()` → 建立 WebSocket 连接
-4. **`ListConversations()` → 加载服务端会话列表**（这是本轮新增的步骤）
-5. 对每个返回的会话调用 `loadConversationHistory(conv.id)` 预拉最新消息
+4. **`GetFriendsPresence()` → 拉取好友在线状态快照**（`GET /api/presence/friends`）
+5. **`ListConversations()` → 加载服务端会话列表**
+6. 对每个返回的会话调用 `loadConversationHistory(conv.id)` 预拉最新消息
 
 ## 数据流
 
@@ -20,13 +21,12 @@ Vue `handleLogin()` 在以下步骤之后触发会话加载：
 Vue handleLogin()
   └─ Login(email, password, device_id)           // Wails bindings → App.Login()
   └─ ConnectWS()                                  // Wails bindings → App.ConnectWS()
-  └─ ListConversations()                          // Wails bindings → App.ListConversations()
-       └─ restClient.ListConversations(ctx, token) // HTTP GET /api/conversations
+  └─ GetFriendsPresence()                         // Wails bindings → App.GetFriendsPresence()
+       └─ restClient.GetFriendsPresence(ctx, token) // HTTP GET /api/presence/friends
             └─ Gateway Auth 中间件验签
-            └─ LogicRpc.GetUserConversations(userId)
-            └─ 返回 []ConversationItem
-  └─ for each item:
-       └─ 解析成员 ID → 通过 GetUserById(otherId) 获取昵称和头像
+            └─ pipeline SCARD aim:presence:{friend_id}
+            └─ 返回 [{user_id, status}]
+  └─ ListConversations()                          // Wails bindings → App.ListConversations()
        └─ 构建 Conversation 对象（title、avatar、memberIds）
        └─ loadConversationHistory(conv.id)        // 预拉消息
             └─ GetConversationHistory(convId, 0, 0, 50)  // HTTP GET /api/conversations/history/{id}

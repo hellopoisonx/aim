@@ -19,6 +19,8 @@ const gatewayClientTracerName = "github.com/hellopoisonx/aim/app/core/rpc/intern
 // GatewayPusher defines the interface for pushing messages to a gateway node.
 type GatewayPusher interface {
 	PushMessage(ctx context.Context, req *gwpb.PushMessageReq) (*gwpb.PushMessageResp, error)
+	PushPresence(ctx context.Context, req *gwpb.PushPresenceReq) (*gwpb.PushPresenceResp, error)
+	PushTyping(ctx context.Context, req *gwpb.PushTypingReq) (*gwpb.PushTypingResp, error)
 }
 
 type GatewayClient struct {
@@ -52,6 +54,26 @@ func (c *GatewayClient) PushMessage(ctx context.Context, req *gwpb.PushMessageRe
 	}
 
 	return c.client.PushMessage(ctx, req)
+}
+
+func (c *GatewayClient) PushPresence(ctx context.Context, req *gwpb.PushPresenceReq) (*gwpb.PushPresenceResp, error) {
+	if c.initErr != nil {
+		return nil, c.initErr
+	}
+	if c.client == nil {
+		return nil, fmt.Errorf("gateway client for %s is not initialized", c.target)
+	}
+	return c.client.PushPresence(ctx, req)
+}
+
+func (c *GatewayClient) PushTyping(ctx context.Context, req *gwpb.PushTypingReq) (*gwpb.PushTypingResp, error) {
+	if c.initErr != nil {
+		return nil, c.initErr
+	}
+	if c.client == nil {
+		return nil, fmt.Errorf("gateway client for %s is not initialized", c.target)
+	}
+	return c.client.PushTyping(ctx, req)
 }
 
 func (c *GatewayClient) Close() error {

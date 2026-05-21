@@ -31,7 +31,7 @@ message WsFrame {
 1. 客户端通过 `GET /ws` 携带 `Authorization: Bearer <access_token>` 发起 HTTP Upgrade
 2. 网关验证 JWT，升级为 WebSocket 连接（二进制模式）
 3. 双方通过 `WsFrame` 二进制帧通信
-4. 客户端应定期发送 `HEARTBEAT` 保活（默认 30s 间隔）
+4. 客户端应定期发送 `HEARTBEAT` 保活（默认 20s 间隔，与 Redis 45s TTL 配合使用）
 5. Token 过期时网关推送 `TOKEN_EXPIRED` 帧并关闭连接
 
 ---
@@ -122,8 +122,8 @@ message HeartbeatPayload {
 
 **副作用**：
 
-- 更新 Redis `aim:presence:{user_id}:{device_id}` → `"online"`，TTL 由配置 `PresenceTTL` 决定（默认 60s）
-- 发布在线状态事件到 Kafka（topic: `aim.presence.events`）
+- 续约 Redis `aim:presence:{user_id}` 和 `aim:user_gateway:{user_id}` 两个 Set 的 TTL（保持 alive）
+- 在线状态事件仅在用户级 0→1（上线）或 1→0（下线）切换时发布到 Kafka（topic: `aim.presence.events`），心跳本身不触发事件
 
 ---
 
@@ -139,7 +139,7 @@ message TypingPayload {
 
 **方向**：客户端 → 网关
 
-**服务端行为**：通过 [`PushTypingPayload`](#pushtypingpayload) 推送给会话中其他在线用户。
+**服务端行为**：发布到 Kafka（topic: `aim.typing.events`），由 core 的 `TypingConsumer` 消费后向会话成员所在网关节点投递 [`PushTypingPayload`](#pushtypingpayload)。
 
 ---
 
@@ -212,6 +212,8 @@ message PushPresencePayload {
 **方向**：网关 → 客户端
 
 **触发条件**：好友上线或下线。
+
+> **在线状态快照**：客户端在 WS 连接建立 / 重连成功后应调用 `GET /api/presence/friends` 获取当前好友的在线状态快照，避免依赖等待逐个 PushPresence 事件填充。
 
 ---
 
@@ -379,7 +381,7 @@ WsFrame 结构体
 
 ## 最佳实践
 
-1. **心跳间隔**：建议每 30s 发送一次 `HEARTBEAT`（与服务端 `HeartbeatInterv` 配置一致），`last_seq` 填入客户端收到的最大服务端 seq
+1. **心跳间隔**：建议每 20s 发送一次 `HEARTBEAT`（Vue `startHeartbeat()` 中 `20_000` ms），Redis TTL 45s（`Redis.PresenceTTL`）；心跳仅续约 TTL，不触发状态变更事件；`last_seq` 填入客户端收到的最大服务端 seq
 2. **消息重试**：收到 `ServerAck` 中 `status = RETRYABLE` 时可以重试；`REJECTED` 时不应重试，应向用户展示错误
 3. **断线重连**：收到 `RECONNECT` 帧时，客户端应在 `reconnect_delay_ms` 后重新发起连接
 4. **Token 刷新**：收到 `TOKEN_EXPIRED` 时，客户端应通过 REST API `/api/auth/refresh` 获取新 Token，然后重新建立 WebSocket 连接

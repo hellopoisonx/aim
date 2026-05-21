@@ -62,6 +62,10 @@ type GetConversationHistoryResponse struct {
 	HasMore             bool          `json:"has_more"`
 }
 
+type GetFriendsPresenceResponse struct {
+	Presences []PresenceItem `json:"presences"`
+}
+
 type GetUserByIdRequest struct {
 	Id int64 `path:"id" validate:"required"`
 }
@@ -115,6 +119,12 @@ type MessageItem struct {
 	Content        string `json:"content"`
 	ClientMsgId    string `json:"client_msg_id"`
 	CreatedAt      int64  `json:"created_at"`
+}
+
+type PresenceItem struct {
+	UserId    int64  `json:"user_id"`
+	Status    string `json:"status"`
+	UpdatedAt int64  `json:"updated_at"`
 }
 
 type RefreshRequest struct {

@@ -235,3 +235,23 @@ service gateway-api {
 	post /reject/:id (RejectFriendRequest) returns (RejectFriendResponse)
 }
 
+type PresenceItem {
+	UserId    int64  `json:"user_id"`
+	Status    string `json:"status"`
+	UpdatedAt int64  `json:"updated_at"`
+}
+
+type GetFriendsPresenceResponse {
+	Presences []PresenceItem `json:"presences"`
+}
+
+@server (
+	middleware: Auth
+	prefix:     /api/presence
+	group:      presence
+)
+service gateway-api {
+	@handler GetFriendsPresence
+	get /friends returns (GetFriendsPresenceResponse)
+}
+

@@ -18,6 +18,7 @@
 | 12 | POST | `/api/conversations` | Bearer | `CreateConversation()` / `CreateDirectConversation()` | ✅ |
 | 13 | GET | `/api/conversations` | Bearer | `ListConversations()` | ✅ |
 | 14 | GET | `/api/conversations/history/{id}` | Bearer | `GetConversationHistory()` | ✅ |
+| 15 | GET | `/api/presence/friends` | Bearer | `GetFriendsPresence()` | ✅ |
 
 ## WebSocket 升级端点（1 个）
 

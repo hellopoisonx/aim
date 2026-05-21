@@ -5,6 +5,11 @@ package svc
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
+	"os"
+	"strconv"
+	"time"
 
 	"github.com/hellopoisonx/aim/app/auth/rpc/authservice"
 	"github.com/hellopoisonx/aim/app/core/rpc/pb"
@@ -15,25 +20,100 @@ import (
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/friendshipservice"
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/userservice"
 	aimnacos "github.com/hellopoisonx/aim/app/shared/nacos"
+	"github.com/hellopoisonx/aim/app/shared/tracing"
 
 	"github.com/redis/go-redis/v9"
+	"github.com/zeromicro/go-queue/kq"
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/rest"
 	"github.com/zeromicro/go-zero/zrpc"
 )
 
 // PresencePublisher is the interface for publishing presence events to Kafka.
-// Implementation may be a real Kafka writer or a no-op for testing.
 type PresencePublisher interface {
 	PublishPresence(ctx context.Context, userID int64, status string) error
 }
 
-// noopPresencePublisher is a no-op implementation for when no real publisher is configured.
-type noopPresencePublisher struct{}
+// TypingPublisher is the interface for publishing typing events to Kafka.
+type TypingPublisher interface {
+	PublishTyping(ctx context.Context, fromUserID, conversationID int64) error
+}
 
-func (noopPresencePublisher) PublishPresence(ctx context.Context, userID int64, status string) error {
+// noopPublisher is a no-op implementation for when no real publisher is configured.
+type noopPublisher struct{}
+
+func (noopPublisher) PublishPresence(ctx context.Context, userID int64, status string) error {
 	logx.WithContext(ctx).Debugf("presence publish (noop): user=%d status=%s", userID, status)
 	return nil
+}
+
+func (noopPublisher) PublishTyping(ctx context.Context, fromUserID, conversationID int64) error {
+	logx.WithContext(ctx).Debugf("typing publish (noop): from=%d conv=%d", fromUserID, conversationID)
+	return nil
+}
+
+// ── Kafka-based publishers ────────────────────────────────────────────────────
+
+// presenceEvent is the Kafka message for presence change.
+type presenceEvent struct {
+	tracing.TraceContextFields
+	UserID        int64  `json:"user_id"`
+	DeviceID      string `json:"device_id"`
+	Status        string `json:"status"`
+	UpdatedAt     int64  `json:"updated_at"`
+	GatewayNodeID string `json:"gateway_node_id"`
+}
+
+// typingEvent is the Kafka message for typing notification.
+type typingEvent struct {
+	tracing.TraceContextFields
+	FromUserID     int64 `json:"from_user_id"`
+	ConversationID int64 `json:"conversation_id"`
+	Timestamp      int64 `json:"timestamp"`
+}
+
+// kafkaPresencePublisher implements PresencePublisher via Kafka.
+type kafkaPresencePublisher struct {
+	pusher  *kq.Pusher
+	nodeID  string
+}
+
+func (p *kafkaPresencePublisher) PublishPresence(ctx context.Context, userID int64, status string) error {
+	event := presenceEvent{
+		TraceContextFields: tracing.InjectTraceContext(ctx),
+		UserID:             userID,
+		Status:             status,
+		UpdatedAt:          time.Now().UnixMilli(),
+		GatewayNodeID:      p.nodeID,
+	}
+	data, err := json.Marshal(event)
+	if err != nil {
+		return err
+	}
+	// Use user_id as Kafka key to preserve order for same user.
+	key := strconv.FormatInt(userID, 10)
+	return p.pusher.PushWithKey(ctx, key, string(data))
+}
+
+// kafkaTypingPublisher implements TypingPublisher via Kafka.
+type kafkaTypingPublisher struct {
+	pusher *kq.Pusher
+}
+
+func (p *kafkaTypingPublisher) PublishTyping(ctx context.Context, fromUserID, conversationID int64) error {
+	event := typingEvent{
+		TraceContextFields: tracing.InjectTraceContext(ctx),
+		FromUserID:         fromUserID,
+		ConversationID:     conversationID,
+		Timestamp:          time.Now().UnixMilli(),
+	}
+	data, err := json.Marshal(event)
+	if err != nil {
+		return err
+	}
+	// Use conversation_id as Kafka key to preserve order for same conversation.
+	key := strconv.FormatInt(conversationID, 10)
+	return p.pusher.PushWithKey(ctx, key, string(data))
 }
 
 type ServiceContext struct {
@@ -49,10 +129,19 @@ type ServiceContext struct {
 	logicNamingClient       aimnacos.NamingClient
 	RedisClient             *redis.Client
 	PresencePub             PresencePublisher
+	TypingPub               TypingPublisher
 	WsManager               *ws.Manager
 }
 
 func NewServiceContext(c config.Config) *ServiceContext {
+	// Read GatewayNodeID from environment variable (required).
+	if c.GatewayNodeID == "" {
+		c.GatewayNodeID = os.Getenv("AIM_GATEWAY_NODE_ID")
+	}
+	if c.GatewayNodeID == "" {
+		logx.Must(errors.New("AIM_GATEWAY_NODE_ID environment variable is required but not set"))
+	}
+
 	if c.Auth.AccessSecret == "" {
 		c.Auth.AccessSecret = "aim-dev-access-secret"
 	}
@@ -104,7 +193,8 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	}
 
 	// Create WebSocket connection manager shared by HTTP handler and gRPC server.
-	wsManager := ws.NewManager()
+	// Use presence-aware manager when Redis and node ID are available.
+	wsManager := ws.NewManagerWithPresence(redisClient, c.GatewayNodeID, c.Redis.PresenceTTL)
 
 	return &ServiceContext{
 		Config:                  c,
@@ -118,9 +208,31 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		coreNamingClient:        coreNamingClient,
 		logicNamingClient:       logicNamingClient,
 		RedisClient:             redisClient,
-		PresencePub:             &noopPresencePublisher{},
+		PresencePub:             newPresencePub(c, redisClient),
+		TypingPub:               newTypingPub(c, redisClient),
 		WsManager:               wsManager,
 	}
+}
+
+// newPresencePub creates a PresencePublisher (Kafka if brokers are configured, otherwise noop).
+func newPresencePub(c config.Config, redisClient *redis.Client) PresencePublisher {
+	if len(c.Kafka.Brokers) > 0 && c.Kafka.PresenceTopic != "" && redisClient != nil {
+		logx.Infof("presence publisher: Kafka topic=%s", c.Kafka.PresenceTopic)
+		return &kafkaPresencePublisher{
+			pusher:  kq.NewPusher(c.Kafka.Brokers, c.Kafka.PresenceTopic),
+			nodeID:  c.GatewayNodeID,
+		}
+	}
+	return &noopPublisher{}
+}
+
+// newTypingPub creates a TypingPublisher (Kafka if brokers are configured, otherwise noop).
+func newTypingPub(c config.Config, redisClient *redis.Client) TypingPublisher {
+	if len(c.Kafka.Brokers) > 0 && c.Kafka.TypingTopic != "" && redisClient != nil {
+		logx.Infof("typing publisher: Kafka topic=%s", c.Kafka.TypingTopic)
+		return &kafkaTypingPublisher{pusher: kq.NewPusher(c.Kafka.Brokers, c.Kafka.TypingTopic)}
+	}
+	return &noopPublisher{}
 }
 
 // Close releases the underlying Nacos naming clients and Redis client.
@@ -153,6 +265,7 @@ func NewServiceContextWithAuth(c config.Config, authClient authservice.AuthServi
 		CoreClient:  nil,
 		RedisClient: nil,
 		PresencePub: nil,
+		TypingPub:   nil,
 		WsManager:   ws.NewManager(),
 	}
 }
@@ -164,6 +277,7 @@ func NewServiceContextWithLogic(c config.Config, logicUserClient userservice.Use
 		Auth:            middleware.NewAuthMiddleware(c.Auth.AccessSecret).Handle,
 		RedisClient:     nil,
 		PresencePub:     nil,
+		TypingPub:       nil,
 		WsManager:       ws.NewManager(),
 	}
 }
@@ -177,6 +291,7 @@ func NewServiceContextWithCore(c config.Config, authClient authservice.AuthServi
 		Auth:        middleware.NewAuthMiddleware(c.Auth.AccessSecret).Handle,
 		RedisClient: nil,
 		PresencePub: nil,
+		TypingPub:   nil,
 		WsManager:   ws.NewManager(),
 	}
 }

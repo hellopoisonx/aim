@@ -20,9 +20,18 @@ const emit = defineEmits<{
 const inputValue = ref('')
 
 let typingTimer: ReturnType<typeof setTimeout> | null = null
+let lastTypingEmit = 0
+const TYPING_THROTTLE_MS = 2500
 
 function onInput() {
-  emit('typing')
+  // Throttle: only emit typing once every 2.5s to avoid flooding.
+  const now = Date.now()
+  if (now - lastTypingEmit >= TYPING_THROTTLE_MS) {
+    lastTypingEmit = now
+    emit('typing')
+  }
+
+  // Reset silence detection timer.
   if (typingTimer) clearTimeout(typingTimer)
   typingTimer = setTimeout(() => {
     // typing stopped

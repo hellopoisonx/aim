@@ -289,6 +289,120 @@ func (x *PushPresenceResp) GetSuccess() bool {
 	return false
 }
 
+// PushTypingReq — 推送输入状态请求
+type PushTypingReq struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	TargetUserId   int64                  `protobuf:"varint,1,opt,name=target_user_id,json=targetUserId,proto3" json:"target_user_id,omitempty"`     // 目标用户 ID（投递到此用户在本节点的所有连接）
+	FromUserId     int64                  `protobuf:"varint,2,opt,name=from_user_id,json=fromUserId,proto3" json:"from_user_id,omitempty"`           // 正在输入的用户 ID
+	ConversationId int64                  `protobuf:"varint,3,opt,name=conversation_id,json=conversationId,proto3" json:"conversation_id,omitempty"` // 会话 ID
+	Timestamp      int64                  `protobuf:"varint,4,opt,name=timestamp,proto3" json:"timestamp,omitempty"`                                 // 事件时间戳（毫秒）
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *PushTypingReq) Reset() {
+	*x = PushTypingReq{}
+	mi := &file_gateway_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PushTypingReq) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PushTypingReq) ProtoMessage() {}
+
+func (x *PushTypingReq) ProtoReflect() protoreflect.Message {
+	mi := &file_gateway_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PushTypingReq.ProtoReflect.Descriptor instead.
+func (*PushTypingReq) Descriptor() ([]byte, []int) {
+	return file_gateway_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *PushTypingReq) GetTargetUserId() int64 {
+	if x != nil {
+		return x.TargetUserId
+	}
+	return 0
+}
+
+func (x *PushTypingReq) GetFromUserId() int64 {
+	if x != nil {
+		return x.FromUserId
+	}
+	return 0
+}
+
+func (x *PushTypingReq) GetConversationId() int64 {
+	if x != nil {
+		return x.ConversationId
+	}
+	return 0
+}
+
+func (x *PushTypingReq) GetTimestamp() int64 {
+	if x != nil {
+		return x.Timestamp
+	}
+	return 0
+}
+
+// PushTypingResp — 推送输入状态响应
+type PushTypingResp struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"` // 是否成功推送
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PushTypingResp) Reset() {
+	*x = PushTypingResp{}
+	mi := &file_gateway_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PushTypingResp) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PushTypingResp) ProtoMessage() {}
+
+func (x *PushTypingResp) ProtoReflect() protoreflect.Message {
+	mi := &file_gateway_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PushTypingResp.ProtoReflect.Descriptor instead.
+func (*PushTypingResp) Descriptor() ([]byte, []int) {
+	return file_gateway_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *PushTypingResp) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
 type PushFriendApplicationReq struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	TargetUserId  int64                  `protobuf:"varint,1,opt,name=target_user_id,json=targetUserId,proto3" json:"target_user_id,omitempty"`
@@ -303,7 +417,7 @@ type PushFriendApplicationReq struct {
 
 func (x *PushFriendApplicationReq) Reset() {
 	*x = PushFriendApplicationReq{}
-	mi := &file_gateway_proto_msgTypes[4]
+	mi := &file_gateway_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -315,7 +429,7 @@ func (x *PushFriendApplicationReq) String() string {
 func (*PushFriendApplicationReq) ProtoMessage() {}
 
 func (x *PushFriendApplicationReq) ProtoReflect() protoreflect.Message {
-	mi := &file_gateway_proto_msgTypes[4]
+	mi := &file_gateway_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -328,7 +442,7 @@ func (x *PushFriendApplicationReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PushFriendApplicationReq.ProtoReflect.Descriptor instead.
 func (*PushFriendApplicationReq) Descriptor() ([]byte, []int) {
-	return file_gateway_proto_rawDescGZIP(), []int{4}
+	return file_gateway_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *PushFriendApplicationReq) GetTargetUserId() int64 {
@@ -382,7 +496,7 @@ type PushFriendApplicationResp struct {
 
 func (x *PushFriendApplicationResp) Reset() {
 	*x = PushFriendApplicationResp{}
-	mi := &file_gateway_proto_msgTypes[5]
+	mi := &file_gateway_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -394,7 +508,7 @@ func (x *PushFriendApplicationResp) String() string {
 func (*PushFriendApplicationResp) ProtoMessage() {}
 
 func (x *PushFriendApplicationResp) ProtoReflect() protoreflect.Message {
-	mi := &file_gateway_proto_msgTypes[5]
+	mi := &file_gateway_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -407,7 +521,7 @@ func (x *PushFriendApplicationResp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PushFriendApplicationResp.ProtoReflect.Descriptor instead.
 func (*PushFriendApplicationResp) Descriptor() ([]byte, []int) {
-	return file_gateway_proto_rawDescGZIP(), []int{5}
+	return file_gateway_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *PushFriendApplicationResp) GetSuccess() bool {
@@ -429,7 +543,7 @@ type KickUserReq struct {
 
 func (x *KickUserReq) Reset() {
 	*x = KickUserReq{}
-	mi := &file_gateway_proto_msgTypes[6]
+	mi := &file_gateway_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -441,7 +555,7 @@ func (x *KickUserReq) String() string {
 func (*KickUserReq) ProtoMessage() {}
 
 func (x *KickUserReq) ProtoReflect() protoreflect.Message {
-	mi := &file_gateway_proto_msgTypes[6]
+	mi := &file_gateway_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -454,7 +568,7 @@ func (x *KickUserReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use KickUserReq.ProtoReflect.Descriptor instead.
 func (*KickUserReq) Descriptor() ([]byte, []int) {
-	return file_gateway_proto_rawDescGZIP(), []int{6}
+	return file_gateway_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *KickUserReq) GetUserId() int64 {
@@ -488,7 +602,7 @@ type KickUserResp struct {
 
 func (x *KickUserResp) Reset() {
 	*x = KickUserResp{}
-	mi := &file_gateway_proto_msgTypes[7]
+	mi := &file_gateway_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -500,7 +614,7 @@ func (x *KickUserResp) String() string {
 func (*KickUserResp) ProtoMessage() {}
 
 func (x *KickUserResp) ProtoReflect() protoreflect.Message {
-	mi := &file_gateway_proto_msgTypes[7]
+	mi := &file_gateway_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -513,7 +627,7 @@ func (x *KickUserResp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use KickUserResp.ProtoReflect.Descriptor instead.
 func (*KickUserResp) Descriptor() ([]byte, []int) {
-	return file_gateway_proto_rawDescGZIP(), []int{7}
+	return file_gateway_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *KickUserResp) GetKickedCount() int32 {
@@ -534,7 +648,7 @@ type DrainNotifyReq struct {
 
 func (x *DrainNotifyReq) Reset() {
 	*x = DrainNotifyReq{}
-	mi := &file_gateway_proto_msgTypes[8]
+	mi := &file_gateway_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -546,7 +660,7 @@ func (x *DrainNotifyReq) String() string {
 func (*DrainNotifyReq) ProtoMessage() {}
 
 func (x *DrainNotifyReq) ProtoReflect() protoreflect.Message {
-	mi := &file_gateway_proto_msgTypes[8]
+	mi := &file_gateway_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -559,7 +673,7 @@ func (x *DrainNotifyReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DrainNotifyReq.ProtoReflect.Descriptor instead.
 func (*DrainNotifyReq) Descriptor() ([]byte, []int) {
-	return file_gateway_proto_rawDescGZIP(), []int{8}
+	return file_gateway_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *DrainNotifyReq) GetDrainTimeoutMs() int64 {
@@ -586,7 +700,7 @@ type DrainNotifyResp struct {
 
 func (x *DrainNotifyResp) Reset() {
 	*x = DrainNotifyResp{}
-	mi := &file_gateway_proto_msgTypes[9]
+	mi := &file_gateway_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -598,7 +712,7 @@ func (x *DrainNotifyResp) String() string {
 func (*DrainNotifyResp) ProtoMessage() {}
 
 func (x *DrainNotifyResp) ProtoReflect() protoreflect.Message {
-	mi := &file_gateway_proto_msgTypes[9]
+	mi := &file_gateway_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -611,7 +725,7 @@ func (x *DrainNotifyResp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DrainNotifyResp.ProtoReflect.Descriptor instead.
 func (*DrainNotifyResp) Descriptor() ([]byte, []int) {
-	return file_gateway_proto_rawDescGZIP(), []int{9}
+	return file_gateway_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *DrainNotifyResp) GetAffectedCount() int32 {
@@ -647,6 +761,14 @@ const file_gateway_proto_rawDesc = "" +
 	"\n" +
 	"updated_at\x18\x03 \x01(\x03R\tupdatedAt\",\n" +
 	"\x10PushPresenceResp\x12\x18\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\"\x9e\x01\n" +
+	"\rPushTypingReq\x12$\n" +
+	"\x0etarget_user_id\x18\x01 \x01(\x03R\ftargetUserId\x12 \n" +
+	"\ffrom_user_id\x18\x02 \x01(\x03R\n" +
+	"fromUserId\x12'\n" +
+	"\x0fconversation_id\x18\x03 \x01(\x03R\x0econversationId\x12\x1c\n" +
+	"\ttimestamp\x18\x04 \x01(\x03R\ttimestamp\"*\n" +
+	"\x0ePushTypingResp\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\"\xcc\x01\n" +
 	"\x18PushFriendApplicationReq\x12$\n" +
 	"\x0etarget_user_id\x18\x01 \x01(\x03R\ftargetUserId\x12\x17\n" +
@@ -669,10 +791,12 @@ const file_gateway_proto_rawDesc = "" +
 	"\x10drain_timeout_ms\x18\x01 \x01(\x03R\x0edrainTimeoutMs\x12&\n" +
 	"\x0fgateway_node_id\x18\x02 \x01(\tR\rgatewayNodeId\"8\n" +
 	"\x0fDrainNotifyResp\x12%\n" +
-	"\x0eaffected_count\x18\x01 \x01(\x05R\raffectedCount2\xf2\x02\n" +
+	"\x0eaffected_count\x18\x01 \x01(\x05R\raffectedCount2\xb1\x03\n" +
 	"\x0eGatewayService\x12@\n" +
 	"\vPushMessage\x12\x17.gateway.PushMessageReq\x1a\x18.gateway.PushMessageResp\x12C\n" +
-	"\fPushPresence\x12\x18.gateway.PushPresenceReq\x1a\x19.gateway.PushPresenceResp\x12^\n" +
+	"\fPushPresence\x12\x18.gateway.PushPresenceReq\x1a\x19.gateway.PushPresenceResp\x12=\n" +
+	"\n" +
+	"PushTyping\x12\x16.gateway.PushTypingReq\x1a\x17.gateway.PushTypingResp\x12^\n" +
 	"\x15PushFriendApplication\x12!.gateway.PushFriendApplicationReq\x1a\".gateway.PushFriendApplicationResp\x127\n" +
 	"\bKickUser\x12\x14.gateway.KickUserReq\x1a\x15.gateway.KickUserResp\x12@\n" +
 	"\vDrainNotify\x12\x17.gateway.DrainNotifyReq\x1a\x18.gateway.DrainNotifyRespB5Z3github.com/hellopoisonx/aim/shared/proto/gateway/pbb\x06proto3"
@@ -689,35 +813,39 @@ func file_gateway_proto_rawDescGZIP() []byte {
 	return file_gateway_proto_rawDescData
 }
 
-var file_gateway_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
+var file_gateway_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
 var file_gateway_proto_goTypes = []any{
 	(*PushMessageReq)(nil),            // 0: gateway.PushMessageReq
 	(*PushMessageResp)(nil),           // 1: gateway.PushMessageResp
 	(*PushPresenceReq)(nil),           // 2: gateway.PushPresenceReq
 	(*PushPresenceResp)(nil),          // 3: gateway.PushPresenceResp
-	(*PushFriendApplicationReq)(nil),  // 4: gateway.PushFriendApplicationReq
-	(*PushFriendApplicationResp)(nil), // 5: gateway.PushFriendApplicationResp
-	(*KickUserReq)(nil),               // 6: gateway.KickUserReq
-	(*KickUserResp)(nil),              // 7: gateway.KickUserResp
-	(*DrainNotifyReq)(nil),            // 8: gateway.DrainNotifyReq
-	(*DrainNotifyResp)(nil),           // 9: gateway.DrainNotifyResp
+	(*PushTypingReq)(nil),             // 4: gateway.PushTypingReq
+	(*PushTypingResp)(nil),            // 5: gateway.PushTypingResp
+	(*PushFriendApplicationReq)(nil),  // 6: gateway.PushFriendApplicationReq
+	(*PushFriendApplicationResp)(nil), // 7: gateway.PushFriendApplicationResp
+	(*KickUserReq)(nil),               // 8: gateway.KickUserReq
+	(*KickUserResp)(nil),              // 9: gateway.KickUserResp
+	(*DrainNotifyReq)(nil),            // 10: gateway.DrainNotifyReq
+	(*DrainNotifyResp)(nil),           // 11: gateway.DrainNotifyResp
 }
 var file_gateway_proto_depIdxs = []int32{
-	0, // 0: gateway.GatewayService.PushMessage:input_type -> gateway.PushMessageReq
-	2, // 1: gateway.GatewayService.PushPresence:input_type -> gateway.PushPresenceReq
-	4, // 2: gateway.GatewayService.PushFriendApplication:input_type -> gateway.PushFriendApplicationReq
-	6, // 3: gateway.GatewayService.KickUser:input_type -> gateway.KickUserReq
-	8, // 4: gateway.GatewayService.DrainNotify:input_type -> gateway.DrainNotifyReq
-	1, // 5: gateway.GatewayService.PushMessage:output_type -> gateway.PushMessageResp
-	3, // 6: gateway.GatewayService.PushPresence:output_type -> gateway.PushPresenceResp
-	5, // 7: gateway.GatewayService.PushFriendApplication:output_type -> gateway.PushFriendApplicationResp
-	7, // 8: gateway.GatewayService.KickUser:output_type -> gateway.KickUserResp
-	9, // 9: gateway.GatewayService.DrainNotify:output_type -> gateway.DrainNotifyResp
-	5, // [5:10] is the sub-list for method output_type
-	0, // [0:5] is the sub-list for method input_type
-	0, // [0:0] is the sub-list for extension type_name
-	0, // [0:0] is the sub-list for extension extendee
-	0, // [0:0] is the sub-list for field type_name
+	0,  // 0: gateway.GatewayService.PushMessage:input_type -> gateway.PushMessageReq
+	2,  // 1: gateway.GatewayService.PushPresence:input_type -> gateway.PushPresenceReq
+	4,  // 2: gateway.GatewayService.PushTyping:input_type -> gateway.PushTypingReq
+	6,  // 3: gateway.GatewayService.PushFriendApplication:input_type -> gateway.PushFriendApplicationReq
+	8,  // 4: gateway.GatewayService.KickUser:input_type -> gateway.KickUserReq
+	10, // 5: gateway.GatewayService.DrainNotify:input_type -> gateway.DrainNotifyReq
+	1,  // 6: gateway.GatewayService.PushMessage:output_type -> gateway.PushMessageResp
+	3,  // 7: gateway.GatewayService.PushPresence:output_type -> gateway.PushPresenceResp
+	5,  // 8: gateway.GatewayService.PushTyping:output_type -> gateway.PushTypingResp
+	7,  // 9: gateway.GatewayService.PushFriendApplication:output_type -> gateway.PushFriendApplicationResp
+	9,  // 10: gateway.GatewayService.KickUser:output_type -> gateway.KickUserResp
+	11, // 11: gateway.GatewayService.DrainNotify:output_type -> gateway.DrainNotifyResp
+	6,  // [6:12] is the sub-list for method output_type
+	0,  // [0:6] is the sub-list for method input_type
+	0,  // [0:0] is the sub-list for extension type_name
+	0,  // [0:0] is the sub-list for extension extendee
+	0,  // [0:0] is the sub-list for field type_name
 }
 
 func init() { file_gateway_proto_init() }
@@ -731,7 +859,7 @@ func file_gateway_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_gateway_proto_rawDesc), len(file_gateway_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   10,
+			NumMessages:   12,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -15,4 +15,5 @@ description: aim 的 Protobuf 协议域。定义跨端/跨服务线缆协议。�
 
 ## 最近变更
 
+- 2026-05-22: `gateway.proto` 新增 `PushTyping` RPC（`PushTypingReq`/`PushTypingResp`），用于 core `TypingConsumer` 向目标用户网关推送输入状态；字段号 1-4 对应 target_user_id/from_user_id/conversation_id/timestamp。
 - 2026-05-20: 从 shared/proto/AGENTS.md 迁移
