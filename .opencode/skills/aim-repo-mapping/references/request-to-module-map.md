@@ -6,6 +6,7 @@
 - “网关、REST API、http、ws、websocket” -> `aim-gateway-domain`
 - “用户信息、逻辑、logic” -> `aim-logic-domain`
 - “核心、core、转发” -> `aim-core-domain`
+- “dev-tool、aim_test、冒烟测试、集成测试、接口调试、测试脚本” -> `aim-dev-tool`
 
 ## 不要误判
 

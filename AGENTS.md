@@ -11,6 +11,12 @@
 
 AIM 是多人在线即时通讯系统，内置可自部署 AI 助手。后端为 go-zero 微服务（gateway/auth/core/logic），桌面端为 Wails + Vue3 + Element Plus，基础设施包含 Kafka、Redis/Redis Stack、PostgreSQL/pgvector、Nacos、Jaeger。
 
+## 工作流
+
+- 代码更改后必须执行测试、覆盖率测试、lint
+- 任务完成后及时更新相关文档 (`.opencode/skills/`)
+- 总结工作区改动并 `git commit`
+
 ## 结构
 
 ```text
@@ -39,6 +45,7 @@ aim/
 - aim-shared-domain: 共享包域
 - aim-proto-domain: Protobuf 协议域
 - aim-database-migration: 数据库迁移
+- aim-dev-tool: 开发测试工具
 - zero-skills: go-zero 框架
 
 ## 约定

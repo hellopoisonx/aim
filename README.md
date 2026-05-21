@@ -17,6 +17,7 @@
 | `aim-shared-domain` | 进程内共享包 |
 | `aim-proto-domain` | Protobuf 协议 |
 | `aim-database-migration` | 数据库迁移 |
+| `aim-dev-tool` | 开发测试工具 |
 | `zero-skills` | go-zero 框架 |
 
 ## 技术栈
