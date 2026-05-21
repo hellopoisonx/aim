@@ -65,6 +65,17 @@
 
 `GET /api/friends/me` 从 JWT payload 提取 `user_id`，调用 `FriendshipService.ListFriends` 返回当前用户的所有已接受好友列表。
 
+### 代理转发 `logic` - `/api/conversations`
+
+| Method | Path | Auth | Handler |
+| --- | --- | --- | --- |
+| POST | `/api/conversations` | `Auth` 中间件（JWT Bearer token） | `internal/handler/conversations/create_conversation_handler.go` |
+| GET | `/api/conversations` | `Auth` 中间件（JWT Bearer token） | `internal/handler/conversations/list_conversations_handler.go` |
+
+- `POST /api/conversations` 调用 `ConversationService.CreateConversation`（通过 `LogicRpc`）创建直聊/群聊会话。
+- `GET /api/conversations` 调用 `ConversationService.GetUserConversations`（通过 `LogicRpc`）返回当前用户参与的所有会话，每条记录包含 `conversation_id`、`conversation_type`、`is_active`、`created_at`、`member_ids`。
+- 两个端点均受 `Auth` 中间件保护，`user_id` 从 JWT payload 提取。
+
 重新生成 REST 脚手架：
 
 ```bash

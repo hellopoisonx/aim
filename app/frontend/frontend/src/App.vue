@@ -362,10 +362,12 @@ onMounted(async () => {
           const notificationType = (payload?.notification_type as string) ?? ''
           const title = (payload?.title as string) ?? ''
           const body = (payload?.body as string) ?? ''
+          const relatedId = payload?.related_id as number | undefined
           const displayText = [title, body].filter(Boolean).join('：')
           if (displayText) {
             ElMessage.info(displayText)
           }
+          // relatedId may be used to navigate to the related conversation/object
           break
         }
 

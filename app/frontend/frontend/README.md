@@ -1,8 +1,8 @@
-# Vue 3 + TypeScript + Vite
+# AIM Frontend (Vue 3 + TypeScript + Vite)
 
-This template should help get you started developing with Vue 3 and TypeScript in Vite. The template uses Vue
-3 `<script setup>` SFCs, check out
-the [script setup docs](https://v3.vuejs.org/api/sfc-script-setup.html#sfc-script-setup) to learn more.
+AIM 桌面客户端的 Vue 3 前端。使用 `<script setup>` SFC + Element Plus 组件库。
+
+This project was scaffolded from the Vue 3 + TypeScript + Vite template.
 
 ## Recommended IDE Setup
 

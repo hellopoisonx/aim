@@ -26,6 +26,7 @@ REST endpoints:
 - `GET /api/users/by-name/{name}` for authenticated nickname search
 - `GET /api/users/by-id/{id}` for authenticated user detail lookup
 - `POST /api/conversations` for authenticated direct/group conversation creation
+- `GET /api/conversations` for authenticated listing of user's conversations
 - `GET /api/conversations/history/{id}` for authenticated cursor-based message history
 
 WebSocket endpoint:
@@ -33,6 +34,14 @@ WebSocket endpoint:
 - `GET /ws` with `Authorization: Bearer <access_token>`
 
 WebSocket frames are protobuf binary frames defined by `shared/proto/ws/ws.proto` and generated Go package `github.com/hellopoisonx/aim/shared/proto/ws/pb`.
+
+Push frame types handled by Vue:
+
+- `PUSH_MESSAGE` (101): 消息推送，支持 client_msg_id 去重和乐观消息替换
+- `PUSH_PRESENCE` (102): 在线状态变更
+- `PUSH_NOTIFICATION` (103): 系统通知，通过 `ElMessage.info()` 显示
+- `PUSH_TYPING` (104): 输入状态提示（4 秒自动清除）
+- `PUSH_FRIEND_APPLICATION` (108): 好友申请推送
 
 ## Rules
 
@@ -50,6 +59,12 @@ WebSocket frames are protobuf binary frames defined by `shared/proto/ws/ws.proto
   - Go runtime: `github.com/wailsapp/wails/v2/pkg/runtime`
   - Frontend bindings: `../wailsjs/go/main/App`
   - Frontend runtime: `../wailsjs/runtime/runtime`
+
+## References
+
+- `references/rest-client-pattern.md` — REST 客户端架构、DTO 定义、Auth token 传递
+- `references/ws-frame-handling.md` — WebSocket 帧处理、`SendFrame`、帧类型分发
+- `references/login-conversation-load-flow.md` — 登录后加载会话列表的完整数据流
 
 ## Verification
 
@@ -69,4 +84,5 @@ go build ./...
 go test ./...
 go test -cover ./app/frontend/...
 ```
+- 2026-05-21: 新增 `GET /api/conversations` REST 端点支持；`SendFrame` 添加 `Timestamp` 填充（`time.Now().UnixMilli()`）；Wails App bridge 新增 `ListConversations()` 方法；Vue 新增 `PUSH_NOTIFICATION`（103）处理使用 `ElMessage.info()`；登录后从服务端加载已有会话列表。
 - 2026-05-20: 修复客户端消息回推处理：解析 PushMessagePayload 的 message_id/sent_at/client_msg_id，按 client_msg_id 替换乐观消息，并在未知 conversation_id 收到消息时创建真实会话条目。

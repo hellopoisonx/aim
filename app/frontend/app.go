@@ -432,6 +432,7 @@ func (a *App) ProtocolCatalog() ProtocolCatalog {
 			"GET /api/friends/applications",
 			"GET /api/friends/me",
 			"POST /api/conversations",
+			"GET /api/conversations",
 			"GET /api/conversations/history/{id}",
 			"GET /ws",
 		},

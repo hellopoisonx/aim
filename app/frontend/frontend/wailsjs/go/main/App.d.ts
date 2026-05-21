@@ -25,6 +25,8 @@ export function ListFriendApplications():Promise<client.ListFriendApplicationsRe
 
 export function ListFriends():Promise<client.ListFriendsResponse>;
 
+export function ListConversations():Promise<client.ListConversationsResponse>;
+
 export function Login(arg1:client.LoginRequest):Promise<client.LoginResponse>;
 
 export function Logout():Promise<client.LogoutResponse>;

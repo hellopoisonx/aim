@@ -46,6 +46,10 @@ export function ListFriends() {
   return window['go']['main']['App']['ListFriends']();
 }
 
+export function ListConversations() {
+  return window['go']['main']['App']['ListConversations']();
+}
+
 export function Login(arg1) {
   return window['go']['main']['App']['Login'](arg1);
 }
