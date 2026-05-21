@@ -459,3 +459,68 @@ func TestRESTClientGetConversationHistoryEnvelopeError(t *testing.T) {
 		t.Fatalf("CodeError = %+v", codeErr)
 	}
 }
+
+func TestRESTClientListConversations(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/conversations" {
+			t.Fatalf("path = %s, want /api/conversations", r.URL.Path)
+		}
+
+		if got := r.Header.Get("Authorization"); got != "Bearer token-list" {
+			t.Fatalf("Authorization = %q", got)
+		}
+
+		_ = json.NewEncoder(w).Encode(Envelope{
+			Code: 0,
+			Msg:  "ok",
+			Body: json.RawMessage(`{"conversations":[{"conversation_id":1,"conversation_type":"direct","is_active":true,"created_at":1715678900000,"member_ids":[7,42]},{"conversation_id":2,"conversation_type":"direct","is_active":true,"created_at":1715678910000,"member_ids":[7,99]}]}`),
+		})
+	}))
+	defer server.Close()
+
+	got, err := NewRESTClient(server.URL).ListConversations(context.Background(), "token-list")
+	if err != nil {
+		t.Fatalf("ListConversations returned error: %v", err)
+	}
+
+	if len(got.Conversations) != 2 {
+		t.Fatalf("len(Conversations) = %d, want 2", len(got.Conversations))
+	}
+
+	if got.Conversations[0].ConversationID != 1 || got.Conversations[0].ConversationType != "direct" || !got.Conversations[0].IsActive {
+		t.Fatalf("Conversation[0] = %+v", got.Conversations[0])
+	}
+
+	if len(got.Conversations[0].MemberIDs) != 2 || got.Conversations[0].MemberIDs[0] != 7 || got.Conversations[0].MemberIDs[1] != 42 {
+		t.Fatalf("Conversation[0].MemberIDs = %+v", got.Conversations[0].MemberIDs)
+	}
+
+	if got.Conversations[1].ConversationID != 2 {
+		t.Fatalf("Conversation[1] = %+v", got.Conversations[1])
+	}
+}
+
+func TestRESTClientListConversationsEnvelopeError(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(Envelope{Code: errorx.CodeAuth, Msg: "auth failure"})
+	}))
+	defer server.Close()
+
+	_, err := NewRESTClient(server.URL).ListConversations(context.Background(), "bad-token")
+	if err == nil {
+		t.Fatal("ListConversations returned nil error")
+	}
+
+	var codeErr *errorx.CodeError
+	if !errors.As(err, &codeErr) {
+		t.Fatalf("error type = %T, want *errorx.CodeError", err)
+	}
+
+	if codeErr.Code != errorx.CodeAuth || codeErr.Message != "auth failure" {
+		t.Fatalf("CodeError = %+v", codeErr)
+	}
+}

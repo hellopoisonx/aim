@@ -295,6 +295,18 @@ func (a *App) GetUserById(id int64) (*client.GetUserByIdResponse, error) {
 	return a.restClient().GetUserById(a.callContext(), id, accessToken)
 }
 
+func (a *App) ListConversations() (*client.ListConversationsResponse, error) {
+	a.mu.RLock()
+	accessToken := a.accessToken
+	a.mu.RUnlock()
+
+	if accessToken == "" {
+		return nil, errorx.NewCodeError(errorx.CodeAuth, "missing access token")
+	}
+
+	return a.restClient().ListConversations(a.callContext(), accessToken)
+}
+
 func (a *App) GetConversationHistory(conversationID, cursorCreatedAt, cursorID int64, limit int32) (*client.GetConversationHistoryResponse, error) {
 	a.mu.RLock()
 	accessToken := a.accessToken

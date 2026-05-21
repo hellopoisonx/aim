@@ -8,6 +8,7 @@ import {
   DisconnectWS,
   GetConversationHistory,
   GetUserById,
+  ListConversations,
   Login,
   Logout,
   Refresh,
@@ -356,6 +357,18 @@ onMounted(async () => {
           break
         }
 
+        // ── PUSH_NOTIFICATION (103) ──────────────────────────────────
+        case WS_FRAME.PUSH_NOTIFICATION: {
+          const notificationType = (payload?.notification_type as string) ?? ''
+          const title = (payload?.title as string) ?? ''
+          const body = (payload?.body as string) ?? ''
+          const displayText = [title, body].filter(Boolean).join('：')
+          if (displayText) {
+            ElMessage.info(displayText)
+          }
+          break
+        }
+
         // ── PUSH_TYPING (104) ──────────────────────────────────────────
         case WS_FRAME.PUSH_TYPING: {
           const conversationId = payload?.conversation_id as number | undefined
@@ -506,6 +519,50 @@ async function handleLogin(payload: { email: string; password: string; device_id
         connectionState.value = 'connected'
       } catch {
         ElMessage.warning('已登录，但无法建立实时连接')
+      }
+
+      // Load existing conversations from server
+      try {
+        const listResp = await ListConversations()
+        const items = listResp?.conversations ?? []
+        if (items.length > 0) {
+          const convPromises = items.map(async (item) => {
+            // Determine the other member (for direct chats)
+            const otherIds = (item.member_ids ?? []).filter((id: number) => id !== currentUserId.value)
+            const otherId = otherIds.length > 0 ? otherIds[0] : 0
+            let title = `会话 ${item.conversation_id}`
+            let avatar = ''
+            if (otherId > 0) {
+              try {
+                const userResp = await GetUserById(otherId)
+                if (userResp?.user) {
+                  const atIdx = userResp.user.email.indexOf('@')
+                  title = atIdx > 0 ? userResp.user.email.slice(0, atIdx) : userResp.user.email
+                  avatar = userResp.user.avatar ?? ''
+                }
+              } catch { /* use placeholder title */ }
+            }
+            const conv: Conversation = {
+              id: item.conversation_id,
+              title,
+              avatar,
+              lastMessage: '',
+              lastMessageAt: '',
+              unreadCount: 0,
+              isOnline: onlineUserIds.value.has(otherId),
+              memberIds: item.member_ids ?? [],
+            }
+            return conv
+          })
+          const loadedConvs = await Promise.all(convPromises)
+          conversations.value = loadedConvs
+          // Load history for each conversation
+          for (const conv of loadedConvs) {
+            loadConversationHistory(conv.id)
+          }
+        }
+      } catch {
+        // Non-critical: conversations will populate via WS pushes
       }
     }
   } catch (err) {

@@ -226,7 +226,7 @@ func (c *Client) SendFrame(ctx context.Context, frameType FrameType, payload pro
 	frame := &WsFrame{
 		Type:      frameType,
 		Seq:       seq,
-		Timestamp: 0,
+		Timestamp: time.Now().UnixMilli(),
 	}
 
 	if payload != nil {

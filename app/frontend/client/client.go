@@ -107,6 +107,20 @@ type CreateConversationResponse struct {
 	MemberIDs        []int64 `json:"member_ids"`
 }
 
+// ConversationItem mirrors gateway.api ConversationItem.
+type ConversationItem struct {
+	ConversationID   int64   `json:"conversation_id"`
+	ConversationType string  `json:"conversation_type"`
+	IsActive         bool    `json:"is_active"`
+	CreatedAt        int64   `json:"created_at"`
+	MemberIDs        []int64 `json:"member_ids"`
+}
+
+// ListConversationsResponse mirrors gateway.api ListConversationsResponse.
+type ListConversationsResponse struct {
+	Conversations []ConversationItem `json:"conversations"`
+}
+
 // UserInfo mirrors gateway.api UserInfo.
 type UserInfo struct {
 	ID        int64  `json:"id"`
@@ -339,6 +353,16 @@ func (c *RESTClient) GetConversationHistory(ctx context.Context, conversationID,
 
 	return &resp, nil
 }
+// ListConversations calls GET /api/conversations with Bearer access token.
+func (c *RESTClient) ListConversations(ctx context.Context, accessToken string) (*ListConversationsResponse, error) {
+	var resp ListConversationsResponse
+	if err := c.doRequest(ctx, http.MethodGet, "/api/conversations", nil, &resp, accessToken); err != nil {
+		return nil, err
+	}
+
+	return &resp, nil
+}
+
 // AddFriend calls POST /api/users/friends/{id} with Bearer access token.
 func (c *RESTClient) AddFriend(ctx context.Context, id int64, accessToken string) (*AddFriendResponse, error) {
 	var resp AddFriendResponse
