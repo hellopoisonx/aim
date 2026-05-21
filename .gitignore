@@ -10,5 +10,6 @@ coverage*
 /dev-tool/__pycache__
 /dev-tool/*.json
 /plan
+/plans
 /.mcp.json
 /.pi
