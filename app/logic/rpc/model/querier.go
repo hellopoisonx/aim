@@ -16,6 +16,7 @@ type Querier interface {
 	GetConversation(ctx context.Context, id int64) (Conversation, error)
 	GetConversationMembers(ctx context.Context, conversationID int64) ([]ConversationMember, error)
 	GetConversationsByUserID(ctx context.Context, userID int64) ([]Conversation, error)
+	GetDirectConversationByMembers(ctx context.Context, arg GetDirectConversationByMembersParams) (Conversation, error)
 	GetFriendship(ctx context.Context, arg GetFriendshipParams) (GetFriendshipRow, error)
 	GetFriendshipBidirectional(ctx context.Context, arg GetFriendshipBidirectionalParams) ([]GetFriendshipBidirectionalRow, error)
 	GetFriendshipByPair(ctx context.Context, arg GetFriendshipByPairParams) (Friendship, error)

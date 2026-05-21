@@ -39,6 +39,7 @@ type ConversationStore interface {
 	ListMessagesByConversation(ctx context.Context, arg model.ListMessagesByConversationParams) ([]model.Message, error)
 	ListMessagesByConversationInitial(ctx context.Context, arg model.ListMessagesByConversationInitialParams) ([]model.Message, error)
 	CountMessagesByConversation(ctx context.Context, conversationID int64) (int64, error)
+	GetDirectConversationByMembers(ctx context.Context, arg model.GetDirectConversationByMembersParams) (model.Conversation, error)
 }
 
 // ConversationService handles conversation business logic.
@@ -78,6 +79,24 @@ func (s ConversationService) CreateConversation(ctx context.Context, conversatio
 	// For direct conversations, exactly 2 members are required.
 	if conversationType == "direct" && len(memberIDs) != 2 {
 		return model.Conversation{}, errorx.NewCodeError(errorx.CodeBadInput, "direct conversation must have exactly 2 members")
+	}
+
+	// For direct conversations, check if a conversation already exists between these members.
+	if conversationType == "direct" {
+		// memberIDs has exactly 2 members at this point (validated above)
+		existing, err := s.store.GetDirectConversationByMembers(ctx, model.GetDirectConversationByMembersParams{
+			UserID:   memberIDs[0],
+			UserID_2: memberIDs[1],
+		})
+		if err == nil {
+			// Found existing active direct conversation - return it.
+			return existing, nil
+		}
+		if !errors.Is(err, pgx.ErrNoRows) {
+			// Real database error (not just "no rows found")
+			return model.Conversation{}, err
+		}
+		// ErrNoRows means no existing conversation → continue creating
 	}
 
 	conversationID := generateConversationID()

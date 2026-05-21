@@ -78,6 +78,22 @@ func (f *fakeConversationStore) CountMessagesByConversation(_ context.Context, c
 	return int64(len(f.messages[conversationID])), nil
 }
 
+func (f *fakeConversationStore) GetDirectConversationByMembers(_ context.Context, arg model.GetDirectConversationByMembersParams) (model.Conversation, error) {
+	for convID, conv := range f.conversations {
+		if conv.ConversationType != "direct" || !conv.IsActive {
+			continue
+		}
+		memberSet := make(map[int64]bool)
+		for _, m := range f.members[convID] {
+			memberSet[m.UserID] = true
+		}
+		if memberSet[arg.UserID] && memberSet[arg.UserID_2] {
+			return conv, nil
+		}
+	}
+	return model.Conversation{}, pgx.ErrNoRows
+}
+
 func setupTestSvc() *svc.ServiceContext {
 	store := newFakeStore()
 	convSvc := service.NewConversationService(store)

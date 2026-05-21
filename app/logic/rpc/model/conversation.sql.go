@@ -132,3 +132,34 @@ func (q *Queries) GetConversationsByUserID(ctx context.Context, userID int64) ([
 	}
 	return items, nil
 }
+
+const getDirectConversationByMembers = `-- name: GetDirectConversationByMembers :one
+SELECT c.id, c.conversation_type, c.is_active, c.created_at
+FROM conversations c
+WHERE c.conversation_type = 'direct'
+  AND c.is_active = true
+  AND c.id IN (
+    SELECT cm1.conversation_id
+    FROM conversation_members cm1
+    INNER JOIN conversation_members cm2 ON cm1.conversation_id = cm2.conversation_id
+    WHERE cm1.user_id = $1 AND cm2.user_id = $2
+  )
+LIMIT 1
+`
+
+type GetDirectConversationByMembersParams struct {
+	UserID   int64 `json:"user_id"`
+	UserID_2 int64 `json:"user_id_2"`
+}
+
+func (q *Queries) GetDirectConversationByMembers(ctx context.Context, arg GetDirectConversationByMembersParams) (Conversation, error) {
+	row := q.db.QueryRow(ctx, getDirectConversationByMembers, arg.UserID, arg.UserID_2)
+	var i Conversation
+	err := row.Scan(
+		&i.ID,
+		&i.ConversationType,
+		&i.IsActive,
+		&i.CreatedAt,
+	)
+	return i, err
+}

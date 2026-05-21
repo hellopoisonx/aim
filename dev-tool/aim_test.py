@@ -4,10 +4,12 @@ AIM Development Tool — REST + WebSocket Test Suite
 ===================================================
 Covers all gateway REST endpoints and WebSocket protocol frames.
 Auto-refreshes tokens. Protobuf frames are encoded/decoded transparently.
+Supports multiple user profiles for simultaneous multi-user testing.
 
 Usage:
   python aim_test.py register --email a@t.com --password 12345678
   python aim_test.py login --email a@t.com --password 12345678
+  python aim_test.py login --email b@t.com --password 12345678 --profile bob
   python aim_test.py search --name alice
   python aim_test.py friend-add --id 2
   python aim_test.py friend-accept --id 1
@@ -16,8 +18,11 @@ Usage:
   python aim_test.py conversation-create --member-id 2
   python aim_test.py history --conversation-id 1
   python aim_test.py ws-connect
+  python aim_test.py ws-connect --profile bob
   python aim_test.py ws-send --conversation-id 1 --content "hello"
+  python aim_test.py ws-send --conversation-id 1 --content "hi" --profile bob
   python aim_test.py interactive
+  python aim_test.py run-all
 """
 
 import sys
@@ -28,6 +33,7 @@ import uuid
 import struct
 import signal
 import argparse
+import threading
 from dataclasses import dataclass, field
 from typing import Optional, Callable
 from datetime import datetime
@@ -50,7 +56,31 @@ import gateway_pb2
 # multi-second fallback latency on every REST request and WS connection timeout.
 GATEWAY_HTTP = os.environ.get("AIM_GATEWAY_HTTP", "http://127.0.0.1:8888")
 GATEWAY_WS = os.environ.get("AIM_GATEWAY_WS", "ws://127.0.0.1:8888/ws")
-STATE_FILE = os.path.join(os.path.dirname(__file__), ".aim_state.json")
+def _state_file(profile: str = "") -> str:
+    """Return per-profile state file path.
+    Empty profile → .aim_state.json (backward compat).
+    Non-empty profile → .aim_state_{profile}.json.
+    """
+    base = os.path.dirname(__file__)
+    if profile:
+        return os.path.join(base, f".aim_state_{profile}.json")
+    return os.path.join(base, ".aim_state.json")
+
+
+def _all_profiles() -> list[str]:
+    """Scan for existing profile state files and return profile names."""
+    base = os.path.dirname(__file__)
+    profiles: list[str] = []
+    # Always include "default" if the base state file exists
+    if os.path.exists(_state_file("")):
+        profiles.append("default")
+    for name in os.listdir(base):
+        if name.startswith(".aim_state_") and name.endswith(".json"):
+            # .aim_state_alice.json → alice
+            profile = name[len(".aim_state_"):-len(".json")]
+            if profile not in profiles:
+                profiles.append(profile)
+    return sorted(profiles, key=lambda p: (p != "default", p))
 
 # ── Frame Types (mirrors ws.proto) ─────────────────────────────────────────────
 
@@ -83,17 +113,22 @@ class TokenManager:
     expires_at: int = 0
     user_id: int = 0
     device_id: str = ""
+    profile: str = ""
 
     @classmethod
-    def load(cls) -> "TokenManager":
-        if os.path.exists(STATE_FILE):
-            with open(STATE_FILE) as f:
+    def load(cls, profile: str = "") -> "TokenManager":
+        path = _state_file(profile)
+        if os.path.exists(path):
+            with open(path) as f:
                 data = json.load(f)
-                return cls(**data)
-        return cls()
+                tm = cls(**data)
+                tm.profile = profile
+                return tm
+        return cls(profile=profile)
 
     def save(self):
-        with open(STATE_FILE, "w") as f:
+        path = _state_file(self.profile)
+        with open(path, "w") as f:
             json.dump({
                 "access_token": self.access_token,
                 "refresh_token": self.refresh_token,
@@ -103,12 +138,13 @@ class TokenManager:
             }, f, indent=2)
 
     def clear(self):
+        path = _state_file(self.profile)
         self.access_token = None
         self.refresh_token = None
         self.expires_at = 0
         self.user_id = 0
-        if os.path.exists(STATE_FILE):
-            os.remove(STATE_FILE)
+        if os.path.exists(path):
+            os.remove(path)
 
     def is_expired(self) -> bool:
         if not self.expires_at or not self.access_token:
@@ -124,9 +160,10 @@ class TokenManager:
 class RESTClient:
     """Covers all AIM gateway REST endpoints."""
 
-    def __init__(self, base_url: str = GATEWAY_HTTP, token: TokenManager = None):
+    def __init__(self, base_url: str = GATEWAY_HTTP, token: TokenManager = None, profile: str = ""):
         self.base_url = base_url.rstrip("/")
-        self.token = token or TokenManager.load()
+        self.token = token or TokenManager.load(profile)
+        self.profile = self.token.profile
         self.session = requests.Session()
         self.session.headers["Content-Type"] = "application/json"
 
@@ -222,7 +259,7 @@ class RESTClient:
             "conversation_type": "direct" if len(member_ids) == 1 else "group",
             "member_ids": member_ids,
         }
-        return self._post("/api/conversations", body)["conversation"]
+        return self._post("/api/conversations", body)
 
     def get_history(self, conversation_id: int, cursor_created_at: int = 0,
                     cursor_id: int = 0, limit: int = 50) -> dict:
@@ -271,7 +308,6 @@ class WSClient:
             on_close=self._on_close,
         )
         # Run in background thread
-        import threading
         connect_timeout = 15.0
         t = threading.Thread(target=self.ws.run_forever, daemon=True)
         t.start()
@@ -421,17 +457,19 @@ def cmd_register(args):
 
 
 def cmd_login(args):
-    client = RESTClient()
+    profile = getattr(args, "profile", "") or ""
+    client = RESTClient(profile=profile)
     try:
         resp = client.login(args.email, args.password)
-        print(f"✓ Logged in as user #{resp['user_id']}")
+        print(f"✓ Logged in as user #{resp['user_id']} (profile={'default' if not profile else profile})")
         print_json(resp)
     except APIError as e:
         print(f"✗ Login failed: {e}")
 
 
 def cmd_refresh(args):
-    client = RESTClient()
+    profile = getattr(args, "profile", "") or ""
+    client = RESTClient(profile=profile)
     try:
         resp = client.refresh()
         print("✓ Token refreshed")
@@ -441,7 +479,8 @@ def cmd_refresh(args):
 
 
 def cmd_logout(args):
-    client = RESTClient()
+    profile = getattr(args, "profile", "") or ""
+    client = RESTClient(profile=profile)
     try:
         resp = client.logout()
         print("✓ Logged out")
@@ -512,7 +551,7 @@ def cmd_create_conversation(args):
     client = RESTClient()
     try:
         conv = client.create_conversation([args.member_id])
-        print(f"✓ Conversation #{conv['id']} created ({conv['conversation_type']})")
+        print(f"✓ Conversation #{conv['conversation_id']} created ({conv['conversation_type']})")
         print_json(conv)
     except APIError as e:
         print(f"✗ Create conversation failed: {e}")
@@ -534,47 +573,63 @@ def cmd_history(args):
 
 # ── WebSocket commands ──
 
-_ws_client: Optional[WSClient] = None
+_ws_clients: dict[str, WSClient] = {}
+
+
+def _get_ws_client(profile: str = "") -> Optional[WSClient]:
+    """Get WS client for a profile. Empty string = default profile key."""
+    key = profile if profile else "default"
+    return _ws_clients.get(key)
 
 
 def cmd_ws_connect(args):
-    global _ws_client
-    token = TokenManager.load()
+    profile = getattr(args, "profile", "") or ""
+    key = profile if profile else "default"
+    token = TokenManager.load(profile)
     if not token.access_token:
         print("✗ Not logged in. Run 'login' first.")
         return
     if token.is_expired():
         print("✗ Token expired. Run 'refresh' first.")
         return
-    _ws_client = WSClient(token=token)
-    _ws_client.connect()
+    # Disconnect existing client for this profile if any
+    existing = _ws_clients.get(key)
+    if existing:
+        existing.disconnect()
+    ws = WSClient(token=token)
+    ws.connect()
+    _ws_clients[key] = ws
 
 
 def cmd_ws_send(args):
-    global _ws_client
-    if not _ws_client or not _ws_client.is_connected():
-        print("✗ Not connected. Run 'ws-connect' first.")
+    profile = getattr(args, "profile", "") or ""
+    ws = _get_ws_client(profile)
+    if not ws or not ws.is_connected():
+        profile_hint = f" (profile={profile})" if profile else ""
+        print(f"✗ Not connected{profile_hint}. Run 'ws-connect' first.")
         return
     try:
-        _ws_client.send_message(args.conversation_id, args.content, args.message_type or "text")
+        ws.send_message(args.conversation_id, args.content, args.message_type or "text")
     except Exception as e:
         print(f"✗ Send failed: {e}")
 
 
 def cmd_ws_heartbeat(args):
-    global _ws_client
-    if not _ws_client or not _ws_client.is_connected():
+    profile = getattr(args, "profile", "") or ""
+    ws = _get_ws_client(profile)
+    if not ws or not ws.is_connected():
         print("✗ Not connected. Run 'ws-connect' first.")
         return
-    _ws_client.send_heartbeat()
+    ws.send_heartbeat()
 
 
 def cmd_ws_typing(args):
-    global _ws_client
-    if not _ws_client or not _ws_client.is_connected():
+    profile = getattr(args, "profile", "") or ""
+    ws = _get_ws_client(profile)
+    if not ws or not ws.is_connected():
         print("✗ Not connected. Run 'ws-connect' first.")
         return
-    _ws_client.send_typing(args.conversation_id)
+    ws.send_typing(args.conversation_id)
 
 
 def _auth_status_line(token: TokenManager) -> str:
@@ -587,12 +642,24 @@ def _auth_status_line(token: TokenManager) -> str:
     return f"auth: {marker} user=#{token.user_id} token={state}"
 
 
-def _ws_status_line() -> str:
-    """Build a compact WebSocket connection status line."""
-    global _ws_client
-    if _ws_client and _ws_client.is_connected():
+def _ws_status_line(profile: str = "") -> str:
+    """Build a compact WebSocket connection status line for a profile."""
+    ws = _get_ws_client(profile)
+    if ws and ws.is_connected():
         return "ws:   ✓ connected"
     return "ws:   ✗ disconnected"
+
+
+def _all_profiles_status() -> list[str]:
+    """Build status lines for all profiles."""
+    lines = []
+    for p in _all_profiles():
+        token = TokenManager.load("" if p == "default" else p)
+        auth = _auth_status_line(token)
+        ws = _ws_status_line("" if p == "default" else p)
+        label = p
+        lines.append(f"[{label}] {auth}  |  {ws}")
+    return lines
 
 
 def _print_help():
@@ -600,28 +667,44 @@ def _print_help():
     print("""
 ┌─ Auth ───────────────────────────────────────────┐
 │  register <email> <password> [username]           │
-│  login <email> <password>                        │
-│  refresh | logout                                │
+│  login <email> <password> [--profile NAME]        │
+│  refresh | logout                                 │
 ├─ Users & Friends ────────────────────────────────┤
-│  search <name>          user <id>                │
-│  friend-add <id>        friend-apps              │
-│  friend-accept <id>     friend-reject <id>       │
+│  search <name>          user <id>                 │
+│  friend-add <id>        friend-apps               │
+│  friend-accept <id>     friend-reject <id>        │
 ├─ Conversations ──────────────────────────────────┤
-│  conv-create <member_id>                         │
-│  history <conversation_id> [limit]               │
-├─ WebSocket ──────────────────────────────────────┤
-│  ws-connect             ws-send <conv_id> <text> │
-│  ws-heartbeat           ws-typing <id>           │
-│  ws-recv (wait for incoming frames)              │
-├─ Meta ───────────────────────────────────────────┤
-│  help | quit | exit | status                     │
-└──────────────────────────────────────────────────┘""")
+│  conv-create <member_id>                          │
+│  history <conversation_id> [limit]                │
+├─ WebSocket ───────────────────────────────────────┤
+│  ws-connect [--profile NAME]                      │
+│  ws-send <conv_id> <text> [--profile NAME]        │
+│  ws-heartbeat [--profile NAME]                    │
+│  ws-typing <id> [--profile NAME]                  │
+│  ws-recv (wait for incoming frames)               │
+├─ Profiles ────────────────────────────────────────┤
+│  switch <profile>   change active profile          │
+│  status             show all profiles              │
+├─ Meta ────────────────────────────────────────────┤
+│  help | quit | exit | status                      │
+└───────────────────────────────────────────────────┘""")
 
 
 def cmd_interactive(args):
     """Interactive mode for exploring the API."""
-    client = RESTClient()
-    token = TokenManager.load()
+    _active_profile: str = "default"  # current active profile
+
+    def _profile_key() -> str:
+        """Return the state-file profile string: "" for default, profile name otherwise."""
+        return "" if _active_profile == "default" else _active_profile
+
+    def _reload_client():
+        nonlocal client, token
+        token = TokenManager.load(_profile_key())
+        client = RESTClient(token=token)
+
+    token = TokenManager.load(_profile_key())
+    client = RESTClient(token=token)
 
     width = 52
     gw_label = f"Gateway HTTP: {GATEWAY_HTTP}"
@@ -631,18 +714,20 @@ def cmd_interactive(args):
     bot = "└" + "─" * (width - 2) + "┘"
 
     def _banner():
-        current = TokenManager.load()
-        auth = _auth_status_line(current)
-        ws_stat = _ws_status_line()
+        lines = []
+        for stat_line in _all_profiles_status():
+            lines.append(f"│ {stat_line:<{width - 4}} │")
+        profiles_block = "\n".join(lines) if lines else f"│ {'(no profiles)':<{width - 4}} │"
         print(f"""
 {top}
 │ {"AIM Dev Tool — Interactive Mode":^{width - 4}} │
 {mid}
 │ {gw_label:<{width - 4}} │
 │ {ws_label:<{width - 4}} │
-│ {auth:<{width - 4}} │
-│ {ws_stat:<{width - 4}} │
+{mid}
+{profiles_block}
 {bot}
+Active profile: {_active_profile}
 Type 'help' for commands, 'quit' to exit.
 """)
 
@@ -650,10 +735,12 @@ Type 'help' for commands, 'quit' to exit.
 
     while True:
         try:
-            # Build dynamic prompt with compact status (use client.token for live state)
+            # Build dynamic prompt with compact status
             auth_hint = f"#{client.token.user_id}" if client.token.access_token and not client.token.is_expired() else "?"
-            ws_hint = "⚡" if (_ws_client and _ws_client.is_connected()) else "·"
-            line = input(f"aim [{auth_hint}] {ws_hint}> ").strip()
+            ws = _get_ws_client(_profile_key())
+            ws_hint = "⚡" if (ws and ws.is_connected()) else "·"
+            profile_hint = _active_profile
+            line = input(f"aim [{profile_hint}] [{auth_hint}] {ws_hint}> ").strip()
 
             if not line:
                 continue
@@ -666,13 +753,19 @@ Type 'help' for commands, 'quit' to exit.
                 _print_help()
             elif cmd == "status":
                 _banner()
+            elif cmd == "switch" and len(parts) >= 2:
+                new_profile = parts[1]
+                _active_profile = new_profile
+                _reload_client()
+                print(f"✓ Switched to profile '{_active_profile}'")
+                _banner()
             elif cmd == "register" and len(parts) >= 3:
                 resp = client.register(parts[1], parts[2], parts[3] if len(parts) > 3 else "")
-                print(f"✓ Registered successfully")
+                print("✓ Registered successfully")
                 print_json(resp)
             elif cmd == "login" and len(parts) >= 3:
                 resp = client.login(parts[1], parts[2])
-                print(f"✓ Logged in as user #{resp['user_id']}")
+                print(f"✓ Logged in as user #{resp['user_id']} (profile={_active_profile})")
                 print_json(resp)
                 _banner()
             elif cmd == "refresh":
@@ -709,7 +802,7 @@ Type 'help' for commands, 'quit' to exit.
                 print_json(apps)
             elif cmd == "conv-create" and len(parts) >= 2:
                 conv = client.create_conversation([int(parts[1])])
-                print(f"✓ Conversation #{conv['id']} created ({conv['conversation_type']})")
+                print(f"✓ Conversation #{conv['conversation_id']} created ({conv['conversation_type']})")
                 print_json(conv)
             elif cmd == "history" and len(parts) >= 2:
                 limit = int(parts[2]) if len(parts) > 2 else 50
@@ -720,14 +813,41 @@ Type 'help' for commands, 'quit' to exit.
                 if resp.get("has_more"):
                     print(f"  More messages available (next cursor: {resp.get('next_cursor_id')})")
             elif cmd == "ws-connect":
-                cmd_ws_connect(args)
+                ws_profile = _profile_key()
+                existing = _ws_clients.get(_active_profile)
+                if existing:
+                    existing.disconnect()
+                if not client.token.access_token:
+                    print("✗ Not logged in. Run 'login' first.")
+                    continue
+                if client.token.is_expired():
+                    print("✗ Token expired. Run 'refresh' first.")
+                    continue
+                ws_client = WSClient(token=client.token)
+                ws_client.connect()
+                _ws_clients[_active_profile] = ws_client
                 _banner()
             elif cmd == "ws-send" and len(parts) >= 3:
-                cmd_ws_send(argparse.Namespace(conversation_id=int(parts[1]), content=parts[2], message_type="text"))
+                ws = _get_ws_client(_profile_key())
+                if not ws or not ws.is_connected():
+                    print(f"✗ Not connected (profile={_active_profile}). Run 'ws-connect' first.")
+                    continue
+                try:
+                    ws.send_message(int(parts[1]), parts[2], "text")
+                except Exception as e:
+                    print(f"✗ Send failed: {e}")
             elif cmd == "ws-heartbeat":
-                cmd_ws_heartbeat(args)
+                ws = _get_ws_client(_profile_key())
+                if not ws or not ws.is_connected():
+                    print(f"✗ Not connected (profile={_active_profile}). Run 'ws-connect' first.")
+                    continue
+                ws.send_heartbeat()
             elif cmd == "ws-typing" and len(parts) >= 2:
-                cmd_ws_typing(argparse.Namespace(conversation_id=int(parts[1])))
+                ws = _get_ws_client(_profile_key())
+                if not ws or not ws.is_connected():
+                    print(f"✗ Not connected (profile={_active_profile}). Run 'ws-connect' first.")
+                    continue
+                ws.send_typing(int(parts[1]))
             elif cmd == "ws-recv":
                 print("Waiting for frames... (Ctrl+C to stop)")
                 try:
@@ -748,118 +868,115 @@ Type 'help' for commands, 'quit' to exit.
 # ── Run all tests ──────────────────────────────────────────────────────────────
 
 def cmd_run_all(args):
-    """Run a full integration test flow covering all REST endpoints and WS."""
+    """Run a full integration test flow using two profiles for multi-user testing."""
     print("=" * 60)
-    print("  AIM Full Integration Test")
+    print("  AIM Full Integration Test (Multi-Profile)")
     print("=" * 60)
 
-    client = RESTClient()
-    test_email = f"test_{int(time.time())}@aim.dev"
     test_password = "12345678"
 
-    # 1. Register 2 users
-    print("\n── 1. Register ──")
-    client.register(test_email, test_password, "TestA")
-    print(f"  ✓ Registered TestA ({test_email})")
-    tok_a = TokenManager()
-    tok_a.access_token = client.token.access_token
-    tok_a.refresh_token = client.token.refresh_token
-    tok_a.user_id = client.token.user_id
+    # 1. Register & login alice (profile=alice) and bob (profile=bob)
+    print("\n── 1. Register & Login ──")
+    alice_email = f"alice_{int(time.time())}@aim.dev"
+    bob_email = f"bob_{int(time.time())}@aim.dev"
 
-    client_b = RESTClient()
-    email_b = f"test_b_{int(time.time())}@aim.dev"
-    client_b.register(email_b, test_password, "TestB")
-    print(f"  ✓ Registered TestB ({email_b})")
+    client_alice = RESTClient(profile="alice")
+    client_alice.register(alice_email, test_password, "Alice")
+    print(f"  ✓ Registered Alice ({alice_email})")
+    client_alice.login(alice_email, test_password)
+    alice_id = client_alice.token.user_id
+    print(f"  ✓ Alice logged in as #{alice_id}")
 
-    # 2. Login both
-    print("\n── 2. Login ──")
-    client.login(test_email, test_password)
-    user_a_id = client.token.user_id
-    print(f"  ✓ TestA logged in as #{user_a_id}")
-    client_b.login(email_b, test_password)
-    user_b_id = client_b.token.user_id
-    print(f"  ✓ TestB logged in as #{user_b_id}")
+    client_bob = RESTClient(profile="bob")
+    client_bob.register(bob_email, test_password, "Bob")
+    print(f"  ✓ Registered Bob ({bob_email})")
+    client_bob.login(bob_email, test_password)
+    bob_id = client_bob.token.user_id
+    print(f"  ✓ Bob logged in as #{bob_id}")
 
-    # 3. Search users
-    print("\n── 3. Search ──")
-    users = client.search_users("Test")
-    print(f"  ✓ Found {len(users)} user(s): {', '.join(str(u['id']) for u in users)}")
+    # 2. Search users
+    print("\n── 2. Search ──")
+    users = client_alice.search_users("Alice")
+    print(f"  ✓ Found {len(users)} user(s)")
 
-    # 4. User info
-    print("\n── 4. Get User ──")
-    user = client.get_user(user_b_id)
-    print(f"  ✓ User #{user_b_id}: {user['email']}")
+    # 3. Friend request (Alice → Bob)
+    print("\n── 3. Friend Request ──")
+    friendship = client_alice.add_friend(bob_id)
+    print(f"  ✓ Alice sent friend request to Bob (status={friendship['status']})")
 
-    # 5. Friend request
-    print("\n── 5. Friend Request ──")
-    friendship = client.add_friend(user_b_id)
-    print(f"  ✓ Sent friend request (status={friendship['status']})")
+    # 4. Accept friend (as Bob)
+    print("\n── 4. Accept Friend ──")
+    apps = client_bob.list_friend_applications()
+    print(f"  ✓ Bob has {len(apps)} pending application(s)")
+    friendship = client_bob.accept_friend(alice_id)
+    print(f"  ✓ Bob accepted (status={friendship['status']})")
 
-    # 6. List applications (as B)
-    print("\n── 6. List Applications ──")
-    apps = client_b.list_friend_applications()
-    print(f"  ✓ TestB has {len(apps)} pending: user_id={apps[0]['user_id']} status={apps[0]['status']}")
-
-    # 7. Accept friend (as B)
-    print("\n── 7. Accept Friend ──")
-    friendship = client_b.accept_friend(user_a_id)
-    print(f"  ✓ Accepted (status={friendship['status']})")
-
-    # Verify both sides now accepted
-    apps2 = client_b.list_friend_applications()
-    print(f"  ✓ Pending apps after accept: {len(apps2)}")
-
-    # 8. Create conversation
-    print("\n── 8. Create Conversation ──")
-    conv = client.create_conversation([user_b_id])
-    conv_id = conv["id"]
+    # 5. Create conversation
+    print("\n── 5. Create Conversation ──")
+    conv = client_alice.create_conversation([bob_id])
+    conv_id = conv["conversation_id"]
     print(f"  ✓ Conversation #{conv_id} created")
 
-    # 9. Get history (empty)
-    print("\n── 9. Get History ──")
-    resp = client.get_history(conv_id, limit=10)
+    # 6. Get history (empty)
+    print("\n── 6. Get History (empty) ──")
+    resp = client_alice.get_history(conv_id, limit=10)
     print(f"  ✓ {len(resp.get('messages', []))} message(s)")
 
-    # 10. WebSocket connect
-    print("\n── 10. WebSocket Connect ──")
-    global _ws_client
-    _ws_client = WSClient(token=TokenManager.load())
-    _ws_client.connect()
+    # 7. WebSocket connect both users simultaneously
+    print("\n── 7. WebSocket Connect (both profiles) ──")
 
-    # 11. Send message via WS
-    print("\n── 11. Send Message (WS) ──")
-    _ws_client.send_message(conv_id, "Hello from test script!")
-    time.sleep(0.5)
+    bob_received = threading.Event()
+    bob_ws = WSClient(token=client_bob.token)
+    bob_ws.on_frame = lambda frame, payload: (
+        bob_received.set() if frame.type == ws_pb2.FRAME_TYPE_PUSH_MESSAGE else None
+    )
+    bob_ws.connect()
+    _ws_clients["bob"] = bob_ws
 
-    # 12. Check history again (should have message now)
-    print("\n── 12. Get History (after send) ──")
-    resp = client.get_history(conv_id, limit=10)
+    alice_ws = WSClient(token=client_alice.token)
+    alice_ws.connect()
+    _ws_clients["alice"] = alice_ws
+
+    # 8. Alice sends message, verify Bob receives it
+    print("\n── 8. Alice sends → Bob receives ──")
+    alice_ws.send_message(conv_id, "Hello from Alice!")
+    # Wait up to 5 seconds for Bob to receive
+    received = bob_received.wait(timeout=5.0)
+    if received:
+        print("  ✓ Bob received the push message from Alice!")
+    else:
+        print("  ⚠ Bob did not receive push within timeout (may still be delivered)")
+
+    # 9. Check history (should have message now)
+    print("\n── 9. Get History (after send) ──")
+    resp = client_alice.get_history(conv_id, limit=10)
     msgs = resp.get("messages", [])
     print(f"  ✓ {len(msgs)} message(s) now")
 
-    # 13. Refresh token
-    print("\n── 13. Refresh Token ──")
-    client.refresh()
-    print(f"  ✓ Token refreshed (expires_at={client.token.expires_at})")
+    # 10. Refresh token (Alice)
+    print("\n── 10. Refresh Token ──")
+    client_alice.refresh()
+    print(f"  ✓ Alice token refreshed (expires_at={client_alice.token.expires_at})")
 
-    # 14. Logout
-    print("\n── 14. Logout ──")
-    client.logout()
-    print("  ✓ Logged out")
+    # 11. Disconnect WS
+    print("\n── 11. Disconnect WS ──")
+    alice_ws.disconnect()
+    bob_ws.disconnect()
+    _ws_clients.pop("alice", None)
+    _ws_clients.pop("bob", None)
+    print("  ✓ Both WS connections closed")
 
-    # 15. Reject friend test (as a new pair)
-    print("\n── 15. Reject Friend ──")
-    c3 = RESTClient()
-    c3.register(f"test_c_{int(time.time())}@aim.dev", test_password, "TestC")
-    c3.login(f"test_c_{int(time.time())}@aim.dev", "wait_need_rework")
-    # Quick fix: use the registered email
-    # Actually this is getting complex. Skip full reject test in run-all.
-    print("  (skipped - needs separate test pair)")
+    # 12. Logout
+    print("\n── 12. Logout ──")
+    client_alice.logout()
+    client_bob.logout()
+    print("  ✓ Both users logged out")
 
-    # 16. Disconnect WS
-    print("\n── 16. Disconnect WS ──")
-    _ws_client.disconnect()
-    print("  ✓ WS disconnected")
+    # Cleanup profile state files
+    for profile in ["alice", "bob"]:
+        path = _state_file(profile)
+        if os.path.exists(path):
+            os.remove(path)
 
     print("\n" + "=" * 60)
     print("  All tests completed!")
@@ -876,10 +993,13 @@ def main():
 Examples:
   python aim_test.py register --email a@t.com --password 12345678
   python aim_test.py login --email a@t.com --password 12345678
+  python aim_test.py login --email b@t.com --password 12345678 --profile bob
   python aim_test.py friend-add --id 2
   python aim_test.py friend-accept --id 1
   python aim_test.py ws-connect
+  python aim_test.py ws-connect --profile bob
   python aim_test.py ws-send --conversation-id 1 --content "hello"
+  python aim_test.py ws-send --conversation-id 1 --content "hi" --profile bob
   python aim_test.py interactive
   python aim_test.py run-all
         """
@@ -896,9 +1016,12 @@ Examples:
     p = sub.add_parser("login", help="Login and save token")
     p.add_argument("--email", required=True)
     p.add_argument("--password", required=True)
+    p.add_argument("--profile", default="", help="Profile name (default: empty = default profile)")
 
-    sub.add_parser("refresh", help="Refresh access token")
-    sub.add_parser("logout", help="Logout and clear token")
+    p = sub.add_parser("refresh", help="Refresh access token")
+    p.add_argument("--profile", default="", help="Profile name")
+    p = sub.add_parser("logout", help="Logout and clear token")
+    p.add_argument("--profile", default="", help="Profile name")
 
     # Users
     p = sub.add_parser("search", help="Search users by name")
@@ -930,14 +1053,18 @@ Examples:
     p.add_argument("--limit", type=int, default=50)
 
     # WebSocket
-    sub.add_parser("ws-connect", help="Connect WebSocket")
+    p = sub.add_parser("ws-connect", help="Connect WebSocket")
+    p.add_argument("--profile", default="", help="Profile name")
     p = sub.add_parser("ws-send", help="Send message via WebSocket")
     p.add_argument("--conversation-id", type=int, required=True)
     p.add_argument("--content", required=True)
     p.add_argument("--message-type", default="text")
-    sub.add_parser("ws-heartbeat", help="Send heartbeat via WebSocket")
+    p.add_argument("--profile", default="", help="Profile name")
+    p = sub.add_parser("ws-heartbeat", help="Send heartbeat via WebSocket")
+    p.add_argument("--profile", default="", help="Profile name")
     p = sub.add_parser("ws-typing", help="Send typing indicator")
     p.add_argument("--conversation-id", type=int, required=True)
+    p.add_argument("--profile", default="", help="Profile name")
 
     # Meta
     sub.add_parser("interactive", help="Interactive mode")

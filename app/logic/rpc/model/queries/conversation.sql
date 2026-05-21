@@ -23,3 +23,16 @@ FROM conversations c
 INNER JOIN conversation_members cm ON c.id = cm.conversation_id
 WHERE cm.user_id = $1
 ORDER BY c.created_at DESC;
+
+-- name: GetDirectConversationByMembers :one
+SELECT c.id, c.conversation_type, c.is_active, c.created_at
+FROM conversations c
+WHERE c.conversation_type = 'direct'
+  AND c.is_active = true
+  AND c.id IN (
+    SELECT cm1.conversation_id
+    FROM conversation_members cm1
+    INNER JOIN conversation_members cm2 ON cm1.conversation_id = cm2.conversation_id
+    WHERE cm1.user_id = $1 AND cm2.user_id = $2
+  )
+LIMIT 1;

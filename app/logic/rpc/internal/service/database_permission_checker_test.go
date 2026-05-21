@@ -145,6 +145,25 @@ func (f *fakeQuerier) CountMessagesByConversation(ctx context.Context, conversat
 	return f.messageCounts[conversationID], nil
 }
 
+func (f *fakeQuerier) GetDirectConversationByMembers(ctx context.Context, arg model.GetDirectConversationByMembersParams) (model.Conversation, error) {
+	if f.getConvErr != nil {
+		return model.Conversation{}, f.getConvErr
+	}
+	for _, conv := range f.conversations {
+		if conv.ConversationType != "direct" || !conv.IsActive {
+			continue
+		}
+		key1 := convUserKey(conv.ID, arg.UserID)
+		key2 := convUserKey(conv.ID, arg.UserID_2)
+		if _, ok1 := f.members[key1]; ok1 {
+			if _, ok2 := f.members[key2]; ok2 {
+				return conv, nil
+			}
+		}
+	}
+	return model.Conversation{}, pgx.ErrNoRows
+}
+
 func convUserKey(convID, userID int64) string {
 	return fmt.Sprintf("%d:%d", convID, userID)
 }

@@ -132,6 +132,26 @@ func (f *fakeConversationStore) CountMessagesByConversation(ctx context.Context,
 	return int64(len(f.messages[conversationID])), nil
 }
 
+func (f *fakeConversationStore) GetDirectConversationByMembers(ctx context.Context, arg model.GetDirectConversationByMembersParams) (model.Conversation, error) {
+	if f.getErr != nil {
+		return model.Conversation{}, f.getErr
+	}
+	// Search for a conversation where both users are members
+	for convID, conv := range f.conversations {
+		if conv.ConversationType != "direct" || !conv.IsActive {
+			continue
+		}
+		memberSet := make(map[int64]bool)
+		for _, m := range f.members[convID] {
+			memberSet[m.UserID] = true
+		}
+		if memberSet[arg.UserID] && memberSet[arg.UserID_2] {
+			return conv, nil
+		}
+	}
+	return model.Conversation{}, pgx.ErrNoRows
+}
+
 func newFakeConversationStore() *fakeConversationStore {
 	return &fakeConversationStore{
 		conversations: make(map[int64]model.Conversation),
@@ -269,6 +289,50 @@ func TestConversationService_CreateConversation_AddMemberError(t *testing.T) {
 	_, err := svc.CreateConversation(context.Background(), "group", 1, []int64{1, 2, 3})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to add member")
+}
+
+func TestConversationService_CreateConversation_DirectDedup_Existing(t *testing.T) {
+	store := newFakeConversationStore()
+	svc := NewConversationService(store)
+
+	// First call: create a direct conversation between users 1 and 2
+	conv1, err := svc.CreateConversation(context.Background(), "direct", 1, []int64{1, 2})
+	require.NoError(t, err)
+
+	// Second call: same two users should return the existing conversation
+	conv2, err := svc.CreateConversation(context.Background(), "direct", 1, []int64{1, 2})
+	require.NoError(t, err)
+
+	// Should return the SAME conversation ID
+	assert.Equal(t, conv1.ID, conv2.ID)
+	assert.Equal(t, "direct", conv2.ConversationType)
+	assert.True(t, conv2.IsActive)
+}
+
+func TestConversationService_CreateConversation_DirectDedup_NewMembers(t *testing.T) {
+	store := newFakeConversationStore()
+	svc := NewConversationService(store)
+
+	// Create conversation between users 1 and 2
+	conv1, err := svc.CreateConversation(context.Background(), "direct", 1, []int64{1, 2})
+	require.NoError(t, err)
+
+	// Create conversation between users 3 and 4 (different pair)
+	conv2, err := svc.CreateConversation(context.Background(), "direct", 3, []int64{3, 4})
+	require.NoError(t, err)
+
+	// Should be DIFFERENT conversation IDs
+	assert.NotEqual(t, conv1.ID, conv2.ID)
+}
+
+func TestConversationService_CreateConversation_DirectDedup_StoreError(t *testing.T) {
+	store := newFakeConversationStore()
+	store.getErr = errors.New("database connection error")
+	svc := NewConversationService(store)
+
+	_, err := svc.CreateConversation(context.Background(), "direct", 1, []int64{1, 2})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "database connection error")
 }
 
 // ---------------------------------------------------------------------------
