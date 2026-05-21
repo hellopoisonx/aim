@@ -18,3 +18,19 @@ docker compose build
 ```
 
 Docker Buildx/新版 Docker Desktop 通常默认启用 BuildKit；显式设置环境变量可避免旧环境退回 legacy builder。
+
+## 何时必须重建
+
+Go 源码变更后，Docker 容器运行的是旧二进制，必须重建镜像并重启服务：
+
+```bash
+# 全量重建（建议首次或依赖变更时）
+docker compose build --no-cache
+docker compose up -d --force-recreate aim-auth aim-core aim-gateway aim-logic
+
+# 增量重建（仅代码变更时，利用缓存更快）
+docker compose build
+docker compose up -d --force-recreate aim-auth aim-core aim-gateway aim-logic
+```
+
+> 常见触发场景：新增 API 路由、proto 变更、配置结构体变更、业务逻辑修改。

@@ -14,6 +14,7 @@ Usage:
   python aim_test.py friend-add --id 2
   python aim_test.py friend-accept --id 1
   python aim_test.py friend-reject --id 1
+  python aim_test.py friend-list
   python aim_test.py friend-applications
   python aim_test.py conversation-create --member-id 2
   python aim_test.py history --conversation-id 1
@@ -243,6 +244,9 @@ class RESTClient:
 
     def list_friend_applications(self) -> list:
         return self._get("/api/friends/applications")["applications"]
+
+    def list_friends(self) -> list:
+        return self._get("/api/friends/me")["friends"]
 
     def accept_friend(self, friend_id: int) -> dict:
         """NEW: accept pending friend request."""
@@ -547,11 +551,27 @@ def cmd_reject_friend(args):
         print(f"✗ Reject friend failed: {e}")
 
 
+def cmd_friend_list(args):
+    client = RESTClient()
+    try:
+        friends = client.list_friends()
+        print(f"✓ {len(friends)} friend(s):")
+        print_json(friends)
+    except APIError as e:
+        print(f"✗ List friends failed: {e}")
+
+
 def cmd_create_conversation(args):
     client = RESTClient()
     try:
-        conv = client.create_conversation([args.member_id])
+        member_ids = [int(m.strip()) for m in args.member_ids.split(",")] if args.member_ids else [args.member_id] if args.member_id else []
+        if not member_ids:
+            print("✗ At least one --member-id or --member-ids is required")
+            return
+        conv = client.create_conversation(member_ids)
         print(f"✓ Conversation #{conv['conversation_id']} created ({conv['conversation_type']})")
+        if len(member_ids) > 1:
+            print(f"  Members: {member_ids}")
         print_json(conv)
     except APIError as e:
         print(f"✗ Create conversation failed: {e}")
@@ -673,8 +693,9 @@ def _print_help():
 │  search <name>          user <id>                 │
 │  friend-add <id>        friend-apps               │
 │  friend-accept <id>     friend-reject <id>        │
+│  friend-list                                       │
 ├─ Conversations ──────────────────────────────────┤
-│  conv-create <member_id>                          │
+│  conv-create <member_id>  (or comma-sep for group) │
 │  history <conversation_id> [limit]                │
 ├─ WebSocket ───────────────────────────────────────┤
 │  ws-connect [--profile NAME]                      │
@@ -800,9 +821,16 @@ Type 'help' for commands, 'quit' to exit.
                 apps = client.list_friend_applications()
                 print(f"✓ {len(apps)} pending application(s):")
                 print_json(apps)
+            elif cmd == "friend-list" or cmd == "friends":
+                friends = client.list_friends()
+                print(f"✓ {len(friends)} friend(s):")
+                print_json(friends)
             elif cmd == "conv-create" and len(parts) >= 2:
-                conv = client.create_conversation([int(parts[1])])
+                member_ids = [int(m.strip()) for m in parts[1].split(",")]
+                conv = client.create_conversation(member_ids)
                 print(f"✓ Conversation #{conv['conversation_id']} created ({conv['conversation_type']})")
+                if len(member_ids) > 1:
+                    print(f"  Members: {member_ids}")
                 print_json(conv)
             elif cmd == "history" and len(parts) >= 2:
                 limit = int(parts[2]) if len(parts) > 2 else 50
@@ -894,6 +922,11 @@ def cmd_run_all(args):
     bob_id = client_bob.token.user_id
     print(f"  ✓ Bob logged in as #{bob_id}")
 
+    # Wait for Kafka UserCreated events to be consumed and user info
+    # to be created in the logic service database (~2-3s propagation delay).
+    print("  ⏳ Waiting for Kafka user sync...")
+    time.sleep(5)
+
     # 2. Search users
     print("\n── 2. Search ──")
     users = client_alice.search_users("Alice")
@@ -910,6 +943,13 @@ def cmd_run_all(args):
     print(f"  ✓ Bob has {len(apps)} pending application(s)")
     friendship = client_bob.accept_friend(alice_id)
     print(f"  ✓ Bob accepted (status={friendship['status']})")
+
+    # 4.5. Check friend lists
+    print("\n── 4.5. Friend Lists ──")
+    alice_friends = client_alice.list_friends()
+    print(f"  ✓ Alice has {len(alice_friends)} friend(s)")
+    bob_friends = client_bob.list_friends()
+    print(f"  ✓ Bob has {len(bob_friends)} friend(s)")
 
     # 5. Create conversation
     print("\n── 5. Create Conversation ──")
@@ -1042,9 +1082,12 @@ Examples:
     p = sub.add_parser("friend-reject", help="Reject pending friend request")
     p.add_argument("--id", type=int, required=True)
 
+    sub.add_parser("friend-list", help="List friends")
+
     # Conversations
     p = sub.add_parser("conv-create", help="Create conversation")
-    p.add_argument("--member-id", type=int, required=True)
+    p.add_argument("--member-id", type=int, help="Single member ID")
+    p.add_argument("--member-ids", help="Comma-separated member IDs (e.g. 2,3,4)")
 
     p = sub.add_parser("history", help="Get conversation history")
     p.add_argument("--conversation-id", type=int, required=True)
@@ -1087,6 +1130,7 @@ Examples:
         "friend-applications": cmd_friend_applications,
         "friend-accept": cmd_accept_friend,
         "friend-reject": cmd_reject_friend,
+        "friend-list": cmd_friend_list,
         "conv-create": cmd_create_conversation,
         "history": cmd_history,
         "ws-connect": cmd_ws_connect,

@@ -141,6 +141,10 @@ func (f *fakeQuerier) ListPendingFriendApplications(ctx context.Context, friendI
 	return nil, nil
 }
 
+func (f *fakeQuerier) ListFriends(ctx context.Context, userID int64) ([]model.Friendship, error) {
+	return nil, nil
+}
+
 func (f *fakeQuerier) CountMessagesByConversation(ctx context.Context, conversationID int64) (int64, error) {
 	return f.messageCounts[conversationID], nil
 }
