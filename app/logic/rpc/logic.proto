@@ -183,6 +183,13 @@ service FriendshipService {
   rpc AddFriend(AddFriendReq) returns (AddFriendResp);
   // ListFriendApplications lists pending friend applications received by the user.
   rpc ListFriendApplications(ListFriendApplicationsReq) returns (ListFriendApplicationsResp);
+  // AcceptFriend accepts a pending friend request.
+  // Requires an existing pending friendship record where friend_id→user_id is "pending".
+  // Updates it to "accepted" and creates the reverse record (user_id→friend_id, "accepted").
+  rpc AcceptFriend(AcceptFriendReq) returns (AcceptFriendResp);
+  // RejectFriend rejects a pending friend request.
+  // Updates the existing pending record (friend_id→user_id) to "blocked".
+  rpc RejectFriend(RejectFriendReq) returns (RejectFriendResp);
 }
 
 message AddFriendReq {
@@ -208,4 +215,22 @@ message ListFriendApplicationsReq {
 
 message ListFriendApplicationsResp {
   repeated FriendshipResponse applications = 1;
+}
+
+message AcceptFriendReq {
+  int64 user_id = 1; // the user accepting the request
+  int64 friend_id = 2; // the original requester
+}
+
+message AcceptFriendResp {
+  FriendshipResponse friendship = 1;
+}
+
+message RejectFriendReq {
+  int64 user_id = 1; // the user rejecting the request
+  int64 friend_id = 2; // the original requester
+}
+
+message RejectFriendResp {
+  FriendshipResponse friendship = 1;
 }

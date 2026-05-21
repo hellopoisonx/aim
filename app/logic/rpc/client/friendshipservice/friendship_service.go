@@ -14,16 +14,24 @@ import (
 )
 
 type (
+	AcceptFriendReq            = pb.AcceptFriendReq
+	AcceptFriendResp           = pb.AcceptFriendResp
 	AddFriendReq               = pb.AddFriendReq
 	AddFriendResp              = pb.AddFriendResp
 	ListFriendApplicationsReq  = pb.ListFriendApplicationsReq
 	ListFriendApplicationsResp = pb.ListFriendApplicationsResp
+	RejectFriendReq            = pb.RejectFriendReq
+	RejectFriendResp           = pb.RejectFriendResp
 
 	FriendshipService interface {
 		// AddFriend sends a friend request or accepts an existing pending one.
 		AddFriend(ctx context.Context, in *AddFriendReq, opts ...grpc.CallOption) (*AddFriendResp, error)
 		// ListFriendApplications lists pending friend applications received by the user.
 		ListFriendApplications(ctx context.Context, in *ListFriendApplicationsReq, opts ...grpc.CallOption) (*ListFriendApplicationsResp, error)
+		// AcceptFriend accepts a pending friend request.
+		AcceptFriend(ctx context.Context, in *AcceptFriendReq, opts ...grpc.CallOption) (*AcceptFriendResp, error)
+		// RejectFriend rejects a pending friend request.
+		RejectFriend(ctx context.Context, in *RejectFriendReq, opts ...grpc.CallOption) (*RejectFriendResp, error)
 	}
 
 	defaultFriendshipService struct {
@@ -47,4 +55,16 @@ func (m *defaultFriendshipService) AddFriend(ctx context.Context, in *AddFriendR
 func (m *defaultFriendshipService) ListFriendApplications(ctx context.Context, in *ListFriendApplicationsReq, opts ...grpc.CallOption) (*ListFriendApplicationsResp, error) {
 	client := pb.NewFriendshipServiceClient(m.cli.Conn())
 	return client.ListFriendApplications(ctx, in, opts...)
+}
+
+// AcceptFriend accepts a pending friend request.
+func (m *defaultFriendshipService) AcceptFriend(ctx context.Context, in *AcceptFriendReq, opts ...grpc.CallOption) (*AcceptFriendResp, error) {
+	client := pb.NewFriendshipServiceClient(m.cli.Conn())
+	return client.AcceptFriend(ctx, in, opts...)
+}
+
+// RejectFriend rejects a pending friend request.
+func (m *defaultFriendshipService) RejectFriend(ctx context.Context, in *RejectFriendReq, opts ...grpc.CallOption) (*RejectFriendResp, error) {
+	client := pb.NewFriendshipServiceClient(m.cli.Conn())
+	return client.RejectFriend(ctx, in, opts...)
 }

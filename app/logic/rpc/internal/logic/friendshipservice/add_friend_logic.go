@@ -25,6 +25,10 @@ func FriendshipToGRPCError(err error) error {
 		return errorx.NewCodeError(errorx.CodeBadInput, "cannot add yourself as friend")
 	case errors.Is(err, service.ErrBlocked):
 		return errorx.NewCodeError(errorx.CodeForbidden, "user is blocked")
+	case errors.Is(err, service.ErrNotPending):
+		return errorx.NewCodeError(errorx.CodeForbidden, "no pending friend request found")
+	case errors.Is(err, service.ErrFriendNotFound):
+		return errorx.NewCodeError(errorx.CodeNotFound, "friend request not found")
 	default:
 		return errorx.NewCodeError(errorx.CodeInternal, "internal error")
 	}

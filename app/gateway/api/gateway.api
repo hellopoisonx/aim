@@ -77,6 +77,22 @@ type ListFriendApplicationsResponse {
 	Applications []FriendshipItem `json:"applications"`
 }
 
+type AcceptFriendRequest {
+	Id int64 `path:"id" validate:"required"`
+}
+
+type AcceptFriendResponse {
+	Friendship FriendshipItem `json:"friendship"`
+}
+
+type RejectFriendRequest {
+	Id int64 `path:"id" validate:"required"`
+}
+
+type RejectFriendResponse {
+	Friendship FriendshipItem `json:"friendship"`
+}
+
 type UserInfo {
 	Id        int64  `json:"id"`
 	Email     string `json:"email"`
@@ -189,5 +205,11 @@ service gateway-api {
 service gateway-api {
 	@handler ListFriendApplications
 	get /applications returns (ListFriendApplicationsResponse)
+
+	@handler AcceptFriend
+	post /accept/:id (AcceptFriendRequest) returns (AcceptFriendResponse)
+
+	@handler RejectFriend
+	post /reject/:id (RejectFriendRequest) returns (RejectFriendResponse)
 }
 

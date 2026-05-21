@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
+	"github.com/zeromicro/go-zero/core/logx"
 )
 
 // Identity represents a connected client's identity.
@@ -39,7 +40,7 @@ func NewManager() *Manager {
 }
 
 // Register adds a new connection for the given identity.
-func (m *Manager) Register(identity Identity, conn *websocket.Conn, cancel context.CancelFunc) error {
+func (m *Manager) Register(ctx context.Context, identity Identity, conn *websocket.Conn, cancel context.CancelFunc) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -53,11 +54,14 @@ func (m *Manager) Register(identity Identity, conn *websocket.Conn, cancel conte
 		Conn:     conn,
 	}
 
+	logx.WithContext(ctx).Infof("ws connection registered: user_id=%d device_id=%s total=%d",
+		identity.UserID, identity.DeviceID, len(m.connections))
+
 	return nil
 }
 
 // Unregister removes a connection by identity.
-func (m *Manager) Unregister(identity Identity) error {
+func (m *Manager) Unregister(ctx context.Context, identity Identity) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -69,6 +73,9 @@ func (m *Manager) Unregister(identity Identity) error {
 	delete(m.connections, identity)
 
 	_ = conn.Cancel // cancel is called by handler on disconnect
+
+	logx.WithContext(ctx).Infof("ws connection unregistered: user_id=%d device_id=%s total=%d",
+		identity.UserID, identity.DeviceID, len(m.connections))
 
 	return nil
 }

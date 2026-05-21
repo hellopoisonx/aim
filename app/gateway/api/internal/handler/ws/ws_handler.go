@@ -19,6 +19,10 @@ import (
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 	pb "github.com/hellopoisonx/aim/shared/proto/ws/pb"
 	"github.com/zeromicro/go-zero/core/logx"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // WsHandler handles WebSocket upgrade requests at GET /ws.
@@ -78,7 +82,7 @@ func (h *WsHandler) ServeWS(w http.ResponseWriter, r *http.Request) {
 	// Inject identity into context for downstream handlers
 	ctx = ws.WithIdentity(ctx, identity)
 
-	if err := h.manager.Register(identity, conn, cancel); err != nil {
+	if err := h.manager.Register(ctx, identity, conn, cancel); err != nil {
 		logx.WithContext(ctx).Errorf("ws register failed: %v", err)
 
 		_ = conn.Close(websocket.StatusInternalError, "registration failed")
@@ -95,12 +99,12 @@ func (h *WsHandler) ServeWS(w http.ResponseWriter, r *http.Request) {
 		if err == nil {
 			connEntry.ExpiresAt = tokenExpiresAt.Unix()
 			connEntry.ExpiryTimer = time.AfterFunc(duration, func() {
-				h.sendTokenExpired(conn, identity, tokenExpiresAt.Unix())
+				h.sendTokenExpired(ctx, conn, identity, tokenExpiresAt.Unix())
 			})
 		}
 	} else {
 		// Token already expired before connection - send expired frame and close
-		h.sendTokenExpired(conn, identity, tokenExpiresAt.Unix())
+		h.sendTokenExpired(ctx, conn, identity, tokenExpiresAt.Unix())
 		return
 	}
 
@@ -122,7 +126,7 @@ func (h *WsHandler) ServeWS(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		if err := h.manager.Unregister(identity); err != nil {
+		if err := h.manager.Unregister(ctx, identity); err != nil {
 			logx.WithContext(ctx).Errorf("ws unregister failed: %v", err)
 		}
 	}()
@@ -156,11 +160,19 @@ func (h *WsHandler) ServeWS(w http.ResponseWriter, r *http.Request) {
 
 // handleFrame processes a single binary protobuf frame.
 func (h *WsHandler) handleFrame(ctx context.Context, conn *websocket.Conn, data []byte) error {
+	tracer := otel.Tracer("github.com/hellopoisonx/aim/app/gateway/api")
+	ctx, span := tracer.Start(ctx, "ws.handle_frame")
+	defer span.End()
+
 	// Decode the frame
 	frame, err := ws.DecodeFrame(data)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return err
 	}
+
+	span.SetAttributes(attribute.String("ws.frame_type", frame.GetType().String()))
 
 	switch frame.GetType() {
 	case pb.FrameType_FRAME_TYPE_HEARTBEAT:
@@ -176,9 +188,17 @@ func (h *WsHandler) handleFrame(ctx context.Context, conn *websocket.Conn, data 
 // handleHeartbeat responds with SERVER_ACK to a client heartbeat.
 // It also updates presence state in Redis and publishes presence events.
 func (h *WsHandler) handleHeartbeat(ctx context.Context, conn *websocket.Conn, frame *pb.WsFrame) error {
+	tracer := otel.Tracer("github.com/hellopoisonx/aim/app/gateway/api")
+	ctx, span := tracer.Start(ctx, "ws.handle_heartbeat")
+	defer span.End()
+
 	// Extract identity from context for presence updates
 	identity, ok := ws.IdentityFromContext(ctx)
 	if ok {
+		span.SetAttributes(
+			attribute.Int64("ws.user_id", identity.UserID),
+			attribute.String("ws.device_id", identity.DeviceID),
+		)
 		presenceKey := fmt.Sprintf("aim:presence:%d:%s", identity.UserID, identity.DeviceID)
 
 		// Write presence state to Redis with TTL - failures are logged but do not block ACK
@@ -220,9 +240,15 @@ func (h *WsHandler) handleHeartbeat(ctx context.Context, conn *websocket.Conn, f
 
 // handleSendMessage forwards a send message to core.Transfer and ACKs the result.
 func (h *WsHandler) handleSendMessage(ctx context.Context, conn *websocket.Conn, frame *pb.WsFrame) error {
+	tracer := otel.Tracer("github.com/hellopoisonx/aim/app/gateway/api")
+	ctx, span := tracer.Start(ctx, "ws.handle_send_message")
+	defer span.End()
+
 	// Decode payload first (before any connection writes)
 	payload, err := ws.DecodePayload(frame)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return err
 	}
 
@@ -235,8 +261,17 @@ func (h *WsHandler) handleSendMessage(ctx context.Context, conn *websocket.Conn,
 	identity, ok := ws.IdentityFromContext(ctx)
 	if !ok {
 		codeErr := errorx.NewCodeError(errorx.CodeAuth, "no identity in context")
+		span.RecordError(codeErr)
+		span.SetStatus(codes.Error, codeErr.Message)
 		return h.writeErrorAck(ctx, conn, frame.GetSeq(), sendPayload.GetClientMsgId(), pb.AckStatus_ACK_STATUS_REJECTED, codeErr.Code, codeErr.Message)
 	}
+
+	span.SetAttributes(
+		attribute.Int64("ws.user_id", identity.UserID),
+		attribute.String("ws.device_id", identity.DeviceID),
+		attribute.Int64("ws.conversation_id", sendPayload.GetConversationId()),
+		attribute.String("ws.message_type", sendPayload.GetMessageType()),
+	)
 
 	// Check if CoreClient is available (nil in test mode)
 	if h.srv.CoreClient == nil {
@@ -368,15 +403,29 @@ func mapTransferToAck(ackSeq int64, clientMsgID string, seq int64, resp *corepb.
 
 // writeFrame writes a WsFrame to the WebSocket connection with a 5s timeout.
 func (h *WsHandler) writeFrame(ctx context.Context, conn *websocket.Conn, frame *pb.WsFrame) error {
+	tracer := otel.Tracer("github.com/hellopoisonx/aim/app/gateway/api")
+	ctx, span := tracer.Start(ctx, "ws.write_frame",
+		trace.WithAttributes(attribute.String("ws.frame_type", frame.GetType().String())),
+		trace.WithSpanKind(trace.SpanKindInternal),
+	)
+	defer span.End()
+
 	data, err := ws.EncodeFrame(frame)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return err
 	}
 
 	writeCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	return conn.Write(writeCtx, websocket.MessageBinary, data)
+	if err := conn.Write(writeCtx, websocket.MessageBinary, data); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+	}
+
+	return err
 }
 
 // nextSeq returns the next server-side sequence number.
@@ -385,7 +434,7 @@ func (h *WsHandler) nextSeq() int64 {
 }
 
 // sendTokenExpired builds and sends a TOKEN_EXPIRED frame, then closes the connection.
-func (h *WsHandler) sendTokenExpired(conn *websocket.Conn, identity ws.Identity, expiredAt int64) {
+func (h *WsHandler) sendTokenExpired(ctx context.Context, conn *websocket.Conn, identity ws.Identity, expiredAt int64) {
 	payload := &pb.TokenExpiredPayload{
 		ExpiredAt: expiredAt * 1000, // convert to milliseconds
 		Reason:    "access_token_expired",
@@ -393,7 +442,7 @@ func (h *WsHandler) sendTokenExpired(conn *websocket.Conn, identity ws.Identity,
 
 	payloadBytes, err := ws.EncodePayload(payload)
 	if err != nil {
-		logx.Errorf("failed to encode token expired payload: %v", err)
+		logx.WithContext(ctx).Errorf("failed to encode token expired payload: %v", err)
 		return
 	}
 
@@ -401,15 +450,15 @@ func (h *WsHandler) sendTokenExpired(conn *websocket.Conn, identity ws.Identity,
 
 	frameBytes, err := ws.EncodeFrame(frame)
 	if err != nil {
-		logx.Errorf("failed to encode token expired frame: %v", err)
+		logx.WithContext(ctx).Errorf("failed to encode token expired frame: %v", err)
 		return
 	}
 
-	writeCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	writeCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
 	if err := conn.Write(writeCtx, websocket.MessageBinary, frameBytes); err != nil {
-		logx.Errorf("failed to send token expired frame: %v", err)
+		logx.WithContext(ctx).Errorf("failed to send token expired frame: %v", err)
 	}
 
 	_ = conn.Close(websocket.StatusPolicyViolation, "token expired")

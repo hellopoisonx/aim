@@ -1,0 +1,88 @@
+// Code scaffolded by goctl. Safe to edit.
+// goctl 1.10.1
+
+package friends
+
+import (
+	"context"
+
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/ws"
+	"github.com/hellopoisonx/aim/app/logic/rpc/client/friendshipservice"
+	gwpb "github.com/hellopoisonx/aim/shared/proto/gateway/pb"
+	"github.com/hellopoisonx/aim/app/shared/errorx"
+
+	"github.com/zeromicro/go-zero/core/logx"
+)
+
+type AcceptFriendLogic struct {
+	logx.Logger
+	ctx    context.Context
+	svcCtx *svc.ServiceContext
+}
+
+func NewAcceptFriendLogic(ctx context.Context, svcCtx *svc.ServiceContext) *AcceptFriendLogic {
+	return &AcceptFriendLogic{
+		Logger: logx.WithContext(ctx),
+		ctx:    ctx,
+		svcCtx: svcCtx,
+	}
+}
+
+func (l *AcceptFriendLogic) AcceptFriend(req *types.AcceptFriendRequest) (resp *types.AcceptFriendResponse, err error) {
+	identity, ok := ws.IdentityFromContext(l.ctx)
+	if !ok {
+		return nil, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
+	}
+
+	if l.svcCtx.LogicFriendshipClient == nil {
+		return nil, errorx.NewCodeError(errorx.CodeInternal, "internal error")
+	}
+
+	rpcResp, err := l.svcCtx.LogicFriendshipClient.AcceptFriend(l.ctx, &friendshipservice.AcceptFriendReq{
+		UserId:   identity.UserID,
+		FriendId: req.Id,
+	})
+	if err != nil {
+		return nil, l.sanitizeLogicRPCError("accept friend", err)
+	}
+
+	friendship := rpcResp.GetFriendship()
+	if friendship == nil {
+		return nil, errorx.NewCodeError(errorx.CodeInternal, "internal error")
+	}
+
+	// Push notification to the requester via WebSocket.
+	if l.svcCtx.WsManager != nil {
+		gs := ws.NewGatewayServer(l.svcCtx.WsManager)
+		_, _ = gs.PushFriendApplication(l.ctx, &gwpb.PushFriendApplicationReq{
+			TargetUserId: req.Id,
+			UserId:       identity.UserID,
+			FriendId:     req.Id,
+			Status:       friendship.GetStatus(),
+			CreatedAt:    friendship.GetCreatedAt(),
+			UpdatedAt:    friendship.GetUpdatedAt(),
+		})
+	}
+
+	return &types.AcceptFriendResponse{
+		Friendship: types.FriendshipItem{
+			UserId:    friendship.GetUserId(),
+			FriendId:  friendship.GetFriendId(),
+			Status:    friendship.GetStatus(),
+			CreatedAt: friendship.GetCreatedAt(),
+			UpdatedAt: friendship.GetUpdatedAt(),
+		},
+	}, nil
+}
+
+func (l *AcceptFriendLogic) sanitizeLogicRPCError(operation string, err error) error {
+	if codeErr := errorx.FromGRPCError(err); codeErr != nil {
+		return codeErr
+	}
+
+	l.Errorf("logic rpc %s failed: %v", operation, err)
+
+	return errorx.NewCodeError(errorx.CodeInternal, "internal error")
+}

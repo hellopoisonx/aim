@@ -34,3 +34,15 @@ func (s *FriendshipServiceServer) ListFriendApplications(ctx context.Context, in
 	l := friendshipservicelogic.NewListFriendApplicationsLogic(ctx, s.svcCtx)
 	return l.ListFriendApplications(in)
 }
+
+// AcceptFriend accepts a pending friend request.
+func (s *FriendshipServiceServer) AcceptFriend(ctx context.Context, in *pb.AcceptFriendReq) (*pb.AcceptFriendResp, error) {
+	l := friendshipservicelogic.NewAcceptFriendLogic(ctx, s.svcCtx)
+	return l.AcceptFriend(in)
+}
+
+// RejectFriend rejects a pending friend request.
+func (s *FriendshipServiceServer) RejectFriend(ctx context.Context, in *pb.RejectFriendReq) (*pb.RejectFriendResp, error) {
+	l := friendshipservicelogic.NewRejectFriendLogic(ctx, s.svcCtx)
+	return l.RejectFriend(in)
+}

@@ -3,6 +3,14 @@
 
 package types
 
+type AcceptFriendRequest struct {
+	Id int64 `path:"id" validate:"required"`
+}
+
+type AcceptFriendResponse struct {
+	Friendship FriendshipItem `json:"friendship"`
+}
+
 type AddFriendRequest struct {
 	Id int64 `path:"id" validate:"required"`
 }
@@ -113,6 +121,14 @@ type RegisterRequest struct {
 
 type RegisterResponse struct {
 	UserId int64 `json:"user_id"`
+}
+
+type RejectFriendRequest struct {
+	Id int64 `path:"id" validate:"required"`
+}
+
+type RejectFriendResponse struct {
+	Friendship FriendshipItem `json:"friendship"`
 }
 
 type UserInfo struct {

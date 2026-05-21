@@ -10,6 +10,10 @@ import (
 	pb "github.com/hellopoisonx/aim/shared/proto/gateway/pb"
 	wspb "github.com/hellopoisonx/aim/shared/proto/ws/pb"
 	"github.com/zeromicro/go-zero/core/logx"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	otelcodes "go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
@@ -234,8 +238,17 @@ func (c *Connection) WriteFrame(ctx context.Context, frameType wspb.FrameType, p
 		return fmt.Errorf("connection is nil")
 	}
 
+	tracer := otel.Tracer("github.com/hellopoisonx/aim/app/gateway/api")
+	ctx, span := tracer.Start(ctx, "ws.write_frame",
+		trace.WithAttributes(attribute.String("ws.frame_type", frameType.String())),
+		trace.WithSpanKind(trace.SpanKindInternal),
+	)
+	defer span.End()
+
 	payloadBytes, err := EncodePayload(payload)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(otelcodes.Error, err.Error())
 		return fmt.Errorf("encode payload: %w", err)
 	}
 
@@ -243,11 +256,18 @@ func (c *Connection) WriteFrame(ctx context.Context, frameType wspb.FrameType, p
 
 	data, err := EncodeFrame(wsframe)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(otelcodes.Error, err.Error())
 		return fmt.Errorf("encode frame: %w", err)
 	}
 
 	writeCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	return c.Conn.Write(writeCtx, websocket.MessageBinary, data)
+	if err := c.Conn.Write(writeCtx, websocket.MessageBinary, data); err != nil {
+		span.RecordError(err)
+		span.SetStatus(otelcodes.Error, err.Error())
+	}
+
+	return err
 }

@@ -1,6 +1,10 @@
 /.sisyphus
 /.idea
-/.env
-/cover
-/coverage
-/*.out
+.env
+*cover
+cover*
+coverage*
+*coverage
+*.out
+*.exe
+/dev-tool/__pycache__

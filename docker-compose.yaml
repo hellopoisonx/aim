@@ -214,6 +214,22 @@ services:
     networks:
       - aim-network
 
+  kafbat-ui:
+     container_name: kafbat-ui
+     image: ghcr.io/kafbat/kafka-ui:latest
+     ports:
+       - 8000:8080
+     environment:
+       DYNAMIC_CONFIG_ENABLED: 'true'
+       SWAGGER_UI_ENABLED: 'true'
+     depends_on:
+       kafka:
+           condition: service_healthy
+     volumes:
+       - ./kui/config.yaml:/etc/kafkaui/dynamic_config.yaml:ro
+     networks:
+       - aim-network
+
   kafka-init:
     image: apache/kafka:4.0.2
     container_name: aim-kafka-init

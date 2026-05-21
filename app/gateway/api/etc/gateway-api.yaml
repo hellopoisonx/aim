@@ -67,13 +67,13 @@ WebSocket:
   ServerAckDelay: 5
   HeartbeatInterv: 30
 Redis:
-  Addr: 127.0.0.1:6379
+  Addr: redis:6379
   Password: ""
   DB: 0
   PresenceTTL: 60
 Kafka:
   Brokers:
-    - 127.0.0.1:9092
+    - kafka:9092
   PresenceTopic: aim.presence.events
 GatewayRpc:
   Name: gateway.rpc

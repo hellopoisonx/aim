@@ -655,6 +655,8 @@ var ConversationService_ServiceDesc = grpc.ServiceDesc{
 const (
 	FriendshipService_AddFriend_FullMethodName              = "/logic.FriendshipService/AddFriend"
 	FriendshipService_ListFriendApplications_FullMethodName = "/logic.FriendshipService/ListFriendApplications"
+	FriendshipService_AcceptFriend_FullMethodName           = "/logic.FriendshipService/AcceptFriend"
+	FriendshipService_RejectFriend_FullMethodName           = "/logic.FriendshipService/RejectFriend"
 )
 
 // FriendshipServiceClient is the client API for FriendshipService service.
@@ -666,6 +668,13 @@ type FriendshipServiceClient interface {
 	AddFriend(ctx context.Context, in *AddFriendReq, opts ...grpc.CallOption) (*AddFriendResp, error)
 	// ListFriendApplications lists pending friend applications received by the user.
 	ListFriendApplications(ctx context.Context, in *ListFriendApplicationsReq, opts ...grpc.CallOption) (*ListFriendApplicationsResp, error)
+	// AcceptFriend accepts a pending friend request.
+	// Requires an existing pending friendship record where friend_id→user_id is "pending".
+	// Updates it to "accepted" and creates the reverse record (user_id→friend_id, "accepted").
+	AcceptFriend(ctx context.Context, in *AcceptFriendReq, opts ...grpc.CallOption) (*AcceptFriendResp, error)
+	// RejectFriend rejects a pending friend request.
+	// Updates the existing pending record (friend_id→user_id) to "blocked".
+	RejectFriend(ctx context.Context, in *RejectFriendReq, opts ...grpc.CallOption) (*RejectFriendResp, error)
 }
 
 type friendshipServiceClient struct {
@@ -696,6 +705,26 @@ func (c *friendshipServiceClient) ListFriendApplications(ctx context.Context, in
 	return out, nil
 }
 
+func (c *friendshipServiceClient) AcceptFriend(ctx context.Context, in *AcceptFriendReq, opts ...grpc.CallOption) (*AcceptFriendResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AcceptFriendResp)
+	err := c.cc.Invoke(ctx, FriendshipService_AcceptFriend_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *friendshipServiceClient) RejectFriend(ctx context.Context, in *RejectFriendReq, opts ...grpc.CallOption) (*RejectFriendResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RejectFriendResp)
+	err := c.cc.Invoke(ctx, FriendshipService_RejectFriend_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // FriendshipServiceServer is the server API for FriendshipService service.
 // All implementations must embed UnimplementedFriendshipServiceServer
 // for forward compatibility.
@@ -705,6 +734,13 @@ type FriendshipServiceServer interface {
 	AddFriend(context.Context, *AddFriendReq) (*AddFriendResp, error)
 	// ListFriendApplications lists pending friend applications received by the user.
 	ListFriendApplications(context.Context, *ListFriendApplicationsReq) (*ListFriendApplicationsResp, error)
+	// AcceptFriend accepts a pending friend request.
+	// Requires an existing pending friendship record where friend_id→user_id is "pending".
+	// Updates it to "accepted" and creates the reverse record (user_id→friend_id, "accepted").
+	AcceptFriend(context.Context, *AcceptFriendReq) (*AcceptFriendResp, error)
+	// RejectFriend rejects a pending friend request.
+	// Updates the existing pending record (friend_id→user_id) to "blocked".
+	RejectFriend(context.Context, *RejectFriendReq) (*RejectFriendResp, error)
 	mustEmbedUnimplementedFriendshipServiceServer()
 }
 
@@ -720,6 +756,12 @@ func (UnimplementedFriendshipServiceServer) AddFriend(context.Context, *AddFrien
 }
 func (UnimplementedFriendshipServiceServer) ListFriendApplications(context.Context, *ListFriendApplicationsReq) (*ListFriendApplicationsResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListFriendApplications not implemented")
+}
+func (UnimplementedFriendshipServiceServer) AcceptFriend(context.Context, *AcceptFriendReq) (*AcceptFriendResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method AcceptFriend not implemented")
+}
+func (UnimplementedFriendshipServiceServer) RejectFriend(context.Context, *RejectFriendReq) (*RejectFriendResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RejectFriend not implemented")
 }
 func (UnimplementedFriendshipServiceServer) mustEmbedUnimplementedFriendshipServiceServer() {}
 func (UnimplementedFriendshipServiceServer) testEmbeddedByValue()                           {}
@@ -778,6 +820,42 @@ func _FriendshipService_ListFriendApplications_Handler(srv interface{}, ctx cont
 	return interceptor(ctx, in, info, handler)
 }
 
+func _FriendshipService_AcceptFriend_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AcceptFriendReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FriendshipServiceServer).AcceptFriend(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: FriendshipService_AcceptFriend_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FriendshipServiceServer).AcceptFriend(ctx, req.(*AcceptFriendReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _FriendshipService_RejectFriend_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RejectFriendReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FriendshipServiceServer).RejectFriend(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: FriendshipService_RejectFriend_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FriendshipServiceServer).RejectFriend(ctx, req.(*RejectFriendReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // FriendshipService_ServiceDesc is the grpc.ServiceDesc for FriendshipService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -792,6 +870,14 @@ var FriendshipService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListFriendApplications",
 			Handler:    _FriendshipService_ListFriendApplications_Handler,
+		},
+		{
+			MethodName: "AcceptFriend",
+			Handler:    _FriendshipService_AcceptFriend_Handler,
+		},
+		{
+			MethodName: "RejectFriend",
+			Handler:    _FriendshipService_RejectFriend_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

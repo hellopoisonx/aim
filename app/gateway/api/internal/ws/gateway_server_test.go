@@ -105,7 +105,7 @@ func newWSTestServer(t *testing.T, manager *Manager, userID int64, deviceID stri
 		wsServer.mu.Unlock()
 
 		ctx, cancel := context.WithCancel(context.Background())
-		_ = manager.Register(wsServer.identity, conn, cancel)
+		_ = manager.Register(ctx, wsServer.identity, conn, cancel)
 
 		// Block until context is cancelled or done signal is received
 		select {
@@ -119,7 +119,7 @@ func newWSTestServer(t *testing.T, manager *Manager, userID int64, deviceID stri
 		// Clean up on disconnect - this mirrors the real ws_handler.go defer block
 		// Close the websocket connection first (simulates what happens on real disconnect)
 		_ = conn.Close(websocket.StatusNormalClosure, "connection closed by server")
-		_ = manager.Unregister(wsServer.identity)
+		_ = manager.Unregister(ctx, wsServer.identity)
 	})
 
 	wsServer.server = httptest.NewServer(mux)
