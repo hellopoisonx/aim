@@ -84,6 +84,11 @@ type ProtocolCatalog struct {
 	Frames []ProtocolFrame `json:"frames"`
 }
 
+type CreateConversationRequest struct {
+	ConversationType string  `json:"conversation_type" validate:"required,oneof=direct group"`
+	MemberIDs        []int64 `json:"member_ids" validate:"required,min=1"`
+}
+
 type SendMessageRequest struct {
 	ConversationID int64    `json:"conversation_id"`
 	MessageType    string   `json:"message_type"`
@@ -266,7 +271,7 @@ func (a *App) SearchUsersByName(name string) ([]client.UserListItem, error) {
 	return resp.Users, nil
 }
 
-func (a *App) CreateDirectConversation(memberID int64) (*client.CreateConversationResponse, error) {
+func (a *App) CreateConversation(req CreateConversationRequest) (*client.CreateConversationResponse, error) {
 	a.mu.RLock()
 	accessToken := a.accessToken
 	a.mu.RUnlock()
@@ -275,12 +280,32 @@ func (a *App) CreateDirectConversation(memberID int64) (*client.CreateConversati
 		return nil, errorx.NewCodeError(errorx.CodeAuth, "missing access token")
 	}
 
-	req := &client.CreateConversationRequest{
-		ConversationType: "direct",
-		MemberIDs:        []int64{memberID},
+	convType := strings.TrimSpace(req.ConversationType)
+	if convType == "" {
+		return nil, errorx.NewCodeError(errorx.CodeBadInput, "conversation_type is required")
 	}
 
-	return a.restClient().CreateConversation(a.callContext(), req, accessToken)
+	if convType != "direct" && convType != "group" {
+		return nil, errorx.NewCodeError(errorx.CodeBadInput, "conversation_type must be direct or group")
+	}
+
+	if len(req.MemberIDs) == 0 {
+		return nil, errorx.NewCodeError(errorx.CodeBadInput, "member_ids must contain at least one user")
+	}
+
+	payload := &client.CreateConversationRequest{
+		ConversationType: convType,
+		MemberIDs:        req.MemberIDs,
+	}
+
+	return a.restClient().CreateConversation(a.callContext(), payload, accessToken)
+}
+
+func (a *App) CreateDirectConversation(memberID int64) (*client.CreateConversationResponse, error) {
+	return a.CreateConversation(CreateConversationRequest{
+		ConversationType: "direct",
+		MemberIDs:        []int64{memberID},
+	})
 }
 
 func (a *App) GetUserById(id int64) (*client.GetUserByIdResponse, error) {

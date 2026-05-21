@@ -13,7 +13,12 @@ const props = withDefaults(defineProps<Props>(), {
   typingUserId: null,
 })
 
+const emit = defineEmits<{
+  'load-more': [conversationId: number]
+}>()
+
 const scrollbarRef = ref<InstanceType<typeof ElScrollbar> | null>(null)
+const isLoadingMore = ref(false)
 
 const hasMessages = computed(() => props.messages.length > 0)
 
@@ -66,10 +71,22 @@ const groupedMessages = computed<MessageGroup[]>(() => {
   return groups
 })
 
-// Auto-scroll to bottom when new messages arrive
+// ─── 滚动到顶部时加载更多历史消息 ──────────────────────────────────────
+function handleScroll({ scrollTop }: { scrollTop: number }) {
+  if (scrollTop <= 20 && !isLoadingMore.value && props.conversation?.historyCursor?.hasMore) {
+    isLoadingMore.value = true
+    emit('load-more', props.conversation.id)
+  }
+}
+
+// Auto-scroll to bottom when new messages arrive (非加载更多场景)
 watch(
   () => props.messages.length,
   async () => {
+    if (isLoadingMore.value) {
+      isLoadingMore.value = false
+      return // 加载更早历史时不滚动到底部
+    }
     await nextTick()
     scrollbarRef.value?.wrapRef?.scrollTo({ top: scrollbarRef.value.wrapRef.scrollHeight, behavior: 'smooth' })
   },
@@ -113,7 +130,7 @@ watch(
         </div>
       </div>
 
-      <ElScrollbar ref="scrollbarRef" class="ma-scroll">
+      <ElScrollbar ref="scrollbarRef" class="ma-scroll" @scroll="handleScroll">
         <div class="ma-messages">
           <template v-for="group in groupedMessages" :key="group.label">
             <div class="ma-date-divider">
@@ -144,8 +161,17 @@ watch(
                 <div class="ma-bubble" :class="msg.isMine ? 'bubble-mine' : 'bubble-theirs'">
                   {{ msg.content }}
                 </div>
-                <div class="ma-time" :class="msg.isMine ? 'time-mine' : 'time-theirs'">
-                  {{ formatTime(msg.timestamp) }}
+                <div class="ma-meta" :class="msg.isMine ? 'meta-mine' : 'meta-theirs'">
+                  <!-- ACK 状态图标（仅自己的消息） -->
+                  <span v-if="msg.isMine && msg.ackStatus === 'pending'" class="ma-ack ma-ack-pending" title="发送中">◌</span>
+                  <span v-else-if="msg.isMine && msg.ackStatus === 'failed'" class="ma-ack ma-ack-failed" title="发送失败">⚠</span>
+                  <span class="ma-time" :class="msg.isMine ? 'time-mine' : 'time-theirs'">
+                    {{ formatTime(msg.timestamp) }}
+                  </span>
+                </div>
+                <!-- 发送失败提示 -->
+                <div v-if="msg.isMine && msg.ackStatus === 'failed'" class="ma-failed-hint">
+                  发送失败
                 </div>
               </div>
             </div>
@@ -308,12 +334,48 @@ watch(
   border-bottom-left-radius: 4px;
 }
 
+.ma-meta {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 var(--space-2);
+}
+
+.meta-mine {
+  justify-content: flex-end;
+}
+
+.meta-theirs {
+  justify-content: flex-start;
+}
+
 .ma-time {
   font-size: 10px;
   color: var(--aim-text-muted);
-  padding: 0 var(--space-2);
 }
 
 .time-mine { text-align: right; }
 .time-theirs { text-align: left; }
+
+/* ACK 状态图标 */
+.ma-ack {
+  font-size: 12px;
+  line-height: 1;
+}
+
+.ma-ack-pending {
+  color: var(--aim-text-muted);
+  opacity: 0.5;
+}
+
+.ma-ack-failed {
+  color: #f56c6c;
+}
+
+.ma-failed-hint {
+  font-size: 10px;
+  color: #f56c6c;
+  padding: 0 var(--space-2);
+  text-align: right;
+}
 </style>

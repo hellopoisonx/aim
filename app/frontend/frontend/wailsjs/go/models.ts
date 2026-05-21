@@ -80,27 +80,6 @@ export namespace client {
 		    return a;
 		}
 	}
-	export class CreateConversationResponse {
-	    conversation_id: number;
-	    conversation_type: string;
-	    is_active: boolean;
-	    created_at: number;
-	    member_ids: number[];
-	
-	    static createFrom(source: any = {}) {
-	        return new CreateConversationResponse(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.conversation_id = source["conversation_id"];
-	        this.conversation_type = source["conversation_type"];
-	        this.is_active = source["is_active"];
-	        this.created_at = source["created_at"];
-	        this.member_ids = source["member_ids"];
-	    }
-	}
-	
 	export class ConversationItem {
 	    conversation_id: number;
 	    conversation_type: string;
@@ -121,35 +100,25 @@ export namespace client {
 	        this.member_ids = source["member_ids"];
 	    }
 	}
-	export class ListConversationsResponse {
-	    conversations: ConversationItem[];
+	export class CreateConversationResponse {
+	    conversation_id: number;
+	    conversation_type: string;
+	    is_active: boolean;
+	    created_at: number;
+	    member_ids: number[];
 	
 	    static createFrom(source: any = {}) {
-	        return new ListConversationsResponse(source);
+	        return new CreateConversationResponse(source);
 	    }
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.conversations = this.convertValues(source["conversations"], ConversationItem);
+	        this.conversation_id = source["conversation_id"];
+	        this.conversation_type = source["conversation_type"];
+	        this.is_active = source["is_active"];
+	        this.created_at = source["created_at"];
+	        this.member_ids = source["member_ids"];
 	    }
-	
-		convertValues(a: any, classs: any, asMap: boolean = false): any {
-		    if (!a) {
-		        return a;
-		    }
-		    if (a.slice && a.map) {
-		        return (a as any[]).map(elem => this.convertValues(elem, classs));
-		    } else if ("object" === typeof a) {
-		        if (asMap) {
-		            for (const key of Object.keys(a)) {
-		                a[key] = new classs(a[key]);
-		            }
-		            return a;
-		        }
-		        return new classs(a);
-		    }
-		    return a;
-		}
 	}
 	
 	export class MessageItem {
@@ -246,6 +215,36 @@ export namespace client {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.user = this.convertValues(source["user"], UserInfo);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class ListConversationsResponse {
+	    conversations: ConversationItem[];
+	
+	    static createFrom(source: any = {}) {
+	        return new ListConversationsResponse(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.conversations = this.convertValues(source["conversations"], ConversationItem);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -497,6 +496,20 @@ export namespace main {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.gateway_http = source["gateway_http"];
 	        this.gateway_ws = source["gateway_ws"];
+	    }
+	}
+	export class CreateConversationRequest {
+	    conversation_type: string;
+	    member_ids: number[];
+	
+	    static createFrom(source: any = {}) {
+	        return new CreateConversationRequest(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.conversation_type = source["conversation_type"];
+	        this.member_ids = source["member_ids"];
 	    }
 	}
 	export class ProtocolFrame {

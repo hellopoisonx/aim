@@ -88,7 +88,7 @@ async function loadAll() {
     const appItems: FriendRequest[] = await Promise.all(
       (appsResp?.applications ?? [])
         .filter((item: { status: string }) => item.status === 'pending')
-        .map(async (item: { user_id: number; friend_id: number; status: string; created_at: number; updated_at: number }, idx: number) => {
+        .map(async (item: { user_id: number; friend_id: number; status: string; created_at: number; updated_at: number }) => {
           let userEmail = ''
           try {
             const userResp = await GetUserById(item.user_id)
@@ -97,7 +97,7 @@ async function loadAll() {
             userEmail = `用户 ${item.user_id}`
           }
           return {
-            id: idx,
+            id: item.user_id,
             userId: item.user_id,
             friendId: item.friend_id,
             status: item.status,
@@ -118,31 +118,31 @@ async function loadAll() {
 
 // ─── Actions ──────────────────────────────────────────────────────────────
 
-async function handleAccept(userId: number) {
-  if (actionLoading.value.has(userId)) return
-  actionLoading.value.add(userId)
+async function handleAccept(id: number) {
+  if (actionLoading.value.has(id)) return
+  actionLoading.value.add(id)
   try {
-    await AcceptFriend(userId)
-    applications.value = applications.value.filter((a) => a.userId !== userId)
+    await AcceptFriend(id)
+    applications.value = applications.value.filter((a) => a.id !== id)
     // Reload friends to reflect the new friend
     await loadAll()
   } catch {
     // Error handled silently
   } finally {
-    actionLoading.value.delete(userId)
+    actionLoading.value.delete(id)
   }
 }
 
-async function handleReject(userId: number) {
-  if (actionLoading.value.has(userId)) return
-  actionLoading.value.add(userId)
+async function handleReject(id: number) {
+  if (actionLoading.value.has(id)) return
+  actionLoading.value.add(id)
   try {
-    await RejectFriend(userId)
-    applications.value = applications.value.filter((a) => a.userId !== userId)
+    await RejectFriend(id)
+    applications.value = applications.value.filter((a) => a.id !== id)
   } catch {
     // Error handled silently
   } finally {
-    actionLoading.value.delete(userId)
+    actionLoading.value.delete(id)
   }
 }
 
@@ -291,7 +291,7 @@ onMounted(() => {
         <div v-else class="fv-list">
           <div
             v-for="app in applications"
-            :key="app.userId"
+            :key="app.id"
             class="fv-item fv-app-item"
           >
             <ElAvatar :size="40">
@@ -305,17 +305,17 @@ onMounted(() => {
               <ElButton
                 size="small"
                 type="primary"
-                :loading="actionLoading.has(app.userId)"
-                @click="handleAccept(app.userId)"
+                :loading="actionLoading.has(app.id)"
+                @click="handleAccept(app.id)"
               >
                 接受
               </ElButton>
               <ElButton
                 size="small"
                 type="danger"
-                :loading="actionLoading.has(app.userId)"
+                :loading="actionLoading.has(app.id)"
                 plain
-                @click="handleReject(app.userId)"
+                @click="handleReject(app.id)"
               >
                 拒绝
               </ElButton>

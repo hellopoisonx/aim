@@ -11,6 +11,8 @@ export function Configure(arg1:main.AppConfig):Promise<main.SessionState>;
 
 export function ConnectWS():Promise<void>;
 
+export function CreateConversation(arg1:main.CreateConversationRequest):Promise<client.CreateConversationResponse>;
+
 export function CreateDirectConversation(arg1:number):Promise<client.CreateConversationResponse>;
 
 export function DeviceID():Promise<string>;
@@ -21,11 +23,11 @@ export function GetConversationHistory(arg1:number,arg2:number,arg3:number,arg4:
 
 export function GetUserById(arg1:number):Promise<client.GetUserByIdResponse>;
 
+export function ListConversations():Promise<client.ListConversationsResponse>;
+
 export function ListFriendApplications():Promise<client.ListFriendApplicationsResponse>;
 
 export function ListFriends():Promise<client.ListFriendsResponse>;
-
-export function ListConversations():Promise<client.ListConversationsResponse>;
 
 export function Login(arg1:client.LoginRequest):Promise<client.LoginResponse>;
 

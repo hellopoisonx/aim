@@ -33,8 +33,8 @@ func TestConfigureAndProtocolCatalog(t *testing.T) {
 	}
 
 	catalog := app.ProtocolCatalog()
-	if len(catalog.REST) != 14 {
-		t.Fatalf("REST endpoints = %d, want 14", len(catalog.REST))
+	if len(catalog.REST) != 15 {
+		t.Fatalf("REST endpoints = %d, want 15", len(catalog.REST))
 	}
 
 	if len(catalog.Frames) != 13 {
@@ -461,6 +461,91 @@ func TestAppCreateDirectConversation(t *testing.T) {
 
 	if len(resp.MemberIDs) != 2 {
 		t.Fatalf("member_ids count = %d, want 2", len(resp.MemberIDs))
+	}
+}
+
+func TestAppCreateGroupConversation(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/conversations" {
+			t.Fatalf("path = %s", r.URL.Path)
+		}
+
+		if got := r.Header.Get("Authorization"); got != "Bearer access-create-group" {
+			t.Fatalf("Authorization = %q", got)
+		}
+
+		var req client.CreateConversationRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+
+		if req.ConversationType != "group" {
+			t.Fatalf("conversation_type = %q, want group", req.ConversationType)
+		}
+		if len(req.MemberIDs) != 3 || req.MemberIDs[0] != 10 || req.MemberIDs[1] != 20 || req.MemberIDs[2] != 30 {
+			t.Fatalf("member_ids = %v", req.MemberIDs)
+		}
+
+		writeEnvelope(t, w, map[string]any{
+			"conversation_id":   int64(99999),
+			"conversation_type": "group",
+			"is_active":         true,
+			"created_at":        int64(1715679000000),
+			"member_ids":        []int64{7, 10, 20, 30},
+		})
+	}))
+	defer server.Close()
+
+	app := NewApp()
+	app.accessToken = "access-create-group"
+	app.Configure(AppConfig{GatewayHTTP: server.URL, GatewayWS: "ws://example.test/ws"})
+
+	resp, err := app.CreateConversation(CreateConversationRequest{
+		ConversationType: "group",
+		MemberIDs:        []int64{10, 20, 30},
+	})
+	if err != nil {
+		t.Fatalf("CreateConversation returned error: %v", err)
+	}
+
+	if resp.ConversationID != 99999 || resp.ConversationType != "group" || !resp.IsActive {
+		t.Fatalf("response = %+v", resp)
+	}
+
+	if len(resp.MemberIDs) != 4 {
+		t.Fatalf("member_ids count = %d, want 4", len(resp.MemberIDs))
+	}
+}
+
+func TestAppCreateConversationValidation(t *testing.T) {
+	t.Parallel()
+
+	app := NewApp()
+
+	_, err := app.CreateConversation(CreateConversationRequest{
+		ConversationType: "",
+		MemberIDs:        []int64{1},
+	})
+	if err == nil {
+		t.Fatal("expected error for empty conversation_type")
+	}
+
+	_, err = app.CreateConversation(CreateConversationRequest{
+		ConversationType: "invalid",
+		MemberIDs:        []int64{1},
+	})
+	if err == nil {
+		t.Fatal("expected error for invalid conversation_type")
+	}
+
+	_, err = app.CreateConversation(CreateConversationRequest{
+		ConversationType: "group",
+		MemberIDs:        []int64{},
+	})
+	if err == nil {
+		t.Fatal("expected error for empty member_ids")
 	}
 }
 

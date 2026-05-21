@@ -13,6 +13,12 @@ export interface Conversation {
   unreadCount: number
   isOnline: boolean
   memberIds?: number[]
+  /** 历史消息游标分页信息 */
+  historyCursor?: {
+    cursorCreatedAt: number
+    cursorId: number
+    hasMore: boolean
+  }
 }
 
 export interface ChatMessage {

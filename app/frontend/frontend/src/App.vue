@@ -17,6 +17,7 @@ import {
   SendAck,
   SendHeartbeat,
   SendMessage,
+  SendReadReceipt,
   SendTyping,
   SessionState,
 } from '../wailsjs/go/main/App'
@@ -65,6 +66,12 @@ const onlineUserIds = ref<Set<number>>(new Set())
 const typingInfo = ref<{ conversationId: number; userId: number } | null>(null)
 const lastReadSeq = ref(0)
 let heartbeatTimer: ReturnType<typeof setInterval> | null = null
+
+// ─── Auto-reconnect ───────────────────────────────────────────────────────────
+const intentionalDisconnect = ref(false)
+let reconnectAttempt = 0
+const MAX_RECONNECT_ATTEMPTS = 5
+let reconnectTimer: ReturnType<typeof setTimeout> | null = null
 
 // ─── Derived helpers ──────────────────────────────────────────────────────────
 
@@ -123,6 +130,16 @@ async function loadConversationHistory(conversationId: number) {
     }
     const existing = messagesMap.value.get(conversationId)!
     messagesMap.value.set(conversationId, [...hist, ...existing])
+
+    // 保存游标信息用于分页加载更多历史
+    const conv2 = conversations.value.find((c) => c.id === conversationId)
+    if (conv2) {
+      conv2.historyCursor = {
+        cursorCreatedAt: resp.next_cursor_created_at,
+        cursorId: resp.next_cursor_id,
+        hasMore: resp.has_more,
+      }
+    }
     historyLoadedSet.value.add(conversationId)
   } catch {
     ElMessage.error('加载历史消息失败')
@@ -237,10 +254,15 @@ onMounted(async () => {
     EventsOn('aim:connection_state', (state: main.SessionState) => {
       if (state.ws_connected) {
         connectionState.value = 'connected'
+        reconnectAttempt = 0
         startHeartbeat()
       } else {
         connectionState.value = 'disconnected'
         stopHeartbeat()
+        // 非主动断线时自动重连（指数退避）
+        if (!intentionalDisconnect.value) {
+          scheduleReconnect()
+        }
       }
     }),
 
@@ -322,6 +344,8 @@ onMounted(async () => {
             loadConversationHistory(conversationId)
           } else if (activeConversationId.value === conversationId) {
             conv.unreadCount = 0
+            // 活跃会话收到新消息时发送已读回执
+            SendReadReceipt(conversationId, msgId).catch(() => {})
           } else {
             conv.unreadCount++
           }
@@ -442,6 +466,13 @@ onMounted(async () => {
         case WS_FRAME.TOKEN_EXPIRED: {
           try {
             await Refresh({ refresh_token: '' })
+            // 刷新成功后重新建立 WebSocket 连接
+            try {
+              await ConnectWS()
+            } catch {
+              ElMessage.error('重新连接失败，请重新登录')
+              handleLogout()
+            }
           } catch {
             ElMessage.error('登录已过期，请重新登录')
             handleLogout()
@@ -478,6 +509,7 @@ onMounted(async () => {
 onUnmounted(() => {
   offHandlers.forEach((off) => off())
   stopHeartbeat()
+  clearReconnectTimer()
 })
 
 // ─── Heartbeat ────────────────────────────────────────────────────────────────
@@ -498,6 +530,36 @@ function stopHeartbeat() {
   }
 }
 
+function clearReconnectTimer() {
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer)
+    reconnectTimer = null
+  }
+}
+
+function scheduleReconnect() {
+  if (reconnectAttempt >= MAX_RECONNECT_ATTEMPTS) {
+    ElMessage.error('无法重新连接，请检查网络后手动登录')
+    return
+  }
+  clearReconnectTimer()
+  // 指数退避: 1s → 2s → 4s → 8s, 最多 30s
+  const delay = Math.min(1000 * Math.pow(2, reconnectAttempt), 30000)
+  reconnectAttempt++
+  reconnectTimer = setTimeout(async () => {
+    try {
+      await ConnectWS()
+    } catch {
+      // 重连失败，if 还有机会则继续
+      if (reconnectAttempt < MAX_RECONNECT_ATTEMPTS) {
+        scheduleReconnect()
+      } else {
+        ElMessage.error('重连次数已达上限，请检查网络后手动登录')
+      }
+    }
+  }, delay)
+}
+
 // ─── Auth handlers ────────────────────────────────────────────────────────────
 
 async function handleLogin(payload: { email: string; password: string; device_id: string }) {
@@ -508,6 +570,9 @@ async function handleLogin(payload: { email: string; password: string; device_id
       const state = await SessionState()
       currentUserId.value = state.user_id ?? 0
       currentUserLabel.value = payload.email.split('@')[0]
+      intentionalDisconnect.value = false
+      reconnectAttempt = 0
+      clearReconnectTimer()
       conversations.value = []
       messagesMap.value = new Map()
       historyLoadedSet.value.clear()
@@ -596,6 +661,8 @@ async function handleRegister(payload: { email: string; password: string; userna
 }
 
 async function handleLogout() {
+  intentionalDisconnect.value = true
+  clearReconnectTimer()
   stopHeartbeat()
   try {
     await Logout()
@@ -618,12 +685,67 @@ async function handleLogout() {
 
 // ─── Conversation handlers ───────────────────────────────────────────────────
 
+// ─── History pagination: 加载更早的历史消息 ──────────────────────────────
+async function handleLoadMoreHistory(conversationId: number) {
+  if (historyLoading.value) return
+  const conv = conversations.value.find((c) => c.id === conversationId)
+  if (!conv?.historyCursor?.hasMore) return
+
+  const cursor = conv.historyCursor
+  historyLoading.value = true
+  try {
+    const resp = await GetConversationHistory(
+      conversationId,
+      cursor.cursorCreatedAt,
+      cursor.cursorId,
+      50,
+    )
+    if (!resp?.messages?.length) {
+      conv.historyCursor = { ...cursor, hasMore: false }
+      return
+    }
+
+    const remoteName = conv.title ?? '未知用户'
+    const olderMsgs: ChatMessage[] = resp.messages.map((m: client.MessageItem) => ({
+      id: m.id,
+      conversationId: m.conversation_id,
+      senderId: m.sender_id,
+      senderName: m.sender_id === currentUserId.value ? currentUserLabel.value : remoteName,
+      senderAvatar: '',
+      content: m.content,
+      timestamp: new Date(m.created_at).toISOString(),
+      isMine: m.sender_id === currentUserId.value,
+    }))
+
+    // 将更早的消息追加到列表头部（保持时间顺序）
+    const existing = messagesMap.value.get(conversationId) ?? []
+    messagesMap.value.set(conversationId, [...olderMsgs, ...existing])
+
+    // 更新游标
+    conv.historyCursor = {
+      cursorCreatedAt: resp.next_cursor_created_at,
+      cursorId: resp.next_cursor_id,
+      hasMore: resp.has_more,
+    }
+  } catch {
+    ElMessage.error('加载更多历史消息失败')
+  } finally {
+    historyLoading.value = false
+  }
+}
+
 function handleSelectConversation(id: number) {
   friendsViewVisible.value = false
   activeConversationId.value = id
   const conv = conversations.value.find((c) => c.id === id)
   if (conv) conv.unreadCount = 0
   loadConversationHistory(id)
+  // 发送已读回执：标记该会话最后一条消息为已读
+  const msgs = messagesMap.value.get(id)
+  if (msgs && msgs.length > 0) {
+    const lastMsg = msgs[msgs.length - 1]
+    SendReadReceipt(id, lastMsg.id).catch(() => {})
+  }
 }
 
 async function handleSendMessage(content: string) {
@@ -649,6 +771,12 @@ async function handleSendMessage(content: string) {
     ackStatus: 'pending',
   }
 
+  // 乐观更新：先将消息加入 UI
+  if (!messagesMap.value.has(conversationId)) {
+    messagesMap.value.set(conversationId, [])
+  }
+  messagesMap.value.get(conversationId)!.push(optimisticMsg)
+
   try {
     await SendMessage({
       conversation_id: conversationId,
@@ -658,14 +786,11 @@ async function handleSendMessage(content: string) {
       mentions: [],
     })
   } catch {
+    // 发送失败，将乐观消息标记为 failed
+    optimisticMsg.ackStatus = 'failed'
     ElMessage.error('消息发送失败')
     return
   }
-
-  if (!messagesMap.value.has(conversationId)) {
-    messagesMap.value.set(conversationId, [])
-  }
-  messagesMap.value.get(conversationId)!.push(optimisticMsg)
 
   const conv = conversations.value.find((c) => c.id === conversationId)
   if (conv) {
@@ -839,6 +964,7 @@ function displayUserName(user: SearchUserItem): string {
         :conversation="activeConversation"
         :messages="activeMessages"
         :typing-user-id="typingUserId"
+        @load-more="handleLoadMoreHistory"
       />
       <div class="input-area">
         <MessageInput

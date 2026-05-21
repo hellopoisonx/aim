@@ -48,6 +48,24 @@ Vue handleLogin()
 - 加载历史时跳过已有消息的会话（`messagesMap.get(convId)?.length > 0`）
 - 每条 `ChatMessage` 包含 `clientMsgId` 用于去重和乐观消息替换
 
+## 历史消息游标分页
+
+`getConversationHistory` 返回的响应包含分页游标，首次加载和后续滚动加载使用相同的游标字段：
+
+```json
+{
+  "messages": [...],
+  "next_cursor_created_at": 1715679000000,
+  "next_cursor_id": 12345,
+  "has_more": true
+}
+```
+
+- 首次加载（`loadConversationHistory`）：`GetConversationHistory(convId, 0, 0, 50)`
+- 加载更多（`handleLoadMore`）：`GetConversationHistory(convId, cursorCreatedAt, cursorId, 50)`
+- `has_more === false` 时停止加载
+- 游标信息存储在 `Conversation.historyCursor`，在 `loadConversationHistory` 返回后更新
+
 ## 相关的 DTO
 
 ```go
@@ -71,3 +89,6 @@ type ListConversationsResponse struct {
 - 不要在登录成功之前调用 `ListConversations()`（没有 token）
 - 不要将客户端本地生成的假会话数据混入服务端返回的 `ConversationItem` 列表
 - 不要在每次会话切换时重新拉全量列表；`handleLogin` 只拉一次
+- 加载更多历史时不要重置 `historyLoadedSet`；它用于跳过空历史会话的重复请求
+- 不要在 `load-more` 处理中滚动到底部；使用 `isLoadingMore` 标记阻止自动滚动
+- 不要在每次 `load-more` 时覆盖原有 `historyCursor`；只在首次加载后保存游标

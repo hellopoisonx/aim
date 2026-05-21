@@ -18,6 +18,10 @@ export function ConnectWS() {
   return window['go']['main']['App']['ConnectWS']();
 }
 
+export function CreateConversation(arg1) {
+  return window['go']['main']['App']['CreateConversation'](arg1);
+}
+
 export function CreateDirectConversation(arg1) {
   return window['go']['main']['App']['CreateDirectConversation'](arg1);
 }
@@ -38,16 +42,16 @@ export function GetUserById(arg1) {
   return window['go']['main']['App']['GetUserById'](arg1);
 }
 
+export function ListConversations() {
+  return window['go']['main']['App']['ListConversations']();
+}
+
 export function ListFriendApplications() {
   return window['go']['main']['App']['ListFriendApplications']();
 }
 
 export function ListFriends() {
   return window['go']['main']['App']['ListFriends']();
-}
-
-export function ListConversations() {
-  return window['go']['main']['App']['ListConversations']();
 }
 
 export function Login(arg1) {
