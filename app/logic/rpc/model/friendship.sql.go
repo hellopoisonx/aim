@@ -94,6 +94,39 @@ func (q *Queries) GetFriendshipByPair(ctx context.Context, arg GetFriendshipByPa
 	return i, err
 }
 
+const listFriends = `-- name: ListFriends :many
+SELECT user_id, friend_id, status, created_at, updated_at
+FROM friendships
+WHERE user_id = $1 AND status = 'accepted'
+ORDER BY created_at DESC
+`
+
+func (q *Queries) ListFriends(ctx context.Context, userID int64) ([]Friendship, error) {
+	rows, err := q.db.Query(ctx, listFriends, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Friendship{}
+	for rows.Next() {
+		var i Friendship
+		if err := rows.Scan(
+			&i.UserID,
+			&i.FriendID,
+			&i.Status,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listPendingFriendApplications = `-- name: ListPendingFriendApplications :many
 SELECT user_id, friend_id, status, created_at, updated_at
 FROM friendships

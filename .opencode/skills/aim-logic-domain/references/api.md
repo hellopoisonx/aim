@@ -157,6 +157,15 @@ service FriendshipService {
 
   // ListFriendApplications lists pending friend applications where the current user is the receiver.
   rpc ListFriendApplications(ListFriendApplicationsReq) returns (ListFriendApplicationsResp);
+
+  // AcceptFriend accepts a pending friend request.
+  rpc AcceptFriend(AcceptFriendReq) returns (AcceptFriendResp);
+
+  // RejectFriend rejects a pending friend request.
+  rpc RejectFriend(RejectFriendReq) returns (RejectFriendResp);
+
+  // ListFriends lists all accepted friends of the user.
+  rpc ListFriends(ListFriendsReq) returns (ListFriendsResp);
 }
 
 message AddFriendReq {
@@ -180,16 +189,34 @@ message ListFriendApplicationsReq {
   int64 user_id = 1; // 认证用户 ID（作为接收方查询 pending 申请）
 }
 
-message FriendApplication {
-  int64 application_id = 1;
-  int64 from_user_id    = 2;
-  string from_nickname  = 3;
-  string from_avatar    = 4;
-  int64 created_at      = 5;
+message ListFriendApplicationsResp {
+  repeated FriendshipResponse applications = 1;
 }
 
-message ListFriendApplicationsResp {
-  repeated FriendApplication applications = 1;
+message AcceptFriendReq {
+  int64 user_id = 1; // 接受请求的用户 ID
+  int64 friend_id = 2; // 原始请求方 ID
+}
+
+message AcceptFriendResp {
+  FriendshipResponse friendship = 1;
+}
+
+message RejectFriendReq {
+  int64 user_id = 1; // 拒绝请求的用户 ID
+  int64 friend_id = 2; // 原始请求方 ID
+}
+
+message RejectFriendResp {
+  FriendshipResponse friendship = 1;
+}
+
+message ListFriendsReq {
+  int64 user_id = 1; // 认证用户 ID
+}
+
+message ListFriendsResp {
+  repeated FriendshipResponse friends = 1;
 }
 ```
 
@@ -204,10 +231,33 @@ message ListFriendApplicationsResp {
 ### ListFriendApplications
 
 - 请求：`ListFriendApplicationsReq`（`user_id` 为认证用户 ID，作为接收方查询 pending 申请）。
-- 响应：`ListFriendApplicationsResp.applications`，返回 `application_id/from_user_id/from_nickname/from_avatar/created_at` 列表。
+- 响应：`ListFriendApplicationsResp.applications`，返回 `FriendshipResponse` 列表（`user_id/friend_id/status/created_at/updated_at`），时间戳为 Unix milliseconds。
 - 行为：查询 `friendships` 表中 `friend_id=user_id AND status=pending` 的记录，按 `created_at DESC` 排序。
 - 数据：sqlc 查询 `ListPendingFriendApplications` 位于 `app/logic/rpc/model/queries/friendship.sql`。
 - 错误码：40000（user_id 必须正数）、50000（基础设施错误）。
+
+### AcceptFriend
+
+- 请求：`AcceptFriendReq`（`user_id` 为接受请求的用户 ID，`friend_id` 为原始请求方 ID）。
+- 响应：`AcceptFriendResp.friendship`，返回更新后的 `FriendshipResponse`。
+- 行为：验证 pending 关系存在，更新为 `accepted`，同时创建反向 `accepted` 记录。
+- RPC 逻辑：`app/logic/rpc/internal/logic/friendshipservice/accept_friend_logic.go`。
+
+### RejectFriend
+
+- 请求：`RejectFriendReq`（`user_id` 为拒绝请求的用户 ID，`friend_id` 为原始请求方 ID）。
+- 响应：`RejectFriendResp.friendship`，返回更新后的 `FriendshipResponse`。
+- 行为：验证 pending 关系存在，更新为 `blocked`。
+- RPC 逻辑：`app/logic/rpc/internal/logic/friendshipservice/reject_friend_logic.go`。
+
+### ListFriends
+
+- 请求：`ListFriendsReq`（`user_id` 为认证用户 ID，由 gateway 从 JWT 上下文传入）。
+- 响应：`ListFriendsResp.friends`，返回 `FriendshipResponse` 列表（`user_id/friend_id/status/created_at/updated_at`），时间戳为 Unix milliseconds。
+- 行为：查询 `friendships` 表中 `user_id=$1 AND status=accepted` 的记录，按 `created_at DESC` 排序。
+- Gateway REST 端点：`GET /api/friends/me`（受 `Auth` 中间件保护，从 JWT 提取 `user_id`）。
+- 数据：sqlc 查询 `ListFriends` 位于 `app/logic/rpc/model/queries/friendship.sql`。
+- RPC 逻辑：`app/logic/rpc/internal/logic/friendshipservice/list_friends_logic.go`。
 
 ### 返回码约定
 

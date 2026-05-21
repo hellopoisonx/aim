@@ -26,6 +26,7 @@ type Querier interface {
 	GetUserInfoByNickname(ctx context.Context, nickname string) (UserInfo, error)
 	InsertMessage(ctx context.Context, arg InsertMessageParams) error
 	IsMemberMuted(ctx context.Context, arg IsMemberMutedParams) (IsMemberMutedRow, error)
+	ListFriends(ctx context.Context, userID int64) ([]Friendship, error)
 	ListMessagesByConversation(ctx context.Context, arg ListMessagesByConversationParams) ([]Message, error)
 	ListMessagesByConversationInitial(ctx context.Context, arg ListMessagesByConversationInitialParams) ([]Message, error)
 	ListPendingFriendApplications(ctx context.Context, friendID int64) ([]Friendship, error)

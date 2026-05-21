@@ -76,6 +76,11 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 					Handler: friends.ListFriendApplicationsHandler(serverCtx),
 				},
 				{
+					Method:  http.MethodGet,
+					Path:    "/me",
+					Handler: friends.ListFriendsHandler(serverCtx),
+				},
+				{
 					Method:  http.MethodPost,
 					Path:    "/reject/:id",
 					Handler: friends.RejectFriendHandler(serverCtx),

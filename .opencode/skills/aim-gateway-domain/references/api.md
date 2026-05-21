@@ -58,7 +58,12 @@
 
 | Method | Path | Auth | Handler |
 | --- | --- | --- | --- |
-| GET | `/api/friends/applications` | `Auth` 中间件（JWT Bearer token） | `internal/handler/friends/get_friend_applications_handler.go` |
+| GET | `/api/friends/me` | `Auth` 中间件（JWT Bearer token） | `internal/handler/friends/list_friends_handler.go` |
+| GET | `/api/friends/applications` | `Auth` 中间件（JWT Bearer token） | `internal/handler/friends/list_friend_applications_handler.go` |
+| POST | `/api/friends/accept/:id` | `Auth` 中间件（JWT Bearer token） | `internal/handler/friends/accept_friend_handler.go` |
+| POST | `/api/friends/reject/:id` | `Auth` 中间件（JWT Bearer token） | `internal/handler/friends/reject_friend_handler.go` |
+
+`GET /api/friends/me` 从 JWT payload 提取 `user_id`，调用 `FriendshipService.ListFriends` 返回当前用户的所有已接受好友列表。
 
 重新生成 REST 脚手架：
 

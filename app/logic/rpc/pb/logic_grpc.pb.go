@@ -657,6 +657,7 @@ const (
 	FriendshipService_ListFriendApplications_FullMethodName = "/logic.FriendshipService/ListFriendApplications"
 	FriendshipService_AcceptFriend_FullMethodName           = "/logic.FriendshipService/AcceptFriend"
 	FriendshipService_RejectFriend_FullMethodName           = "/logic.FriendshipService/RejectFriend"
+	FriendshipService_ListFriends_FullMethodName            = "/logic.FriendshipService/ListFriends"
 )
 
 // FriendshipServiceClient is the client API for FriendshipService service.
@@ -675,6 +676,8 @@ type FriendshipServiceClient interface {
 	// RejectFriend rejects a pending friend request.
 	// Updates the existing pending record (friend_id→user_id) to "blocked".
 	RejectFriend(ctx context.Context, in *RejectFriendReq, opts ...grpc.CallOption) (*RejectFriendResp, error)
+	// ListFriends lists all accepted friends of the user.
+	ListFriends(ctx context.Context, in *ListFriendsReq, opts ...grpc.CallOption) (*ListFriendsResp, error)
 }
 
 type friendshipServiceClient struct {
@@ -725,6 +728,16 @@ func (c *friendshipServiceClient) RejectFriend(ctx context.Context, in *RejectFr
 	return out, nil
 }
 
+func (c *friendshipServiceClient) ListFriends(ctx context.Context, in *ListFriendsReq, opts ...grpc.CallOption) (*ListFriendsResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListFriendsResp)
+	err := c.cc.Invoke(ctx, FriendshipService_ListFriends_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // FriendshipServiceServer is the server API for FriendshipService service.
 // All implementations must embed UnimplementedFriendshipServiceServer
 // for forward compatibility.
@@ -741,6 +754,8 @@ type FriendshipServiceServer interface {
 	// RejectFriend rejects a pending friend request.
 	// Updates the existing pending record (friend_id→user_id) to "blocked".
 	RejectFriend(context.Context, *RejectFriendReq) (*RejectFriendResp, error)
+	// ListFriends lists all accepted friends of the user.
+	ListFriends(context.Context, *ListFriendsReq) (*ListFriendsResp, error)
 	mustEmbedUnimplementedFriendshipServiceServer()
 }
 
@@ -762,6 +777,9 @@ func (UnimplementedFriendshipServiceServer) AcceptFriend(context.Context, *Accep
 }
 func (UnimplementedFriendshipServiceServer) RejectFriend(context.Context, *RejectFriendReq) (*RejectFriendResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RejectFriend not implemented")
+}
+func (UnimplementedFriendshipServiceServer) ListFriends(context.Context, *ListFriendsReq) (*ListFriendsResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListFriends not implemented")
 }
 func (UnimplementedFriendshipServiceServer) mustEmbedUnimplementedFriendshipServiceServer() {}
 func (UnimplementedFriendshipServiceServer) testEmbeddedByValue()                           {}
@@ -856,6 +874,24 @@ func _FriendshipService_RejectFriend_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _FriendshipService_ListFriends_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListFriendsReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FriendshipServiceServer).ListFriends(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: FriendshipService_ListFriends_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FriendshipServiceServer).ListFriends(ctx, req.(*ListFriendsReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // FriendshipService_ServiceDesc is the grpc.ServiceDesc for FriendshipService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -878,6 +914,10 @@ var FriendshipService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RejectFriend",
 			Handler:    _FriendshipService_RejectFriend_Handler,
+		},
+		{
+			MethodName: "ListFriends",
+			Handler:    _FriendshipService_ListFriends_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

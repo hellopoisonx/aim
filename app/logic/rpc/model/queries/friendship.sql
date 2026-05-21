@@ -26,3 +26,9 @@ SELECT user_id, friend_id, status, created_at, updated_at
 FROM friendships
 WHERE friend_id = $1 AND status = 'pending'
 ORDER BY created_at DESC;
+
+-- name: ListFriends :many
+SELECT user_id, friend_id, status, created_at, updated_at
+FROM friendships
+WHERE user_id = $1 AND status = 'accepted'
+ORDER BY created_at DESC;

@@ -20,6 +20,8 @@ type (
 	AddFriendResp              = pb.AddFriendResp
 	ListFriendApplicationsReq  = pb.ListFriendApplicationsReq
 	ListFriendApplicationsResp = pb.ListFriendApplicationsResp
+	ListFriendsReq             = pb.ListFriendsReq
+	ListFriendsResp            = pb.ListFriendsResp
 	RejectFriendReq            = pb.RejectFriendReq
 	RejectFriendResp           = pb.RejectFriendResp
 
@@ -32,6 +34,8 @@ type (
 		AcceptFriend(ctx context.Context, in *AcceptFriendReq, opts ...grpc.CallOption) (*AcceptFriendResp, error)
 		// RejectFriend rejects a pending friend request.
 		RejectFriend(ctx context.Context, in *RejectFriendReq, opts ...grpc.CallOption) (*RejectFriendResp, error)
+		// ListFriends lists all accepted friends of the user.
+		ListFriends(ctx context.Context, in *ListFriendsReq, opts ...grpc.CallOption) (*ListFriendsResp, error)
 	}
 
 	defaultFriendshipService struct {
@@ -67,4 +71,10 @@ func (m *defaultFriendshipService) AcceptFriend(ctx context.Context, in *AcceptF
 func (m *defaultFriendshipService) RejectFriend(ctx context.Context, in *RejectFriendReq, opts ...grpc.CallOption) (*RejectFriendResp, error) {
 	client := pb.NewFriendshipServiceClient(m.cli.Conn())
 	return client.RejectFriend(ctx, in, opts...)
+}
+
+// ListFriends lists all accepted friends of the user.
+func (m *defaultFriendshipService) ListFriends(ctx context.Context, in *ListFriendsReq, opts ...grpc.CallOption) (*ListFriendsResp, error) {
+	client := pb.NewFriendshipServiceClient(m.cli.Conn())
+	return client.ListFriends(ctx, in, opts...)
 }

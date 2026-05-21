@@ -74,6 +74,10 @@ type ListFriendApplicationsResponse struct {
 	Applications []FriendshipItem `json:"applications"`
 }
 
+type ListFriendsResponse struct {
+	Friends []FriendshipItem `json:"friends"`
+}
+
 type LoginRequest struct {
 	Email    string `json:"email" validate:"required,email"`
 	Password string `json:"password" validate:"required,min=8"`

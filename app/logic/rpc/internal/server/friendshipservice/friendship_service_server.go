@@ -46,3 +46,9 @@ func (s *FriendshipServiceServer) RejectFriend(ctx context.Context, in *pb.Rejec
 	l := friendshipservicelogic.NewRejectFriendLogic(ctx, s.svcCtx)
 	return l.RejectFriend(in)
 }
+
+// ListFriends lists all accepted friends of the user.
+func (s *FriendshipServiceServer) ListFriends(ctx context.Context, in *pb.ListFriendsReq) (*pb.ListFriendsResp, error) {
+	l := friendshipservicelogic.NewListFriendsLogic(ctx, s.svcCtx)
+	return l.ListFriends(in)
+}

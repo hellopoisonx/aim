@@ -190,6 +190,8 @@ service FriendshipService {
   // RejectFriend rejects a pending friend request.
   // Updates the existing pending record (friend_id→user_id) to "blocked".
   rpc RejectFriend(RejectFriendReq) returns (RejectFriendResp);
+  // ListFriends lists all accepted friends of the user.
+  rpc ListFriends(ListFriendsReq) returns (ListFriendsResp);
 }
 
 message AddFriendReq {
@@ -233,4 +235,12 @@ message RejectFriendReq {
 
 message RejectFriendResp {
   FriendshipResponse friendship = 1;
+}
+
+message ListFriendsReq {
+  int64 user_id = 1;
+}
+
+message ListFriendsResp {
+  repeated FriendshipResponse friends = 1;
 }

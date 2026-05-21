@@ -1785,6 +1785,94 @@ func (x *RejectFriendResp) GetFriendship() *FriendshipResponse {
 	return nil
 }
 
+type ListFriendsReq struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	UserId        int64                  `protobuf:"varint,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListFriendsReq) Reset() {
+	*x = ListFriendsReq{}
+	mi := &file_logic_proto_msgTypes[32]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListFriendsReq) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListFriendsReq) ProtoMessage() {}
+
+func (x *ListFriendsReq) ProtoReflect() protoreflect.Message {
+	mi := &file_logic_proto_msgTypes[32]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListFriendsReq.ProtoReflect.Descriptor instead.
+func (*ListFriendsReq) Descriptor() ([]byte, []int) {
+	return file_logic_proto_rawDescGZIP(), []int{32}
+}
+
+func (x *ListFriendsReq) GetUserId() int64 {
+	if x != nil {
+		return x.UserId
+	}
+	return 0
+}
+
+type ListFriendsResp struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Friends       []*FriendshipResponse  `protobuf:"bytes,1,rep,name=friends,proto3" json:"friends,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListFriendsResp) Reset() {
+	*x = ListFriendsResp{}
+	mi := &file_logic_proto_msgTypes[33]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListFriendsResp) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListFriendsResp) ProtoMessage() {}
+
+func (x *ListFriendsResp) ProtoReflect() protoreflect.Message {
+	mi := &file_logic_proto_msgTypes[33]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListFriendsResp.ProtoReflect.Descriptor instead.
+func (*ListFriendsResp) Descriptor() ([]byte, []int) {
+	return file_logic_proto_rawDescGZIP(), []int{33}
+}
+
+func (x *ListFriendsResp) GetFriends() []*FriendshipResponse {
+	if x != nil {
+		return x.Friends
+	}
+	return nil
+}
+
 var File_logic_proto protoreflect.FileDescriptor
 
 const file_logic_proto_rawDesc = "" +
@@ -1913,7 +2001,11 @@ const file_logic_proto_rawDesc = "" +
 	"\x10RejectFriendResp\x129\n" +
 	"\n" +
 	"friendship\x18\x01 \x01(\v2\x19.logic.FriendshipResponseR\n" +
-	"friendship2r\n" +
+	"friendship\")\n" +
+	"\x0eListFriendsReq\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\x03R\x06userId\"F\n" +
+	"\x0fListFriendsResp\x123\n" +
+	"\afriends\x18\x01 \x03(\v2\x19.logic.FriendshipResponseR\afriends2r\n" +
 	"\x11PermissionService\x12]\n" +
 	"\x16CheckMessagePermission\x12 .logic.CheckMessagePermissionReq\x1a!.logic.CheckMessagePermissionResp2\xca\x04\n" +
 	"\vUserService\x12E\n" +
@@ -1927,12 +2019,13 @@ const file_logic_proto_rawDesc = "" +
 	"\x13ConversationService\x12Q\n" +
 	"\x12CreateConversation\x12\x1c.logic.CreateConversationReq\x1a\x1d.logic.CreateConversationResp\x12]\n" +
 	"\x16GetConversationHistory\x12 .logic.GetConversationHistoryReq\x1a!.logic.GetConversationHistoryResp\x12]\n" +
-	"\x16GetConversationMembers\x12 .logic.GetConversationMembersReq\x1a!.logic.GetConversationMembersResp2\xac\x02\n" +
+	"\x16GetConversationMembers\x12 .logic.GetConversationMembersReq\x1a!.logic.GetConversationMembersResp2\xea\x02\n" +
 	"\x11FriendshipService\x126\n" +
 	"\tAddFriend\x12\x13.logic.AddFriendReq\x1a\x14.logic.AddFriendResp\x12]\n" +
 	"\x16ListFriendApplications\x12 .logic.ListFriendApplicationsReq\x1a!.logic.ListFriendApplicationsResp\x12?\n" +
 	"\fAcceptFriend\x12\x16.logic.AcceptFriendReq\x1a\x17.logic.AcceptFriendResp\x12?\n" +
-	"\fRejectFriend\x12\x16.logic.RejectFriendReq\x1a\x17.logic.RejectFriendRespB\x06Z\x04./pbb\x06proto3"
+	"\fRejectFriend\x12\x16.logic.RejectFriendReq\x1a\x17.logic.RejectFriendResp\x12<\n" +
+	"\vListFriends\x12\x15.logic.ListFriendsReq\x1a\x16.logic.ListFriendsRespB\x06Z\x04./pbb\x06proto3"
 
 var (
 	file_logic_proto_rawDescOnce sync.Once
@@ -1946,7 +2039,7 @@ func file_logic_proto_rawDescGZIP() []byte {
 	return file_logic_proto_rawDescData
 }
 
-var file_logic_proto_msgTypes = make([]protoimpl.MessageInfo, 32)
+var file_logic_proto_msgTypes = make([]protoimpl.MessageInfo, 34)
 var file_logic_proto_goTypes = []any{
 	(*CheckMessagePermissionReq)(nil),    // 0: logic.CheckMessagePermissionReq
 	(*CheckMessagePermissionResp)(nil),   // 1: logic.CheckMessagePermissionResp
@@ -1980,6 +2073,8 @@ var file_logic_proto_goTypes = []any{
 	(*AcceptFriendResp)(nil),             // 29: logic.AcceptFriendResp
 	(*RejectFriendReq)(nil),              // 30: logic.RejectFriendReq
 	(*RejectFriendResp)(nil),             // 31: logic.RejectFriendResp
+	(*ListFriendsReq)(nil),               // 32: logic.ListFriendsReq
+	(*ListFriendsResp)(nil),              // 33: logic.ListFriendsResp
 }
 var file_logic_proto_depIdxs = []int32{
 	2,  // 0: logic.CreateUserInfoResp.user:type_name -> logic.UserInfoResponse
@@ -1993,41 +2088,44 @@ var file_logic_proto_depIdxs = []int32{
 	24, // 8: logic.ListFriendApplicationsResp.applications:type_name -> logic.FriendshipResponse
 	24, // 9: logic.AcceptFriendResp.friendship:type_name -> logic.FriendshipResponse
 	24, // 10: logic.RejectFriendResp.friendship:type_name -> logic.FriendshipResponse
-	0,  // 11: logic.PermissionService.CheckMessagePermission:input_type -> logic.CheckMessagePermissionReq
-	3,  // 12: logic.UserService.CreateUserInfo:input_type -> logic.CreateUserInfoReq
-	5,  // 13: logic.UserService.GetUserInfo:input_type -> logic.GetUserInfoReq
-	6,  // 14: logic.UserService.GetUserInfoByEmail:input_type -> logic.GetUserInfoByEmailReq
-	7,  // 15: logic.UserService.GetUserInfoByNickname:input_type -> logic.GetUserInfoByNicknameReq
-	9,  // 16: logic.UserService.UpdateUserInfoProfile:input_type -> logic.UpdateUserInfoProfileReq
-	11, // 17: logic.UserService.UpdateUserInfoStatus:input_type -> logic.UpdateUserInfoStatusReq
-	13, // 18: logic.UserService.SearchUserInfoByNickname:input_type -> logic.SearchUserInfoByNicknameReq
-	15, // 19: logic.ConversationService.CreateConversation:input_type -> logic.CreateConversationReq
-	20, // 20: logic.ConversationService.GetConversationHistory:input_type -> logic.GetConversationHistoryReq
-	18, // 21: logic.ConversationService.GetConversationMembers:input_type -> logic.GetConversationMembersReq
-	23, // 22: logic.FriendshipService.AddFriend:input_type -> logic.AddFriendReq
-	26, // 23: logic.FriendshipService.ListFriendApplications:input_type -> logic.ListFriendApplicationsReq
-	28, // 24: logic.FriendshipService.AcceptFriend:input_type -> logic.AcceptFriendReq
-	30, // 25: logic.FriendshipService.RejectFriend:input_type -> logic.RejectFriendReq
-	1,  // 26: logic.PermissionService.CheckMessagePermission:output_type -> logic.CheckMessagePermissionResp
-	4,  // 27: logic.UserService.CreateUserInfo:output_type -> logic.CreateUserInfoResp
-	8,  // 28: logic.UserService.GetUserInfo:output_type -> logic.GetUserInfoResp
-	8,  // 29: logic.UserService.GetUserInfoByEmail:output_type -> logic.GetUserInfoResp
-	8,  // 30: logic.UserService.GetUserInfoByNickname:output_type -> logic.GetUserInfoResp
-	10, // 31: logic.UserService.UpdateUserInfoProfile:output_type -> logic.UpdateUserInfoProfileResp
-	12, // 32: logic.UserService.UpdateUserInfoStatus:output_type -> logic.UpdateUserInfoStatusResp
-	14, // 33: logic.UserService.SearchUserInfoByNickname:output_type -> logic.SearchUserInfoByNicknameResp
-	17, // 34: logic.ConversationService.CreateConversation:output_type -> logic.CreateConversationResp
-	22, // 35: logic.ConversationService.GetConversationHistory:output_type -> logic.GetConversationHistoryResp
-	19, // 36: logic.ConversationService.GetConversationMembers:output_type -> logic.GetConversationMembersResp
-	25, // 37: logic.FriendshipService.AddFriend:output_type -> logic.AddFriendResp
-	27, // 38: logic.FriendshipService.ListFriendApplications:output_type -> logic.ListFriendApplicationsResp
-	29, // 39: logic.FriendshipService.AcceptFriend:output_type -> logic.AcceptFriendResp
-	31, // 40: logic.FriendshipService.RejectFriend:output_type -> logic.RejectFriendResp
-	26, // [26:41] is the sub-list for method output_type
-	11, // [11:26] is the sub-list for method input_type
-	11, // [11:11] is the sub-list for extension type_name
-	11, // [11:11] is the sub-list for extension extendee
-	0,  // [0:11] is the sub-list for field type_name
+	24, // 11: logic.ListFriendsResp.friends:type_name -> logic.FriendshipResponse
+	0,  // 12: logic.PermissionService.CheckMessagePermission:input_type -> logic.CheckMessagePermissionReq
+	3,  // 13: logic.UserService.CreateUserInfo:input_type -> logic.CreateUserInfoReq
+	5,  // 14: logic.UserService.GetUserInfo:input_type -> logic.GetUserInfoReq
+	6,  // 15: logic.UserService.GetUserInfoByEmail:input_type -> logic.GetUserInfoByEmailReq
+	7,  // 16: logic.UserService.GetUserInfoByNickname:input_type -> logic.GetUserInfoByNicknameReq
+	9,  // 17: logic.UserService.UpdateUserInfoProfile:input_type -> logic.UpdateUserInfoProfileReq
+	11, // 18: logic.UserService.UpdateUserInfoStatus:input_type -> logic.UpdateUserInfoStatusReq
+	13, // 19: logic.UserService.SearchUserInfoByNickname:input_type -> logic.SearchUserInfoByNicknameReq
+	15, // 20: logic.ConversationService.CreateConversation:input_type -> logic.CreateConversationReq
+	20, // 21: logic.ConversationService.GetConversationHistory:input_type -> logic.GetConversationHistoryReq
+	18, // 22: logic.ConversationService.GetConversationMembers:input_type -> logic.GetConversationMembersReq
+	23, // 23: logic.FriendshipService.AddFriend:input_type -> logic.AddFriendReq
+	26, // 24: logic.FriendshipService.ListFriendApplications:input_type -> logic.ListFriendApplicationsReq
+	28, // 25: logic.FriendshipService.AcceptFriend:input_type -> logic.AcceptFriendReq
+	30, // 26: logic.FriendshipService.RejectFriend:input_type -> logic.RejectFriendReq
+	32, // 27: logic.FriendshipService.ListFriends:input_type -> logic.ListFriendsReq
+	1,  // 28: logic.PermissionService.CheckMessagePermission:output_type -> logic.CheckMessagePermissionResp
+	4,  // 29: logic.UserService.CreateUserInfo:output_type -> logic.CreateUserInfoResp
+	8,  // 30: logic.UserService.GetUserInfo:output_type -> logic.GetUserInfoResp
+	8,  // 31: logic.UserService.GetUserInfoByEmail:output_type -> logic.GetUserInfoResp
+	8,  // 32: logic.UserService.GetUserInfoByNickname:output_type -> logic.GetUserInfoResp
+	10, // 33: logic.UserService.UpdateUserInfoProfile:output_type -> logic.UpdateUserInfoProfileResp
+	12, // 34: logic.UserService.UpdateUserInfoStatus:output_type -> logic.UpdateUserInfoStatusResp
+	14, // 35: logic.UserService.SearchUserInfoByNickname:output_type -> logic.SearchUserInfoByNicknameResp
+	17, // 36: logic.ConversationService.CreateConversation:output_type -> logic.CreateConversationResp
+	22, // 37: logic.ConversationService.GetConversationHistory:output_type -> logic.GetConversationHistoryResp
+	19, // 38: logic.ConversationService.GetConversationMembers:output_type -> logic.GetConversationMembersResp
+	25, // 39: logic.FriendshipService.AddFriend:output_type -> logic.AddFriendResp
+	27, // 40: logic.FriendshipService.ListFriendApplications:output_type -> logic.ListFriendApplicationsResp
+	29, // 41: logic.FriendshipService.AcceptFriend:output_type -> logic.AcceptFriendResp
+	31, // 42: logic.FriendshipService.RejectFriend:output_type -> logic.RejectFriendResp
+	33, // 43: logic.FriendshipService.ListFriends:output_type -> logic.ListFriendsResp
+	28, // [28:44] is the sub-list for method output_type
+	12, // [12:28] is the sub-list for method input_type
+	12, // [12:12] is the sub-list for extension type_name
+	12, // [12:12] is the sub-list for extension extendee
+	0,  // [0:12] is the sub-list for field type_name
 }
 
 func init() { file_logic_proto_init() }
@@ -2041,7 +2139,7 @@ func file_logic_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_logic_proto_rawDesc), len(file_logic_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   32,
+			NumMessages:   34,
 			NumExtensions: 0,
 			NumServices:   4,
 		},
