@@ -8,3 +8,4 @@ coverage*
 *.out
 *.exe
 /dev-tool/__pycache__
+/dev-tool/.aim_state.json
