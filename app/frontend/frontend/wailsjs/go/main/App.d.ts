@@ -3,6 +3,8 @@
 import {client} from '../models';
 import {main} from '../models';
 
+export function AcceptFriend(arg1:number):Promise<client.AcceptFriendResponse>;
+
 export function AddFriend(arg1:number):Promise<client.AddFriendResponse>;
 
 export function Configure(arg1:main.AppConfig):Promise<main.SessionState>;
@@ -21,6 +23,8 @@ export function GetUserById(arg1:number):Promise<client.GetUserByIdResponse>;
 
 export function ListFriendApplications():Promise<client.ListFriendApplicationsResponse>;
 
+export function ListFriends():Promise<client.ListFriendsResponse>;
+
 export function Login(arg1:client.LoginRequest):Promise<client.LoginResponse>;
 
 export function Logout():Promise<client.LogoutResponse>;
@@ -30,6 +34,8 @@ export function ProtocolCatalog():Promise<main.ProtocolCatalog>;
 export function Refresh(arg1:client.RefreshRequest):Promise<client.RefreshResponse>;
 
 export function Register(arg1:client.RegisterRequest):Promise<client.RegisterResponse>;
+
+export function RejectFriend(arg1:number):Promise<client.RejectFriendResponse>;
 
 export function SearchUsersByName(arg1:string):Promise<Array<client.UserListItem>>;
 

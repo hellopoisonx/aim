@@ -7,10 +7,14 @@ import {
   DeviceID,
   DisconnectWS,
   GetConversationHistory,
+  GetUserById,
   Login,
   Logout,
+  Refresh,
   Register,
   SearchUsersByName,
+  SendAck,
+  SendHeartbeat,
   SendMessage,
   SendTyping,
   SessionState,
@@ -20,6 +24,7 @@ import type { client, main } from '../wailsjs/go/models'
 import type { ChatMessage, Conversation, SearchUserItem } from './components/types'
 import LoginView from './views/LoginView.vue'
 import RegisterView from './views/RegisterView.vue'
+import FriendsView from './views/FriendsView.vue'
 import ConversationList from './components/ConversationList.vue'
 import MessageArea from './components/MessageArea.vue'
 import MessageInput from './components/MessageInput.vue'
@@ -50,6 +55,16 @@ const createLoading = ref(false)
 const creatingUserId = ref<number | null>(null)
 const searchError = ref('')
 
+// ─── Friends view ─────────────────────────────────────────────────────────────
+const friendsViewVisible = ref(false)
+const pendingFriendAppCount = ref(0)
+
+// ─── Presence / Typing / Heartbeat ────────────────────────────────────────────
+const onlineUserIds = ref<Set<number>>(new Set())
+const typingInfo = ref<{ conversationId: number; userId: number } | null>(null)
+const lastReadSeq = ref(0)
+let heartbeatTimer: ReturnType<typeof setInterval> | null = null
+
 // ─── Derived helpers ──────────────────────────────────────────────────────────
 
 const activeConversation = computed<Conversation | null>(() => {
@@ -62,15 +77,22 @@ const activeMessages = computed<ChatMessage[]>(() => {
   return messagesMap.value.get(activeConversationId.value) ?? []
 })
 
+/** The user ID currently typing in the active conversation, or null */
+const typingUserId = computed<number | null>(() => {
+  if (!typingInfo.value || activeConversationId.value === null) return null
+  if (typingInfo.value.conversationId === activeConversationId.value) {
+    return typingInfo.value.userId
+  }
+  return null
+})
+
 const isAuthenticated = computed(() => currentUserId.value > 0 && deviceId.value !== '')
 const isConnected = computed(() => connectionState.value === 'connected')
 
 // ─── Conversation history loader ──────────────────────────────────────────────
 
 async function loadConversationHistory(conversationId: number) {
-  // Skip if already loaded or currently loading
   if (historyLoadedSet.value.has(conversationId) || historyLoading.value) return
-  // Skip if messages already exist for this conversation (already populated)
   if ((messagesMap.value.get(conversationId)?.length ?? 0) > 0) return
 
   historyLoading.value = true
@@ -98,7 +120,6 @@ async function loadConversationHistory(conversationId: number) {
     if (!messagesMap.value.has(conversationId)) {
       messagesMap.value.set(conversationId, [])
     }
-    // Prepend history (oldest first) before optimistic/real-time messages
     const existing = messagesMap.value.get(conversationId)!
     messagesMap.value.set(conversationId, [...hist, ...existing])
     historyLoadedSet.value.add(conversationId)
@@ -109,22 +130,7 @@ async function loadConversationHistory(conversationId: number) {
   }
 }
 
-// ─── Wails event handlers ─────────────────────────────────────────────────────
-
-const offHandlers: Array<() => void> = []
-
-interface FramePayload {
-  conversation_id?: number
-  sender_id?: number
-  sender_name?: string
-  content?: string
-  timestamp?: string
-  message_id?: number
-  sent_at?: number
-  client_msg_id?: string
-  conversation_type?: string
-  message_type?: string
-}
+// ─── Helpers for WS frame decoding ────────────────────────────────────────────
 
 function toRecord(val: unknown): Record<string, unknown> | null {
   if (val === null || val === undefined) return null
@@ -132,106 +138,323 @@ function toRecord(val: unknown): Record<string, unknown> | null {
   return val as Record<string, unknown>
 }
 
-function toFramePayload(val: unknown): FramePayload | null {
-  const obj = toRecord(val)
-  if (!obj) return null
+// Frame types from ws.proto
+const WS_FRAME = {
+  PUSH_MESSAGE: 101,
+  PUSH_PRESENCE: 102,
+  PUSH_NOTIFICATION: 103,
+  PUSH_TYPING: 104,
+  RECONNECT: 105,
+  SERVER_ACK: 106,
+  TOKEN_EXPIRED: 107,
+  PUSH_FRIEND_APPLICATION: 108,
+} as const
 
-  const nested = toRecord(obj.payload)
-  const source = nested ?? obj
-  return (
-    typeof source.conversation_id === 'number' ||
-    typeof source.message_type === 'string'
-  ) ? {
-    conversation_id: typeof source.conversation_id === 'number' ? source.conversation_id : undefined,
-    sender_id: typeof source.sender_id === 'number' ? source.sender_id : undefined,
-    sender_name: typeof source.sender_name === 'string' ? source.sender_name : undefined,
-    content: typeof source.content === 'string' ? source.content : undefined,
-    timestamp: typeof source.timestamp === 'string' ? source.timestamp : undefined,
-    message_id: typeof source.message_id === 'number' ? source.message_id : undefined,
-    sent_at: typeof source.sent_at === 'number' ? source.sent_at : undefined,
-    client_msg_id: typeof source.client_msg_id === 'string' ? source.client_msg_id : undefined,
-    conversation_type: typeof source.conversation_type === 'string' ? source.conversation_type : undefined,
-    message_type: typeof source.message_type === 'string' ? source.message_type : undefined,
-  } : null
+interface WsFrameEnvelope {
+  frame?: { type?: number; seq?: number }
+  payload?: Record<string, unknown>
 }
 
+function parseFrameEnvelope(val: unknown): WsFrameEnvelope | null {
+  const obj = toRecord(val)
+  if (!obj) return null
+  const frame = toRecord(obj.frame)
+  const payload = toRecord(obj.payload)
+  return {
+    frame: frame ? { type: frame.type as number | undefined, seq: frame.seq as number | undefined } : undefined,
+    payload: payload ?? undefined,
+  }
+}
+
+// ─── Create or get conversation from WS push ──────────────────────────────────
+
+async function ensureConversationForPush(
+  conversationId: number,
+  senderId: number,
+): Promise<Conversation | null> {
+  let conv = conversations.value.find((c) => c.id === conversationId)
+  if (conv) return conv
+
+  // Try to create a direct conversation
+  try {
+    const resp = await CreateDirectConversation(senderId)
+    const title = `用户 ${senderId}`
+    conv = {
+      id: resp.conversation_id,
+      title,
+      avatar: '',
+      lastMessage: '',
+      lastMessageAt: '',
+      unreadCount: 0,
+      isOnline: onlineUserIds.value.has(senderId),
+      memberIds: resp.member_ids ?? [senderId, currentUserId.value],
+    }
+    conversations.value.unshift(conv)
+    messagesMap.value.set(conversationId, [])
+    return conv
+  } catch {
+    // Fallback: create a placeholder without server call
+    conv = {
+      id: conversationId,
+      title: `用户 ${senderId}`,
+      avatar: '',
+      lastMessage: '',
+      lastMessageAt: '',
+      unreadCount: 0,
+      isOnline: onlineUserIds.value.has(senderId),
+      memberIds: [senderId, currentUserId.value],
+    }
+    conversations.value.unshift(conv)
+    messagesMap.value.set(conversationId, [])
+    return conv
+  }
+}
+
+async function resolveSenderInfo(senderId: number): Promise<{ name: string; avatar: string }> {
+  try {
+    const resp = await GetUserById(senderId)
+    if (resp?.user) {
+      const atIndex = resp.user.email.indexOf('@')
+      const name = atIndex > 0 ? resp.user.email.slice(0, atIndex) : resp.user.email
+      return { name, avatar: resp.user.avatar ?? '' }
+    }
+  } catch { /* ignore */ }
+  return { name: `用户 ${senderId}`, avatar: '' }
+}
+
+// ─── Wails event handlers ─────────────────────────────────────────────────────
+
+const offHandlers: Array<() => void> = []
+
 onMounted(async () => {
-  // Load device ID immediately
   try {
     const id = await DeviceID()
     if (id) deviceId.value = id
-  } catch {
-    // device ID load failed — proceed without it
-  }
+  } catch { /* ignore */ }
 
   offHandlers.push(
     EventsOn('aim:connection_state', (state: main.SessionState) => {
       if (state.ws_connected) {
         connectionState.value = 'connected'
+        startHeartbeat()
       } else {
         connectionState.value = 'disconnected'
+        stopHeartbeat()
       }
     }),
-    EventsOn('aim:frame_received', (frame: unknown) => {
-      const payload = toFramePayload(frame)
-      if (!payload?.conversation_id || !payload.message_type) return
 
-      // Only process text messages for now
-      if (payload.message_type !== 'text' && payload.message_type !== 'message') return
-      if (!payload.content) return
+    EventsOn('aim:frame_received', async (raw: unknown) => {
+      const env = parseFrameEnvelope(raw)
+      const frameType = env?.frame?.type
+      const seq = env?.frame?.seq
+      const payload = env?.payload
 
-      const conversationId = payload.conversation_id
-      const msgId = payload.message_id ?? Date.now()
-      const senderId = payload.sender_id ?? 0
-      const senderName = payload.sender_name ?? (senderId === currentUserId.value ? currentUserLabel.value : `用户 ${senderId}`)
-      const timestamp = payload.timestamp ?? (payload.sent_at ? new Date(payload.sent_at).toISOString() : new Date().toISOString())
-
-      const existing = messagesMap.value.get(conversationId)
-      const existingIndex = existing?.findIndex((m) =>
-        (payload.client_msg_id && m.clientMsgId === payload.client_msg_id) || m.id === msgId
-      ) ?? -1
-
-      const newMsg: ChatMessage = {
-        id: msgId,
-        conversationId,
-        senderId,
-        senderName,
-        senderAvatar: '',
-        content: payload.content,
-        timestamp,
-        isMine: senderId === currentUserId.value,
-        clientMsgId: payload.client_msg_id,
+      if (seq != null && seq > lastReadSeq.value) {
+        lastReadSeq.value = seq
       }
 
-      if (!messagesMap.value.has(conversationId)) {
-        messagesMap.value.set(conversationId, [])
-      }
-      if (existingIndex >= 0) {
-        messagesMap.value.get(conversationId)!.splice(existingIndex, 1, newMsg)
-      } else {
-        messagesMap.value.get(conversationId)!.push(newMsg)
-      }
+      switch (frameType) {
+        // ── PUSH_MESSAGE (101) ──────────────────────────────────────────
+        case WS_FRAME.PUSH_MESSAGE: {
+          const conversationId = payload?.conversation_id as number | undefined
+          const senderId = (payload?.sender_id as number) ?? 0
+          const content = (payload?.content as string) ?? ''
+          const msgType = (payload?.message_type as string) ?? 'text'
+          const msgId = (payload?.message_id as number) ?? Date.now()
+          const sentAt = payload?.sent_at as number | undefined
+          const clientMsgId = payload?.client_msg_id as string | undefined
 
-      let conv = conversations.value.find((c) => c.id === conversationId)
-      if (!conv) {
-        conv = {
-          id: conversationId,
-          title: senderId === currentUserId.value ? '我' : senderName,
-          avatar: '',
-          lastMessage: '',
-          lastMessageAt: '',
-          unreadCount: 0,
-          isOnline: false,
+          if (!conversationId) break
+
+          // Skip own messages that we already have optimistically
+          if (senderId === currentUserId.value) break
+
+          const conv = await ensureConversationForPush(conversationId, senderId)
+          if (!conv) break
+
+          // Resolve sender info for the message
+          const senderInfo = await resolveSenderInfo(senderId)
+          // Also update conversation title if it's still a placeholder
+          if (conv.title.startsWith('用户 ')) {
+            conv.title = senderInfo.name
+            conv.avatar = senderInfo.avatar
+            conv.memberIds = conv.memberIds ?? [senderId, currentUserId.value]
+          }
+
+          const timestamp = sentAt ? new Date(sentAt).toISOString() : new Date().toISOString()
+
+          // Check for duplicate
+          const existing = messagesMap.value.get(conversationId)
+          const dupIdx = existing?.findIndex((m) =>
+            (clientMsgId && m.clientMsgId === clientMsgId) || m.id === msgId
+          ) ?? -1
+
+          const newMsg: ChatMessage = {
+            id: msgId,
+            conversationId,
+            senderId,
+            senderName: senderInfo.name,
+            senderAvatar: senderInfo.avatar,
+            content,
+            timestamp,
+            isMine: false,
+            clientMsgId,
+          }
+
+          if (!messagesMap.value.has(conversationId)) {
+            messagesMap.value.set(conversationId, [])
+          }
+          if (dupIdx >= 0) {
+            messagesMap.value.get(conversationId)!.splice(dupIdx, 1, newMsg)
+          } else {
+            messagesMap.value.get(conversationId)!.push(newMsg)
+          }
+
+          conv.lastMessage = content
+          conv.lastMessageAt = timestamp
+
+          // Jump strategy
+          if (activeConversationId.value === null) {
+            // User idle — auto-activate this conversation
+            activeConversationId.value = conversationId
+            conv.unreadCount = 0
+            loadConversationHistory(conversationId)
+          } else if (activeConversationId.value === conversationId) {
+            conv.unreadCount = 0
+          } else {
+            conv.unreadCount++
+          }
+
+          // Send ACK
+          if (seq != null) {
+            SendAck(seq).catch(() => {})
+          }
+          break
         }
-        conversations.value.unshift(conv)
+
+        // ── PUSH_PRESENCE (102) ────────────────────────────────────────
+        case WS_FRAME.PUSH_PRESENCE: {
+          const userId = payload?.user_id as number | undefined
+          const status = (payload?.status as string) ?? ''
+          if (userId == null) break
+
+          if (status === 'online') {
+            onlineUserIds.value = new Set([...onlineUserIds.value, userId])
+          } else {
+            const next = new Set(onlineUserIds.value)
+            next.delete(userId)
+            onlineUserIds.value = next
+          }
+
+          // Update conversation online status
+          const conv = conversations.value.find((c) =>
+            c.memberIds?.includes(userId)
+          )
+          if (conv) {
+            conv.isOnline = status === 'online'
+          }
+          break
+        }
+
+        // ── PUSH_TYPING (104) ──────────────────────────────────────────
+        case WS_FRAME.PUSH_TYPING: {
+          const conversationId = payload?.conversation_id as number | undefined
+          const userId = payload?.user_id as number | undefined
+          if (conversationId == null || userId == null) break
+
+          typingInfo.value = { conversationId, userId }
+
+          // Clear typing indicator after 4 seconds
+          setTimeout(() => {
+            if (
+              typingInfo.value?.conversationId === conversationId &&
+              typingInfo.value?.userId === userId
+            ) {
+              typingInfo.value = null
+            }
+          }, 4000)
+          break
+        }
+
+        // ── PUSH_FRIEND_APPLICATION (108) ──────────────────────────────
+        case WS_FRAME.PUSH_FRIEND_APPLICATION: {
+          const status = (payload?.status as string) ?? ''
+          const userEmail = (payload?.user_id != null)
+            ? (await resolveSenderInfo(payload.user_id as number)).name
+            : '有人'
+
+          if (status === 'pending') {
+            pendingFriendAppCount.value++
+            ElMessage.info(`${userEmail} 向你发送了好友申请`)
+          } else if (status === 'accepted') {
+            ElMessage.success(`${userEmail} 已接受你的好友申请`)
+          } else if (status === 'rejected') {
+            ElMessage.warning(`${userEmail} 已拒绝你的好友申请`)
+          }
+          break
+        }
+
+        // ── SERVER_ACK (106) ───────────────────────────────────────────
+        case WS_FRAME.SERVER_ACK: {
+          const ackSeq = payload?.ack_seq as number | undefined
+          const clientMsgId = payload?.client_msg_id as string | undefined
+          const ackStatus = payload?.status as number | undefined
+          // status: 1=ACCEPTED, 2=REJECTED, 3=RETRYABLE
+
+          if (clientMsgId) {
+            // Find and update the message with matching clientMsgId
+            for (const [, msgs] of messagesMap.value) {
+              const msg = msgs.find((m) => m.clientMsgId === clientMsgId)
+              if (msg) {
+                if (ackStatus === 1) {
+                  msg.ackStatus = 'delivered'
+                } else if (ackStatus === 2) {
+                  msg.ackStatus = 'failed'
+                }
+                break
+              }
+            }
+          }
+
+          // Send client ack for the server ack
+          if (ackSeq != null) {
+            SendAck(ackSeq).catch(() => {})
+          }
+          break
+        }
+
+        // ── TOKEN_EXPIRED (107) ────────────────────────────────────────
+        case WS_FRAME.TOKEN_EXPIRED: {
+          try {
+            await Refresh({ refresh_token: '' })
+          } catch {
+            ElMessage.error('登录已过期，请重新登录')
+            handleLogout()
+          }
+          break
+        }
+
+        // ── RECONNECT (105) ────────────────────────────────────────────
+        case WS_FRAME.RECONNECT: {
+          const delayMs = (payload?.reconnect_delay_ms as number) ?? 3000
+          connectionState.value = 'connecting'
+          setTimeout(async () => {
+            try {
+              await ConnectWS()
+              connectionState.value = 'connected'
+            } catch {
+              connectionState.value = 'disconnected'
+            }
+          }, delayMs)
+          break
+        }
+
+        default:
+          break
       }
-      conv.lastMessage = payload.content
-      conv.lastMessageAt = timestamp
-      if (newMsg.isMine || activeConversationId.value === conversationId) conv.unreadCount = 0
-      else conv.unreadCount++
     }),
+
     EventsOn('aim:error', (_error: unknown) => {
-      // Surface errors as user-friendly messages, not raw logs
       ElMessage.error('连接异常，请检查网络')
     }),
   )
@@ -239,7 +462,26 @@ onMounted(async () => {
 
 onUnmounted(() => {
   offHandlers.forEach((off) => off())
+  stopHeartbeat()
 })
+
+// ─── Heartbeat ────────────────────────────────────────────────────────────────
+
+function startHeartbeat() {
+  if (heartbeatTimer) return
+  heartbeatTimer = setInterval(() => {
+    if (connectionState.value === 'connected') {
+      SendHeartbeat(lastReadSeq.value).catch(() => {})
+    }
+  }, 30_000)
+}
+
+function stopHeartbeat() {
+  if (heartbeatTimer) {
+    clearInterval(heartbeatTimer)
+    heartbeatTimer = null
+  }
+}
 
 // ─── Auth handlers ────────────────────────────────────────────────────────────
 
@@ -253,7 +495,12 @@ async function handleLogin(payload: { email: string; password: string; device_id
       currentUserLabel.value = payload.email.split('@')[0]
       conversations.value = []
       messagesMap.value = new Map()
+      historyLoadedSet.value.clear()
+      onlineUserIds.value = new Set()
+      typingInfo.value = null
       activeConversationId.value = null
+      friendsViewVisible.value = false
+      pendingFriendAppCount.value = 0
       try {
         await ConnectWS()
         connectionState.value = 'connected'
@@ -290,6 +537,7 @@ async function handleRegister(payload: { email: string; password: string; userna
 }
 
 async function handleLogout() {
+  stopHeartbeat()
   try {
     await Logout()
   } catch {
@@ -300,7 +548,11 @@ async function handleLogout() {
   conversations.value = []
   messagesMap.value.clear()
   historyLoadedSet.value.clear()
+  onlineUserIds.value = new Set()
+  typingInfo.value = null
   activeConversationId.value = null
+  friendsViewVisible.value = false
+  pendingFriendAppCount.value = 0
   connectionState.value = 'disconnected'
   authView.value = 'login'
 }
@@ -308,11 +560,10 @@ async function handleLogout() {
 // ─── Conversation handlers ───────────────────────────────────────────────────
 
 function handleSelectConversation(id: number) {
+  friendsViewVisible.value = false
   activeConversationId.value = id
-  // Clear unread for selected conversation
   const conv = conversations.value.find((c) => c.id === id)
   if (conv) conv.unreadCount = 0
-  // Load history if not yet loaded and no messages present
   loadConversationHistory(id)
 }
 
@@ -324,7 +575,7 @@ async function handleSendMessage(content: string) {
   }
 
   const conversationId = activeConversationId.value
-  const clientMsgId = Date.now().toString()
+  const clientMsgId = Date.now().toString() + '-' + Math.random().toString(36).slice(2, 8)
 
   const optimisticMsg: ChatMessage = {
     id: Date.now(),
@@ -336,6 +587,7 @@ async function handleSendMessage(content: string) {
     timestamp: new Date().toISOString(),
     isMine: true,
     clientMsgId,
+    ackStatus: 'pending',
   }
 
   try {
@@ -367,9 +619,7 @@ async function handleSendMessage(content: string) {
 function handleTyping() {
   if (activeConversationId.value === null) return
   if (!isConnected.value) return
-  SendTyping(activeConversationId.value).catch(() => {
-    // typing errors should not surface as debug logs
-  })
+  SendTyping(activeConversationId.value).catch(() => {})
 }
 
 // ─── Search / start direct conversation ───────────────────────────────────────
@@ -406,9 +656,9 @@ async function handleStartDirect(userId: number) {
       lastMessage: '',
       lastMessageAt: '',
       unreadCount: 0,
-      isOnline: false,
+      isOnline: onlineUserIds.value.has(userId),
+      memberIds: resp.member_ids ?? [userId, currentUserId.value],
     }
-    // upsert: avoid duplicates if already exists
     const idx = conversations.value.findIndex((c) => c.id === resp.conversation_id)
     if (idx >= 0) {
       conversations.value.splice(idx, 1, newConv)
@@ -417,9 +667,9 @@ async function handleStartDirect(userId: number) {
     }
     messagesMap.value.set(resp.conversation_id, [])
     activeConversationId.value = resp.conversation_id
+    friendsViewVisible.value = false
     searchResults.value = []
     searchKeyword.value = ''
-    // Load history for the newly created conversation
     loadConversationHistory(resp.conversation_id)
   } catch (err) {
     const msg = err instanceof Error ? err.message : '创建会话失败'
@@ -428,6 +678,44 @@ async function handleStartDirect(userId: number) {
     createLoading.value = false
     creatingUserId.value = null
   }
+}
+
+// ─── Friends view handlers ────────────────────────────────────────────────────
+
+function handleOpenFriends() {
+  friendsViewVisible.value = true
+  pendingFriendAppCount.value = 0
+}
+
+function handleFriendsStartConversation(
+  conversationId: number,
+  friendId: number,
+  title: string,
+  avatar: string,
+) {
+  // Build conversation entry
+  const newConv: Conversation = {
+    id: conversationId,
+    title,
+    avatar,
+    lastMessage: '',
+    lastMessageAt: '',
+    unreadCount: 0,
+    isOnline: onlineUserIds.value.has(friendId),
+    memberIds: [friendId, currentUserId.value],
+  }
+  const idx = conversations.value.findIndex((c) => c.id === conversationId)
+  if (idx >= 0) {
+    conversations.value.splice(idx, 1, newConv)
+  } else {
+    conversations.value.unshift(newConv)
+  }
+  if (!messagesMap.value.has(conversationId)) {
+    messagesMap.value.set(conversationId, [])
+  }
+  activeConversationId.value = conversationId
+  friendsViewVisible.value = false
+  loadConversationHistory(conversationId)
 }
 
 function displayUserName(user: SearchUserItem): string {
@@ -461,10 +749,12 @@ function displayUserName(user: SearchUserItem): string {
   <div v-else class="app-shell">
     <div class="chat-sidebar">
       <ConversationList
+        v-if="!friendsViewVisible"
         :conversations="conversations"
         :active-conversation-id="activeConversationId"
         :current-user-label="currentUserLabel"
         :connected="isConnected"
+        :pending-friend-count="pendingFriendAppCount"
         :search-keyword="searchKeyword"
         :search-results="searchResults"
         :search-loading="searchLoading"
@@ -473,15 +763,23 @@ function displayUserName(user: SearchUserItem): string {
         :search-error="searchError"
         @select="handleSelectConversation"
         @logout="handleLogout"
+        @open-friends="handleOpenFriends"
         @search-user="handleSearchUsers"
         @start-direct="handleStartDirect"
+      />
+      <FriendsView
+        v-else
+        :current-user-id="currentUserId"
+        :online-user-ids="onlineUserIds"
+        @start-conversation="handleFriendsStartConversation"
+        @back="friendsViewVisible = false"
       />
     </div>
     <div class="chat-main">
       <MessageArea
         :conversation="activeConversation"
         :messages="activeMessages"
-        :typing-label="isConnected && activeConversationId !== null ? activeConversation?.title : ''"
+        :typing-user-id="typingUserId"
       />
       <div class="input-area">
         <MessageInput

@@ -178,6 +178,42 @@ func (a *App) AddFriend(id int64) (*client.AddFriendResponse, error) {
 	return a.restClient().AddFriend(a.callContext(), id, accessToken)
 }
 
+func (a *App) AcceptFriend(id int64) (*client.AcceptFriendResponse, error) {
+	a.mu.RLock()
+	accessToken := a.accessToken
+	a.mu.RUnlock()
+
+	if accessToken == "" {
+		return nil, errorx.NewCodeError(errorx.CodeAuth, "missing access token")
+	}
+
+	return a.restClient().AcceptFriend(a.callContext(), id, accessToken)
+}
+
+func (a *App) RejectFriend(id int64) (*client.RejectFriendResponse, error) {
+	a.mu.RLock()
+	accessToken := a.accessToken
+	a.mu.RUnlock()
+
+	if accessToken == "" {
+		return nil, errorx.NewCodeError(errorx.CodeAuth, "missing access token")
+	}
+
+	return a.restClient().RejectFriend(a.callContext(), id, accessToken)
+}
+
+func (a *App) ListFriends() (*client.ListFriendsResponse, error) {
+	a.mu.RLock()
+	accessToken := a.accessToken
+	a.mu.RUnlock()
+
+	if accessToken == "" {
+		return nil, errorx.NewCodeError(errorx.CodeAuth, "missing access token")
+	}
+
+	return a.restClient().ListFriends(a.callContext(), accessToken)
+}
+
 func (a *App) ListFriendApplications() (*client.ListFriendApplicationsResponse, error) {
 	a.mu.RLock()
 	accessToken := a.accessToken
@@ -379,9 +415,12 @@ func (a *App) ProtocolCatalog() ProtocolCatalog {
 			"GET /api/users/by-name/{name}",
 			"GET /api/users/by-id/{id}",
 			"POST /api/users/friends/{id}",
+			"POST /api/friends/accept/{id}",
+			"POST /api/friends/reject/{id}",
+			"GET /api/friends/applications",
+			"GET /api/friends/me",
 			"POST /api/conversations",
 			"GET /api/conversations/history/{id}",
-			"GET /api/friends/applications",
 			"GET /ws",
 		},
 		Frames: []ProtocolFrame{

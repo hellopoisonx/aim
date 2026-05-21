@@ -349,12 +349,61 @@ func (c *RESTClient) AddFriend(ctx context.Context, id int64, accessToken string
 	return &resp, nil
 }
 
+// AcceptFriendResponse mirrors gateway.api AcceptFriendResponse.
+type AcceptFriendResponse struct {
+	Friendship FriendshipItem `json:"friendship"`
+}
+
+// RejectFriendResponse mirrors gateway.api RejectFriendResponse.
+type RejectFriendResponse struct {
+	Friendship FriendshipItem `json:"friendship"`
+}
+
+// ListFriendsResponse mirrors gateway.api ListFriendsResponse.
+type ListFriendsResponse struct {
+	Friends []FriendshipItem `json:"friends"`
+}
+
 // ListFriendApplications calls GET /api/friends/applications with Bearer access token.
 func (c *RESTClient) ListFriendApplications(ctx context.Context, accessToken string) (*ListFriendApplicationsResponse, error) {
 	var resp ListFriendApplicationsResponse
 	if err := c.doRequest(ctx, http.MethodGet, "/api/friends/applications", nil, &resp, accessToken); err != nil {
 		return nil, err
 	}
+	return &resp, nil
+}
+
+// AcceptFriend calls POST /api/friends/accept/{id} with Bearer access token.
+func (c *RESTClient) AcceptFriend(ctx context.Context, id int64, accessToken string) (*AcceptFriendResponse, error) {
+	var resp AcceptFriendResponse
+
+	path := "/api/friends/accept/" + strconv.FormatInt(id, 10)
+	if err := c.doRequest(ctx, http.MethodPost, path, nil, &resp, accessToken); err != nil {
+		return nil, err
+	}
+
+	return &resp, nil
+}
+
+// RejectFriend calls POST /api/friends/reject/{id} with Bearer access token.
+func (c *RESTClient) RejectFriend(ctx context.Context, id int64, accessToken string) (*RejectFriendResponse, error) {
+	var resp RejectFriendResponse
+
+	path := "/api/friends/reject/" + strconv.FormatInt(id, 10)
+	if err := c.doRequest(ctx, http.MethodPost, path, nil, &resp, accessToken); err != nil {
+		return nil, err
+	}
+
+	return &resp, nil
+}
+
+// ListFriends calls GET /api/friends/me with Bearer access token.
+func (c *RESTClient) ListFriends(ctx context.Context, accessToken string) (*ListFriendsResponse, error) {
+	var resp ListFriendsResponse
+	if err := c.doRequest(ctx, http.MethodGet, "/api/friends/me", nil, &resp, accessToken); err != nil {
+		return nil, err
+	}
+
 	return &resp, nil
 }
 

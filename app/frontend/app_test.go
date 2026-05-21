@@ -33,8 +33,8 @@ func TestConfigureAndProtocolCatalog(t *testing.T) {
 	}
 
 	catalog := app.ProtocolCatalog()
-	if len(catalog.REST) != 11 {
-		t.Fatalf("REST endpoints = %d, want 11", len(catalog.REST))
+	if len(catalog.REST) != 14 {
+		t.Fatalf("REST endpoints = %d, want 14", len(catalog.REST))
 	}
 
 	if len(catalog.Frames) != 13 {

@@ -8,6 +8,7 @@ interface Props {
   activeConversationId: number | null
   currentUserLabel: string
   connected: boolean
+  pendingFriendCount?: number
   loading?: boolean
   historyLoading?: boolean
   searchKeyword?: string
@@ -21,6 +22,7 @@ interface Props {
 const props = withDefaults(defineProps<Props>(), {
   loading: false,
   historyLoading: false,
+  pendingFriendCount: 0,
   searchKeyword: '',
   searchResults: () => [],
   searchLoading: false,
@@ -32,6 +34,7 @@ const props = withDefaults(defineProps<Props>(), {
 const emit = defineEmits<{
   select: [conversationId: number]
   logout: []
+  'open-friends': []
   'search-user': [keyword: string]
   'start-direct': [userId: number]
 }>()
@@ -85,7 +88,14 @@ function getDisplayName(user: SearchUserItem): string {
           {{ connected ? '在线' : '离线' }}
         </span>
       </div>
-      <button class="cl-logout" title="退出登录" @click="emit('logout')">退出</button>
+      <div class="cl-header-actions">
+        <ElBadge :value="pendingFriendCount" :hidden="pendingFriendCount === 0" :max="99">
+          <button class="cl-friends-btn" title="好友管理" @click="emit('open-friends')">
+            好友
+          </button>
+        </ElBadge>
+        <button class="cl-logout" title="退出登录" @click="emit('logout')">退出</button>
+      </div>
     </div>
 
     <!-- Search -->
@@ -146,11 +156,14 @@ function getDisplayName(user: SearchUserItem): string {
         @keydown.enter="emit('select', conv.id)"
       >
         <!-- Avatar with online badge -->
-        <ElBadge :value="conv.unreadCount" :hidden="conv.unreadCount === 0" :max="99" class="cl-badge">
-          <ElAvatar :src="conv.avatar" :size="42" class="cl-avatar">
-            {{ conv.title.slice(0, 1) }}
-          </ElAvatar>
-        </ElBadge>
+        <div class="cl-avatar-wrap">
+          <span v-if="conv.isOnline" class="cl-online-dot" />
+          <ElBadge :value="conv.unreadCount" :hidden="conv.unreadCount === 0" :max="99" class="cl-badge">
+            <ElAvatar :src="conv.avatar" :size="42" class="cl-avatar">
+              {{ conv.title.slice(0, 1) }}
+            </ElAvatar>
+          </ElBadge>
+        </div>
 
         <!-- Text content -->
         <div class="cl-body">
@@ -212,11 +225,52 @@ function getDisplayName(user: SearchUserItem): string {
   border-radius: 4px;
   cursor: pointer;
   transition: border-color 0.15s, color 0.15s;
+  flex-shrink: 0;
 }
 
 .cl-logout:hover {
   border-color: var(--aim-danger);
   color: var(--aim-danger);
+}
+
+.cl-header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.cl-friends-btn {
+  background: none;
+  border: 1px solid var(--aim-border);
+  color: var(--aim-text-muted);
+  font-size: 10px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.cl-friends-btn:hover {
+  border-color: var(--aim-primary);
+  color: var(--aim-primary);
+}
+
+/* Avatar + online dot */
+.cl-avatar-wrap {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.cl-online-dot {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 10px;
+  height: 10px;
+  background: var(--aim-primary);
+  border: 2px solid var(--aim-surface);
+  border-radius: 50%;
+  z-index: 2;
 }
 
 /* Loading skeletons */

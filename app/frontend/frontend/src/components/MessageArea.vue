@@ -6,16 +6,27 @@ import type { ChatMessage, Conversation } from './types'
 interface Props {
   conversation: Conversation | null
   messages: ChatMessage[]
-  typingLabel?: string
+  typingUserId?: number | null
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  typingLabel: '',
+  typingUserId: null,
 })
 
 const scrollbarRef = ref<InstanceType<typeof ElScrollbar> | null>(null)
 
 const hasMessages = computed(() => props.messages.length > 0)
+
+const typingDisplayName = computed(() => {
+  if (!props.typingUserId || !props.conversation) return ''
+  // If the conversation has memberIds, check if typing user is in it
+  if (props.conversation.memberIds?.includes(props.typingUserId)) {
+    // Try to derive name from messages
+    const msg = props.messages.find((m) => m.senderId === props.typingUserId && !m.isMine)
+    return msg?.senderName ?? `用户 ${props.typingUserId}`
+  }
+  return ''
+})
 
 function formatTime(isoString: string): string {
   const date = new Date(isoString)
@@ -96,7 +107,7 @@ watch(
           <ElAvatar :src="conversation.avatar" :size="40">{{ conversation.title.slice(0, 1) }}</ElAvatar>
           <div>
             <div class="ma-conv-title">{{ conversation.title }}</div>
-            <div v-if="typingLabel" class="ma-typing">{{ typingLabel }}正在输入…</div>
+            <div v-if="typingDisplayName" class="ma-typing">{{ typingDisplayName }} 正在输入…</div>
             <div v-else class="ma-conv-sub">{{ conversation.isOnline ? '在线' : '离线' }}</div>
           </div>
         </div>
