@@ -1018,6 +1018,8 @@ class WsMessageScenario:
 
         msg_idx = 0
         idx_lock = threading.Lock()
+        # 重连锁：每个 sender 独立，避免多个 worker 同时重连同一个 WS
+        reconnect_locks = [threading.Lock() for _ in sender_ws_clients]
 
         def send_one():
             nonlocal msg_idx
@@ -1034,26 +1036,42 @@ class WsMessageScenario:
             else:
                 content = f"bench_msg_{msg_idx}"
 
-            # 注册 pending 追踪，再发送
-            evt = threading.Event()
-            t0 = time.time()
-            client_msg_id = ws.send_message(conv_id, content, "text")
-            with pending_lock:
-                send_times[client_msg_id] = t0
-                pending_sends[client_msg_id] = evt
+            # 尝试发送，断线时重连重试
+            max_send_retries = 2  # 最多重试 2 次（含首次共 3 次机会）
+            for attempt in range(max_send_retries + 1):
+                try:
+                    # 注册 pending 追踪，再发送
+                    evt = threading.Event()
+                    t0 = time.time()
+                    client_msg_id = ws.send_message(conv_id, content, "text")
+                    with pending_lock:
+                        send_times[client_msg_id] = t0
+                        pending_sends[client_msg_id] = evt
 
-            # 等待接收方确认（带超时）
-            if not evt.wait(timeout=self.RECV_TIMEOUT):
-                # 超时：清理并记录错误
-                with pending_lock:
-                    send_times.pop(client_msg_id, None)
-                    pending_sends.pop(client_msg_id, None)
-                timed_out_count["value"] += 1
-                latency = time.time() - t0
-                self.metrics.record_error(latency, "recv_timeout")
+                    # 等待接收方确认（带超时）
+                    if not evt.wait(timeout=self.RECV_TIMEOUT):
+                        # 超时：清理并记录错误
+                        with pending_lock:
+                            send_times.pop(client_msg_id, None)
+                            pending_sends.pop(client_msg_id, None)
+                        timed_out_count["value"] += 1
+                        latency = time.time() - t0
+                        self.metrics.record_error(latency, "recv_timeout")
 
-            # 返回 _SKIP_METRICS: 本函数自行管理 record_success/record_error
-            return _SKIP_METRICS
+                    # 返回 _SKIP_METRICS: 本函数自行管理 record_success/record_error
+                    return _SKIP_METRICS
+
+                except RuntimeError as e:
+                    if "Not connected" not in str(e) or attempt >= max_send_retries:
+                        # 非断线 RuntimeError 或重试耗尽，记录错误
+                        latency = time.time() - t0
+                        self.metrics.record_error(latency, "ws_disconnected")
+                        return _SKIP_METRICS
+                    # 断线：尝试重连
+                    with reconnect_locks[sender_idx]:
+                        if not ws.is_connected():
+                            ws.reconnect(max_retries=1)
+                    # 重连后继续循环重试
 
         gen3 = LoadGenerator(self.metrics, self.rate_limiter,
                              workers=min(active_senders, 20),
@@ -1206,13 +1224,21 @@ class MixedScenario:
 
             import random
             if random.random() < self.ws_ratio and ws_clients:
-                # WS send
+                # WS send（带断线重连）
                 with counter_lock:
                     ws_counter += 1
                     idx = ws_counter % len(ws_clients)
                 conv_id, ws = ws_clients[idx]
                 content = f"mx_{ws_counter}"
-                ws.send_message(conv_id, content, "text")
+                try:
+                    ws.send_message(conv_id, content, "text")
+                except RuntimeError:
+                    # 断线：尝试重连一次，重连失败则忽略此条（_worker_loop 会记录 RuntimeError）
+                    try:
+                        ws.reconnect(max_retries=1)
+                        ws.send_message(conv_id, content, "text")
+                    except RuntimeError:
+                        raise  # 重连也失败，让 _worker_loop 记录错误
             else:
                 # REST query -- pick a random user and search/list
                 with counter_lock:

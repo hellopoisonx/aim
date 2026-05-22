@@ -296,9 +296,23 @@ class RESTClient:
 # ── WebSocket Client ────────────────────────────────────────────────────────────
 
 class WSClient:
-    """WebSocket client with automatic protobuf frame encoding/decoding."""
+    """WebSocket client with automatic protobuf frame encoding/decoding.
 
-    def __init__(self, url: str = None, token: TokenManager = None):
+    Features:
+    - Auto heartbeat: periodically sends heartbeat frames to keep the connection alive.
+    - Auto reconnect: on unexpected close, retries connection with exponential backoff.
+    """
+
+    # 心跳间隔（秒），0 表示禁用自动心跳
+    HEARTBEAT_INTERVAL = 30.0
+    # 自动重连最大次数，0 表示禁用自动重连
+    RECONNECT_MAX_RETRIES = 3
+    # 重连初始退避（秒）
+    RECONNECT_BACKOFF_BASE = 1.0
+
+    def __init__(self, url: str = None, token: TokenManager = None,
+                 heartbeat_interval: float = None,
+                 reconnect_max_retries: int = None):
         self.url = url or GATEWAY_WS
         self.token = token or TokenManager.load()
         self.ws: Optional[websocket.WebSocketApp] = None
@@ -306,6 +320,11 @@ class WSClient:
         self.on_frame: Optional[Callable] = None
         self._connected = False
         self._error: Optional[str] = None
+        self._heartbeat_interval = heartbeat_interval if heartbeat_interval is not None else self.HEARTBEAT_INTERVAL
+        self._reconnect_max = reconnect_max_retries if reconnect_max_retries is not None else self.RECONNECT_MAX_RETRIES
+        self._heartbeat_timer: Optional[threading.Timer] = None
+        self._intentional_close = False
+        self._reconnect_count = 0
 
     def _next_seq(self) -> int:
         self.seq += 1
@@ -314,6 +333,7 @@ class WSClient:
     def connect(self):
         # The gateway expects a GET /ws upgrade request with Authorization header.
         # websocket-client sends HTTP upgrade (GET + Upgrade headers) natively.
+        self._intentional_close = False
         headers = {}
         if self.token.access_token:
             headers["Authorization"] = f"Bearer {self.token.access_token}"
@@ -351,8 +371,59 @@ class WSClient:
                 else:
                     print(f"  ✗ WS connection timed out after {int(connect_timeout)}s")
             self.disconnect()
+        else:
+            # 连接成功，启动心跳
+            self._reconnect_count = 0
+            self._start_heartbeat()
+
+    def reconnect(self, max_retries: int = None) -> bool:
+        """Attempt to reconnect with exponential backoff.
+
+        Returns True if reconnection succeeds, False otherwise.
+        """
+        retries = max_retries if max_retries is not None else self._reconnect_max
+        for attempt in range(retries):
+            backoff = self.RECONNECT_BACKOFF_BASE * (2 ** attempt)
+            if VERBOSE:
+                print(f"  ↻ WS reconnect attempt {attempt + 1}/{retries} in {backoff:.1f}s...")
+            time.sleep(backoff)
+            self.connect()
+            if self._connected:
+                if VERBOSE:
+                    print(f"  ✓ WS reconnected on attempt {attempt + 1}")
+                return True
+        if VERBOSE:
+            print(f"  ✗ WS reconnect failed after {retries} attempts")
+        return False
+
+    def _start_heartbeat(self):
+        """Start periodic heartbeat."""
+        self._stop_heartbeat()
+        if self._heartbeat_interval <= 0:
+            return
+        def _heartbeat_loop():
+            if self._connected and not self._intentional_close:
+                try:
+                    self.send_heartbeat()
+                except Exception:
+                    pass  # 连接已断开，心跳失败忽略
+            if self._connected and not self._intentional_close:
+                self._heartbeat_timer = threading.Timer(self._heartbeat_interval, _heartbeat_loop)
+                self._heartbeat_timer.daemon = True
+                self._heartbeat_timer.start()
+        self._heartbeat_timer = threading.Timer(self._heartbeat_interval, _heartbeat_loop)
+        self._heartbeat_timer.daemon = True
+        self._heartbeat_timer.start()
+
+    def _stop_heartbeat(self):
+        """Stop periodic heartbeat."""
+        if self._heartbeat_timer is not None:
+            self._heartbeat_timer.cancel()
+            self._heartbeat_timer = None
 
     def disconnect(self):
+        self._intentional_close = True
+        self._stop_heartbeat()
         if self.ws:
             self.ws.close()
 
@@ -387,8 +458,18 @@ class WSClient:
 
     def _on_close(self, ws, status, msg):
         self._connected = False
+        self._stop_heartbeat()
         if VERBOSE:
             print(f"  ✓ WS closed (status={status})")
+        # 非主动关闭时尝试自动重连
+        if not self._intentional_close and self._reconnect_max > 0:
+            self._reconnect_count += 1
+            if self._reconnect_count <= self._reconnect_max:
+                def _do_reconnect():
+                    if self.reconnect(max_retries=1):
+                        self._reconnect_count = 0  # 重连成功，重置计数
+                t = threading.Thread(target=_do_reconnect, daemon=True)
+                t.start()
 
     def _decode_payload(self, frame: ws_pb2.WsFrame):
         """Decode payload based on frame type."""
@@ -434,6 +515,17 @@ class WSClient:
             print(f"  → [{ftype}] seq={frame.seq}{payload_info}")
 
     # ── Convenience methods ──
+
+    def ensure_connected(self, max_retries: int = 1) -> bool:
+        """Check connection and attempt reconnect if disconnected.
+
+        Returns True if connected (either already or after reconnect), False otherwise.
+        """
+        if self._connected:
+            return True
+        if self._intentional_close:
+            return False
+        return self.reconnect(max_retries=max_retries)
 
     def send_message(self, conversation_id: int, content: str, message_type: str = "text") -> str:
         """Send a chat message and return the client_msg_id for correlation."""
