@@ -63,6 +63,12 @@ type CreateConversationResponse struct {
 	CreatorId        int64   `json:"creator_id"`
 }
 
+type CreateGroupRequest struct {
+	MemberIds []int64 `json:"member_ids" validate:"required,min=1"`
+	Name      string  `json:"name,optional"`
+	Avatar    string  `json:"avatar,optional"`
+}
+
 type DismissGroupRequest struct {
 	Id int64 `path:"id" validate:"required"`
 }
@@ -236,7 +242,7 @@ type UserInfo struct {
 }
 
 type UserListItem struct {
-	Id     int64  `json:"id"`
+	Id     string `json:"id"`
 	Email  string `json:"email"`
 	Avatar string `json:"avatar"`
 }

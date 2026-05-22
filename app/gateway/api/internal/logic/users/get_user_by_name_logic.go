@@ -5,6 +5,7 @@ package users
 
 import (
 	"context"
+	"strconv"
 
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
@@ -61,7 +62,7 @@ func userListItemFromRPC(user *pb.UserInfoResponse) types.UserListItem {
 	}
 
 	return types.UserListItem{
-		Id:     user.GetId(),
+		Id:     strconv.FormatInt(user.GetId(), 10),
 		Email:  user.GetEmail(),
 		Avatar: user.GetAvatar(),
 	}

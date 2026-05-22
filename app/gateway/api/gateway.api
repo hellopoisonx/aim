@@ -112,9 +112,15 @@ type GetUserByNameResponse {
 }
 
 type UserListItem {
-	Id     int64  `json:"id"`
+	Id     string `json:"id"`
 	Email  string `json:"email"`
 	Avatar string `json:"avatar"`
+}
+
+type CreateGroupRequest {
+	MemberIds []int64 `json:"member_ids" validate:"required,min=1"`
+	Name      string  `json:"name,optional"`
+	Avatar    string  `json:"avatar,optional"`
 }
 
 type CreateConversationRequest {
@@ -276,6 +282,9 @@ service gateway-api {
 service gateway-api {
 	@handler CreateConversation
 	post / (CreateConversationRequest) returns (CreateConversationResponse)
+
+	@handler CreateGroup
+	post /group (CreateGroupRequest) returns (CreateConversationResponse)
 
 	@handler GetConversationHistory
 	get /history/:id (GetConversationHistoryRequest) returns (GetConversationHistoryResponse)
