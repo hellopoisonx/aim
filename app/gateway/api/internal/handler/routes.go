@@ -58,6 +58,36 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 					Handler: conversations.ListConversationsHandler(serverCtx),
 				},
 				{
+					Method:  http.MethodDelete,
+					Path:    "/:id",
+					Handler: conversations.DismissGroupHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPut,
+					Path:    "/:id",
+					Handler: conversations.UpdateGroupInfoHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/:id/leave",
+					Handler: conversations.LeaveGroupHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodGet,
+					Path:    "/:id/members",
+					Handler: conversations.GetConversationMembersHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/:id/members",
+					Handler: conversations.AddGroupMembersHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodDelete,
+					Path:    "/:id/members/:uid",
+					Handler: conversations.RemoveGroupMemberHandler(serverCtx),
+				},
+				{
 					Method:  http.MethodGet,
 					Path:    "/history/:id",
 					Handler: conversations.GetConversationHistoryHandler(serverCtx),

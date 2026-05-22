@@ -25,7 +25,6 @@ func NewCreateConversationLogic(ctx context.Context, svcCtx *svc.ServiceContext)
 	}
 }
 
-// CreateConversation creates a new conversation (direct or group).
 func (l *CreateConversationLogic) CreateConversation(in *pb.CreateConversationReq) (*pb.CreateConversationResp, error) {
 	if in.GetCreatorId() <= 0 {
 		return nil, errorx.NewCodeError(errorx.CodeBadInput, "creator_id is required and must be positive")
@@ -44,7 +43,7 @@ func (l *CreateConversationLogic) CreateConversation(in *pb.CreateConversationRe
 		return nil, errorx.NewCodeError(errorx.CodeInternal, "conversation service is not configured")
 	}
 
-	conv, err := convSvc.CreateConversation(l.ctx, in.GetConversationType(), in.GetCreatorId(), in.GetMemberIds())
+	conv, err := convSvc.CreateConversation(l.ctx, in.GetConversationType(), in.GetCreatorId(), in.GetMemberIds(), in.GetName())
 	if err != nil {
 		return nil, service.ConversationToGRPCError(err)
 	}
@@ -66,6 +65,9 @@ func (l *CreateConversationLogic) CreateConversation(in *pb.CreateConversationRe
 			IsActive:         conv.IsActive,
 			CreatedAt:        service.UnixFromPGTimestamptz(conv.CreatedAt),
 			MemberIds:        memberIDs,
+			Name:             conv.Name,
+			Avatar:           conv.Avatar,
+			CreatorId:        conv.CreatorID,
 		},
 	}, nil
 }

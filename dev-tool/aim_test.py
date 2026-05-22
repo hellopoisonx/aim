@@ -312,7 +312,8 @@ class WSClient:
 
     def __init__(self, url: str = None, token: TokenManager = None,
                  heartbeat_interval: float = None,
-                 reconnect_max_retries: int = None):
+                 reconnect_max_retries: int = None,
+                 rest_client: 'RESTClient' = None):
         self.url = url or GATEWAY_WS
         self.token = token or TokenManager.load()
         self.ws: Optional[websocket.WebSocketApp] = None
@@ -325,6 +326,7 @@ class WSClient:
         self._heartbeat_timer: Optional[threading.Timer] = None
         self._intentional_close = False
         self._reconnect_count = 0
+        self._rest_client = rest_client
 
     def _next_seq(self) -> int:
         self.seq += 1
@@ -379,8 +381,12 @@ class WSClient:
     def reconnect(self, max_retries: int = None) -> bool:
         """Attempt to reconnect with exponential backoff.
 
+        If the access token is expired and a RESTClient is available,
+        automatically refresh the token before reconnecting.
+
         Returns True if reconnection succeeds, False otherwise.
         """
+        self._try_refresh_token()
         retries = max_retries if max_retries is not None else self._reconnect_max
         for attempt in range(retries):
             backoff = self.RECONNECT_BACKOFF_BASE * (2 ** attempt)
@@ -395,6 +401,22 @@ class WSClient:
         if VERBOSE:
             print(f"  ✗ WS reconnect failed after {retries} attempts")
         return False
+
+    def _try_refresh_token(self):
+        """Refresh access token if expired and a RESTClient is available."""
+        if not self.token.is_expired():
+            return
+        if self._rest_client is None:
+            if VERBOSE:
+                print("  ⚠ Token expired but no RESTClient for refresh")
+            return
+        try:
+            self._rest_client.refresh()
+            if VERBOSE:
+                print(f"  ✓ Token refreshed (user_id={self.token.user_id})")
+        except Exception as e:
+            if VERBOSE:
+                print(f"  ✗ Token refresh failed: {e}")
 
     def _start_heartbeat(self):
         """Start periodic heartbeat."""

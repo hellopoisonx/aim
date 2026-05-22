@@ -48,6 +48,7 @@ func (s *GatewayServer) PushMessage(ctx context.Context, req *pb.PushMessageReq)
 		SentAt:           req.SentAt,
 		ConversationType: req.ConversationType,
 		ClientMsgId:      req.ClientMsgId,
+		IsSystem:         req.GetIsSystem(),
 	}
 
 	// Look up all connections for the target user.

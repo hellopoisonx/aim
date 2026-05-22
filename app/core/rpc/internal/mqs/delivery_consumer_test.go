@@ -89,6 +89,30 @@ func (f *fakeConversationClient) GetUserConversations(context.Context, *logicpb.
 	return nil, errors.New("GetUserConversations not implemented")
 }
 
+func (f *fakeConversationClient) AddGroupMembers(context.Context, *logicpb.AddGroupMembersReq, ...grpc.CallOption) (*logicpb.AddGroupMembersResp, error) {
+	return nil, errors.New("AddGroupMembers not implemented")
+}
+
+func (f *fakeConversationClient) RemoveGroupMembers(context.Context, *logicpb.RemoveGroupMembersReq, ...grpc.CallOption) (*logicpb.RemoveGroupMembersResp, error) {
+	return nil, errors.New("RemoveGroupMembers not implemented")
+}
+
+func (f *fakeConversationClient) LeaveGroup(context.Context, *logicpb.LeaveGroupReq, ...grpc.CallOption) (*logicpb.LeaveGroupResp, error) {
+	return nil, errors.New("LeaveGroup not implemented")
+}
+
+func (f *fakeConversationClient) DismissGroup(context.Context, *logicpb.DismissGroupReq, ...grpc.CallOption) (*logicpb.DismissGroupResp, error) {
+	return nil, errors.New("DismissGroup not implemented")
+}
+
+func (f *fakeConversationClient) UpdateGroupInfo(context.Context, *logicpb.UpdateGroupInfoReq, ...grpc.CallOption) (*logicpb.UpdateGroupInfoResp, error) {
+	return nil, errors.New("UpdateGroupInfo not implemented")
+}
+
+func (f *fakeConversationClient) GetConversationMembersDetail(context.Context, *logicpb.GetConversationMembersDetailReq, ...grpc.CallOption) (*logicpb.GetConversationMembersDetailResp, error) {
+	return nil, errors.New("GetConversationMembersDetail not implemented")
+}
+
 var _ logicpb.ConversationServiceClient = (*fakeConversationClient)(nil)
 
 // --- Test helpers ---

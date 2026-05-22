@@ -230,6 +230,22 @@ services:
     networks:
       - bench-network
 
+  bench-kafbat-ui:
+    container_name: bench-kafbat-ui
+    image: ghcr.io/kafbat/kafka-ui:latest
+    ports:
+      - 18000:8080
+    environment:
+      DYNAMIC_CONFIG_ENABLED: 'true'
+      SWAGGER_UI_ENABLED: 'true'
+    depends_on:
+      bench-kafka:
+        condition: service_healthy
+    volumes:
+      - ./kui/config.yaml:/etc/kafkaui/dynamic_config.yaml:ro
+    networks:
+      - bench-network
+
   bench-kafka-init:
     image: apache/kafka:4.0.2
     container_name: bench-kafka-init

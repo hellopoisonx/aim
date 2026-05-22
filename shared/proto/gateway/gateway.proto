@@ -70,6 +70,7 @@ message PushMessageReq {
   string client_msg_id = 8;      // 客户端消息 ID（用于去重）
   repeated string mentions = 9;  // 被 @ 的用户 ID 列表
   int64 target_user_id = 10;     // 目标用户 ID（投递到此用户在本节点的所有连接）
+  bool is_system = 11;           // true 表示群变更系统消息
 }
 
 // PushMessageResp — 投递聊天消息响应

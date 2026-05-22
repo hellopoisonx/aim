@@ -872,8 +872,8 @@ class WsMessageScenario:
 
         # Step 1: Register & login
         print("  [1/5] Registering & logging in...")
-        user_creds: List[tuple] = []  # (user_id, token)
-        conv_pairs: List[tuple] = []  # (conv_id, sender_user_id, sender_token, receiver_user_id, receiver_token)
+        user_creds: List[tuple] = []  # (user_id, access_token, refresh_token, expires_at, device_id)
+        conv_pairs: List[tuple] = []  # (conv_id, a_id, a_token, a_refresh, a_expires, a_device, b_id, b_token, b_refresh, b_expires, b_device)
         cred_lock = threading.Lock()
 
         def reg_login_and_conv():
@@ -883,8 +883,11 @@ class WsMessageScenario:
             client.login(email, self._password)
             uid = client.token.user_id
             token = client.token.access_token
+            refresh = client.token.refresh_token
+            expires = client.token.expires_at
+            device = client.token.device_id
             with cred_lock:
-                user_creds.append((uid, token))
+                user_creds.append((uid, token, refresh, expires, device))
 
         gen = LoadGenerator(MetricsCollector(), RateLimiter(),
                             workers=min(self.users, 20), verbose=False)
@@ -909,15 +912,16 @@ class WsMessageScenario:
                 idx = len(conv_pairs)
             if idx * 2 + 1 >= len(user_creds):
                 return
-            a_id, a_token = user_creds[idx * 2]
-            b_id, b_token = user_creds[idx * 2 + 1]
+            a_id, a_token, a_refresh, a_expires, a_device = user_creds[idx * 2]
+            b_id, b_token, b_refresh, b_expires, b_device = user_creds[idx * 2 + 1]
             client = RESTClient(token=TokenManager.load())
             client.token.access_token = a_token
             client.token.user_id = a_id
             resp = client.create_conversation([b_id])
             conv_id = resp["conversation_id"]
             with conv_lock:
-                conv_pairs.append((conv_id, a_id, a_token, b_id, b_token))
+                conv_pairs.append((conv_id, a_id, a_token, a_refresh, a_expires, a_device,
+                                   b_id, b_token, b_refresh, b_expires, b_device))
 
         gen2 = LoadGenerator(MetricsCollector(), RateLimiter(),
                              workers=min(pairs, 20), verbose=False)
@@ -940,11 +944,16 @@ class WsMessageScenario:
 
         receiver_ws_clients: List[tuple] = []  # (conv_id, receiver_user_id, WSClient)
 
-        for i, (conv_id, a_id, a_token, b_id, b_token) in enumerate(conv_pairs):
+        for i, (conv_id, a_id, a_token, a_refresh, a_expires, a_device,
+                 b_id, b_token, b_refresh, b_expires, b_device) in enumerate(conv_pairs):
             token_mgr = TokenManager.load()
             token_mgr.access_token = b_token
+            token_mgr.refresh_token = b_refresh
+            token_mgr.expires_at = b_expires
+            token_mgr.device_id = b_device
             token_mgr.user_id = b_id
-            ws = WSClient(token=token_mgr)
+            rest = RESTClient(token=token_mgr)
+            ws = WSClient(token=token_mgr, rest_client=rest)
 
             # 注册 on_frame 回调，接收方监听 PUSH_MESSAGE
             def make_on_frame(receiver_uid: int):
@@ -980,14 +989,19 @@ class WsMessageScenario:
         # 构建 conv_id → receiver 映射，方便查找哪些 conv 有活跃接收方
         active_conv_ids = {c for c, _, _ in receiver_ws_clients}
 
-        for conv_id, a_id, a_token, b_id, b_token in conv_pairs:
+        for conv_id, a_id, a_token, a_refresh, a_expires, a_device, \
+                b_id, b_token, b_refresh, b_expires, b_device in conv_pairs:
             if conv_id not in active_conv_ids:
                 _vprint(f"    x Skipping sender for conv {conv_id} (no receiver)")
                 continue
             token_mgr = TokenManager.load()
             token_mgr.access_token = a_token
+            token_mgr.refresh_token = a_refresh
+            token_mgr.expires_at = a_expires
+            token_mgr.device_id = a_device
             token_mgr.user_id = a_id
-            ws = WSClient(token=token_mgr)
+            rest = RESTClient(token=token_mgr)
+            ws = WSClient(token=token_mgr, rest_client=rest)
             ws.connect()
             if ws.is_connected():
                 sender_ws_clients.append((conv_id, ws))
@@ -1159,8 +1173,11 @@ class MixedScenario:
             client.login(email, self._password)
             uid = client.token.user_id
             token = client.token.access_token
+            refresh = client.token.refresh_token
+            expires = client.token.expires_at
+            device = client.token.device_id
             with cred_lock:
-                user_creds.append((uid, token))
+                user_creds.append((uid, token, refresh, expires, device))
 
         gen = LoadGenerator(MetricsCollector(), RateLimiter(),
                             workers=min(self.users, 20), verbose=False)
@@ -1176,14 +1193,15 @@ class MixedScenario:
                 idx = len(conv_pairs)
             if idx * 2 + 1 >= len(user_creds):
                 return
-            a_id, a_token = user_creds[idx * 2]
-            b_id, b_token = user_creds[idx * 2 + 1]
+            a_id, a_token, a_refresh, a_expires, a_device = user_creds[idx * 2]
+            b_id, b_token, b_refresh, b_expires, b_device = user_creds[idx * 2 + 1]
             client = RESTClient(token=TokenManager.load())
             client.token.access_token = a_token
             client.token.user_id = a_id
             resp = client.create_conversation([b_id])
             with conv_lock:
-                conv_pairs.append((resp["conversation_id"], a_id, a_token, b_id, b_token))
+                conv_pairs.append((resp["conversation_id"], a_id, a_token, a_refresh, a_expires, a_device,
+                                   b_id, b_token, b_refresh, b_expires, b_device))
 
         gen2 = LoadGenerator(MetricsCollector(), RateLimiter(),
                              workers=min(pairs, 20), verbose=False)
@@ -1196,11 +1214,16 @@ class MixedScenario:
         # Connect WS clients
         print("  [Setup] Connecting WebSocket clients...")
         ws_clients: List[tuple] = []  # (conv_id, ws)
-        for conv_id, a_id, a_token, b_id, b_token in conv_pairs:
+        for conv_id, a_id, a_token, a_refresh, a_expires, a_device, \
+                b_id, b_token, b_refresh, b_expires, b_device in conv_pairs:
             token_mgr = TokenManager.load()
             token_mgr.access_token = a_token
+            token_mgr.refresh_token = a_refresh
+            token_mgr.expires_at = a_expires
+            token_mgr.device_id = a_device
             token_mgr.user_id = a_id
-            ws = WSClient(token=token_mgr)
+            rest = RESTClient(token=token_mgr)
+            ws = WSClient(token=token_mgr, rest_client=rest)
             ws.connect()
             if ws.is_connected():
                 ws_clients.append((conv_id, ws))

@@ -29,6 +29,97 @@
 - 好友接口幂等保护:AddFriend 先通过 `GetFriendshipByPair` 检查正向关系,如已为 `pending` 或 `accepted` 则直接返回,防止 `UpsertFriendship(status=pending)` 将 `accepted` 降级。
 - 测试覆盖率:`ConversationService` 服务层 91.6%(含 3 个去重测试用例),`ConversationService` RPC 逻辑层 89.4%;`FriendshipService` RPC 逻辑层 89.7%。
 
+## 群管理
+
+### 架构
+
+群变更事件遵循统一模式：
+
+```
+┌─────────┐  DB事务   ┌────┐  事务提交后Kafka  ┌──────┐  gRPC   ┌──────────┐  WS   ┌────────┐
+│  Logic  │ ────────→ │ DB │ ───────────────→ │ Core │ ──────→ │ Gateway  │ ────→ │ Client │
+└─────────┘          └────┘                   └──────┘         └──────────┘       └────────┘
+                         │                         │
+                         │  aim.conversation.events │
+                         └─────────────────────────┘
+```
+
+- **事务内**：DB 操作（成员变更 + 插入系统消息 + 计算 target_user_ids）
+- **事务提交后**：生产 Kafka 事件到 `aim.conversation.events`（best-effort）
+- **Core 消费**：`ConversationEventConsumer` 消费事件，通过 Gateway PushMessage 推送给每个 target_user_id
+- **is_system**：`PushMessageReq.is_system = true` 区分群变更消息和普通消息
+
+### 数据库迁移
+
+`app/logic/rpc/model/migrations/004_group_management.sql`：
+
+| 表 | 字段 | 说明 |
+|----|------|------|
+| conversations | `name VARCHAR(128) DEFAULT ''` | 会话名称；群聊为群名 |
+| conversations | `avatar VARCHAR(512) DEFAULT ''` | 群聊头像 URL |
+| conversations | `creator_id BIGINT DEFAULT 0` | 创建者/群主 |
+| conversation_members | `role VARCHAR(16) DEFAULT 'member'` | 取值：owner / admin / member |
+
+### 事务支持
+
+`ConversationService` 新增 `InTx` 方法，使用 `pgx` 标准库事务：
+
+```go
+func (s *ConversationService) InTx(ctx context.Context, fn func(txQueries *model.Queries) error) error
+```
+
+- `ConversationService` 持有 `pool *pgxpool.Pool` 引用（与 `store *model.Queries` 并存）
+- 事务内使用 `model.New(tx)` 创建临时 Queries，`defer tx.Rollback(ctx)`
+- 事务提交失败自动回滚；业务错误返回后回滚
+
+### 系统消息
+
+群变更消息统一使用 `message_type="system"`、`sender_id=0` 写入 messages 表：
+
+| 事件类型 | 触发场景 |
+|---------|---------|
+| `member_joined` | 添加成员 |
+| `member_left` | 成员主动退群 |
+| `member_removed` | 管理员移除成员 |
+| `group_renamed` | 群聊改名 |
+| `group_dismissed` | 群聊解散 |
+| `group_avatar_changed` | 群头像变更 |
+
+### target_user_ids 计算规则
+
+| 事件 | target_user_ids 来源 |
+|------|---------------------|
+| `member_joined` | 变更后的全部成员（含新增） |
+| `member_removed` | 变更前的全部成员（含将被移除的） |
+| `member_left` | 变更前的全部成员（含退出者） |
+| `group_renamed` | 当前全部成员 |
+| `group_avatar_changed` | 当前全部成员 |
+| `group_dismissed` | 解散前的全部成员 |
+
+### CreateConversation 改造
+
+- `CreateConversation` 新增 `name` 参数
+- 创建者使用 `AddConversationMemberWithRole` 设置 `role = "owner"`
+- 其他成员使用 `AddConversationMembers`（默认 role = "member"）
+
+### 配置
+
+`app/logic/rpc/internal/config/config.go` 新增：
+
+```go
+type KqPusherConf struct {
+    Brokers []string
+    Topic   string
+}
+
+type Config struct {
+    // ... 现有字段 ...
+    ConversationEventProducerConf KqPusherConf `json:",optional"`
+}
+```
+
+`ServiceContext` 新增 `ConversationEventPusher *kq.Pusher`。logic.yaml 需添加对应 Kafka 配置块。
+
 ## 边界
 
 - aim-core 可以调用 aim-logic:查询会话成员、好友/黑名单、群成员禁言等投递判断依据。

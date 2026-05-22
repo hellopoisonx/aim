@@ -367,3 +367,22 @@ func TestGetConversationHistory(t *testing.T) {
 		})
 	}
 }
+
+func (m *mockGetHistoryConversationService) AddGroupMembers(ctx context.Context, in *pb.AddGroupMembersReq, opts ...grpc.CallOption) (*pb.AddGroupMembersResp, error) {
+	return nil, errors.New("AddGroupMembers not implemented")
+}
+func (m *mockGetHistoryConversationService) RemoveGroupMembers(ctx context.Context, in *pb.RemoveGroupMembersReq, opts ...grpc.CallOption) (*pb.RemoveGroupMembersResp, error) {
+	return nil, errors.New("RemoveGroupMembers not implemented")
+}
+func (m *mockGetHistoryConversationService) LeaveGroup(ctx context.Context, in *pb.LeaveGroupReq, opts ...grpc.CallOption) (*pb.LeaveGroupResp, error) {
+	return nil, errors.New("LeaveGroup not implemented")
+}
+func (m *mockGetHistoryConversationService) DismissGroup(ctx context.Context, in *pb.DismissGroupReq, opts ...grpc.CallOption) (*pb.DismissGroupResp, error) {
+	return nil, errors.New("DismissGroup not implemented")
+}
+func (m *mockGetHistoryConversationService) UpdateGroupInfo(ctx context.Context, in *pb.UpdateGroupInfoReq, opts ...grpc.CallOption) (*pb.UpdateGroupInfoResp, error) {
+	return nil, errors.New("UpdateGroupInfo not implemented")
+}
+func (m *mockGetHistoryConversationService) GetConversationMembersDetail(ctx context.Context, in *pb.GetConversationMembersDetailReq, opts ...grpc.CallOption) (*pb.GetConversationMembersDetailResp, error) {
+	return nil, errors.New("GetConversationMembersDetail not implemented")
+}

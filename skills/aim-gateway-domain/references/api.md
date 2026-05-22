@@ -76,6 +76,23 @@
 - `GET /api/conversations` 调用 `ConversationService.GetUserConversations`（通过 `LogicRpc`）返回当前用户参与的所有会话，每条记录包含 `conversation_id`、`conversation_type`、`is_active`、`created_at`、`member_ids`。
 - 两个端点均受 `Auth` 中间件保护，`user_id` 从 JWT payload 提取。
 
+### 群管理 REST 端点
+
+| Method | Path | Auth | 说明 |
+| --- | --- | --- | --- |
+| `GET` | `/api/conversations/:id/members` | `Auth` 中间件 | 获取成员详情列表（user_id, email, avatar, role, joined_at） |
+| `POST` | `/api/conversations/:id/members` | `Auth` 中间件 | 添加群成员（body: `member_ids []int64`） |
+| `DELETE` | `/api/conversations/:id/members/:uid` | `Auth` 中间件 | 移除单个群成员 |
+| `POST` | `/api/conversations/:id/leave` | `Auth` 中间件 | 退出群聊 |
+| `DELETE` | `/api/conversations/:id` | `Auth` 中间件 | 解散群聊（仅 creator 可操作） |
+| `PUT` | `/api/conversations/:id` | `Auth` 中间件 | 更新群信息（body: `name`, `avatar`，均为 optional） |
+
+以上端点均通过 `LogicRpc` 调用 `ConversationService` 的对应 RPC（AddGroupMembers, RemoveGroupMembers, LeaveGroup, DismissGroup, UpdateGroupInfo, GetConversationMembersDetail）。`user_id` 和 `operator_id` 从 JWT payload 提取。
+
+**类型更新**：`ConversationItem`、`CreateConversationRequest`、`CreateConversationResponse` 新增 `name`、`avatar`、`creator_id` 字段。`CreateConversationRequest` 新增 `Name` 字段用于创建群聊时指定群名。
+
+**PushMessage is_system**：`GatewayServer.PushMessage` 将 gRPC `PushMessageReq.is_system` 传递至 WebSocket `PushMessagePayload.is_system`，前端据此区分群变更系统消息和普通消息。
+
 重新生成 REST 脚手架：
 
 ```bash

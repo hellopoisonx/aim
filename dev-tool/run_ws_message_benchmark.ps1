@@ -1,0 +1,1 @@
+python .\generate_fixtures.py --count 3000; if ($?) { python .\benchmark.py ws-message --gateway http://127.0.0.1:18888 --users 3000 --messages-per-user 100 --quiet --output ./result.json }

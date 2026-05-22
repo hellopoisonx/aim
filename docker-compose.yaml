@@ -120,6 +120,7 @@ services:
         psql -h postgres -U user -d aim_logic -f /migrations/001_initial_permission.sql
         psql -h postgres -U user -d aim_logic -f /migrations/002_messages.sql
         psql -h postgres -U user -d aim_logic -f /migrations/003_user_info.sql
+        psql -h postgres -U user -d aim_logic -f /migrations/004_group_management.sql
     networks:
       - aim-network
 
@@ -244,6 +245,7 @@ services:
       - |
         /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic aim.user.events --partitions 3 --replication-factor 1
         /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic aim-message-transfer --partitions 3 --replication-factor 1
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic aim.conversation.events --partitions 3 --replication-factor 1
     networks:
       - aim-network
 

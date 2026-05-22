@@ -31,6 +31,12 @@ shared/proto/
 
 - 服务端 `PushPresence` 收到 `target_user_id == 0` 时，自动回退到 `user_id` 寻址连接，保证旧版 caller（未设置 `target_user_id` 的 core 部署）行为不变。
 
+### 群变更系统消息
+
+- `PushMessagePayload.is_system`（字段号 9）：`true` 表示群变更系统消息（member_joined, member_left, member_removed, group_renamed, group_dismissed, group_avatar_changed）。前端据此区分展示。
+- `PushMessageReq.is_system`（字段号 11）：core `ConversationEventConsumer` 向 gateway 推送群变更事件时设为 `true`。
+- `sender_id=0`、`message_type="system"` 标识系统消息，与普通用户消息区分。
+
 ## 一般规则
 
 - WebSocket 只使用 Protobuf binary frame；不要新增 JSON/text frame 协议。

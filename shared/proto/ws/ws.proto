@@ -110,6 +110,7 @@ message PushMessagePayload {
   int64 sent_at = 6;
   string conversation_type = 7;
   string client_msg_id = 8;
+  bool is_system = 9;
 }
 
 // PushPresencePayload — 推送在线状态变更

@@ -48,6 +48,9 @@ func (l *GetUserConversationsLogic) GetUserConversations(in *pb.GetUserConversat
 			ConversationType: conv.ConversationType,
 			IsActive:         conv.IsActive,
 			CreatedAt:        service.UnixFromPGTimestamptz(conv.CreatedAt),
+			Name:             conv.Name,
+			Avatar:           conv.Avatar,
+			CreatorId:        conv.CreatorID,
 		})
 	}
 

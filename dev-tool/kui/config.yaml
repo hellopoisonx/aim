@@ -1,0 +1,21 @@
+kafka:
+  clusters:
+    - name: bench
+      bootstrap-servers: bench-kafka:9092
+      read-only: false
+      properties: {}
+      metrics:
+        type: JMX
+        port: 9997
+        ssl: false
+  internalTopicPrefix: "__"
+  admin-client-timeout: 30000
+  polling:
+    poll-timeout-ms: 1000
+    max-page-size: 500
+    default-page-size: 100
+logging:
+  level:
+    root: INFO
+    io.kafbat.ui: DEBUG
+    reactor.netty.http.server.AccessLog: INFO

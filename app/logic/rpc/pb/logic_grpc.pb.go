@@ -469,24 +469,32 @@ var UserService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	ConversationService_CreateConversation_FullMethodName     = "/logic.ConversationService/CreateConversation"
-	ConversationService_GetConversationHistory_FullMethodName = "/logic.ConversationService/GetConversationHistory"
-	ConversationService_GetConversationMembers_FullMethodName = "/logic.ConversationService/GetConversationMembers"
-	ConversationService_GetUserConversations_FullMethodName   = "/logic.ConversationService/GetUserConversations"
+	ConversationService_CreateConversation_FullMethodName           = "/logic.ConversationService/CreateConversation"
+	ConversationService_GetConversationHistory_FullMethodName       = "/logic.ConversationService/GetConversationHistory"
+	ConversationService_GetConversationMembers_FullMethodName       = "/logic.ConversationService/GetConversationMembers"
+	ConversationService_GetUserConversations_FullMethodName         = "/logic.ConversationService/GetUserConversations"
+	ConversationService_AddGroupMembers_FullMethodName              = "/logic.ConversationService/AddGroupMembers"
+	ConversationService_RemoveGroupMembers_FullMethodName           = "/logic.ConversationService/RemoveGroupMembers"
+	ConversationService_LeaveGroup_FullMethodName                   = "/logic.ConversationService/LeaveGroup"
+	ConversationService_DismissGroup_FullMethodName                 = "/logic.ConversationService/DismissGroup"
+	ConversationService_UpdateGroupInfo_FullMethodName              = "/logic.ConversationService/UpdateGroupInfo"
+	ConversationService_GetConversationMembersDetail_FullMethodName = "/logic.ConversationService/GetConversationMembersDetail"
 )
 
 // ConversationServiceClient is the client API for ConversationService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type ConversationServiceClient interface {
-	// CreateConversation creates a new conversation (direct or group).
 	CreateConversation(ctx context.Context, in *CreateConversationReq, opts ...grpc.CallOption) (*CreateConversationResp, error)
-	// GetConversationHistory retrieves message history for a conversation with cursor-based pagination.
 	GetConversationHistory(ctx context.Context, in *GetConversationHistoryReq, opts ...grpc.CallOption) (*GetConversationHistoryResp, error)
-	// GetConversationMembers retrieves the member IDs for a conversation.
 	GetConversationMembers(ctx context.Context, in *GetConversationMembersReq, opts ...grpc.CallOption) (*GetConversationMembersResp, error)
-	// GetUserConversations retrieves all conversations the user is a member of.
 	GetUserConversations(ctx context.Context, in *GetUserConversationsReq, opts ...grpc.CallOption) (*GetUserConversationsResp, error)
+	AddGroupMembers(ctx context.Context, in *AddGroupMembersReq, opts ...grpc.CallOption) (*AddGroupMembersResp, error)
+	RemoveGroupMembers(ctx context.Context, in *RemoveGroupMembersReq, opts ...grpc.CallOption) (*RemoveGroupMembersResp, error)
+	LeaveGroup(ctx context.Context, in *LeaveGroupReq, opts ...grpc.CallOption) (*LeaveGroupResp, error)
+	DismissGroup(ctx context.Context, in *DismissGroupReq, opts ...grpc.CallOption) (*DismissGroupResp, error)
+	UpdateGroupInfo(ctx context.Context, in *UpdateGroupInfoReq, opts ...grpc.CallOption) (*UpdateGroupInfoResp, error)
+	GetConversationMembersDetail(ctx context.Context, in *GetConversationMembersDetailReq, opts ...grpc.CallOption) (*GetConversationMembersDetailResp, error)
 }
 
 type conversationServiceClient struct {
@@ -537,18 +545,80 @@ func (c *conversationServiceClient) GetUserConversations(ctx context.Context, in
 	return out, nil
 }
 
+func (c *conversationServiceClient) AddGroupMembers(ctx context.Context, in *AddGroupMembersReq, opts ...grpc.CallOption) (*AddGroupMembersResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AddGroupMembersResp)
+	err := c.cc.Invoke(ctx, ConversationService_AddGroupMembers_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *conversationServiceClient) RemoveGroupMembers(ctx context.Context, in *RemoveGroupMembersReq, opts ...grpc.CallOption) (*RemoveGroupMembersResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RemoveGroupMembersResp)
+	err := c.cc.Invoke(ctx, ConversationService_RemoveGroupMembers_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *conversationServiceClient) LeaveGroup(ctx context.Context, in *LeaveGroupReq, opts ...grpc.CallOption) (*LeaveGroupResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(LeaveGroupResp)
+	err := c.cc.Invoke(ctx, ConversationService_LeaveGroup_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *conversationServiceClient) DismissGroup(ctx context.Context, in *DismissGroupReq, opts ...grpc.CallOption) (*DismissGroupResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DismissGroupResp)
+	err := c.cc.Invoke(ctx, ConversationService_DismissGroup_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *conversationServiceClient) UpdateGroupInfo(ctx context.Context, in *UpdateGroupInfoReq, opts ...grpc.CallOption) (*UpdateGroupInfoResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UpdateGroupInfoResp)
+	err := c.cc.Invoke(ctx, ConversationService_UpdateGroupInfo_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *conversationServiceClient) GetConversationMembersDetail(ctx context.Context, in *GetConversationMembersDetailReq, opts ...grpc.CallOption) (*GetConversationMembersDetailResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetConversationMembersDetailResp)
+	err := c.cc.Invoke(ctx, ConversationService_GetConversationMembersDetail_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ConversationServiceServer is the server API for ConversationService service.
 // All implementations must embed UnimplementedConversationServiceServer
 // for forward compatibility.
 type ConversationServiceServer interface {
-	// CreateConversation creates a new conversation (direct or group).
 	CreateConversation(context.Context, *CreateConversationReq) (*CreateConversationResp, error)
-	// GetConversationHistory retrieves message history for a conversation with cursor-based pagination.
 	GetConversationHistory(context.Context, *GetConversationHistoryReq) (*GetConversationHistoryResp, error)
-	// GetConversationMembers retrieves the member IDs for a conversation.
 	GetConversationMembers(context.Context, *GetConversationMembersReq) (*GetConversationMembersResp, error)
-	// GetUserConversations retrieves all conversations the user is a member of.
 	GetUserConversations(context.Context, *GetUserConversationsReq) (*GetUserConversationsResp, error)
+	AddGroupMembers(context.Context, *AddGroupMembersReq) (*AddGroupMembersResp, error)
+	RemoveGroupMembers(context.Context, *RemoveGroupMembersReq) (*RemoveGroupMembersResp, error)
+	LeaveGroup(context.Context, *LeaveGroupReq) (*LeaveGroupResp, error)
+	DismissGroup(context.Context, *DismissGroupReq) (*DismissGroupResp, error)
+	UpdateGroupInfo(context.Context, *UpdateGroupInfoReq) (*UpdateGroupInfoResp, error)
+	GetConversationMembersDetail(context.Context, *GetConversationMembersDetailReq) (*GetConversationMembersDetailResp, error)
 	mustEmbedUnimplementedConversationServiceServer()
 }
 
@@ -570,6 +640,24 @@ func (UnimplementedConversationServiceServer) GetConversationMembers(context.Con
 }
 func (UnimplementedConversationServiceServer) GetUserConversations(context.Context, *GetUserConversationsReq) (*GetUserConversationsResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetUserConversations not implemented")
+}
+func (UnimplementedConversationServiceServer) AddGroupMembers(context.Context, *AddGroupMembersReq) (*AddGroupMembersResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method AddGroupMembers not implemented")
+}
+func (UnimplementedConversationServiceServer) RemoveGroupMembers(context.Context, *RemoveGroupMembersReq) (*RemoveGroupMembersResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RemoveGroupMembers not implemented")
+}
+func (UnimplementedConversationServiceServer) LeaveGroup(context.Context, *LeaveGroupReq) (*LeaveGroupResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method LeaveGroup not implemented")
+}
+func (UnimplementedConversationServiceServer) DismissGroup(context.Context, *DismissGroupReq) (*DismissGroupResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DismissGroup not implemented")
+}
+func (UnimplementedConversationServiceServer) UpdateGroupInfo(context.Context, *UpdateGroupInfoReq) (*UpdateGroupInfoResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UpdateGroupInfo not implemented")
+}
+func (UnimplementedConversationServiceServer) GetConversationMembersDetail(context.Context, *GetConversationMembersDetailReq) (*GetConversationMembersDetailResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetConversationMembersDetail not implemented")
 }
 func (UnimplementedConversationServiceServer) mustEmbedUnimplementedConversationServiceServer() {}
 func (UnimplementedConversationServiceServer) testEmbeddedByValue()                             {}
@@ -664,6 +752,114 @@ func _ConversationService_GetUserConversations_Handler(srv interface{}, ctx cont
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ConversationService_AddGroupMembers_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AddGroupMembersReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ConversationServiceServer).AddGroupMembers(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ConversationService_AddGroupMembers_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ConversationServiceServer).AddGroupMembers(ctx, req.(*AddGroupMembersReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ConversationService_RemoveGroupMembers_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RemoveGroupMembersReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ConversationServiceServer).RemoveGroupMembers(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ConversationService_RemoveGroupMembers_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ConversationServiceServer).RemoveGroupMembers(ctx, req.(*RemoveGroupMembersReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ConversationService_LeaveGroup_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(LeaveGroupReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ConversationServiceServer).LeaveGroup(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ConversationService_LeaveGroup_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ConversationServiceServer).LeaveGroup(ctx, req.(*LeaveGroupReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ConversationService_DismissGroup_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DismissGroupReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ConversationServiceServer).DismissGroup(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ConversationService_DismissGroup_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ConversationServiceServer).DismissGroup(ctx, req.(*DismissGroupReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ConversationService_UpdateGroupInfo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateGroupInfoReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ConversationServiceServer).UpdateGroupInfo(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ConversationService_UpdateGroupInfo_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ConversationServiceServer).UpdateGroupInfo(ctx, req.(*UpdateGroupInfoReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ConversationService_GetConversationMembersDetail_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetConversationMembersDetailReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ConversationServiceServer).GetConversationMembersDetail(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ConversationService_GetConversationMembersDetail_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ConversationServiceServer).GetConversationMembersDetail(ctx, req.(*GetConversationMembersDetailReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ConversationService_ServiceDesc is the grpc.ServiceDesc for ConversationService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -686,6 +882,30 @@ var ConversationService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetUserConversations",
 			Handler:    _ConversationService_GetUserConversations_Handler,
+		},
+		{
+			MethodName: "AddGroupMembers",
+			Handler:    _ConversationService_AddGroupMembers_Handler,
+		},
+		{
+			MethodName: "RemoveGroupMembers",
+			Handler:    _ConversationService_RemoveGroupMembers_Handler,
+		},
+		{
+			MethodName: "LeaveGroup",
+			Handler:    _ConversationService_LeaveGroup_Handler,
+		},
+		{
+			MethodName: "DismissGroup",
+			Handler:    _ConversationService_DismissGroup_Handler,
+		},
+		{
+			MethodName: "UpdateGroupInfo",
+			Handler:    _ConversationService_UpdateGroupInfo_Handler,
+		},
+		{
+			MethodName: "GetConversationMembersDetail",
+			Handler:    _ConversationService_GetConversationMembersDetail_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

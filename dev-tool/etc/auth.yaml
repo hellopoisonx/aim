@@ -29,7 +29,7 @@ SessionRedis:
   Pass: ""
 Token:
   AccessSecret: aim-dev-access-secret
-  AccessTTL: 5m
+  AccessTTL: 30m
   RefreshTTL: 168h
   SnowflakeMachineID: 1
 KqPusherConf:

@@ -19,17 +19,37 @@ type AddFriendResponse struct {
 	Friendship FriendshipItem `json:"friendship"`
 }
 
+type AddGroupMembersRequest struct {
+	Id        int64   `path:"id" validate:"required"`
+	MemberIds []int64 `json:"member_ids" validate:"required,min=1"`
+}
+
+type AddGroupMembersResponse struct {
+	ConversationId   int64   `json:"conversation_id"`
+	ConversationType string  `json:"conversation_type"`
+	IsActive         bool    `json:"is_active"`
+	CreatedAt        int64   `json:"created_at"`
+	MemberIds        []int64 `json:"member_ids"`
+	Name             string  `json:"name"`
+	Avatar           string  `json:"avatar"`
+	CreatorId        int64   `json:"creator_id"`
+}
+
 type ConversationItem struct {
 	ConversationId   int64   `json:"conversation_id"`
 	ConversationType string  `json:"conversation_type"`
 	IsActive         bool    `json:"is_active"`
 	CreatedAt        int64   `json:"created_at"`
 	MemberIds        []int64 `json:"member_ids"`
+	Name             string  `json:"name"`
+	Avatar           string  `json:"avatar"`
+	CreatorId        int64   `json:"creator_id"`
 }
 
 type CreateConversationRequest struct {
 	ConversationType string  `json:"conversation_type" validate:"required,oneof=direct group"`
 	MemberIds        []int64 `json:"member_ids" validate:"required,min=1"`
+	Name             string  `json:"name,optional"`
 }
 
 type CreateConversationResponse struct {
@@ -38,6 +58,13 @@ type CreateConversationResponse struct {
 	IsActive         bool    `json:"is_active"`
 	CreatedAt        int64   `json:"created_at"`
 	MemberIds        []int64 `json:"member_ids"`
+	Name             string  `json:"name"`
+	Avatar           string  `json:"avatar"`
+	CreatorId        int64   `json:"creator_id"`
+}
+
+type DismissGroupRequest struct {
+	Id int64 `path:"id" validate:"required"`
 }
 
 type FriendshipItem struct {
@@ -62,6 +89,14 @@ type GetConversationHistoryResponse struct {
 	HasMore             bool          `json:"has_more"`
 }
 
+type GetConversationMembersDetailRequest struct {
+	Id int64 `path:"id" validate:"required"`
+}
+
+type GetConversationMembersResponse struct {
+	Members []MemberDetailItem `json:"members"`
+}
+
 type GetFriendsPresenceResponse struct {
 	Presences []PresenceItem `json:"presences"`
 }
@@ -80,6 +115,10 @@ type GetUserByNameRequest struct {
 
 type GetUserByNameResponse struct {
 	Users []UserListItem `json:"users"`
+}
+
+type LeaveGroupRequest struct {
+	Id int64 `path:"id" validate:"required"`
 }
 
 type ListConversationsResponse struct {
@@ -109,6 +148,14 @@ type LoginResponse struct {
 
 type LogoutResponse struct {
 	Success bool `json:"success"`
+}
+
+type MemberDetailItem struct {
+	UserId   int64  `json:"user_id"`
+	Email    string `json:"email"`
+	Avatar   string `json:"avatar"`
+	Role     string `json:"role"`
+	JoinedAt int64  `json:"joined_at"`
 }
 
 type MessageItem struct {
@@ -155,6 +202,27 @@ type RejectFriendRequest struct {
 
 type RejectFriendResponse struct {
 	Friendship FriendshipItem `json:"friendship"`
+}
+
+type RemoveGroupMemberRequest struct {
+	Id  int64 `path:"id" validate:"required"`
+	Uid int64 `path:"uid" validate:"required"`
+}
+
+type UpdateGroupInfoRequest struct {
+	Id     int64   `path:"id" validate:"required"`
+	Name   *string `json:"name,optional"`
+	Avatar *string `json:"avatar,optional"`
+}
+
+type UpdateGroupInfoResponse struct {
+	ConversationId   int64  `json:"conversation_id"`
+	ConversationType string `json:"conversation_type"`
+	IsActive         bool   `json:"is_active"`
+	Name             string `json:"name"`
+	Avatar           string `json:"avatar"`
+	CreatorId        int64  `json:"creator_id"`
+	CreatedAt        int64  `json:"created_at"`
 }
 
 type UserInfo struct {

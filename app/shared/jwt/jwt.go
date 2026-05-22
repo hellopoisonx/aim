@@ -22,18 +22,28 @@ type Claims struct {
 // Manager handles JWT token operations
 type Manager struct {
 	secretKey []byte
+	accessTTL time.Duration
 }
 
 // NewManager creates a new JWT Manager
 func NewManager(secretKey string) *Manager {
 	return &Manager{
 		secretKey: []byte(secretKey),
+		accessTTL: AccessTokenTTL,
+	}
+}
+
+// NewManagerWithTTL creates a new JWT Manager with a custom access token TTL.
+func NewManagerWithTTL(secretKey string, ttl time.Duration) *Manager {
+	return &Manager{
+		secretKey: []byte(secretKey),
+		accessTTL: ttl,
 	}
 }
 
 // GenerateAccessToken generates a new JWT access token
 func (m *Manager) GenerateAccessToken(userID int64, deviceID string) (string, int64, error) {
-	expiresAt := time.Now().Add(AccessTokenTTL)
+	expiresAt := time.Now().Add(m.accessTTL)
 	claims := &Claims{
 		UserID:   userID,
 		DeviceID: deviceID,

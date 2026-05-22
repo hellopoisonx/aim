@@ -48,6 +48,7 @@ func (l *CreateConversationLogic) CreateConversation(req *types.CreateConversati
 		ConversationType: req.ConversationType,
 		CreatorId:        identity.UserID,
 		MemberIds:        req.MemberIds,
+		Name:             req.Name,
 	})
 	if err != nil {
 		return nil, sanitizeLogicRPCError(l, "create conversation", err)
@@ -69,6 +70,9 @@ func (l *CreateConversationLogic) CreateConversation(req *types.CreateConversati
 		IsActive:         conv.GetIsActive(),
 		CreatedAt:        conv.GetCreatedAt(),
 		MemberIds:        memberIDs,
+		Name:             conv.GetName(),
+		Avatar:           conv.GetAvatar(),
+		CreatorId:        conv.GetCreatorId(),
 	}, nil
 }
 

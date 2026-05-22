@@ -82,3 +82,56 @@ message TransferResp {
 - go-zero OTel/Jaeger：`app/core/rpc/etc/core.yaml` 的 `Telemetry` 块使用 `Name: core.rpc`、`Batcher: otlphttp`、`Endpoint: jaeger:4318`、`OtlpHttpPath: /v1/traces`，由 `zrpc.RpcServerConf` 自动接入 RPC tracing。
 - 配置加载测试：`app/core/rpc/internal/config/config_test.go` 覆盖 `Telemetry`、`CacheRedis`、Kafka producer 和 Nacos client 配置。
 - Kafka tracing：`TransferLogic` 发布到 `aim-message-transfer` 的 JSON payload 包含 `traceparent`/`tracestate`；`DeliveryConsumer` 恢复 trace context 并创建 `core.kafka.delivery.consume` consumer span，然后用恢复后的 context 调用 GatewayService。
+
+## ConversationEventConsumer
+
+### 概述
+
+`ConversationEventConsumer` 消费 `aim.conversation.events` topic，将 logic 生产的群变更系统消息推送给 Gateway，再由 Gateway 通过 WebSocket 推送给客户端。
+
+实现位置：`app/core/rpc/internal/mqs/conversation_event_consumer.go`。
+
+### 事件格式
+
+```json
+{
+  "traceparent": "00-...",
+  "tracestate": "",
+  "message_id": 123,
+  "conversation_id": 456,
+  "sender_id": 0,
+  "message_type": "system",
+  "content": "{\"event\":\"member_removed\",...}",
+  "target_user_ids": [101, 102, 103],
+  "timestamp": 1234567890
+}
+```
+
+### 处理流程
+
+1. 反序列化 Kafka value 为 `conversationEvent`
+2. 恢复 W3C trace context（`traceparent`/`tracestate`）
+3. 创建 `core.kafka.conversation_event.consume` consumer span
+4. 遍历 `target_user_ids`，对每个用户调用 `GatewayClient.PushMessage`（`is_system=true`）
+5. 任一推送失败记录 `span.RecordError` 并返回错误
+
+### 配置
+
+`app/core/rpc/internal/config/config.go` 新增：
+
+```go
+type Config struct {
+    // ... 现有字段 ...
+    ConversationEventConsumerConf kq.KqConf `json:",optional"`
+}
+```
+
+`app/core/rpc/internal/mqs/consumers.go` 条件注册：仅当 `ConversationEventConsumerConf` 配置了 Brokers 和 Topic 时才启动 consumer。
+
+core.yaml 需添加对应的 Kafka consumer 配置块。
+
+### 关键设计决策
+
+- logic 在事务内预先计算 `target_user_ids`，core 无需再次查询成员列表，避免二次 DB 查询
+- `sender_id=0`、`message_type=system` 标识系统消息，前端可据此区分展示
+- 推送失败不重试，依赖客户端拉取历史时可见（消息已持久化到 DB）

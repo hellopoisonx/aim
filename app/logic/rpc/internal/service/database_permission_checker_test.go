@@ -17,7 +17,7 @@ import (
 // --- Fake querier ---
 
 type fakeQuerier struct {
-	conversations    map[int64]model.Conversation
+	conversations    map[int64]model.GetConversationRow
 	members          map[string]model.GetMemberRow // key: "convID:userID"
 	friendships      map[string][]model.GetFriendshipBidirectionalRow
 	messageCounts    map[int64]int64
@@ -26,14 +26,14 @@ type fakeQuerier struct {
 	getFriendshipErr error
 }
 
-func (f *fakeQuerier) GetConversation(ctx context.Context, id int64) (model.Conversation, error) {
+func (f *fakeQuerier) GetConversation(ctx context.Context, id int64) (model.GetConversationRow, error) {
 	if f.getConvErr != nil {
-		return model.Conversation{}, f.getConvErr
+		return model.GetConversationRow{}, f.getConvErr
 	}
 
 	conv, ok := f.conversations[id]
 	if !ok {
-		return model.Conversation{}, pgx.ErrNoRows
+		return model.GetConversationRow{}, pgx.ErrNoRows
 	}
 
 	return conv, nil
@@ -113,19 +113,19 @@ func (f *fakeQuerier) SearchUserInfoByNickname(ctx context.Context, arg model.Se
 	return nil, nil
 }
 
-func (f *fakeQuerier) CreateConversation(ctx context.Context, arg model.CreateConversationParams) (model.Conversation, error) {
-	return model.Conversation{}, nil
+func (f *fakeQuerier) CreateConversation(ctx context.Context, arg model.CreateConversationParams) (model.CreateConversationRow, error) {
+	return model.CreateConversationRow{}, nil
 }
 
 func (f *fakeQuerier) AddConversationMembers(ctx context.Context, arg model.AddConversationMembersParams) (int64, error) {
 	return 0, nil
 }
 
-func (f *fakeQuerier) GetConversationMembers(ctx context.Context, conversationID int64) ([]model.ConversationMember, error) {
+func (f *fakeQuerier) GetConversationMembers(ctx context.Context, conversationID int64) ([]model.GetConversationMembersRow, error) {
 	return nil, nil
 }
 
-func (f *fakeQuerier) GetConversationsByUserID(ctx context.Context, userID int64) ([]model.Conversation, error) {
+func (f *fakeQuerier) GetConversationsByUserID(ctx context.Context, userID int64) ([]model.GetConversationsByUserIDRow, error) {
 	return nil, nil
 }
 
@@ -149,9 +149,37 @@ func (f *fakeQuerier) CountMessagesByConversation(ctx context.Context, conversat
 	return f.messageCounts[conversationID], nil
 }
 
-func (f *fakeQuerier) GetDirectConversationByMembers(ctx context.Context, arg model.GetDirectConversationByMembersParams) (model.Conversation, error) {
+func (f *fakeQuerier) AddConversationMemberWithRole(ctx context.Context, arg model.AddConversationMemberWithRoleParams) (int64, error) {
+	return 0, nil
+}
+
+func (f *fakeQuerier) RemoveConversationMembers(ctx context.Context, arg model.RemoveConversationMembersParams) (int64, error) {
+	return 0, nil
+}
+
+func (f *fakeQuerier) UpdateConversation(ctx context.Context, arg model.UpdateConversationParams) error {
+	return nil
+}
+
+func (f *fakeQuerier) DeactivateConversation(ctx context.Context, id int64) error {
+	return nil
+}
+
+func (f *fakeQuerier) GetConversationCreator(ctx context.Context, id int64) (int64, error) {
+	return 0, nil
+}
+
+func (f *fakeQuerier) IsConversationMember(ctx context.Context, arg model.IsConversationMemberParams) (bool, error) {
+	return false, nil
+}
+
+func (f *fakeQuerier) GetConversationMembersDetail(ctx context.Context, conversationID int64) ([]model.GetConversationMembersDetailRow, error) {
+	return nil, nil
+}
+
+func (f *fakeQuerier) GetDirectConversationByMembers(ctx context.Context, arg model.GetDirectConversationByMembersParams) (model.GetDirectConversationByMembersRow, error) {
 	if f.getConvErr != nil {
-		return model.Conversation{}, f.getConvErr
+		return model.GetDirectConversationByMembersRow{}, f.getConvErr
 	}
 	for _, conv := range f.conversations {
 		if conv.ConversationType != "direct" || !conv.IsActive {
@@ -161,11 +189,19 @@ func (f *fakeQuerier) GetDirectConversationByMembers(ctx context.Context, arg mo
 		key2 := convUserKey(conv.ID, arg.UserID_2)
 		if _, ok1 := f.members[key1]; ok1 {
 			if _, ok2 := f.members[key2]; ok2 {
-				return conv, nil
+				return model.GetDirectConversationByMembersRow{
+					ID:               conv.ID,
+					ConversationType: conv.ConversationType,
+					IsActive:         conv.IsActive,
+					Name:             conv.Name,
+					Avatar:           conv.Avatar,
+					CreatorID:        conv.CreatorID,
+					CreatedAt:        conv.CreatedAt,
+				}, nil
 			}
 		}
 	}
-	return model.Conversation{}, pgx.ErrNoRows
+	return model.GetDirectConversationByMembersRow{}, pgx.ErrNoRows
 }
 
 func convUserKey(convID, userID int64) string {
@@ -188,7 +224,7 @@ func newFutureTime() pgtype.Timestamptz {
 
 func TestDatabasePermissionChecker_GroupMember(t *testing.T) {
 	fq := &fakeQuerier{
-		conversations: map[int64]model.Conversation{
+		conversations: map[int64]model.GetConversationRow{
 			1: {ID: 1, ConversationType: "group", IsActive: true},
 		},
 		members: map[string]model.GetMemberRow{
@@ -210,7 +246,7 @@ func TestDatabasePermissionChecker_GroupMember(t *testing.T) {
 
 func TestDatabasePermissionChecker_GroupNotMember(t *testing.T) {
 	fq := &fakeQuerier{
-		conversations: map[int64]model.Conversation{
+		conversations: map[int64]model.GetConversationRow{
 			1: {ID: 1, ConversationType: "group", IsActive: true},
 		},
 		members:     map[string]model.GetMemberRow{},
@@ -231,7 +267,7 @@ func TestDatabasePermissionChecker_GroupNotMember(t *testing.T) {
 
 func TestDatabasePermissionChecker_GroupMuted(t *testing.T) {
 	fq := &fakeQuerier{
-		conversations: map[int64]model.Conversation{
+		conversations: map[int64]model.GetConversationRow{
 			1: {ID: 1, ConversationType: "group", IsActive: true},
 		},
 		members: map[string]model.GetMemberRow{
@@ -254,7 +290,7 @@ func TestDatabasePermissionChecker_GroupMuted(t *testing.T) {
 
 func TestDatabasePermissionChecker_GroupMuteExpired(t *testing.T) {
 	fq := &fakeQuerier{
-		conversations: map[int64]model.Conversation{
+		conversations: map[int64]model.GetConversationRow{
 			1: {ID: 1, ConversationType: "group", IsActive: true},
 		},
 		members: map[string]model.GetMemberRow{
@@ -276,7 +312,7 @@ func TestDatabasePermissionChecker_GroupMuteExpired(t *testing.T) {
 
 func TestDatabasePermissionChecker_GroupMuteNotExpired(t *testing.T) {
 	fq := &fakeQuerier{
-		conversations: map[int64]model.Conversation{
+		conversations: map[int64]model.GetConversationRow{
 			1: {ID: 1, ConversationType: "group", IsActive: true},
 		},
 		members: map[string]model.GetMemberRow{
@@ -299,7 +335,7 @@ func TestDatabasePermissionChecker_GroupMuteNotExpired(t *testing.T) {
 
 func TestDatabasePermissionChecker_DirectFriend(t *testing.T) {
 	fq := &fakeQuerier{
-		conversations: map[int64]model.Conversation{
+		conversations: map[int64]model.GetConversationRow{
 			200: {ID: 200, ConversationType: "direct", IsActive: true},
 		},
 		members: map[string]model.GetMemberRow{},
@@ -323,7 +359,7 @@ func TestDatabasePermissionChecker_DirectFriend(t *testing.T) {
 
 func TestDatabasePermissionChecker_DirectNotFriendUsesTemporaryConversation(t *testing.T) {
 	fq := &fakeQuerier{
-		conversations: map[int64]model.Conversation{
+		conversations: map[int64]model.GetConversationRow{
 			200: {ID: 200, ConversationType: "direct", IsActive: true},
 		},
 		members: map[string]model.GetMemberRow{},
@@ -349,7 +385,7 @@ func TestDatabasePermissionChecker_DirectNotFriendUsesTemporaryConversation(t *t
 
 func TestDatabasePermissionChecker_DirectTemporaryConversationLimitReached(t *testing.T) {
 	fq := &fakeQuerier{
-		conversations: map[int64]model.Conversation{
+		conversations: map[int64]model.GetConversationRow{
 			200: {ID: 200, ConversationType: "direct", IsActive: true},
 		},
 		members: map[string]model.GetMemberRow{},
@@ -375,7 +411,7 @@ func TestDatabasePermissionChecker_DirectTemporaryConversationLimitReached(t *te
 
 func TestDatabasePermissionChecker_DirectTemporaryConversationCustomLimit(t *testing.T) {
 	fq := &fakeQuerier{
-		conversations: map[int64]model.Conversation{
+		conversations: map[int64]model.GetConversationRow{
 			200: {ID: 200, ConversationType: "direct", IsActive: true},
 		},
 		members: map[string]model.GetMemberRow{},
@@ -416,7 +452,7 @@ func TestDatabasePermissionChecker_DirectTemporaryConversationCustomLimit(t *tes
 
 func TestDatabasePermissionChecker_DirectBlocked(t *testing.T) {
 	fq := &fakeQuerier{
-		conversations: map[int64]model.Conversation{
+		conversations: map[int64]model.GetConversationRow{
 			200: {ID: 200, ConversationType: "direct", IsActive: true},
 		},
 		members: map[string]model.GetMemberRow{},
@@ -441,7 +477,7 @@ func TestDatabasePermissionChecker_DirectBlocked(t *testing.T) {
 
 func TestDatabasePermissionChecker_ConversationNotFound(t *testing.T) {
 	fq := &fakeQuerier{
-		conversations: map[int64]model.Conversation{},
+		conversations: map[int64]model.GetConversationRow{},
 		members:       map[string]model.GetMemberRow{},
 		friendships:   map[string][]model.GetFriendshipBidirectionalRow{},
 	}
@@ -460,7 +496,7 @@ func TestDatabasePermissionChecker_ConversationNotFound(t *testing.T) {
 
 func TestDatabasePermissionChecker_ConversationInactive(t *testing.T) {
 	fq := &fakeQuerier{
-		conversations: map[int64]model.Conversation{
+		conversations: map[int64]model.GetConversationRow{
 			1: {ID: 1, ConversationType: "group", IsActive: false},
 		},
 		members:     map[string]model.GetMemberRow{},
@@ -481,7 +517,7 @@ func TestDatabasePermissionChecker_ConversationInactive(t *testing.T) {
 
 func TestDatabasePermissionChecker_DBError(t *testing.T) {
 	fq := &fakeQuerier{
-		conversations: map[int64]model.Conversation{},
+		conversations: map[int64]model.GetConversationRow{},
 		members:       map[string]model.GetMemberRow{},
 		friendships:   map[string][]model.GetFriendshipBidirectionalRow{},
 		getConvErr:    errors.New("database connection error"),
@@ -500,7 +536,7 @@ func TestDatabasePermissionChecker_DBError(t *testing.T) {
 
 func TestDatabasePermissionChecker_DirectBidirectionalFriendship(t *testing.T) {
 	fq := &fakeQuerier{
-		conversations: map[int64]model.Conversation{
+		conversations: map[int64]model.GetConversationRow{
 			200: {ID: 200, ConversationType: "direct", IsActive: true},
 		},
 		members: map[string]model.GetMemberRow{},

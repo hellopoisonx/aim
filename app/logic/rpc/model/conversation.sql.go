@@ -7,7 +7,28 @@ package model
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
+
+const addConversationMemberWithRole = `-- name: AddConversationMemberWithRole :execrows
+INSERT INTO conversation_members (conversation_id, user_id, role)
+VALUES ($1, $2, $3)
+`
+
+type AddConversationMemberWithRoleParams struct {
+	ConversationID int64  `json:"conversation_id"`
+	UserID         int64  `json:"user_id"`
+	Role           string `json:"role"`
+}
+
+func (q *Queries) AddConversationMemberWithRole(ctx context.Context, arg AddConversationMemberWithRoleParams) (int64, error) {
+	result, err := q.db.Exec(ctx, addConversationMemberWithRole, arg.ConversationID, arg.UserID, arg.Role)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
 
 const addConversationMembers = `-- name: AddConversationMembers :execrows
 INSERT INTO conversation_members (conversation_id, user_id)
@@ -28,66 +49,172 @@ func (q *Queries) AddConversationMembers(ctx context.Context, arg AddConversatio
 }
 
 const createConversation = `-- name: CreateConversation :one
-INSERT INTO conversations (id, conversation_type, is_active)
-VALUES ($1, $2, true)
-RETURNING id, conversation_type, is_active, created_at
+INSERT INTO conversations (id, conversation_type, name, avatar, creator_id, is_active)
+VALUES ($1, $2, $3, $4, $5, true)
+RETURNING id, conversation_type, is_active, name, avatar, creator_id, created_at
 `
 
 type CreateConversationParams struct {
 	ID               int64  `json:"id"`
 	ConversationType string `json:"conversation_type"`
+	Name             string `json:"name"`
+	Avatar           string `json:"avatar"`
+	CreatorID        int64  `json:"creator_id"`
 }
 
-func (q *Queries) CreateConversation(ctx context.Context, arg CreateConversationParams) (Conversation, error) {
-	row := q.db.QueryRow(ctx, createConversation, arg.ID, arg.ConversationType)
-	var i Conversation
+type CreateConversationRow struct {
+	ID               int64              `json:"id"`
+	ConversationType string             `json:"conversation_type"`
+	IsActive         bool               `json:"is_active"`
+	Name             string             `json:"name"`
+	Avatar           string             `json:"avatar"`
+	CreatorID        int64              `json:"creator_id"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+}
+
+func (q *Queries) CreateConversation(ctx context.Context, arg CreateConversationParams) (CreateConversationRow, error) {
+	row := q.db.QueryRow(ctx, createConversation,
+		arg.ID,
+		arg.ConversationType,
+		arg.Name,
+		arg.Avatar,
+		arg.CreatorID,
+	)
+	var i CreateConversationRow
 	err := row.Scan(
 		&i.ID,
 		&i.ConversationType,
 		&i.IsActive,
+		&i.Name,
+		&i.Avatar,
+		&i.CreatorID,
 		&i.CreatedAt,
 	)
 	return i, err
 }
 
+const deactivateConversation = `-- name: DeactivateConversation :exec
+UPDATE conversations SET is_active = false WHERE id = $1
+`
+
+func (q *Queries) DeactivateConversation(ctx context.Context, id int64) error {
+	_, err := q.db.Exec(ctx, deactivateConversation, id)
+	return err
+}
+
 const getConversation = `-- name: GetConversation :one
-SELECT id, conversation_type, is_active, created_at
+SELECT id, conversation_type, is_active, name, avatar, creator_id, created_at
 FROM conversations
 WHERE id = $1
 `
 
-func (q *Queries) GetConversation(ctx context.Context, id int64) (Conversation, error) {
+type GetConversationRow struct {
+	ID               int64              `json:"id"`
+	ConversationType string             `json:"conversation_type"`
+	IsActive         bool               `json:"is_active"`
+	Name             string             `json:"name"`
+	Avatar           string             `json:"avatar"`
+	CreatorID        int64              `json:"creator_id"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+}
+
+func (q *Queries) GetConversation(ctx context.Context, id int64) (GetConversationRow, error) {
 	row := q.db.QueryRow(ctx, getConversation, id)
-	var i Conversation
+	var i GetConversationRow
 	err := row.Scan(
 		&i.ID,
 		&i.ConversationType,
 		&i.IsActive,
+		&i.Name,
+		&i.Avatar,
+		&i.CreatorID,
 		&i.CreatedAt,
 	)
 	return i, err
 }
 
+const getConversationCreator = `-- name: GetConversationCreator :one
+SELECT creator_id FROM conversations WHERE id = $1
+`
+
+func (q *Queries) GetConversationCreator(ctx context.Context, id int64) (int64, error) {
+	row := q.db.QueryRow(ctx, getConversationCreator, id)
+	var creator_id int64
+	err := row.Scan(&creator_id)
+	return creator_id, err
+}
+
 const getConversationMembers = `-- name: GetConversationMembers :many
-SELECT conversation_id, user_id, is_muted, muted_until, joined_at
+SELECT conversation_id, user_id, is_muted, muted_until, role, joined_at
 FROM conversation_members
 WHERE conversation_id = $1
 `
 
-func (q *Queries) GetConversationMembers(ctx context.Context, conversationID int64) ([]ConversationMember, error) {
+type GetConversationMembersRow struct {
+	ConversationID int64              `json:"conversation_id"`
+	UserID         int64              `json:"user_id"`
+	IsMuted        bool               `json:"is_muted"`
+	MutedUntil     pgtype.Timestamptz `json:"muted_until"`
+	Role           string             `json:"role"`
+	JoinedAt       pgtype.Timestamptz `json:"joined_at"`
+}
+
+func (q *Queries) GetConversationMembers(ctx context.Context, conversationID int64) ([]GetConversationMembersRow, error) {
 	rows, err := q.db.Query(ctx, getConversationMembers, conversationID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []ConversationMember{}
+	items := []GetConversationMembersRow{}
 	for rows.Next() {
-		var i ConversationMember
+		var i GetConversationMembersRow
 		if err := rows.Scan(
 			&i.ConversationID,
 			&i.UserID,
 			&i.IsMuted,
 			&i.MutedUntil,
+			&i.Role,
+			&i.JoinedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getConversationMembersDetail = `-- name: GetConversationMembersDetail :many
+SELECT cm.user_id, ui.email, ui.avatar, cm.role, cm.joined_at
+FROM conversation_members cm
+JOIN user_info ui ON cm.user_id = ui.id
+WHERE cm.conversation_id = $1
+`
+
+type GetConversationMembersDetailRow struct {
+	UserID   int64              `json:"user_id"`
+	Email    string             `json:"email"`
+	Avatar   string             `json:"avatar"`
+	Role     string             `json:"role"`
+	JoinedAt pgtype.Timestamptz `json:"joined_at"`
+}
+
+func (q *Queries) GetConversationMembersDetail(ctx context.Context, conversationID int64) ([]GetConversationMembersDetailRow, error) {
+	rows, err := q.db.Query(ctx, getConversationMembersDetail, conversationID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetConversationMembersDetailRow{}
+	for rows.Next() {
+		var i GetConversationMembersDetailRow
+		if err := rows.Scan(
+			&i.UserID,
+			&i.Email,
+			&i.Avatar,
+			&i.Role,
 			&i.JoinedAt,
 		); err != nil {
 			return nil, err
@@ -101,26 +228,39 @@ func (q *Queries) GetConversationMembers(ctx context.Context, conversationID int
 }
 
 const getConversationsByUserID = `-- name: GetConversationsByUserID :many
-SELECT c.id, c.conversation_type, c.is_active, c.created_at
+SELECT c.id, c.conversation_type, c.is_active, c.name, c.avatar, c.creator_id, c.created_at
 FROM conversations c
 INNER JOIN conversation_members cm ON c.id = cm.conversation_id
 WHERE cm.user_id = $1
 ORDER BY c.created_at DESC
 `
 
-func (q *Queries) GetConversationsByUserID(ctx context.Context, userID int64) ([]Conversation, error) {
+type GetConversationsByUserIDRow struct {
+	ID               int64              `json:"id"`
+	ConversationType string             `json:"conversation_type"`
+	IsActive         bool               `json:"is_active"`
+	Name             string             `json:"name"`
+	Avatar           string             `json:"avatar"`
+	CreatorID        int64              `json:"creator_id"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+}
+
+func (q *Queries) GetConversationsByUserID(ctx context.Context, userID int64) ([]GetConversationsByUserIDRow, error) {
 	rows, err := q.db.Query(ctx, getConversationsByUserID, userID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []Conversation{}
+	items := []GetConversationsByUserIDRow{}
 	for rows.Next() {
-		var i Conversation
+		var i GetConversationsByUserIDRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.ConversationType,
 			&i.IsActive,
+			&i.Name,
+			&i.Avatar,
+			&i.CreatorID,
 			&i.CreatedAt,
 		); err != nil {
 			return nil, err
@@ -134,7 +274,7 @@ func (q *Queries) GetConversationsByUserID(ctx context.Context, userID int64) ([
 }
 
 const getDirectConversationByMembers = `-- name: GetDirectConversationByMembers :one
-SELECT c.id, c.conversation_type, c.is_active, c.created_at
+SELECT c.id, c.conversation_type, c.is_active, c.name, c.avatar, c.creator_id, c.created_at
 FROM conversations c
 WHERE c.conversation_type = 'direct'
   AND c.is_active = true
@@ -152,14 +292,82 @@ type GetDirectConversationByMembersParams struct {
 	UserID_2 int64 `json:"user_id_2"`
 }
 
-func (q *Queries) GetDirectConversationByMembers(ctx context.Context, arg GetDirectConversationByMembersParams) (Conversation, error) {
+type GetDirectConversationByMembersRow struct {
+	ID               int64              `json:"id"`
+	ConversationType string             `json:"conversation_type"`
+	IsActive         bool               `json:"is_active"`
+	Name             string             `json:"name"`
+	Avatar           string             `json:"avatar"`
+	CreatorID        int64              `json:"creator_id"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+}
+
+func (q *Queries) GetDirectConversationByMembers(ctx context.Context, arg GetDirectConversationByMembersParams) (GetDirectConversationByMembersRow, error) {
 	row := q.db.QueryRow(ctx, getDirectConversationByMembers, arg.UserID, arg.UserID_2)
-	var i Conversation
+	var i GetDirectConversationByMembersRow
 	err := row.Scan(
 		&i.ID,
 		&i.ConversationType,
 		&i.IsActive,
+		&i.Name,
+		&i.Avatar,
+		&i.CreatorID,
 		&i.CreatedAt,
 	)
 	return i, err
+}
+
+const isConversationMember = `-- name: IsConversationMember :one
+SELECT EXISTS(
+    SELECT 1 FROM conversation_members
+    WHERE conversation_id = $1 AND user_id = $2
+)
+`
+
+type IsConversationMemberParams struct {
+	ConversationID int64 `json:"conversation_id"`
+	UserID         int64 `json:"user_id"`
+}
+
+func (q *Queries) IsConversationMember(ctx context.Context, arg IsConversationMemberParams) (bool, error) {
+	row := q.db.QueryRow(ctx, isConversationMember, arg.ConversationID, arg.UserID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
+const removeConversationMembers = `-- name: RemoveConversationMembers :execrows
+DELETE FROM conversation_members
+WHERE conversation_id = $1 AND user_id = ANY($2::bigint[])
+`
+
+type RemoveConversationMembersParams struct {
+	ConversationID int64   `json:"conversation_id"`
+	Column2        []int64 `json:"column_2"`
+}
+
+func (q *Queries) RemoveConversationMembers(ctx context.Context, arg RemoveConversationMembersParams) (int64, error) {
+	result, err := q.db.Exec(ctx, removeConversationMembers, arg.ConversationID, arg.Column2)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const updateConversation = `-- name: UpdateConversation :exec
+UPDATE conversations
+SET name = COALESCE($2, name),
+    avatar = COALESCE($3, avatar)
+WHERE id = $1
+`
+
+type UpdateConversationParams struct {
+	ID     int64   `json:"id"`
+	Name   *string `json:"name"`
+	Avatar *string `json:"avatar"`
+}
+
+func (q *Queries) UpdateConversation(ctx context.Context, arg UpdateConversationParams) error {
+	_, err := q.db.Exec(ctx, updateConversation, arg.ID, arg.Name, arg.Avatar)
+	return err
 }

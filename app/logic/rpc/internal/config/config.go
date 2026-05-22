@@ -10,14 +10,20 @@ import (
 
 type Config struct {
 	zrpc.RpcServerConf
-	Nacos                   nacos.Config
-	Postgres                PostgresConf `json:",optional"`
-	KqConsumerConf          kq.KqConf    `json:",optional"`
-	UserCreatedConsumerConf kq.KqConf    `json:",optional"`
-	CacheRedis              RedisConf    `json:",optional"`
-	Quota                   QuotaConf    `json:",optional"`
-	Dev                     DevConf      `json:",optional"`
-	MachineID               int64        `json:",default=1"`
+	Nacos                         nacos.Config `json:",optional"`
+	Postgres                      PostgresConf `json:",optional"`
+	KqConsumerConf                kq.KqConf    `json:",optional"`
+	UserCreatedConsumerConf       kq.KqConf    `json:",optional"`
+	ConversationEventProducerConf KqPusherConf `json:",optional"`
+	CacheRedis                    RedisConf    `json:",optional"`
+	Quota                         QuotaConf    `json:",optional"`
+	Dev                           DevConf      `json:",optional"`
+	MachineID                     int64        `json:",default=1"`
+}
+
+type KqPusherConf struct {
+	Brokers []string `json:",optional"`
+	Topic   string   `json:",optional"`
 }
 
 type PostgresConf struct {

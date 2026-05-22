@@ -13,6 +13,9 @@ type Conversation struct {
 	ConversationType string             `json:"conversation_type"`
 	IsActive         bool               `json:"is_active"`
 	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	Name             string             `json:"name"`
+	Avatar           string             `json:"avatar"`
+	CreatorID        int64              `json:"creator_id"`
 }
 
 type ConversationMember struct {
@@ -21,6 +24,7 @@ type ConversationMember struct {
 	IsMuted        bool               `json:"is_muted"`
 	MutedUntil     pgtype.Timestamptz `json:"muted_until"`
 	JoinedAt       pgtype.Timestamptz `json:"joined_at"`
+	Role           string             `json:"role"`
 }
 
 type Friendship struct {

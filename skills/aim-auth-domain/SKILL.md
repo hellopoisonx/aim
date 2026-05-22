@@ -17,4 +17,5 @@ description: aim 的认证域。对应 `auth` 模块。
 
 ## 最近变更
 
+- 2026-05-22: 修复 `JWTIssuer` 静默忽略配置 TTL 的 Bug。`JWTIssuer` 现在存储并传递 `AccessTTL` 给 `sharedjwt.NewManagerWithTTL()`，`GenerateAccessToken` 不再硬编码 5min。`shared/jwt` 新增 `NewManagerWithTTL` 和 `Manager.accessTTL` 字段。详见 `aim-ws-token-management` skill。
 - 2026-05-19: 接入 RPC 统一错误拦截器，清洗非业务错误并记录追踪事件。

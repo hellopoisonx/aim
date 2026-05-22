@@ -23,26 +23,52 @@ func NewConversationServiceServer(svcCtx *svc.ServiceContext) *ConversationServi
 	}
 }
 
-// CreateConversation creates a new conversation (direct or group).
 func (s *ConversationServiceServer) CreateConversation(ctx context.Context, in *pb.CreateConversationReq) (*pb.CreateConversationResp, error) {
 	l := conversationservicelogic.NewCreateConversationLogic(ctx, s.svcCtx)
 	return l.CreateConversation(in)
 }
 
-// GetConversationHistory retrieves message history for a conversation with cursor-based pagination.
 func (s *ConversationServiceServer) GetConversationHistory(ctx context.Context, in *pb.GetConversationHistoryReq) (*pb.GetConversationHistoryResp, error) {
 	l := conversationservicelogic.NewGetConversationHistoryLogic(ctx, s.svcCtx)
 	return l.GetConversationHistory(in)
 }
 
-// GetConversationMembers retrieves the member IDs for a conversation.
 func (s *ConversationServiceServer) GetConversationMembers(ctx context.Context, in *pb.GetConversationMembersReq) (*pb.GetConversationMembersResp, error) {
 	l := conversationservicelogic.NewGetConversationMembersLogic(ctx, s.svcCtx)
 	return l.GetConversationMembers(in)
 }
 
-// GetUserConversations retrieves all conversations the user is a member of.
 func (s *ConversationServiceServer) GetUserConversations(ctx context.Context, in *pb.GetUserConversationsReq) (*pb.GetUserConversationsResp, error) {
 	l := conversationservicelogic.NewGetUserConversationsLogic(ctx, s.svcCtx)
 	return l.GetUserConversations(in)
+}
+
+func (s *ConversationServiceServer) AddGroupMembers(ctx context.Context, in *pb.AddGroupMembersReq) (*pb.AddGroupMembersResp, error) {
+	l := conversationservicelogic.NewAddGroupMembersLogic(ctx, s.svcCtx)
+	return l.AddGroupMembers(in)
+}
+
+func (s *ConversationServiceServer) RemoveGroupMembers(ctx context.Context, in *pb.RemoveGroupMembersReq) (*pb.RemoveGroupMembersResp, error) {
+	l := conversationservicelogic.NewRemoveGroupMembersLogic(ctx, s.svcCtx)
+	return l.RemoveGroupMembers(in)
+}
+
+func (s *ConversationServiceServer) LeaveGroup(ctx context.Context, in *pb.LeaveGroupReq) (*pb.LeaveGroupResp, error) {
+	l := conversationservicelogic.NewLeaveGroupLogic(ctx, s.svcCtx)
+	return l.LeaveGroup(in)
+}
+
+func (s *ConversationServiceServer) DismissGroup(ctx context.Context, in *pb.DismissGroupReq) (*pb.DismissGroupResp, error) {
+	l := conversationservicelogic.NewDismissGroupLogic(ctx, s.svcCtx)
+	return l.DismissGroup(in)
+}
+
+func (s *ConversationServiceServer) UpdateGroupInfo(ctx context.Context, in *pb.UpdateGroupInfoReq) (*pb.UpdateGroupInfoResp, error) {
+	l := conversationservicelogic.NewUpdateGroupInfoLogic(ctx, s.svcCtx)
+	return l.UpdateGroupInfo(in)
+}
+
+func (s *ConversationServiceServer) GetConversationMembersDetail(ctx context.Context, in *pb.GetConversationMembersDetailReq) (*pb.GetConversationMembersDetailResp, error) {
+	l := conversationservicelogic.NewGetConversationMembersDetailLogic(ctx, s.svcCtx)
+	return l.GetConversationMembersDetail(in)
 }

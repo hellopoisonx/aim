@@ -114,28 +114,34 @@ message SearchUserInfoByNicknameResp {
 // ConversationService messages
 
 service ConversationService {
-  // CreateConversation creates a new conversation (direct or group).
   rpc CreateConversation(CreateConversationReq) returns (CreateConversationResp);
-  // GetConversationHistory retrieves message history for a conversation with cursor-based pagination.
   rpc GetConversationHistory(GetConversationHistoryReq) returns (GetConversationHistoryResp);
-  // GetConversationMembers retrieves the member IDs for a conversation.
   rpc GetConversationMembers(GetConversationMembersReq) returns (GetConversationMembersResp);
-  // GetUserConversations retrieves all conversations the user is a member of.
   rpc GetUserConversations(GetUserConversationsReq) returns (GetUserConversationsResp);
+  rpc AddGroupMembers(AddGroupMembersReq) returns (AddGroupMembersResp);
+  rpc RemoveGroupMembers(RemoveGroupMembersReq) returns (RemoveGroupMembersResp);
+  rpc LeaveGroup(LeaveGroupReq) returns (LeaveGroupResp);
+  rpc DismissGroup(DismissGroupReq) returns (DismissGroupResp);
+  rpc UpdateGroupInfo(UpdateGroupInfoReq) returns (UpdateGroupInfoResp);
+  rpc GetConversationMembersDetail(GetConversationMembersDetailReq) returns (GetConversationMembersDetailResp);
 }
 
 message CreateConversationReq {
-  string conversation_type = 1; // "direct" or "group"
+  string conversation_type = 1;
   int64 creator_id = 2;
   repeated int64 member_ids = 3;
+  string name = 4;
 }
 
 message ConversationResponse {
   int64 id = 1;
   string conversation_type = 2;
   bool is_active = 3;
-  int64 created_at = 4; // unix timestamp in milliseconds
+  int64 created_at = 4;
   repeated int64 member_ids = 5;
+  string name = 6;
+  string avatar = 7;
+  int64 creator_id = 8;
 }
 
 message CreateConversationResp {
@@ -157,6 +163,69 @@ message GetUserConversationsReq {
 
 message GetUserConversationsResp {
   repeated ConversationResponse conversations = 1;
+}
+
+message AddGroupMembersReq {
+  int64 conversation_id = 1;
+  int64 operator_id = 2;
+  string operator_name = 3;
+  repeated int64 member_ids = 4;
+}
+
+message AddGroupMembersResp {
+  ConversationResponse conversation = 1;
+}
+
+message RemoveGroupMembersReq {
+  int64 conversation_id = 1;
+  int64 operator_id = 2;
+  string operator_name = 3;
+  repeated int64 member_ids = 4;
+}
+
+message RemoveGroupMembersResp {}
+
+message LeaveGroupReq {
+  int64 conversation_id = 1;
+  int64 user_id = 2;
+  string user_name = 3;
+}
+
+message LeaveGroupResp {}
+
+message DismissGroupReq {
+  int64 conversation_id = 1;
+  int64 operator_id = 2;
+}
+
+message DismissGroupResp {}
+
+message UpdateGroupInfoReq {
+  int64 conversation_id = 1;
+  int64 operator_id = 2;
+  string operator_name = 3;
+  optional string name = 4;
+  optional string avatar = 5;
+}
+
+message UpdateGroupInfoResp {
+  ConversationResponse conversation = 1;
+}
+
+message GetConversationMembersDetailReq {
+  int64 conversation_id = 1;
+}
+
+message MemberDetailItem {
+  int64 user_id = 1;
+  string email = 2;
+  string avatar = 3;
+  string role = 4;
+  int64 joined_at = 5;
+}
+
+message GetConversationMembersDetailResp {
+  repeated MemberDetailItem members = 1;
 }
 
 message GetConversationHistoryReq {

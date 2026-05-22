@@ -1,6 +1,3 @@
-// Code scaffolded by goctl. Safe to edit.
-// goctl 1.10.1
-
 package conversations
 
 import (
@@ -55,6 +52,9 @@ func (l *ListConversationsLogic) ListConversations() (resp *types.ListConversati
 			IsActive:         conv.GetIsActive(),
 			CreatedAt:        conv.GetCreatedAt(),
 			MemberIds:        conv.GetMemberIds(),
+			Name:             conv.GetName(),
+			Avatar:           conv.GetAvatar(),
+			CreatorId:        conv.GetCreatorId(),
 		})
 	}
 

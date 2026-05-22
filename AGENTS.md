@@ -47,6 +47,7 @@ aim/
 - aim-database-migration: 数据库迁移
 - aim-dev-tool: 开发测试工具
 - zero-skills: go-zero 框架
+- aim-ws-token-management: WebSocket 连接 Token 生命周期管理
 
 ## 约定
 

@@ -27,7 +27,7 @@ func TestGetUserConversationsLogic(t *testing.T) {
 	store.conversations[convID3] = newConv(convID3, "direct")
 	store.members[convID3] = newMember(convID3, 2, 4)
 
-	convSvc := service.NewConversationService(store, testSnowflake)
+	convSvc := service.NewConversationService(store, testSnowflake, nil, nil)
 	svcCtx := &svc.ServiceContext{
 		ConversationService: convSvc,
 	}
@@ -106,8 +106,8 @@ func TestGetUserConversationsLogic_NilService(t *testing.T) {
 
 // Helper functions updated for member creation
 
-func newConv(id int64, convType string) model.Conversation {
-	return model.Conversation{
+func newConv(id int64, convType string) model.GetConversationRow {
+	return model.GetConversationRow{
 		ID:               id,
 		ConversationType: convType,
 		IsActive:         true,
@@ -115,10 +115,10 @@ func newConv(id int64, convType string) model.Conversation {
 	}
 }
 
-func newMember(convID int64, userIDs ...int64) []model.ConversationMember {
-	members := make([]model.ConversationMember, len(userIDs))
+func newMember(convID int64, userIDs ...int64) []model.GetConversationMembersRow {
+	members := make([]model.GetConversationMembersRow, len(userIDs))
 	for i, uid := range userIDs {
-		members[i] = model.ConversationMember{
+		members[i] = model.GetConversationMembersRow{
 			ConversationID: convID,
 			UserID:         uid,
 			JoinedAt:       newTS(),

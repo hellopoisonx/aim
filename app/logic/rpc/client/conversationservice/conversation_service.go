@@ -14,24 +14,38 @@ import (
 )
 
 type (
-	CreateConversationReq       = pb.CreateConversationReq
-	CreateConversationResp      = pb.CreateConversationResp
-	GetConversationHistoryReq   = pb.GetConversationHistoryReq
-	GetConversationHistoryResp  = pb.GetConversationHistoryResp
-	GetConversationMembersReq   = pb.GetConversationMembersReq
-	GetConversationMembersResp  = pb.GetConversationMembersResp
-	GetUserConversationsReq     = pb.GetUserConversationsReq
-	GetUserConversationsResp    = pb.GetUserConversationsResp
+	AddGroupMembersReq               = pb.AddGroupMembersReq
+	AddGroupMembersResp              = pb.AddGroupMembersResp
+	CreateConversationReq            = pb.CreateConversationReq
+	CreateConversationResp           = pb.CreateConversationResp
+	DismissGroupReq                  = pb.DismissGroupReq
+	DismissGroupResp                 = pb.DismissGroupResp
+	GetConversationHistoryReq        = pb.GetConversationHistoryReq
+	GetConversationHistoryResp       = pb.GetConversationHistoryResp
+	GetConversationMembersDetailReq  = pb.GetConversationMembersDetailReq
+	GetConversationMembersDetailResp = pb.GetConversationMembersDetailResp
+	GetConversationMembersReq        = pb.GetConversationMembersReq
+	GetConversationMembersResp       = pb.GetConversationMembersResp
+	GetUserConversationsReq          = pb.GetUserConversationsReq
+	GetUserConversationsResp         = pb.GetUserConversationsResp
+	LeaveGroupReq                    = pb.LeaveGroupReq
+	LeaveGroupResp                   = pb.LeaveGroupResp
+	RemoveGroupMembersReq            = pb.RemoveGroupMembersReq
+	RemoveGroupMembersResp           = pb.RemoveGroupMembersResp
+	UpdateGroupInfoReq               = pb.UpdateGroupInfoReq
+	UpdateGroupInfoResp              = pb.UpdateGroupInfoResp
 
 	ConversationService interface {
-		// CreateConversation creates a new conversation (direct or group).
 		CreateConversation(ctx context.Context, in *CreateConversationReq, opts ...grpc.CallOption) (*CreateConversationResp, error)
-		// GetConversationHistory retrieves message history for a conversation with cursor-based pagination.
 		GetConversationHistory(ctx context.Context, in *GetConversationHistoryReq, opts ...grpc.CallOption) (*GetConversationHistoryResp, error)
-		// GetConversationMembers retrieves the member IDs for a conversation.
 		GetConversationMembers(ctx context.Context, in *GetConversationMembersReq, opts ...grpc.CallOption) (*GetConversationMembersResp, error)
-		// GetUserConversations retrieves all conversations the user is a member of.
 		GetUserConversations(ctx context.Context, in *GetUserConversationsReq, opts ...grpc.CallOption) (*GetUserConversationsResp, error)
+		AddGroupMembers(ctx context.Context, in *AddGroupMembersReq, opts ...grpc.CallOption) (*AddGroupMembersResp, error)
+		RemoveGroupMembers(ctx context.Context, in *RemoveGroupMembersReq, opts ...grpc.CallOption) (*RemoveGroupMembersResp, error)
+		LeaveGroup(ctx context.Context, in *LeaveGroupReq, opts ...grpc.CallOption) (*LeaveGroupResp, error)
+		DismissGroup(ctx context.Context, in *DismissGroupReq, opts ...grpc.CallOption) (*DismissGroupResp, error)
+		UpdateGroupInfo(ctx context.Context, in *UpdateGroupInfoReq, opts ...grpc.CallOption) (*UpdateGroupInfoResp, error)
+		GetConversationMembersDetail(ctx context.Context, in *GetConversationMembersDetailReq, opts ...grpc.CallOption) (*GetConversationMembersDetailResp, error)
 	}
 
 	defaultConversationService struct {
@@ -45,26 +59,52 @@ func NewConversationService(cli zrpc.Client) ConversationService {
 	}
 }
 
-// CreateConversation creates a new conversation (direct or group).
 func (m *defaultConversationService) CreateConversation(ctx context.Context, in *CreateConversationReq, opts ...grpc.CallOption) (*CreateConversationResp, error) {
 	client := pb.NewConversationServiceClient(m.cli.Conn())
 	return client.CreateConversation(ctx, in, opts...)
 }
 
-// GetConversationHistory retrieves message history for a conversation with cursor-based pagination.
 func (m *defaultConversationService) GetConversationHistory(ctx context.Context, in *GetConversationHistoryReq, opts ...grpc.CallOption) (*GetConversationHistoryResp, error) {
 	client := pb.NewConversationServiceClient(m.cli.Conn())
 	return client.GetConversationHistory(ctx, in, opts...)
 }
 
-// GetConversationMembers retrieves the member IDs for a conversation.
 func (m *defaultConversationService) GetConversationMembers(ctx context.Context, in *GetConversationMembersReq, opts ...grpc.CallOption) (*GetConversationMembersResp, error) {
 	client := pb.NewConversationServiceClient(m.cli.Conn())
 	return client.GetConversationMembers(ctx, in, opts...)
 }
 
-// GetUserConversations retrieves all conversations the user is a member of.
 func (m *defaultConversationService) GetUserConversations(ctx context.Context, in *GetUserConversationsReq, opts ...grpc.CallOption) (*GetUserConversationsResp, error) {
 	client := pb.NewConversationServiceClient(m.cli.Conn())
 	return client.GetUserConversations(ctx, in, opts...)
+}
+
+func (m *defaultConversationService) AddGroupMembers(ctx context.Context, in *AddGroupMembersReq, opts ...grpc.CallOption) (*AddGroupMembersResp, error) {
+	client := pb.NewConversationServiceClient(m.cli.Conn())
+	return client.AddGroupMembers(ctx, in, opts...)
+}
+
+func (m *defaultConversationService) RemoveGroupMembers(ctx context.Context, in *RemoveGroupMembersReq, opts ...grpc.CallOption) (*RemoveGroupMembersResp, error) {
+	client := pb.NewConversationServiceClient(m.cli.Conn())
+	return client.RemoveGroupMembers(ctx, in, opts...)
+}
+
+func (m *defaultConversationService) LeaveGroup(ctx context.Context, in *LeaveGroupReq, opts ...grpc.CallOption) (*LeaveGroupResp, error) {
+	client := pb.NewConversationServiceClient(m.cli.Conn())
+	return client.LeaveGroup(ctx, in, opts...)
+}
+
+func (m *defaultConversationService) DismissGroup(ctx context.Context, in *DismissGroupReq, opts ...grpc.CallOption) (*DismissGroupResp, error) {
+	client := pb.NewConversationServiceClient(m.cli.Conn())
+	return client.DismissGroup(ctx, in, opts...)
+}
+
+func (m *defaultConversationService) UpdateGroupInfo(ctx context.Context, in *UpdateGroupInfoReq, opts ...grpc.CallOption) (*UpdateGroupInfoResp, error) {
+	client := pb.NewConversationServiceClient(m.cli.Conn())
+	return client.UpdateGroupInfo(ctx, in, opts...)
+}
+
+func (m *defaultConversationService) GetConversationMembersDetail(ctx context.Context, in *GetConversationMembersDetailReq, opts ...grpc.CallOption) (*GetConversationMembersDetailResp, error) {
+	client := pb.NewConversationServiceClient(m.cli.Conn())
+	return client.GetConversationMembersDetail(ctx, in, opts...)
 }

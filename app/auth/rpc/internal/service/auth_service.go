@@ -176,14 +176,15 @@ func (s *RedisSessionStore) RevokeDevice(ctx context.Context, userID int64, devi
 
 type JWTIssuer struct {
 	secret string
+	ttl    time.Duration
 }
 
 func NewJWTIssuer(secret string, ttl time.Duration) *JWTIssuer {
-	return &JWTIssuer{secret: secret}
+	return &JWTIssuer{secret: secret, ttl: ttl}
 }
 
 func (i *JWTIssuer) Issue(_ context.Context, userID int64, deviceID string) (string, int64, error) {
-	return sharedjwt.NewManager(i.secret).GenerateAccessToken(userID, deviceID)
+	return sharedjwt.NewManagerWithTTL(i.secret, i.ttl).GenerateAccessToken(userID, deviceID)
 }
 
 func HashPassword(password string) (string, error) {

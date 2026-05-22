@@ -248,6 +248,7 @@ python generate_fixtures.py --count 5000   # 自定义数量
 
 ## 最近变更
 
+- 2026-05-22: `WSClient` 新增 `rest_client` 参数和 `_try_refresh_token()` 方法：`reconnect()` 重连前自动检测 Token 过期并通过 REST API 刷新。benchmark 数据流扩展：`user_creds`/`conv_pairs` 元组增加 `refresh_token`/`expires_at`/`device_id`，`WsMessageScenario` 和 `MixedScenario` 为每个 `WSClient` 注入对应的 `RESTClient`。压测配置 `dev-tool/etc/auth.yaml` 的 `AccessTTL` 从 `5m` 增大到 `30m`。详见 `aim-ws-token-management` skill。
 - 2026-05-22: `WSClient` 新增自动心跳（默认 30s 间隔）、自动重连（默认最多 3 次，指数退避 1/2/4s）、`ensure_connected()` 主动重连方法。`disconnect()` 标记 `_intentional_close` 以区分主动/被动断线；`_on_close` 被动断线时自动触发重连。压测 `ws-message` 的 `send_one` 捕获 `RuntimeError("Not connected")` 后尝试重连重试（最多 3 次），重连仍失败记录 `ws_disconnected` 错误（替代原来笼统的 `RuntimeError`）。`mixed` 场景同步增加断线重连逻辑。
 - 2026-05-22: `ws-message` 延迟语义改为端到端（A 发送 → 服务器 → B 收到 PUSH_MESSAGE）。发送方和接收方均建立 WS 连接，通过 `client_msg_id` 关联发送与接收，30s 超时未收到则记录 `recv_timeout` 错误。步骤从 4 步扩展为 5 步（Step 3: 接收方连接，Step 4: 发送方连接，Step 5: 发送消息+等待回执）。`WSClient.send_message()` 现在返回 `client_msg_id`。`LoadGenerator._worker_loop` 支持 `_SKIP_METRICS` 哨兵值，允许 task_fn 自行管理指标记录。
 - 2026-05-22: 新增独立压测 Docker Compose 环境（`dev-tool/docker-compose.yaml`，端口 +10000 偏移）、压测专属配置（`dev-tool/etc/`）、Fixture 生成器（`dev-tool/generate_fixtures.py`）。主 `docker-compose.yaml` 为 gateway 添加 `AIM_GATEWAY_NODE_ID: 0` 环境变量。

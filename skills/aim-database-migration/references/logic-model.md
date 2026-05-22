@@ -27,6 +27,37 @@ model/
 - `client_msg_id` 用于消息幂等；会话历史分页依赖 `(created_at DESC, id DESC)` 游标。
 - 表字段时间优先使用 `TIMESTAMPTZ NOT NULL DEFAULT NOW()`；对外响应再转换 Unix 毫秒。
 
+## 迁移文件清单
+
+| 编号 | 文件名 | 说明 |
+|------|--------|------|
+| 000 | `000_extensions.sql` | PostgreSQL 扩展（pg_trgm 等） |
+| 001 | `001_initial_permission.sql` | 好友关系表、会话表、会话成员表 |
+| 002 | `002_messages.sql` | 消息表（含 client_msg_id 幂等索引） |
+| 003 | `003_user_info.sql` | 用户资料表 |
+| 004 | `004_group_management.sql` | 群管理：conversations 新增 name/avatar/creator_id；conversation_members 新增 role |
+
+### 004_group_management.sql 详细
+
+```sql
+ALTER TABLE conversations ADD COLUMN IF NOT EXISTS name VARCHAR(128) NOT NULL DEFAULT '';
+ALTER TABLE conversations ADD COLUMN IF NOT EXISTS avatar VARCHAR(512) NOT NULL DEFAULT '';
+ALTER TABLE conversations ADD COLUMN IF NOT EXISTS creator_id BIGINT NOT NULL DEFAULT 0;
+
+ALTER TABLE conversation_members ADD COLUMN IF NOT EXISTS role VARCHAR(16) NOT NULL DEFAULT 'member';
+```
+
+| 表 | 字段 | 类型 | 默认值 | 说明 |
+|----|------|------|--------|------|
+| conversations | `name` | VARCHAR(128) | `''` | 会话名称；群聊为群名 |
+| conversations | `avatar` | VARCHAR(512) | `''` | 群聊头像 URL |
+| conversations | `creator_id` | BIGINT | `0` | 创建者/群主 |
+| conversation_members | `role` | VARCHAR(16) | `'member'` | 取值：owner / admin / member |
+
+sqlc 查询变更：所有涉及 conversations 和 conversation_members 的 SELECT/INSERT/RETURNING 已包含新列。新增 9 个查询：AddConversationMemberWithRole, RemoveConversationMembers, UpdateConversation, DeactivateConversation, GetConversationCreator, IsConversationMember, GetConversationMembersDetail 等。
+
+Docker Compose 的 `logic-migrate` 已追加 `004_group_management.sql`；Kafka `kafka-init` 已新增 `aim.conversation.events` topic。
+
 ## 查询规则
 
 - 查询名用动词前缀：`Create*`、`Get*`、`List*`、`Count*`、`Update*`、`Upsert*`。

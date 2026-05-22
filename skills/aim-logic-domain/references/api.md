@@ -293,3 +293,171 @@ message ListFriendsResp {
 - 目标用户不存在：`errorx.CodeNotFound`（40400）。
 - 任一方向存在 `blocked` 关系：`errorx.CodeForbidden`（40300）。
 - 数据库等基础设施错误：`errorx.CodeInternal`（50000），不泄漏底层错误细节。
+
+## 群管理 RPC
+
+ConversationService 新增 6 个群管理 RPC，用于群聊成员管理和群信息变更。所有群变更操作遵循统一模式：事务内 DB 操作 + 计算 target_user_ids → 事务提交 → 生产 Kafka 事件到 `aim.conversation.events`。
+
+### AddGroupMembers
+
+```protobuf
+rpc AddGroupMembers(AddGroupMembersReq) returns (AddGroupMembersResp);
+
+message AddGroupMembersReq {
+  int64 conversation_id = 1;
+  int64 operator_id = 2;
+  string operator_name = 3;
+  repeated int64 member_ids = 4;
+}
+
+message AddGroupMembersResp {
+  ConversationResponse conversation = 1;
+}
+```
+
+- 请求：conversation_id、operator_id（操作者）、operator_name（操作者昵称）、member_ids（新增成员列表）。
+- 响应：更新后的 `ConversationResponse`。
+- 行为：事务内检查 operator 是群成员 → 插入新成员（role=member）→ 插入 system message（event=member_joined）→ 提交 → 生产 Kafka 事件。
+- 错误码：40000（conversation_id 必须正数、member_ids 不能为空）、40400（会话不存在）、40300（operator 非成员）、50000（基础设施错误）。
+
+### RemoveGroupMembers
+
+```protobuf
+rpc RemoveGroupMembers(RemoveGroupMembersReq) returns (RemoveGroupMembersResp);
+
+message RemoveGroupMembersReq {
+  int64 conversation_id = 1;
+  int64 operator_id = 2;
+  string operator_name = 3;
+  repeated int64 member_ids = 4;
+}
+
+message RemoveGroupMembersResp {}
+```
+
+- 行为：事务内检查 operator 是群成员 → 删除成员 → 插入 system message（event=member_removed）→ 提交 → 生产 Kafka 事件。target_user_ids 包含将被移除的成员。
+- 错误码：40000（conversation_id 必须正数、member_ids 不能为空）、40400（会话不存在）、40300（operator 非成员）、50000。
+
+### LeaveGroup
+
+```protobuf
+rpc LeaveGroup(LeaveGroupReq) returns (LeaveGroupResp);
+
+message LeaveGroupReq {
+  int64 conversation_id = 1;
+  int64 user_id = 2;
+  string user_name = 3;
+}
+
+message LeaveGroupResp {}
+```
+
+- 行为：事务内检查 user 是群成员 → 删除成员 → 插入 system message（event=member_left）→ 提交 → 生产 Kafka 事件。target_user_ids 包含退出者。
+- 错误码：40000、40400、40300、50000。
+
+### DismissGroup
+
+```protobuf
+rpc DismissGroup(DismissGroupReq) returns (DismissGroupResp);
+
+message DismissGroupReq {
+  int64 conversation_id = 1;
+  int64 operator_id = 2;
+}
+
+message DismissGroupResp {}
+```
+
+- 行为：事务内检查 operator 是群成员 → 查询全员 → 设置 is_active=false → 插入 system message（event=group_dismissed）→ 提交 → 生产 Kafka 事件。
+- 错误码：40000、40400、40300、50000。
+
+### UpdateGroupInfo
+
+```protobuf
+rpc UpdateGroupInfo(UpdateGroupInfoReq) returns (UpdateGroupInfoResp);
+
+message UpdateGroupInfoReq {
+  int64 conversation_id = 1;
+  int64 operator_id = 2;
+  string operator_name = 3;
+  optional string name = 4;
+  optional string avatar = 5;
+}
+
+message UpdateGroupInfoResp {
+  ConversationResponse conversation = 1;
+}
+```
+
+- 行为：事务内检查 operator 是群成员 → 更新 name/avatar（至少提供一个）→ 插入 system message（event=group_renamed / group_avatar_changed）→ 提交 → 生产 Kafka 事件。
+- 错误码：40000（至少提供 name 或 avatar）、40400、40300、50000。
+
+### GetConversationMembersDetail
+
+```protobuf
+rpc GetConversationMembersDetail(GetConversationMembersDetailReq) returns (GetConversationMembersDetailResp);
+
+message GetConversationMembersDetailReq {
+  int64 conversation_id = 1;
+}
+
+message MemberDetailItem {
+  int64 user_id = 1;
+  string email = 2;
+  string avatar = 3;
+  string role = 4;
+  int64 joined_at = 5;
+}
+
+message GetConversationMembersDetailResp {
+  repeated MemberDetailItem members = 1;
+}
+```
+
+- 行为：查询 conversation_members 与 user_info 关联，返回成员详情（user_id, email, avatar, role, joined_at）。
+- 错误码：40000、40400、50000。
+
+### 系统消息约定
+
+群变更消息统一使用 `message_type="system"`、`sender_id=0` 写入 messages 表。content 为 JSONB：
+
+```json
+{
+  "event": "member_joined | member_left | member_removed | group_renamed | group_dismissed | group_avatar_changed",
+  "operator_id": 100,
+  "operator_name": "张三",
+  "target_ids": [101],
+  "target_names": ["李四"],
+  "extra": {}
+}
+```
+
+### Kafka 事件设计
+
+logic 事务提交后生产事件到 `aim.conversation.events`（best-effort，失败仅日志告警）：
+
+| 字段 | 说明 |
+|------|------|
+| traceparent/tracestate | W3C 追踪上下文 |
+| message_id | 已持久化的系统消息 ID |
+| conversation_id | 会话 ID |
+| sender_id | 固定 0 |
+| message_type | 固定 "system" |
+| content | JSONB（同系统消息 content） |
+| target_user_ids | 由 logic 在事务内计算，包含所有需推送的用户 |
+| timestamp | Unix 毫秒 |
+
+### ConversationResponse 扩展
+
+```protobuf
+message ConversationResponse {
+  int64 id = 1;
+  string conversation_type = 2;
+  bool is_active = 3;
+  int64 created_at = 4;
+  repeated int64 member_ids = 5;
+  string name = 6;       // 新增：会话名称
+  string avatar = 7;     // 新增：会话头像 URL
+  int64 creator_id = 8;  // 新增：创建者 ID
+}
+```

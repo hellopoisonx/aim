@@ -11,7 +11,7 @@
 - JWT Token
 - 委托 `gateway` 进行本地快速验签
 - 无状态
-- TTL: 5 min
+- TTL: 由 `Token.AccessTTL` 配置控制（默认 5min）；通过 `JWTIssuer` → `sharedjwt.NewManagerWithTTL` → `GenerateAccessToken` 生效
 
 ## RefreshToken
 

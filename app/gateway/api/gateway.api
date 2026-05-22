@@ -120,6 +120,7 @@ type UserListItem {
 type CreateConversationRequest {
 	ConversationType string  `json:"conversation_type" validate:"required,oneof=direct group"`
 	MemberIds        []int64 `json:"member_ids" validate:"required,min=1"`
+	Name             string  `json:"name,optional"`
 }
 
 type CreateConversationResponse {
@@ -128,6 +129,9 @@ type CreateConversationResponse {
 	IsActive         bool    `json:"is_active"`
 	CreatedAt        int64   `json:"created_at"`
 	MemberIds        []int64 `json:"member_ids"`
+	Name             string  `json:"name"`
+	Avatar           string  `json:"avatar"`
+	CreatorId        int64   `json:"creator_id"`
 }
 
 type GetConversationHistoryRequest {
@@ -160,10 +164,74 @@ type ConversationItem {
 	IsActive         bool    `json:"is_active"`
 	CreatedAt        int64   `json:"created_at"`
 	MemberIds        []int64 `json:"member_ids"`
+	Name             string  `json:"name"`
+	Avatar           string  `json:"avatar"`
+	CreatorId        int64   `json:"creator_id"`
 }
 
 type ListConversationsResponse {
 	Conversations []ConversationItem `json:"conversations"`
+}
+
+type AddGroupMembersRequest {
+	Id        int64   `path:"id" validate:"required"`
+	MemberIds []int64 `json:"member_ids" validate:"required,min=1"`
+}
+
+type RemoveGroupMemberRequest {
+	Id  int64 `path:"id" validate:"required"`
+	Uid int64 `path:"uid" validate:"required"`
+}
+
+type LeaveGroupRequest {
+	Id int64 `path:"id" validate:"required"`
+}
+
+type DismissGroupRequest {
+	Id int64 `path:"id" validate:"required"`
+}
+
+type UpdateGroupInfoRequest {
+	Id     int64   `path:"id" validate:"required"`
+	Name   *string `json:"name,optional"`
+	Avatar *string `json:"avatar,optional"`
+}
+
+type GetConversationMembersDetailRequest {
+	Id int64 `path:"id" validate:"required"`
+}
+
+type MemberDetailItem {
+	UserId   int64  `json:"user_id"`
+	Email    string `json:"email"`
+	Avatar   string `json:"avatar"`
+	Role     string `json:"role"`
+	JoinedAt int64  `json:"joined_at"`
+}
+
+type GetConversationMembersResponse {
+	Members []MemberDetailItem `json:"members"`
+}
+
+type AddGroupMembersResponse {
+	ConversationId   int64   `json:"conversation_id"`
+	ConversationType string  `json:"conversation_type"`
+	IsActive         bool    `json:"is_active"`
+	CreatedAt        int64   `json:"created_at"`
+	MemberIds        []int64 `json:"member_ids"`
+	Name             string  `json:"name"`
+	Avatar           string  `json:"avatar"`
+	CreatorId        int64   `json:"creator_id"`
+}
+
+type UpdateGroupInfoResponse {
+	ConversationId   int64  `json:"conversation_id"`
+	ConversationType string `json:"conversation_type"`
+	IsActive         bool   `json:"is_active"`
+	Name             string `json:"name"`
+	Avatar           string `json:"avatar"`
+	CreatorId        int64  `json:"creator_id"`
+	CreatedAt        int64  `json:"created_at"`
 }
 
 @server (
@@ -214,6 +282,24 @@ service gateway-api {
 
 	@handler ListConversations
 	get / returns (ListConversationsResponse)
+
+	@handler GetConversationMembers
+	get /:id/members (GetConversationMembersDetailRequest) returns (GetConversationMembersResponse)
+
+	@handler AddGroupMembers
+	post /:id/members (AddGroupMembersRequest) returns (AddGroupMembersResponse)
+
+	@handler RemoveGroupMember
+	delete /:id/members/:uid (RemoveGroupMemberRequest)
+
+	@handler LeaveGroup
+	post /:id/leave (LeaveGroupRequest)
+
+	@handler DismissGroup
+	delete /:id (DismissGroupRequest)
+
+	@handler UpdateGroupInfo
+	put /:id (UpdateGroupInfoRequest) returns (UpdateGroupInfoResponse)
 }
 
 @server (
