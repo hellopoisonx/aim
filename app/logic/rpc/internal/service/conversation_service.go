@@ -38,7 +38,7 @@ var (
 )
 
 type ConversationQuerier interface {
-	CreateConversation(ctx context.Context, conversationType string, creatorID int64, memberIDs []int64, name string) (model.Conversation, error)
+	CreateConversation(ctx context.Context, conversationType string, creatorID int64, memberIDs []int64, name string, avatar string) (model.Conversation, error)
 	GetConversationByID(ctx context.Context, id int64) (model.Conversation, error)
 	GetConversationHistory(ctx context.Context, conversationID int64, cursorCreatedAt int64, cursorID int64, limit int32) ([]model.Message, error)
 	GetConversationHistoryInitial(ctx context.Context, conversationID int64, limit int32) ([]model.Message, error)
@@ -155,7 +155,7 @@ func (s *ConversationService) buildSystemMessage(event string, operatorID int64,
 	return data
 }
 
-func (s ConversationService) CreateConversation(ctx context.Context, conversationType string, creatorID int64, memberIDs []int64, name string) (model.Conversation, error) {
+func (s ConversationService) CreateConversation(ctx context.Context, conversationType string, creatorID int64, memberIDs []int64, name string, avatar string) (model.Conversation, error) {
 	if conversationType != "direct" && conversationType != "group" {
 		return model.Conversation{}, errorx.NewCodeError(errorx.CodeBadInput, "conversation_type must be 'direct' or 'group'")
 	}
@@ -209,7 +209,7 @@ func (s ConversationService) CreateConversation(ctx context.Context, conversatio
 		ID:               conversationID,
 		ConversationType: conversationType,
 		Name:             name,
-		Avatar:           "",
+		Avatar:           avatar,
 		CreatorID:        creatorID,
 	})
 	if err != nil {

@@ -38,7 +38,14 @@ PYTHONIOENCODING=utf-8 python aim_test.py <command> [--args]
 
 | 命令 | 参数 | 鉴权 | 对应 API |
 |------|------|------|----------|
-| `conv-create` | `--member-id` 或 `--member-ids` | Bearer | `POST /api/conversations` |
+| `conv-create` | `--member-id` 或 `--member-ids` [`--name`] | Bearer | `POST /api/conversations` |
+| `group-create` | `--member-id` 或 `--member-ids` [`--name`] [`--avatar`] | Bearer | `POST /api/conversations/group` |
+| `conv-members` | `--conversation-id` | Bearer | `GET /api/conversations/:id/members` |
+| `conv-add-members` | `--conversation-id` `--member-ids` | Bearer | `POST /api/conversations/:id/members` |
+| `conv-remove-member` | `--conversation-id` `--user-id` | Bearer | `DELETE /api/conversations/:id/members/:uid` |
+| `conv-leave` | `--conversation-id` | Bearer | `POST /api/conversations/:id/leave` |
+| `conv-dismiss` | `--conversation-id` | Bearer | `DELETE /api/conversations/:id` |
+| `conv-update` | `--conversation-id` [`--name`] [`--avatar`] | Bearer | `PUT /api/conversations/:id` |
 | `history` | `--conversation-id` [`--limit`] [`--cursor-created-at`] [`--cursor-id`] | Bearer | `GET /api/conversations/history/:id` |
 
 ### WebSocket
@@ -100,7 +107,14 @@ python aim_test.py interactive
 │  friend-accept <id>     friend-reject <id>        │
 │  friend-list                                       │
 ├─ Conversations ──────────────────────────────────┤
-│  conv-create <member_id>  (or comma-sep for group)│
+│  conv-create <member_id> [name]  (or comma-sep)    │
+│  group-create <member_id> [name] (or comma-sep)    │
+│  conv-members <conv_id>                            │
+│  conv-add-members <conv_id> <uid,uid,...>          │
+│  conv-remove-member <conv_id> <uid>                │
+│  conv-leave <conv_id>                              │
+│  conv-dismiss <conv_id>                            │
+│  conv-update <conv_id> [--name N] [--avatar A]     │
 │  history <conversation_id> [limit]                │
 ├─ WebSocket ───────────────────────────────────────┤
 │  ws-connect [--profile NAME]                      │
@@ -119,9 +133,18 @@ python aim_test.py interactive
 ### 群聊示例（交互模式）
 
 ```bash
-aim [default] [#1] ·> conv-create 2,3,4
+aim [default] [#1] ·> conv-create 2,3,4 MyGroup
 ✓ Conversation #5 created (group)
   Members: [2, 3, 4]
+  Name: MyGroup
+aim [default] [#1] ·> conv-members 5
+✓ 4 member(s) in conversation #5
+aim [default] [#1] ·> conv-add-members 5 6,7
+✓ Added 2 member(s)
+aim [default] [#1] ·> conv-update 5 --name "New Name"
+✓ Updated conversation #5
+aim [default] [#1] ·> conv-remove-member 5 7
+✓ Removed user #7
 ```
 
 ### Profile 切换

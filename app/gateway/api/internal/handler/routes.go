@@ -88,6 +88,11 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 					Handler: conversations.RemoveGroupMemberHandler(serverCtx),
 				},
 				{
+					Method:  http.MethodPost,
+					Path:    "/group",
+					Handler: conversations.CreateGroupHandler(serverCtx),
+				},
+				{
 					Method:  http.MethodGet,
 					Path:    "/history/:id",
 					Handler: conversations.GetConversationHistoryHandler(serverCtx),

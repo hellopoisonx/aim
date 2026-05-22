@@ -322,7 +322,7 @@ func TestConversationService_CreateConversation_ValidDirect(t *testing.T) {
 	store := newFakeConversationStore()
 	svc := NewConversationService(store, testSnowflake, nil, nil)
 
-	conv, err := svc.CreateConversation(context.Background(), "direct", 1, []int64{1, 2}, "")
+	conv, err := svc.CreateConversation(context.Background(), "direct", 1, []int64{1, 2}, "", "")
 	require.NoError(t, err)
 	assert.Equal(t, "direct", conv.ConversationType)
 	assert.True(t, conv.IsActive)
@@ -337,7 +337,7 @@ func TestConversationService_CreateConversation_ValidGroup(t *testing.T) {
 	store := newFakeConversationStore()
 	svc := NewConversationService(store, testSnowflake, nil, nil)
 
-	conv, err := svc.CreateConversation(context.Background(), "group", 1, []int64{1, 2, 3, 4}, "")
+	conv, err := svc.CreateConversation(context.Background(), "group", 1, []int64{1, 2, 3, 4}, "", "")
 	require.NoError(t, err)
 	assert.Equal(t, "group", conv.ConversationType)
 	assert.True(t, conv.IsActive)
@@ -363,7 +363,7 @@ func TestConversationService_CreateConversation_InvalidType(t *testing.T) {
 			store := newFakeConversationStore()
 			svc := NewConversationService(store, testSnowflake, nil, nil)
 
-			_, err := svc.CreateConversation(context.Background(), tt.conversationType, 1, []int64{1, 2}, "")
+			_, err := svc.CreateConversation(context.Background(), tt.conversationType, 1, []int64{1, 2}, "", "")
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), "conversation_type must be 'direct' or 'group'")
 		})
@@ -374,7 +374,7 @@ func TestConversationService_CreateConversation_EmptyMembers(t *testing.T) {
 	store := newFakeConversationStore()
 	svc := NewConversationService(store, testSnowflake, nil, nil)
 
-	_, err := svc.CreateConversation(context.Background(), "group", 1, []int64{}, "")
+	_, err := svc.CreateConversation(context.Background(), "group", 1, []int64{}, "", "")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "member_ids must not be empty")
 }
@@ -394,7 +394,7 @@ func TestConversationService_CreateConversation_DirectWithNotTwoMembers(t *testi
 			store := newFakeConversationStore()
 			svc := NewConversationService(store, testSnowflake, nil, nil)
 
-			_, err := svc.CreateConversation(context.Background(), "direct", 1, tt.memberIDs, "")
+			_, err := svc.CreateConversation(context.Background(), "direct", 1, tt.memberIDs, "", "")
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), "direct conversation must have exactly 2 members")
 		})
@@ -406,7 +406,7 @@ func TestConversationService_CreateConversation_DirectWithCreatorNotInMembers(t 
 	svc := NewConversationService(store, testSnowflake, nil, nil)
 
 	// Creator (1) is not in the member list
-	conv, err := svc.CreateConversation(context.Background(), "direct", 1, []int64{2}, "")
+	conv, err := svc.CreateConversation(context.Background(), "direct", 1, []int64{2}, "", "")
 	require.NoError(t, err)
 
 	// Creator should be automatically added
@@ -430,7 +430,7 @@ func TestConversationService_CreateConversation_StoreError(t *testing.T) {
 	store.createErr = errors.New("database connection error")
 	svc := NewConversationService(store, testSnowflake, nil, nil)
 
-	_, err := svc.CreateConversation(context.Background(), "group", 1, []int64{1, 2}, "")
+	_, err := svc.CreateConversation(context.Background(), "group", 1, []int64{1, 2}, "", "")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "database connection error")
 }
@@ -440,7 +440,7 @@ func TestConversationService_CreateConversation_AddMemberError(t *testing.T) {
 	store.addMemberErr = errors.New("failed to add member")
 	svc := NewConversationService(store, testSnowflake, nil, nil)
 
-	_, err := svc.CreateConversation(context.Background(), "group", 1, []int64{1, 2, 3}, "")
+	_, err := svc.CreateConversation(context.Background(), "group", 1, []int64{1, 2, 3}, "", "")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to add member")
 }
@@ -450,11 +450,11 @@ func TestConversationService_CreateConversation_DirectDedup_Existing(t *testing.
 	svc := NewConversationService(store, testSnowflake, nil, nil)
 
 	// First call: create a direct conversation between users 1 and 2
-	conv1, err := svc.CreateConversation(context.Background(), "direct", 1, []int64{1, 2}, "")
+	conv1, err := svc.CreateConversation(context.Background(), "direct", 1, []int64{1, 2}, "", "")
 	require.NoError(t, err)
 
 	// Second call: same two users should return the existing conversation
-	conv2, err := svc.CreateConversation(context.Background(), "direct", 1, []int64{1, 2}, "")
+	conv2, err := svc.CreateConversation(context.Background(), "direct", 1, []int64{1, 2}, "", "")
 	require.NoError(t, err)
 
 	// Should return the SAME conversation ID
@@ -468,11 +468,11 @@ func TestConversationService_CreateConversation_DirectDedup_NewMembers(t *testin
 	svc := NewConversationService(store, testSnowflake, nil, nil)
 
 	// Create conversation between users 1 and 2
-	conv1, err := svc.CreateConversation(context.Background(), "direct", 1, []int64{1, 2}, "")
+	conv1, err := svc.CreateConversation(context.Background(), "direct", 1, []int64{1, 2}, "", "")
 	require.NoError(t, err)
 
 	// Create conversation between users 3 and 4 (different pair)
-	conv2, err := svc.CreateConversation(context.Background(), "direct", 3, []int64{3, 4}, "")
+	conv2, err := svc.CreateConversation(context.Background(), "direct", 3, []int64{3, 4}, "", "")
 	require.NoError(t, err)
 
 	// Should be DIFFERENT conversation IDs
@@ -484,7 +484,7 @@ func TestConversationService_CreateConversation_DirectDedup_StoreError(t *testin
 	store.getErr = errors.New("database connection error")
 	svc := NewConversationService(store, testSnowflake, nil, nil)
 
-	_, err := svc.CreateConversation(context.Background(), "direct", 1, []int64{1, 2}, "")
+	_, err := svc.CreateConversation(context.Background(), "direct", 1, []int64{1, 2}, "", "")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "database connection error")
 }
@@ -956,7 +956,7 @@ func TestConversationService_CreateConversation_TableDriven(t *testing.T) {
 			store := newFakeConversationStore()
 			svc := NewConversationService(store, testSnowflake, nil, nil)
 
-			conv, err := svc.CreateConversation(context.Background(), tt.convType, tt.creatorID, tt.memberIDs, "")
+			conv, err := svc.CreateConversation(context.Background(), tt.convType, tt.creatorID, tt.memberIDs, "", "")
 
 			if tt.wantErr {
 				require.Error(t, err)

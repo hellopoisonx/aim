@@ -1,6 +1,6 @@
 # 前端协议覆盖矩阵
 
-## REST 端点（14 个）
+## REST 端点（22 个）
 
 | # | Method | Path | Auth | 客户端方法 | 状态 |
 |---|---|---|---|---|---|
@@ -16,9 +16,16 @@
 | 10 | GET | `/api/friends/applications` | Bearer | `ListFriendApplications()` | ✅ |
 | 11 | GET | `/api/friends/me` | Bearer | `ListFriends()` | ✅ |
 | 12 | POST | `/api/conversations` | Bearer | `CreateConversation()` / `CreateDirectConversation()` | ✅ |
-| 13 | GET | `/api/conversations` | Bearer | `ListConversations()` | ✅ |
-| 14 | GET | `/api/conversations/history/{id}` | Bearer | `GetConversationHistory()` | ✅ |
-| 15 | GET | `/api/presence/friends` | Bearer | `GetFriendsPresence()` | ✅ |
+| 13 | POST | `/api/conversations/group` | Bearer | `CreateGroup()` | ✅ |
+| 14 | GET | `/api/conversations` | Bearer | `ListConversations()` | ✅ |
+| 15 | GET | `/api/conversations/history/{id}` | Bearer | `GetConversationHistory()` | ✅ |
+| 16 | GET | `/api/conversations/{id}/members` | Bearer | `GetConversationMembers()` | ✅ |
+| 17 | POST | `/api/conversations/{id}/members` | Bearer | `AddGroupMembers()` | ✅ |
+| 18 | DELETE | `/api/conversations/{id}/members/{uid}` | Bearer | `RemoveGroupMember()` | ✅ |
+| 19 | POST | `/api/conversations/{id}/leave` | Bearer | `LeaveGroup()` | ✅ |
+| 20 | DELETE | `/api/conversations/{id}` | Bearer | `DismissGroup()` | ✅ |
+| 21 | PUT | `/api/conversations/{id}` | Bearer | `UpdateGroupInfo()` | ✅ |
+| 22 | GET | `/api/presence/friends` | Bearer | `GetFriendsPresence()` | ✅ |
 
 ## WebSocket 升级端点（1 个）
 
@@ -31,7 +38,7 @@
 | # | FrameType | 值 | Payload | 发送方法 | 说明 |
 |---|---|---|---|---|---|
 | 1 | `SEND_MESSAGE` | 1 | `SendMessagePayload` | `SendMessage()` | 发送消息 |
-| 2 | `HEARTBEAT` | 2 | `HeartbeatPayload` | `SendHeartbeat()` | 30 秒间隔心跳 |
+| 2 | `HEARTBEAT` | 2 | `HeartbeatPayload` | `SendHeartbeat()` | 20 秒间隔心跳 |
 | 3 | `TYPING` | 3 | `TypingPayload` | `SendTyping()` | 输入状态提示 |
 | 4 | `READ_RECEIPT` | 4 | `ReadReceiptPayload` | `SendReadReceipt()` | 已读回执 |
 | 5 | `ACK` | 5 | `ClientAckPayload` | `SendAck()` | 帧确认 |
@@ -40,7 +47,7 @@
 
 | # | FrameType | 值 | Payload | Vue 分发 | 说明 |
 |---|---|---|---|---|---|
-| 1 | `PUSH_MESSAGE` | 101 | `PushMessagePayload` | 替换乐观消息、插入会话、发 ACK | 消息推送 |
+| 1 | `PUSH_MESSAGE` | 101 | `PushMessagePayload` | 替换乐观消息、插入会话、发 ACK；`is_system` 居中展示 | 消息推送 |
 | 2 | `PUSH_PRESENCE` | 102 | `PushPresencePayload` | 更新 `onlineUserIds` | 在线状态变更 |
 | 3 | `PUSH_NOTIFICATION` | 103 | `PushNotificationPayload` | `ElMessage.info()` 显示 | 系统通知 |
 | 4 | `PUSH_TYPING` | 104 | `TypingPayload` | 4 秒后自动清除 | 输入状态提示 |
@@ -53,11 +60,11 @@
 
 | 类别 | 总数 | 已覆盖 |
 |---|---|---|
-| REST 端点 | 14 | 14 |
+| REST 端点 | 22 | 22 |
 | WS 升级 | 1 | 1 |
 | Client→Gateway 帧 | 5 | 5 |
 | Gateway→Client 帧 | 8 | 8 |
-| **合计** | **28** | **28（100%）** |
+| **合计** | **36** | **36（100%）** |
 
 ## 维护说明
 

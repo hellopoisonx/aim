@@ -248,6 +248,8 @@ python generate_fixtures.py --count 5000   # 自定义数量
 
 ## 最近变更
 
+- 2026-05-22: 新增 `group-create` CLI 命令和交互命令，调用 `POST /api/conversations/group` 专用创建群聊端点。`RESTClient` 新增 `create_group()` 方法（支持 `name`/`avatar` 可选参数）。详见 `references/commands.md`。
+- 2026-05-22: 新增群管理 REST 命令：`conv-members`（获取成员详情）、`conv-add-members`（添加成员）、`conv-remove-member`（移除成员）、`conv-leave`（退出群聊）、`conv-dismiss`（解散群聊）、`conv-update`（更新群信息）；`conv-create` 新增 `--name` 参数；`RESTClient` 新增 `_delete`/`_put` HTTP 方法和 6 个群管理方法；重新生成 `ws_pb2.py`/`gateway_pb2.py`（新增 `is_system` 字段）。
 - 2026-05-22: `WSClient` 新增 `rest_client` 参数和 `_try_refresh_token()` 方法：`reconnect()` 重连前自动检测 Token 过期并通过 REST API 刷新。benchmark 数据流扩展：`user_creds`/`conv_pairs` 元组增加 `refresh_token`/`expires_at`/`device_id`，`WsMessageScenario` 和 `MixedScenario` 为每个 `WSClient` 注入对应的 `RESTClient`。压测配置 `dev-tool/etc/auth.yaml` 的 `AccessTTL` 从 `5m` 增大到 `30m`。详见 `aim-ws-token-management` skill。
 - 2026-05-22: `WSClient` 新增自动心跳（默认 30s 间隔）、自动重连（默认最多 3 次，指数退避 1/2/4s）、`ensure_connected()` 主动重连方法。`disconnect()` 标记 `_intentional_close` 以区分主动/被动断线；`_on_close` 被动断线时自动触发重连。压测 `ws-message` 的 `send_one` 捕获 `RuntimeError("Not connected")` 后尝试重连重试（最多 3 次），重连仍失败记录 `ws_disconnected` 错误（替代原来笼统的 `RuntimeError`）。`mixed` 场景同步增加断线重连逻辑。
 - 2026-05-22: `ws-message` 延迟语义改为端到端（A 发送 → 服务器 → B 收到 PUSH_MESSAGE）。发送方和接收方均建立 WS 连接，通过 `client_msg_id` 关联发送与接收，30s 超时未收到则记录 `recv_timeout` 错误。步骤从 4 步扩展为 5 步（Step 3: 接收方连接，Step 4: 发送方连接，Step 5: 发送消息+等待回执）。`WSClient.send_message()` 现在返回 `client_msg_id`。`LoadGenerator._worker_loop` 支持 `_SKIP_METRICS` 哨兵值，允许 task_fn 自行管理指标记录。

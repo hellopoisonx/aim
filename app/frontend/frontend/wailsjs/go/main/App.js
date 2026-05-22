@@ -10,6 +10,10 @@ export function AddFriend(arg1) {
   return window['go']['main']['App']['AddFriend'](arg1);
 }
 
+export function AddGroupMembers(arg1, arg2) {
+  return window['go']['main']['App']['AddGroupMembers'](arg1, arg2);
+}
+
 export function Configure(arg1) {
   return window['go']['main']['App']['Configure'](arg1);
 }
@@ -26,6 +30,10 @@ export function CreateDirectConversation(arg1) {
   return window['go']['main']['App']['CreateDirectConversation'](arg1);
 }
 
+export function CreateGroup(arg1) {
+  return window['go']['main']['App']['CreateGroup'](arg1);
+}
+
 export function DeviceID() {
   return window['go']['main']['App']['DeviceID']();
 }
@@ -34,8 +42,16 @@ export function DisconnectWS() {
   return window['go']['main']['App']['DisconnectWS']();
 }
 
+export function DismissGroup(arg1) {
+  return window['go']['main']['App']['DismissGroup'](arg1);
+}
+
 export function GetConversationHistory(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['GetConversationHistory'](arg1, arg2, arg3, arg4);
+}
+
+export function GetConversationMembers(arg1) {
+  return window['go']['main']['App']['GetConversationMembers'](arg1);
 }
 
 export function GetFriendsPresence() {
@@ -44,6 +60,10 @@ export function GetFriendsPresence() {
 
 export function GetUserById(arg1) {
   return window['go']['main']['App']['GetUserById'](arg1);
+}
+
+export function LeaveGroup(arg1) {
+  return window['go']['main']['App']['LeaveGroup'](arg1);
 }
 
 export function ListConversations() {
@@ -82,6 +102,10 @@ export function RejectFriend(arg1) {
   return window['go']['main']['App']['RejectFriend'](arg1);
 }
 
+export function RemoveGroupMember(arg1, arg2) {
+  return window['go']['main']['App']['RemoveGroupMember'](arg1, arg2);
+}
+
 export function SearchUsersByName(arg1) {
   return window['go']['main']['App']['SearchUsersByName'](arg1);
 }
@@ -108,4 +132,8 @@ export function SendTyping(arg1) {
 
 export function SessionState() {
   return window['go']['main']['App']['SessionState']();
+}
+
+export function UpdateGroupInfo(arg1, arg2) {
+  return window['go']['main']['App']['UpdateGroupInfo'](arg1, arg2);
 }

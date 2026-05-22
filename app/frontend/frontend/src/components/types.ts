@@ -12,6 +12,8 @@ export interface Conversation {
   lastMessageAt?: string
   unreadCount: number
   isOnline: boolean
+  conversationType?: 'direct' | 'group'
+  creatorId?: number
   memberIds?: number[]
   /** 历史消息游标分页信息 */
   historyCursor?: {
@@ -30,8 +32,18 @@ export interface ChatMessage {
   content: string
   timestamp: string
   isMine: boolean
+  isSystem?: boolean
   clientMsgId?: string
   ackStatus?: 'pending' | 'delivered' | 'failed'
+}
+
+/** Group member detail from server */
+export interface GroupMemberItem {
+  userId: number
+  email: string
+  avatar: string
+  role: string
+  joinedAt: number
 }
 
 /** Search user result item, derived from client.UserListItem */

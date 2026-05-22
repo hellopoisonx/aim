@@ -7,6 +7,8 @@ export function AcceptFriend(arg1:number):Promise<client.AcceptFriendResponse>;
 
 export function AddFriend(arg1:number):Promise<client.AddFriendResponse>;
 
+export function AddGroupMembers(arg1:number,arg2:main.AddGroupMembersRequest):Promise<client.CreateConversationResponse>;
+
 export function Configure(arg1:main.AppConfig):Promise<main.SessionState>;
 
 export function ConnectWS():Promise<void>;
@@ -15,15 +17,23 @@ export function CreateConversation(arg1:main.CreateConversationRequest):Promise<
 
 export function CreateDirectConversation(arg1:number):Promise<client.CreateConversationResponse>;
 
+export function CreateGroup(arg1:main.CreateGroupRequest):Promise<client.CreateConversationResponse>;
+
 export function DeviceID():Promise<string>;
 
 export function DisconnectWS():Promise<void>;
 
+export function DismissGroup(arg1:number):Promise<void>;
+
 export function GetConversationHistory(arg1:number,arg2:number,arg3:number,arg4:number):Promise<client.GetConversationHistoryResponse>;
+
+export function GetConversationMembers(arg1:number):Promise<client.GetConversationMembersResponse>;
 
 export function GetFriendsPresence():Promise<client.GetFriendsPresenceResponse>;
 
 export function GetUserById(arg1:number):Promise<client.GetUserByIdResponse>;
+
+export function LeaveGroup(arg1:number):Promise<void>;
 
 export function ListConversations():Promise<client.ListConversationsResponse>;
 
@@ -43,6 +53,8 @@ export function Register(arg1:client.RegisterRequest):Promise<client.RegisterRes
 
 export function RejectFriend(arg1:number):Promise<client.RejectFriendResponse>;
 
+export function RemoveGroupMember(arg1:number,arg2:number):Promise<void>;
+
 export function SearchUsersByName(arg1:string):Promise<Array<client.UserListItem>>;
 
 export function SendAck(arg1:number):Promise<void>;
@@ -56,3 +68,5 @@ export function SendReadReceipt(arg1:number,arg2:number):Promise<void>;
 export function SendTyping(arg1:number):Promise<void>;
 
 export function SessionState():Promise<main.SessionState>;
+
+export function UpdateGroupInfo(arg1:number,arg2:main.UpdateGroupInfoRequest):Promise<client.UpdateGroupInfoResponse>;

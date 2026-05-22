@@ -6,7 +6,7 @@ import type { ChatMessage, Conversation } from './types'
 interface Props {
   conversation: Conversation | null
   messages: ChatMessage[]
-  typingUserId?: number | null
+  typingUserId?: string | null
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -14,7 +14,8 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const emit = defineEmits<{
-  'load-more': [conversationId: number]
+  'load-more': [conversationId: string]
+  'open-settings': []
 }>()
 
 const scrollbarRef = ref<InstanceType<typeof ElScrollbar> | null>(null)
@@ -109,10 +110,21 @@ watch(
         <div class="ma-conv-info">
           <ElAvatar :src="conversation.avatar" :size="40">{{ conversation.title.slice(0, 1) }}</ElAvatar>
           <div>
-            <div class="ma-conv-title">{{ conversation.title }}</div>
+            <div class="ma-conv-title">
+              {{ conversation.title }}
+              <span v-if="conversation.conversationType === 'group'" class="ma-group-tag">群</span>
+            </div>
             <div class="ma-conv-sub">暂无消息记录</div>
           </div>
         </div>
+        <button
+          v-if="conversation.conversationType === 'group'"
+          class="ma-settings-btn"
+          title="群聊设置"
+          @click="emit('open-settings')"
+        >
+          设置
+        </button>
       </div>
       <ElEmpty description="还没有任何消息，快说点什么吧" :image-size="90" class="ma-empty" />
     </template>
@@ -123,11 +135,31 @@ watch(
         <div class="ma-conv-info">
           <ElAvatar :src="conversation.avatar" :size="40">{{ conversation.title.slice(0, 1) }}</ElAvatar>
           <div>
-            <div class="ma-conv-title">{{ conversation.title }}</div>
+            <div class="ma-conv-title">
+              {{ conversation.title }}
+              <span v-if="conversation.conversationType === 'group'" class="ma-group-tag">群</span>
+            </div>
             <div v-if="typingDisplayName" class="ma-typing">{{ typingDisplayName }} 正在输入…</div>
-            <div v-else class="ma-conv-sub">{{ conversation.isOnline ? '在线' : '离线' }}</div>
+            <div v-else-if="conversation.conversationType === 'group'" class="ma-conv-sub">
+              {{ conversation.memberIds?.length ?? 0 }} 名成员
+            </div>
+            <div
+              v-else
+              class="ma-conv-sub"
+              :class="conversation.isOnline ? 'ma-conv-sub--online' : ''"
+            >
+              {{ conversation.isOnline ? '在线' : '离线' }}
+            </div>
           </div>
         </div>
+        <button
+          v-if="conversation.conversationType === 'group'"
+          class="ma-settings-btn"
+          title="群聊设置"
+          @click="emit('open-settings')"
+        >
+          设置
+        </button>
       </div>
 
       <ElScrollbar ref="scrollbarRef" class="ma-scroll" @scroll="handleScroll">
@@ -137,44 +169,49 @@ watch(
               <span>{{ group.label }}</span>
             </div>
 
-            <div
-              v-for="msg in group.messages"
-              :key="msg.id"
-              class="ma-bubble-row"
-              :class="msg.isMine ? 'row-mine' : 'row-theirs'"
-            >
-              <!-- Avatar (only for others) -->
-              <ElAvatar
-                v-if="!msg.isMine"
-                :src="msg.senderAvatar"
-                :size="34"
-                class="ma-avatar"
-              >
-                {{ msg.senderName.slice(0, 1) }}
-              </ElAvatar>
+            <template v-for="msg in group.messages" :key="msg.id">
+              <div v-if="msg.isSystem" class="ma-system-msg">
+                {{ msg.content }}
+              </div>
 
-              <!-- Bubble -->
-              <div class="ma-bubble-wrap">
-                <div class="ma-sender" :class="msg.isMine ? 'sender-mine' : 'sender-theirs'">
-                  {{ msg.isMine ? '我' : msg.senderName }}
-                </div>
-                <div class="ma-bubble" :class="msg.isMine ? 'bubble-mine' : 'bubble-theirs'">
-                  {{ msg.content }}
-                </div>
-                <div class="ma-meta" :class="msg.isMine ? 'meta-mine' : 'meta-theirs'">
-                  <!-- ACK 状态图标（仅自己的消息） -->
-                  <span v-if="msg.isMine && msg.ackStatus === 'pending'" class="ma-ack ma-ack-pending" title="发送中">◌</span>
-                  <span v-else-if="msg.isMine && msg.ackStatus === 'failed'" class="ma-ack ma-ack-failed" title="发送失败">⚠</span>
-                  <span class="ma-time" :class="msg.isMine ? 'time-mine' : 'time-theirs'">
-                    {{ formatTime(msg.timestamp) }}
-                  </span>
-                </div>
-                <!-- 发送失败提示 -->
-                <div v-if="msg.isMine && msg.ackStatus === 'failed'" class="ma-failed-hint">
-                  发送失败
+              <div
+                v-else
+                class="ma-bubble-row"
+                :class="msg.isMine ? 'row-mine' : 'row-theirs'"
+              >
+                <!-- Avatar (only for others) -->
+                <ElAvatar
+                  v-if="!msg.isMine"
+                  :src="msg.senderAvatar"
+                  :size="34"
+                  class="ma-avatar"
+                >
+                  {{ msg.senderName.slice(0, 1) }}
+                </ElAvatar>
+
+                <!-- Bubble -->
+                <div class="ma-bubble-wrap">
+                  <div class="ma-sender" :class="msg.isMine ? 'sender-mine' : 'sender-theirs'">
+                    {{ msg.isMine ? '我' : msg.senderName }}
+                  </div>
+                  <div class="ma-bubble" :class="msg.isMine ? 'bubble-mine' : 'bubble-theirs'">
+                    {{ msg.content }}
+                  </div>
+                  <div class="ma-meta" :class="msg.isMine ? 'meta-mine' : 'meta-theirs'">
+                    <!-- ACK 状态图标（仅自己的消息） -->
+                    <span v-if="msg.isMine && msg.ackStatus === 'pending'" class="ma-ack ma-ack-pending" title="发送中">◌</span>
+                    <span v-else-if="msg.isMine && msg.ackStatus === 'failed'" class="ma-ack ma-ack-failed" title="发送失败">⚠</span>
+                    <span class="ma-time" :class="msg.isMine ? 'time-mine' : 'time-theirs'">
+                      {{ formatTime(msg.timestamp) }}
+                    </span>
+                  </div>
+                  <!-- 发送失败提示 -->
+                  <div v-if="msg.isMine && msg.ackStatus === 'failed'" class="ma-failed-hint">
+                    发送失败
+                  </div>
                 </div>
               </div>
-            </div>
+            </template>
           </template>
         </div>
       </ElScrollbar>
@@ -196,12 +233,47 @@ watch(
   padding: var(--space-4);
   border-bottom: 1px solid var(--aim-border);
   background: var(--aim-surface);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
 }
 
 .ma-conv-info {
   display: flex;
   align-items: center;
   gap: var(--space-3);
+  min-width: 0;
+  flex: 1;
+}
+
+.ma-settings-btn {
+  background: none;
+  border: 1px solid var(--aim-border);
+  color: var(--aim-text-muted);
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.ma-settings-btn:hover {
+  border-color: var(--aim-primary);
+  color: var(--aim-primary);
+}
+
+.ma-group-tag {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--aim-primary);
+  background: rgba(0, 212, 170, 0.12);
+  border: 1px solid rgba(0, 212, 170, 0.35);
+  border-radius: 4px;
+  padding: 1px 5px;
+  vertical-align: middle;
 }
 
 .ma-conv-title {
@@ -214,6 +286,11 @@ watch(
   font-size: 11px;
   color: var(--aim-text-muted);
   margin-top: 2px;
+}
+
+.ma-conv-sub--online {
+  color: var(--aim-online);
+  font-weight: 500;
 }
 
 .ma-typing {
@@ -247,6 +324,18 @@ watch(
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
+}
+
+.ma-system-msg {
+  text-align: center;
+  font-size: 11px;
+  color: var(--aim-text-muted);
+  background: var(--aim-surface-2);
+  border: 1px solid var(--aim-border);
+  border-radius: 10px;
+  padding: 6px 12px;
+  margin: var(--space-1) auto;
+  max-width: 85%;
 }
 
 /* Date divider */

@@ -131,6 +131,7 @@ message CreateConversationReq {
   int64 creator_id = 2;
   repeated int64 member_ids = 3;
   string name = 4;
+  string avatar = 5;
 }
 
 message ConversationResponse {

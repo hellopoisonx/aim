@@ -1,9 +1,10 @@
 <script lang="ts" setup>
-import { computed, onMounted, ref } from 'vue'
-import { ElAvatar, ElButton, ElEmpty, ElMessage, ElTabs, ElTabPane, ElBadge } from 'element-plus'
+import { computed, onMounted, ref, watch } from 'vue'
+import { ElAvatar, ElButton, ElCheckbox, ElCheckboxGroup, ElEmpty, ElInput, ElMessage, ElTabs, ElTabPane, ElBadge } from 'element-plus'
 import {
   AcceptFriend,
   CreateDirectConversation,
+  CreateGroup,
   GetUserById,
   ListFriendApplications,
   ListFriends,
@@ -13,28 +14,37 @@ import type { FriendItem, FriendRequest } from '../components/types'
 
 // ─── Props & Emits ────────────────────────────────────────────────────────
 
+type FriendsTab = 'friends' | 'applications' | 'create-group'
+
 interface Props {
-  currentUserId: number
-  onlineUserIds?: Set<number>
+  currentUserId: string
+  onlineUserIds?: Set<string>
+  initialTab?: FriendsTab
 }
 
 const props = withDefaults(defineProps<Props>(), {
   onlineUserIds: () => new Set(),
+  initialTab: 'friends',
 })
 
 const emit = defineEmits<{
-  'start-conversation': [conversationId: number, friendId: number, title: string, avatar: string]
+  'start-conversation': [conversationId: string, friendId: string, title: string, avatar: string]
+  'start-group': [conversationId: string, title: string, avatar: string, memberIds: string[]]
+  'applications-updated': []
   back: []
 }>()
 
 // ─── State ────────────────────────────────────────────────────────────────
 
-const activeTab = ref<'friends' | 'applications'>('friends')
+const activeTab = ref<FriendsTab>(props.initialTab)
 const friends = ref<FriendItem[]>([])
 const applications = ref<FriendRequest[]>([])
 const loading = ref(false)
-const actionLoading = ref<Set<number>>(new Set())
-const creatingConversation = ref<Set<number>>(new Set())
+const actionLoading = ref<Set<string>>(new Set())
+const creatingConversation = ref<Set<string>>(new Set())
+const selectedGroupMemberIds = ref<string[]>([])
+const groupName = ref('')
+const creatingGroup = ref(false)
 
 // ─── Computed ─────────────────────────────────────────────────────────────
 
@@ -60,7 +70,7 @@ async function loadAll() {
 
     // Map FriendshipItem to FriendItem, resolving user info
     const friendItems: FriendItem[] = await Promise.all(
-      (friendsResp?.friends ?? []).map(async (item: { user_id: number; friend_id: number; status: string; created_at: number; updated_at: number }) => {
+      (friendsResp?.friends ?? []).map(async (item: { user_id: string; friend_id: string; status: string; created_at: number; updated_at: number }) => {
         const otherId = item.user_id === props.currentUserId ? item.friend_id : item.user_id
         let email = ''
         let avatar = ''
@@ -88,7 +98,7 @@ async function loadAll() {
     const appItems: FriendRequest[] = await Promise.all(
       (appsResp?.applications ?? [])
         .filter((item: { status: string }) => item.status === 'pending')
-        .map(async (item: { user_id: number; friend_id: number; status: string; created_at: number; updated_at: number }) => {
+        .map(async (item: { user_id: string; friend_id: string; status: string; created_at: number; updated_at: number }) => {
           let userEmail = ''
           try {
             const userResp = await GetUserById(item.user_id)
@@ -109,6 +119,7 @@ async function loadAll() {
     )
 
     applications.value = appItems
+    emit('applications-updated')
   } catch {
     // Silently handle — UI shows empty state
   } finally {
@@ -116,15 +127,22 @@ async function loadAll() {
   }
 }
 
+watch(
+  () => props.initialTab,
+  (tab) => {
+    activeTab.value = tab
+  },
+)
+
 // ─── Actions ──────────────────────────────────────────────────────────────
 
-async function handleAccept(id: number) {
+async function handleAccept(id: string) {
   if (actionLoading.value.has(id)) return
   actionLoading.value.add(id)
   try {
     await AcceptFriend(id)
     applications.value = applications.value.filter((a) => a.id !== id)
-    // Reload friends to reflect the new friend
+    emit('applications-updated')
     await loadAll()
   } catch (err) {
     const msg = err instanceof Error ? err.message : '接受好友申请失败'
@@ -134,12 +152,13 @@ async function handleAccept(id: number) {
   }
 }
 
-async function handleReject(id: number) {
+async function handleReject(id: string) {
   if (actionLoading.value.has(id)) return
   actionLoading.value.add(id)
   try {
     await RejectFriend(id)
     applications.value = applications.value.filter((a) => a.id !== id)
+    emit('applications-updated')
   } catch (err) {
     const msg = err instanceof Error ? err.message : '拒绝好友申请失败'
     ElMessage.error(msg)
@@ -154,10 +173,42 @@ async function handleStartChat(friend: FriendItem) {
   try {
     const resp = await CreateDirectConversation(friend.id)
     emit('start-conversation', resp.conversation_id, friend.id, friend.email, friend.avatar)
-  } catch {
-    // Error handled silently
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : '创建会话失败'
+    ElMessage.error(msg)
   } finally {
     creatingConversation.value.delete(friend.id)
+  }
+}
+
+async function handleCreateGroup() {
+  if (selectedGroupMemberIds.value.length === 0) {
+    ElMessage.warning('请至少选择一位好友')
+    return
+  }
+  const name = groupName.value.trim() || '未命名群聊'
+  creatingGroup.value = true
+  try {
+    const resp = await CreateGroup({
+      member_ids: selectedGroupMemberIds.value,
+      name,
+      avatar: '',
+    })
+    emit(
+      'start-group',
+      resp.conversation_id,
+      resp.name || name,
+      resp.avatar ?? '',
+      resp.member_ids ?? selectedGroupMemberIds.value,
+    )
+    selectedGroupMemberIds.value = []
+    groupName.value = ''
+    activeTab.value = 'friends'
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : '创建群聊失败'
+    ElMessage.error(msg)
+  } finally {
+    creatingGroup.value = false
   }
 }
 
@@ -201,7 +252,7 @@ onMounted(() => {
         <div v-else class="fv-list">
           <!-- Online -->
           <template v-if="onlineFriends.length > 0">
-            <div class="fv-section-label">在线 — {{ onlineFriends.length }}</div>
+            <div class="fv-section-label fv-online-text">在线 — {{ onlineFriends.length }}</div>
             <div
               v-for="friend in onlineFriends"
               :key="friend.id"
@@ -217,8 +268,8 @@ onMounted(() => {
                 </ElAvatar>
               </ElBadge>
               <div class="fv-body">
-                <span class="fv-name">{{ formatEmail(friend.email) }}</span>
-                <span class="fv-email">{{ friend.email }}</span>
+                <span class="fv-name fv-online-text">{{ formatEmail(friend.email) }}</span>
+                <span class="fv-email fv-online-text">{{ friend.email }}</span>
               </div>
               <ElButton
                 size="small"
@@ -262,6 +313,46 @@ onMounted(() => {
               </ElButton>
             </div>
           </template>
+        </div>
+      </ElTabPane>
+
+      <ElTabPane label="创建群聊" name="create-group">
+        <div class="fv-create-group">
+          <label class="fv-create-label">群名称</label>
+          <ElInput v-model="groupName" placeholder="输入群名称（可选）" size="small" />
+
+          <label class="fv-create-label">选择成员</label>
+          <ElEmpty
+            v-if="friends.length === 0"
+            description="还没有好友，无法创建群聊"
+            :image-size="60"
+            class="fv-empty"
+          />
+          <ElCheckboxGroup v-else v-model="selectedGroupMemberIds" class="fv-group-select">
+            <ElCheckbox
+              v-for="friend in friends"
+              :key="friend.id"
+              :value="friend.id"
+              class="fv-group-item"
+            >
+              <div class="fv-group-item-row">
+                <ElAvatar :src="friend.avatar" :size="28">
+                  {{ formatEmail(friend.email).slice(0, 1) }}
+                </ElAvatar>
+                <span>{{ formatEmail(friend.email) }}</span>
+              </div>
+            </ElCheckbox>
+          </ElCheckboxGroup>
+
+          <ElButton
+            type="primary"
+            :loading="creatingGroup"
+            :disabled="selectedGroupMemberIds.length === 0"
+            style="width: 100%; margin-top: 12px"
+            @click="handleCreateGroup"
+          >
+            创建群聊
+          </ElButton>
         </div>
       </ElTabPane>
 
@@ -441,8 +532,8 @@ onMounted(() => {
   opacity: 0.65;
 }
 
-.fv-online-badge :deep(.el-badge__content) {
-  background-color: var(--aim-primary);
+.fv-online-text {
+  color: var(--aim-online);
 }
 
 .fv-body {
@@ -478,5 +569,38 @@ onMounted(() => {
   display: flex;
   gap: var(--space-2);
   flex-shrink: 0;
+}
+
+.fv-create-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+}
+
+.fv-create-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--aim-text-muted);
+  margin-top: var(--space-2);
+}
+
+.fv-group-select {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.fv-group-item {
+  margin: 0;
+  width: 100%;
+}
+
+.fv-group-item-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
 }
 </style>

@@ -86,6 +86,9 @@ export namespace client {
 	    is_active: boolean;
 	    created_at: number;
 	    member_ids: number[];
+	    name: string;
+	    avatar: string;
+	    creator_id: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new ConversationItem(source);
@@ -98,6 +101,9 @@ export namespace client {
 	        this.is_active = source["is_active"];
 	        this.created_at = source["created_at"];
 	        this.member_ids = source["member_ids"];
+	        this.name = source["name"];
+	        this.avatar = source["avatar"];
+	        this.creator_id = source["creator_id"];
 	    }
 	}
 	export class CreateConversationResponse {
@@ -106,6 +112,9 @@ export namespace client {
 	    is_active: boolean;
 	    created_at: number;
 	    member_ids: number[];
+	    name: string;
+	    avatar: string;
+	    creator_id: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new CreateConversationResponse(source);
@@ -118,6 +127,9 @@ export namespace client {
 	        this.is_active = source["is_active"];
 	        this.created_at = source["created_at"];
 	        this.member_ids = source["member_ids"];
+	        this.name = source["name"];
+	        this.avatar = source["avatar"];
+	        this.creator_id = source["creator_id"];
 	    }
 	}
 	
@@ -161,6 +173,56 @@ export namespace client {
 	        this.next_cursor_created_at = source["next_cursor_created_at"];
 	        this.next_cursor_id = source["next_cursor_id"];
 	        this.has_more = source["has_more"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class MemberDetailItem {
+	    user_id: number;
+	    email: string;
+	    avatar: string;
+	    role: string;
+	    joined_at: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new MemberDetailItem(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.user_id = source["user_id"];
+	        this.email = source["email"];
+	        this.avatar = source["avatar"];
+	        this.role = source["role"];
+	        this.joined_at = source["joined_at"];
+	    }
+	}
+	export class GetConversationMembersResponse {
+	    members: MemberDetailItem[];
+	
+	    static createFrom(source: any = {}) {
+	        return new GetConversationMembersResponse(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.members = this.convertValues(source["members"], MemberDetailItem);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -419,6 +481,7 @@ export namespace client {
 	}
 	
 	
+	
 	export class RefreshRequest {
 	    refresh_token: string;
 	
@@ -509,9 +572,31 @@ export namespace client {
 		    return a;
 		}
 	}
+	export class UpdateGroupInfoResponse {
+	    conversation_id: number;
+	    conversation_type: string;
+	    is_active: boolean;
+	    name: string;
+	    avatar: string;
+	    creator_id: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new UpdateGroupInfoResponse(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.conversation_id = source["conversation_id"];
+	        this.conversation_type = source["conversation_type"];
+	        this.is_active = source["is_active"];
+	        this.name = source["name"];
+	        this.avatar = source["avatar"];
+	        this.creator_id = source["creator_id"];
+	    }
+	}
 	
 	export class UserListItem {
-	    id: number;
+	    id: string;
 	    email: string;
 	    avatar: string;
 	
@@ -531,6 +616,18 @@ export namespace client {
 
 export namespace main {
 	
+	export class AddGroupMembersRequest {
+	    member_ids: number[];
+	
+	    static createFrom(source: any = {}) {
+	        return new AddGroupMembersRequest(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.member_ids = source["member_ids"];
+	    }
+	}
 	export class AppConfig {
 	    gateway_http: string;
 	    gateway_ws: string;
@@ -548,6 +645,7 @@ export namespace main {
 	export class CreateConversationRequest {
 	    conversation_type: string;
 	    member_ids: number[];
+	    name: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new CreateConversationRequest(source);
@@ -557,6 +655,23 @@ export namespace main {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.conversation_type = source["conversation_type"];
 	        this.member_ids = source["member_ids"];
+	        this.name = source["name"];
+	    }
+	}
+	export class CreateGroupRequest {
+	    member_ids: number[];
+	    name: string;
+	    avatar: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new CreateGroupRequest(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.member_ids = source["member_ids"];
+	        this.name = source["name"];
+	        this.avatar = source["avatar"];
 	    }
 	}
 	export class ProtocolFrame {
@@ -654,6 +769,20 @@ export namespace main {
 	        this.refresh_token = source["refresh_token"];
 	        this.expires_at = source["expires_at"];
 	        this.ws_connected = source["ws_connected"];
+	    }
+	}
+	export class UpdateGroupInfoRequest {
+	    name?: string;
+	    avatar?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new UpdateGroupInfoRequest(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.avatar = source["avatar"];
 	    }
 	}
 

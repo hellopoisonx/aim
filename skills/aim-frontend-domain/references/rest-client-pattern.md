@@ -78,8 +78,15 @@ DTO 定义见 `client.go`，注释标注 `// mirrors gateway.api xxx`。
 | GET | `/api/users/by-name/{name}` | Bearer | `SearchUsersResponse` |
 | GET | `/api/users/by-id/{id}` | Bearer | `GetUserByIdResponse` |
 | POST | `/api/conversations` | Bearer | `CreateConversationRequest` (client) / `CreateConversationResponse` |
+| POST | `/api/conversations/group` | Bearer | `CreateGroupRequest` / `CreateConversationResponse` |
 | GET | `/api/conversations` | Bearer | `ListConversationsResponse` |
 | GET | `/api/conversations/history/{id}` | Bearer | `GetConversationHistoryResponse` |
+| GET | `/api/conversations/{id}/members` | Bearer | `GetConversationMembersResponse` |
+| POST | `/api/conversations/{id}/members` | Bearer | `AddGroupMembersRequest` / `CreateConversationResponse` |
+| DELETE | `/api/conversations/{id}/members/{uid}` | Bearer | — |
+| POST | `/api/conversations/{id}/leave` | Bearer | — |
+| DELETE | `/api/conversations/{id}` | Bearer | — |
+| PUT | `/api/conversations/{id}` | Bearer | `UpdateGroupInfoRequest` / `UpdateGroupInfoResponse` |
 | POST | `/api/users/friends/{id}` | Bearer | `AddFriendResponse` |
 | POST | `/api/friends/accept/{id}` | Bearer | `AcceptFriendResponse` |
 | POST | `/api/friends/reject/{id}` | Bearer | `RejectFriendResponse` |

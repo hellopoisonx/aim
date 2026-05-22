@@ -270,12 +270,22 @@ class RESTClient:
 
     # ── Conversations ──
 
-    def create_conversation(self, member_ids: list) -> dict:
+    def create_conversation(self, member_ids: list, name: str = "") -> dict:
         body = {
             "conversation_type": "direct" if len(member_ids) == 1 else "group",
             "member_ids": member_ids,
         }
+        if name:
+            body["name"] = name
         return self._post("/api/conversations", body)
+
+    def create_group(self, member_ids: list, name: str = "", avatar: str = "") -> dict:
+        body = {"member_ids": member_ids}
+        if name:
+            body["name"] = name
+        if avatar:
+            body["avatar"] = avatar
+        return self._post("/api/conversations/group", body)
 
     def get_history(self, conversation_id: int, cursor_created_at: int = 0,
                     cursor_id: int = 0, limit: int = 50) -> dict:
@@ -291,6 +301,45 @@ class RESTClient:
 
     def list_conversations(self) -> list:
         return self._get("/api/conversations")["conversations"]
+
+    def _delete(self, path: str, **kwargs) -> dict:
+        h = {**self.token.auth_header(), **kwargs.pop("headers", {})}
+        r = self.session.delete(self._path(path), headers=h, **kwargs)
+        data = r.json()
+        if data.get("code", 0) != 0:
+            raise APIError(data["code"], data.get("msg", "unknown error"))
+        return data.get("body", {})
+
+    def _put(self, path: str, body=None, **kwargs) -> dict:
+        h = {**self.token.auth_header(), **kwargs.pop("headers", {})}
+        r = self.session.put(self._path(path), json=body, headers=h, **kwargs)
+        data = r.json()
+        if data.get("code", 0) != 0:
+            raise APIError(data["code"], data.get("msg", "unknown error"))
+        return data.get("body", {})
+
+    def get_conversation_members(self, conversation_id: int) -> dict:
+        return self._get(f"/api/conversations/{conversation_id}/members")
+
+    def add_group_members(self, conversation_id: int, member_ids: list) -> dict:
+        return self._post(f"/api/conversations/{conversation_id}/members", {"member_ids": member_ids})
+
+    def remove_group_member(self, conversation_id: int, user_id: int) -> dict:
+        return self._delete(f"/api/conversations/{conversation_id}/members/{user_id}")
+
+    def leave_group(self, conversation_id: int) -> dict:
+        return self._post(f"/api/conversations/{conversation_id}/leave")
+
+    def dismiss_group(self, conversation_id: int) -> dict:
+        return self._delete(f"/api/conversations/{conversation_id}")
+
+    def update_group_info(self, conversation_id: int, name: str = None, avatar: str = None) -> dict:
+        body = {}
+        if name is not None:
+            body["name"] = name
+        if avatar is not None:
+            body["avatar"] = avatar
+        return self._put(f"/api/conversations/{conversation_id}", body)
 
 
 # ── WebSocket Client ────────────────────────────────────────────────────────────
@@ -709,13 +758,37 @@ def cmd_create_conversation(args):
         if not member_ids:
             print("✗ At least one --member-id or --member-ids is required")
             return
-        conv = client.create_conversation(member_ids)
+        name = args.name or ""
+        conv = client.create_conversation(member_ids, name)
         print(f"✓ Conversation #{conv['conversation_id']} created ({conv['conversation_type']})")
         if len(member_ids) > 1:
             print(f"  Members: {member_ids}")
+        if name:
+            print(f"  Name: {name}")
         print_json(conv)
     except APIError as e:
         print(f"✗ Create conversation failed: {e}")
+
+
+def cmd_create_group(args):
+    client = RESTClient()
+    try:
+        member_ids = [int(m.strip()) for m in args.member_ids.split(",")] if args.member_ids else [args.member_id] if args.member_id else []
+        if not member_ids:
+            print("✗ At least one --member-id or --member-ids is required")
+            return
+        name = args.name or ""
+        avatar = args.avatar or ""
+        conv = client.create_group(member_ids, name, avatar)
+        print(f"✓ Group #{conv['conversation_id']} created")
+        print(f"  Members: {member_ids}")
+        if name:
+            print(f"  Name: {name}")
+        if avatar:
+            print(f"  Avatar: {avatar}")
+        print_json(conv)
+    except APIError as e:
+        print(f"✗ Create group failed: {e}")
 
 
 def cmd_list_conversations(args):
@@ -726,6 +799,65 @@ def cmd_list_conversations(args):
         print_json(convs)
     except APIError as e:
         print(f"✗ List conversations failed: {e}")
+
+
+def cmd_conv_members(args):
+    client = RESTClient()
+    try:
+        resp = client.get_conversation_members(args.conversation_id)
+        members = resp.get("members", [])
+        print(f"✓ {len(members)} member(s) in conversation #{args.conversation_id}:")
+        print_json(members)
+    except APIError as e:
+        print(f"✗ Get members failed: {e}")
+
+
+def cmd_add_group_members(args):
+    client = RESTClient()
+    try:
+        member_ids = [int(m.strip()) for m in args.member_ids.split(",")]
+        resp = client.add_group_members(args.conversation_id, member_ids)
+        print(f"✓ Added {len(member_ids)} member(s) to conversation #{args.conversation_id}")
+        print_json(resp)
+    except APIError as e:
+        print(f"✗ Add group members failed: {e}")
+
+
+def cmd_remove_group_member(args):
+    client = RESTClient()
+    try:
+        client.remove_group_member(args.conversation_id, args.user_id)
+        print(f"✓ Removed user #{args.user_id} from conversation #{args.conversation_id}")
+    except APIError as e:
+        print(f"✗ Remove group member failed: {e}")
+
+
+def cmd_leave_group(args):
+    client = RESTClient()
+    try:
+        client.leave_group(args.conversation_id)
+        print(f"✓ Left conversation #{args.conversation_id}")
+    except APIError as e:
+        print(f"✗ Leave group failed: {e}")
+
+
+def cmd_dismiss_group(args):
+    client = RESTClient()
+    try:
+        client.dismiss_group(args.conversation_id)
+        print(f"✓ Dismissed conversation #{args.conversation_id}")
+    except APIError as e:
+        print(f"✗ Dismiss group failed: {e}")
+
+
+def cmd_update_group_info(args):
+    client = RESTClient()
+    try:
+        resp = client.update_group_info(args.conversation_id, args.name, args.avatar)
+        print(f"✓ Updated conversation #{args.conversation_id}")
+        print_json(resp)
+    except APIError as e:
+        print(f"✗ Update group info failed: {e}")
 
 
 def cmd_history(args):
@@ -847,7 +979,14 @@ def _print_help():
 │  friend-list                                       │
 ├─ Conversations ──────────────────────────────────┤
 │  conv-list                                         │
-│  conv-create <member_id>  (or comma-sep for group) │
+│  conv-create <member_id> [name]  (or comma-sep)    │
+│  group-create <member_id> [name] (or comma-sep)    │
+│  conv-members <conv_id>                            │
+│  conv-add-members <conv_id> <uid,uid,...>          │
+│  conv-remove-member <conv_id> <uid>                │
+│  conv-leave <conv_id>                              │
+│  conv-dismiss <conv_id>                            │
+│  conv-update <conv_id> [--name N] [--avatar A]     │
 │  history <conversation_id> [limit]                │
 ├─ WebSocket ───────────────────────────────────────┤
 │  ws-connect [--profile NAME]                      │
@@ -983,11 +1122,72 @@ Type 'help' for commands, 'quit' to exit.
                 print_json(convs)
             elif cmd == "conv-create" and len(parts) >= 2:
                 member_ids = [int(m.strip()) for m in parts[1].split(",")]
-                conv = client.create_conversation(member_ids)
+                name = parts[2] if len(parts) > 2 else ""
+                conv = client.create_conversation(member_ids, name)
                 print(f"✓ Conversation #{conv['conversation_id']} created ({conv['conversation_type']})")
                 if len(member_ids) > 1:
                     print(f"  Members: {member_ids}")
+                if name:
+                    print(f"  Name: {name}")
                 print_json(conv)
+            elif cmd == "group-create" and len(parts) >= 2:
+                member_ids = [int(m.strip()) for m in parts[1].split(",")]
+                name = ""
+                avatar = ""
+                i = 2
+                while i < len(parts):
+                    if parts[i] == "--name" and i + 1 < len(parts):
+                        name = parts[i + 1]
+                        i += 2
+                    elif parts[i] == "--avatar" and i + 1 < len(parts):
+                        avatar = parts[i + 1]
+                        i += 2
+                    else:
+                        name = parts[i]
+                        i += 1
+                conv = client.create_group(member_ids, name, avatar)
+                print(f"✓ Group #{conv['conversation_id']} created")
+                print(f"  Members: {member_ids}")
+                if name:
+                    print(f"  Name: {name}")
+                if avatar:
+                    print(f"  Avatar: {avatar}")
+                print_json(conv)
+            elif cmd == "conv-members" and len(parts) >= 2:
+                resp = client.get_conversation_members(int(parts[1]))
+                members = resp.get("members", [])
+                print(f"✓ {len(members)} member(s):")
+                print_json(members)
+            elif cmd == "conv-add-members" and len(parts) >= 3:
+                member_ids = [int(m.strip()) for m in parts[2].split(",")]
+                resp = client.add_group_members(int(parts[1]), member_ids)
+                print(f"✓ Added {len(member_ids)} member(s)")
+                print_json(resp)
+            elif cmd == "conv-remove-member" and len(parts) >= 3:
+                client.remove_group_member(int(parts[1]), int(parts[2]))
+                print(f"✓ Removed user #{parts[2]}")
+            elif cmd == "conv-leave" and len(parts) >= 2:
+                client.leave_group(int(parts[1]))
+                print(f"✓ Left conversation #{parts[1]}")
+            elif cmd == "conv-dismiss" and len(parts) >= 2:
+                client.dismiss_group(int(parts[1]))
+                print(f"✓ Dismissed conversation #{parts[1]}")
+            elif cmd == "conv-update" and len(parts) >= 2:
+                update_name = None
+                update_avatar = None
+                i = 2
+                while i < len(parts):
+                    if parts[i] == "--name" and i + 1 < len(parts):
+                        update_name = parts[i + 1]
+                        i += 2
+                    elif parts[i] == "--avatar" and i + 1 < len(parts):
+                        update_avatar = parts[i + 1]
+                        i += 2
+                    else:
+                        i += 1
+                resp = client.update_group_info(int(parts[1]), update_name, update_avatar)
+                print(f"✓ Updated conversation #{parts[1]}")
+                print_json(resp)
             elif cmd == "history" and len(parts) >= 2:
                 limit = int(parts[2]) if len(parts) > 2 else 50
                 resp = client.get_history(int(parts[1]), limit=limit)
@@ -1245,6 +1445,35 @@ Examples:
     p = sub.add_parser("conv-create", help="Create conversation")
     p.add_argument("--member-id", type=int, help="Single member ID")
     p.add_argument("--member-ids", help="Comma-separated member IDs (e.g. 2,3,4)")
+    p.add_argument("--name", default="", help="Group name (optional)")
+
+    p = sub.add_parser("group-create", help="Create group conversation")
+    p.add_argument("--member-id", type=int, help="Single member ID")
+    p.add_argument("--member-ids", help="Comma-separated member IDs (e.g. 2,3,4)")
+    p.add_argument("--name", default="", help="Group name (optional)")
+    p.add_argument("--avatar", default="", help="Group avatar URL (optional)")
+
+    p = sub.add_parser("conv-members", help="Get conversation member details")
+    p.add_argument("--conversation-id", type=int, required=True)
+
+    p = sub.add_parser("conv-add-members", help="Add members to a group")
+    p.add_argument("--conversation-id", type=int, required=True)
+    p.add_argument("--member-ids", required=True, help="Comma-separated member IDs to add")
+
+    p = sub.add_parser("conv-remove-member", help="Remove a member from a group")
+    p.add_argument("--conversation-id", type=int, required=True)
+    p.add_argument("--user-id", type=int, required=True)
+
+    p = sub.add_parser("conv-leave", help="Leave a group conversation")
+    p.add_argument("--conversation-id", type=int, required=True)
+
+    p = sub.add_parser("conv-dismiss", help="Dismiss a group conversation")
+    p.add_argument("--conversation-id", type=int, required=True)
+
+    p = sub.add_parser("conv-update", help="Update group info (name/avatar)")
+    p.add_argument("--conversation-id", type=int, required=True)
+    p.add_argument("--name", default=None, help="New group name")
+    p.add_argument("--avatar", default=None, help="New group avatar URL")
 
     p = sub.add_parser("history", help="Get conversation history")
     p.add_argument("--conversation-id", type=int, required=True)
@@ -1290,6 +1519,13 @@ Examples:
         "friend-list": cmd_friend_list,
         "conv-list": cmd_list_conversations,
         "conv-create": cmd_create_conversation,
+        "group-create": cmd_create_group,
+        "conv-members": cmd_conv_members,
+        "conv-add-members": cmd_add_group_members,
+        "conv-remove-member": cmd_remove_group_member,
+        "conv-leave": cmd_leave_group,
+        "conv-dismiss": cmd_dismiss_group,
+        "conv-update": cmd_update_group_info,
         "history": cmd_history,
         "ws-connect": cmd_ws_connect,
         "ws-send": cmd_ws_send,

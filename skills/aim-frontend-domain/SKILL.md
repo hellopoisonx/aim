@@ -17,7 +17,7 @@ AIM desktop client domain. Use this skill when changing `app/frontend`, Wails bi
 
 The desktop client talks only to aim-gateway. 完整协议覆盖矩阵见 `references/frontend-coverage-matrix.md`。
 
-### REST 端点（15 个）
+### REST 端点（22 个）
 
 | Method | Path | 用途 | App 方法 |
 |---|---|---|---|
@@ -33,8 +33,15 @@ The desktop client talks only to aim-gateway. 完整协议覆盖矩阵见 `refer
 | GET | `/api/friends/applications` | 好友申请列表 | `ListFriendApplications()` |
 | GET | `/api/friends/me` | 好友列表 | `ListFriends()` |
 | POST | `/api/conversations` | 创建会话（直聊/群聊） | `CreateConversation()` / `CreateDirectConversation()` |
+| POST | `/api/conversations/group` | 创建群聊 | `CreateGroup()` |
 | GET | `/api/conversations` | 会话列表 | `ListConversations()` |
 | GET | `/api/conversations/history/{id}` | 历史消息（游标分页） | `GetConversationHistory()` |
+| GET | `/api/conversations/{id}/members` | 群成员详情 | `GetConversationMembers()` |
+| POST | `/api/conversations/{id}/members` | 添加群成员 | `AddGroupMembers()` |
+| DELETE | `/api/conversations/{id}/members/{uid}` | 移除群成员 | `RemoveGroupMember()` |
+| POST | `/api/conversations/{id}/leave` | 退出群聊 | `LeaveGroup()` |
+| DELETE | `/api/conversations/{id}` | 解散群聊 | `DismissGroup()` |
+| PUT | `/api/conversations/{id}` | 更新群信息 | `UpdateGroupInfo()` |
 | GET | `/api/presence/friends` | 好友在线状态快照 | `GetFriendsPresence()` |
 
 ### WebSocket
@@ -66,7 +73,7 @@ Gateway→Client（8 种）：`PUSH_MESSAGE`(101)、`PUSH_PRESENCE`(102)、`PUSH
 
 ## References
 
-- `references/frontend-coverage-matrix.md` — 14 REST + 1 WS upgrade + 5 Client→Gateway + 8 Gateway→Client 帧覆盖矩阵
+- `references/frontend-coverage-matrix.md` — 22 REST + 1 WS upgrade + 5 Client→Gateway + 8 Gateway→Client 帧覆盖矩阵
 - `references/rest-client-pattern.md` — REST 客户端架构、DTO 定义、Auth token 传递
 - `references/ws-frame-handling.md` — WebSocket 帧处理、`SendFrame`、帧类型分发、自动重连、历史游标分页、ACK 状态显示
 - `references/login-conversation-load-flow.md` — 登录后加载会话列表的完整数据流
@@ -89,8 +96,10 @@ go build ./...
 go test ./...
 go test -cover ./app/frontend/...
 ```
+- 2026-05-22: 会话列表 UI：`ConversationList` 搜索区接入 `AddFriend`；登录/重连拉取 `ListFriendApplications` 待处理数；有待处理申请时打开好友页直达「好友申请」Tab；`buildConversationFromItem` 优先使用 API `name`；在线态改用 `--aim-online` 绿色；未读角标移至头像左上角。
 - 2026-05-22: 修复 `FriendsView.vue` 好友申请接受/拒绝按钮无反应 Bug：catch 块静默吞噬错误，改为 `ElMessage.error` 提示用户。
 - 2026-05-22: 打通 presence/typing 推送链路：新增 `GetFriendsPresence()` REST 调用及快照接口；`typingInfo` 改为 Map 支持多会话同时输入；`MessageInput.vue` 加 2.5s 节流；PUSH_PRESENCE 严格 online/offline；连接/重连后拉快照；心跳从 30s 改 20s。
+- 2026-05-22: 群聊全链路：`CreateGroup`/`GetConversationMembers`/`AddGroupMembers`/`RemoveGroupMember`/`LeaveGroup`/`DismissGroup`/`UpdateGroupInfo` REST 客户端与 Wails 绑定；`FriendsView` 新增「创建群聊」Tab；`GroupSettingsPanel` 抽屉覆盖成员管理/改名/退出/解散；`MessageArea` 支持 `is_system` 居中系统消息；`PUSH_MESSAGE` 解析 `is_system`/`conversation_type`；`ProtocolCatalog` 更新为 22 REST；覆盖矩阵同步。
 - 2026-05-22: 新增 `CreateConversationRequest` 通用创建会话结构体（支持 direct/group + member_ids 数组）；`CreateConversation()` 参数校验统一返回 `errorx.CodeBadInput`（40000）；`CreateDirectConversation()` 改为薄包装；新增群聊创建测试和参数校验测试；Vue 新增自动重连（指数退避，最多 5 次）、历史消息游标分页（`historyCursor` + `load-more` emit）、活跃会话自动发送已读回执、TOKEN_EXPIRED 后自动重连 WS、ACK 状态图标显示；FriendsView 修复 key/id 错误；`ProtocolCatalog` 测试期望值修正为 15 REST + 13 帧；Wails 绑定重新生成。
 - 2026-05-22: 修复 `ensureConversationForPush` 错误创建新会话 Bug：收到推送时不再调 `CreateDirectConversation`，改用 push 中的原始 `conversationId` 创建本地会话；新增 `resolveSenderInfo` 获取用户信息（fallback 占位标题 `用户 ${senderId}`）。详见 `references/ws-frame-handling.md`。
 - 2026-05-20: 修复客户端消息回推处理：解析 PushMessagePayload 的 message_id/sent_at/client_msg_id，按 client_msg_id 替换乐观消息，并在未知 conversation_id 收到消息时创建真实会话条目。

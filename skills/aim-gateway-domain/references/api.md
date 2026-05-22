@@ -70,9 +70,11 @@
 | Method | Path | Auth | Handler |
 | --- | --- | --- | --- |
 | POST | `/api/conversations` | `Auth` 中间件（JWT Bearer token） | `internal/handler/conversations/create_conversation_handler.go` |
+| POST | `/api/conversations/group` | `Auth` 中间件（JWT Bearer token） | `internal/handler/conversations/create_group_handler.go` |
 | GET | `/api/conversations` | `Auth` 中间件（JWT Bearer token） | `internal/handler/conversations/list_conversations_handler.go` |
 
 - `POST /api/conversations` 调用 `ConversationService.CreateConversation`（通过 `LogicRpc`）创建直聊/群聊会话。
+- `POST /api/conversations/group` 调用 `ConversationService.CreateConversation`（通过 `LogicRpc`）创建群聊会话。请求体无需 `conversation_type` 字段（固定为 `"group"`），支持 `name`（群名）和 `avatar`（群头像）可选字段。底层复用同一 RPC 方法，响应类型与 `POST /api/conversations` 一致。
 - `GET /api/conversations` 调用 `ConversationService.GetUserConversations`（通过 `LogicRpc`）返回当前用户参与的所有会话，每条记录包含 `conversation_id`、`conversation_type`、`is_active`、`created_at`、`member_ids`。
 - 两个端点均受 `Auth` 中间件保护，`user_id` 从 JWT payload 提取。
 

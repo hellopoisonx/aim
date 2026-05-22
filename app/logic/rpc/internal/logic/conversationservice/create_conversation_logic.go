@@ -43,7 +43,7 @@ func (l *CreateConversationLogic) CreateConversation(in *pb.CreateConversationRe
 		return nil, errorx.NewCodeError(errorx.CodeInternal, "conversation service is not configured")
 	}
 
-	conv, err := convSvc.CreateConversation(l.ctx, in.GetConversationType(), in.GetCreatorId(), in.GetMemberIds(), in.GetName())
+	conv, err := convSvc.CreateConversation(l.ctx, in.GetConversationType(), in.GetCreatorId(), in.GetMemberIds(), in.GetName(), in.GetAvatar())
 	if err != nil {
 		return nil, service.ConversationToGRPCError(err)
 	}

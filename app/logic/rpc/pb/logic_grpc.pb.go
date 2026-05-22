@@ -2,7 +2,7 @@
 // versions:
 // - protoc-gen-go-grpc v1.5.1
 // - protoc             v3.19.4
-// source: logic.proto
+// source: app/logic/rpc/logic.proto
 
 package pb
 
@@ -121,7 +121,7 @@ var PermissionService_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "logic.proto",
+	Metadata: "app/logic/rpc/logic.proto",
 }
 
 const (
@@ -465,7 +465,7 @@ var UserService_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "logic.proto",
+	Metadata: "app/logic/rpc/logic.proto",
 }
 
 const (
@@ -909,7 +909,7 @@ var ConversationService_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "logic.proto",
+	Metadata: "app/logic/rpc/logic.proto",
 }
 
 const (
@@ -1181,5 +1181,5 @@ var FriendshipService_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "logic.proto",
+	Metadata: "app/logic/rpc/logic.proto",
 }

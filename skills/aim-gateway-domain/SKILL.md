@@ -18,6 +18,7 @@ description: aim 的网关域。对应 `gateway` 模块。
 
 ## 最近变更
 
+- 2026-05-22: 新增 `POST /api/conversations/group` 专用创建群聊端点。请求体只需 `member_ids`（必填）、`name`/`avatar`（可选），无需指定 `conversation_type`。底层复用 `ConversationService.CreateConversation` RPC（固定 `conversation_type="group"`），响应类型与 `POST /api/conversations` 一致。详见 `references/api.md`。
 - 2026-05-22: 新增群管理 REST 端点：`GET /api/conversations/:id/members`（成员详情）、`POST /api/conversations/:id/members`（添加成员）、`DELETE /api/conversations/:id/members/:uid`（移除成员）、`POST /api/conversations/:id/leave`（退出群聊）、`DELETE /api/conversations/:id`（解散群聊）、`PUT /api/conversations/:id`（更新群信息）。`ConversationItem` 和 `CreateConversationResponse` 新增 name/avatar/creator_id 字段。`PushMessage` 传递 `is_system` 字段标识群变更系统消息。详见 `references/api.md` §群管理 REST 端点。
 - 2026-05-22: 修复 `PushPresence` 推送寻址 Bug：`PushPresenceReq` 改用 `TargetUserId` 查找目标用户连接，兼容 `TargetUserId == 0` 时回退到 `UserId`。新增 `TestGatewayServerPushPresenceFallbackToUserId` 测试覆盖回退兼容路径。参见 `references/ws-internals.md` §PushPresence。
 - 2026-05-22: 打通 presence/typing 推送链路：新增 `PushTyping` gRPC、`GET /api/presence/friends` 快照接口；Manager 维护 Redis Set 聚合多设备状态；用 kq.Pusher 真发 `aim.presence.events` 和 `aim.typing.events`；PresenceTTL 默认 45s，客户端心跳 20s。

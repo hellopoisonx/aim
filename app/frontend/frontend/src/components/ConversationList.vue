@@ -5,8 +5,9 @@ import type { Conversation, SearchUserItem } from './types'
 
 interface Props {
   conversations: Conversation[]
-  activeConversationId: number | null
+  activeConversationId: string | null
   currentUserLabel: string
+  currentUserId?: string
   connected: boolean
   pendingFriendCount?: number
   loading?: boolean
@@ -15,7 +16,9 @@ interface Props {
   searchResults?: SearchUserItem[]
   searchLoading?: boolean
   createLoading?: boolean
-  creatingUserId?: number | null
+  creatingUserId?: string | null
+  addFriendLoading?: boolean
+  addingFriendUserId?: string | null
   searchError?: string
 }
 
@@ -28,15 +31,19 @@ const props = withDefaults(defineProps<Props>(), {
   searchLoading: false,
   createLoading: false,
   creatingUserId: null,
+  addFriendLoading: false,
+  addingFriendUserId: null,
+  currentUserId: '',
   searchError: '',
 })
 
 const emit = defineEmits<{
-  select: [conversationId: number]
+  select: [conversationId: string]
   logout: []
   'open-friends': []
   'search-user': [keyword: string]
-  'start-direct': [userId: number]
+  'start-direct': [userId: string]
+  'add-friend': [userId: string]
 }>()
 
 function formatTime(isoString: string | undefined): string {
@@ -115,17 +122,29 @@ function getDisplayName(user: SearchUserItem): string {
           v-for="user in searchResults"
           :key="user.id"
           class="cl-search-item"
-          role="button"
-          tabindex="0"
-          :class="{ 'cl-search-item--loading': createLoading && creatingUserId === user.id }"
-          @click="!createLoading && emit('start-direct', user.id)"
-          @keydown.enter="!createLoading && emit('start-direct', user.id)"
         >
           <ElAvatar :src="user.avatar" :size="28" class="cl-search-avatar">
             {{ getDisplayName(user).slice(0, 1) }}
           </ElAvatar>
           <span class="cl-search-name">{{ getDisplayName(user) }}</span>
-          <span v-if="createLoading && creatingUserId === user.id" class="cl-search-action">创建中</span>
+          <div class="cl-search-actions">
+            <button
+              type="button"
+              class="cl-search-btn"
+              :disabled="addFriendLoading || user.id === currentUserId"
+              @click="emit('add-friend', user.id)"
+            >
+              {{ addFriendLoading && addingFriendUserId === user.id ? '申请中' : '添加好友' }}
+            </button>
+            <button
+              type="button"
+              class="cl-search-btn cl-search-btn--primary"
+              :disabled="createLoading"
+              @click="!createLoading && emit('start-direct', user.id)"
+            >
+              {{ createLoading && creatingUserId === user.id ? '创建中' : '发消息' }}
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -158,7 +177,7 @@ function getDisplayName(user: SearchUserItem): string {
         <!-- Avatar with online badge -->
         <div class="cl-avatar-wrap">
           <span v-if="conv.isOnline" class="cl-online-dot" />
-          <ElBadge :value="conv.unreadCount" :hidden="conv.unreadCount === 0" :max="99" class="cl-badge">
+          <ElBadge :value="conv.unreadCount" :hidden="conv.unreadCount === 0" :max="99" class="cl-badge cl-unread-badge">
             <ElAvatar :src="conv.avatar" :size="42" class="cl-avatar">
               {{ conv.title.slice(0, 1) }}
             </ElAvatar>
@@ -168,7 +187,10 @@ function getDisplayName(user: SearchUserItem): string {
         <!-- Text content -->
         <div class="cl-body">
           <div class="cl-title-row">
-            <span class="cl-title">{{ conv.title }}</span>
+            <span class="cl-title">
+              {{ conv.title }}
+              <span v-if="conv.conversationType === 'group'" class="cl-group-tag">群</span>
+            </span>
             <span v-if="conv.lastMessageAt" class="cl-time">{{ formatTime(conv.lastMessageAt) }}</span>
           </div>
           <p class="cl-preview">{{ conv.lastMessage || '暂无消息' }}</p>
@@ -213,7 +235,7 @@ function getDisplayName(user: SearchUserItem): string {
   font-weight: 500;
 }
 
-.status-online { color: var(--aim-primary); }
+.status-online { color: var(--aim-online); }
 .status-offline { color: var(--aim-text-muted); }
 
 .cl-logout {
@@ -263,14 +285,21 @@ function getDisplayName(user: SearchUserItem): string {
 
 .cl-online-dot {
   position: absolute;
-  top: 0;
+  bottom: 0;
   right: 0;
   width: 10px;
   height: 10px;
-  background: var(--aim-primary);
+  background: var(--aim-online);
   border: 2px solid var(--aim-surface);
   border-radius: 50%;
   z-index: 2;
+}
+
+.cl-unread-badge :deep(.el-badge__content) {
+  top: 0;
+  right: auto;
+  left: 0;
+  transform: translate(-35%, -35%);
 }
 
 /* Loading skeletons */
@@ -364,6 +393,18 @@ function getDisplayName(user: SearchUserItem): string {
   text-overflow: ellipsis;
 }
 
+.cl-group-tag {
+  display: inline-block;
+  margin-left: 4px;
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--aim-primary);
+  border: 1px solid rgba(0, 212, 170, 0.35);
+  border-radius: 3px;
+  padding: 0 4px;
+  vertical-align: middle;
+}
+
 .cl-time {
   font-size: 10px;
   color: var(--aim-text-muted);
@@ -413,7 +454,6 @@ function getDisplayName(user: SearchUserItem): string {
   gap: var(--space-2);
   padding: 6px var(--space-2);
   border-radius: 6px;
-  cursor: pointer;
   transition: background 0.15s;
 }
 
@@ -421,15 +461,37 @@ function getDisplayName(user: SearchUserItem): string {
   background: var(--aim-surface-2);
 }
 
-.cl-search-item--loading {
-  opacity: 0.72;
-  cursor: progress;
+.cl-search-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
 }
 
-.cl-search-action {
-  margin-left: auto;
-  font-size: 10px;
+.cl-search-btn {
+  background: none;
+  border: 1px solid var(--aim-border);
   color: var(--aim-text-muted);
+  font-size: 10px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.cl-search-btn:hover:not(:disabled) {
+  border-color: var(--aim-primary);
+  color: var(--aim-primary);
+}
+
+.cl-search-btn--primary:hover:not(:disabled) {
+  border-color: var(--aim-online);
+  color: var(--aim-online);
+}
+
+.cl-search-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .cl-search-avatar {

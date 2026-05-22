@@ -2,6 +2,7 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import {
+  AddFriend,
   ConnectWS,
   CreateDirectConversation,
   DeviceID,
@@ -9,6 +10,7 @@ import {
   GetConversationHistory,
   GetUserById,
   ListConversations,
+  ListFriendApplications,
   Login,
   Logout,
   Refresh,
@@ -22,14 +24,16 @@ import {
   SessionState,
 } from '../wailsjs/go/main/App'
 import { EventsOn } from '../wailsjs/runtime/runtime'
-import type { client, main } from '../wailsjs/go/models'
+import type { client, main, vueapi } from '../wailsjs/go/models'
 import type { ChatMessage, Conversation, SearchUserItem } from './components/types'
 import LoginView from './views/LoginView.vue'
 import RegisterView from './views/RegisterView.vue'
 import FriendsView from './views/FriendsView.vue'
 import ConversationList from './components/ConversationList.vue'
+import GroupSettingsPanel from './components/GroupSettingsPanel.vue'
 import MessageArea from './components/MessageArea.vue'
 import MessageInput from './components/MessageInput.vue'
+import { formatSystemMessage, isSystemMessageType } from './utils/systemMessage'
 
 // ─── State ───────────────────────────────────────────────────────────────────
 
@@ -39,14 +43,14 @@ type ConnectionState = 'connecting' | 'connected' | 'disconnected'
 const authView = ref<AuthView>('login')
 const authLoading = ref(false)
 const deviceId = ref('')
-const currentUserId = ref<number>(0)
+const currentUserId = ref<string>('')
 const currentUserLabel = ref('')
 const connectionState = ref<ConnectionState>('disconnected')
 
 const conversations = ref<Conversation[]>([])
-const activeConversationId = ref<number | null>(null)
-const messagesMap = ref<Map<number, ChatMessage[]>>(new Map())
-const historyLoadedSet = ref<Set<number>>(new Set())
+const activeConversationId = ref<string | null>(null)
+const messagesMap = ref<Map<string, ChatMessage[]>>(new Map())
+const historyLoadedSet = ref<Set<string>>(new Set())
 const historyLoading = ref(false)
 
 // ─── User search / direct conversation ────────────────────────────────────────
@@ -54,17 +58,21 @@ const searchKeyword = ref('')
 const searchResults = ref<SearchUserItem[]>([])
 const searchLoading = ref(false)
 const createLoading = ref(false)
-const creatingUserId = ref<number | null>(null)
+const creatingUserId = ref<string | null>(null)
+const addFriendLoading = ref(false)
+const addingFriendUserId = ref<string | null>(null)
 const searchError = ref('')
 
 // ─── Friends view ─────────────────────────────────────────────────────────────
 const friendsViewVisible = ref(false)
+const friendsInitialTab = ref<'friends' | 'applications' | 'create-group'>('friends')
 const pendingFriendAppCount = ref(0)
+const groupSettingsVisible = ref(false)
 
 // ─── Presence / Typing / Heartbeat ────────────────────────────────────────────
-const onlineUserIds = ref<Set<number>>(new Set())
+const onlineUserIds = ref<Set<string>>(new Set())
 // `typingInfo` is now a Map keyed by conversationId to support multiple simultaneous typing indicators.
-const typingInfo = ref<Map<number, { userId: number; timer: ReturnType<typeof setTimeout> }>>(new Map())
+const typingInfo = ref<Map<string, { userId: string; timer: ReturnType<typeof setTimeout> }>>(new Map())
 const lastReadSeq = ref(0)
 let heartbeatTimer: ReturnType<typeof setInterval> | null = null
 // TYPING_TIMEOUT_MS mirrors the 4s clear timeout used on receipt of PUSH_TYPING.
@@ -89,42 +97,117 @@ const activeMessages = computed<ChatMessage[]>(() => {
 })
 
 /** The user ID currently typing in the active conversation, or null */
-const typingUserId = computed<number | null>(() => {
+const typingUserId = computed<string | null>(() => {
   if (activeConversationId.value === null) return null
   const entry = typingInfo.value.get(activeConversationId.value)
   return entry?.userId ?? null
 })
 
-const isAuthenticated = computed(() => currentUserId.value > 0 && deviceId.value !== '')
+const isAuthenticated = computed(() => currentUserId.value !== '' && deviceId.value !== '')
 const isConnected = computed(() => connectionState.value === 'connected')
+
+function mapHistoryMessage(
+  m: vueapi.MessageItem,
+  conv: Conversation | undefined,
+): ChatMessage {
+  const isSystem = isSystemMessageType(m.message_type, false)
+  const remoteName = conv?.title ?? '未知用户'
+  return {
+    id: m.id,
+    conversationId: m.conversation_id,
+    senderId: m.sender_id,
+    senderName: isSystem ? '系统' : (m.sender_id === currentUserId.value ? currentUserLabel.value : remoteName),
+    senderAvatar: '',
+    content: isSystem ? formatSystemMessage(m.content) : m.content,
+    timestamp: new Date(m.created_at).toISOString(),
+    isMine: !isSystem && m.sender_id === currentUserId.value,
+    isSystem,
+  }
+}
+
+function displayNameFromUser(user: vueapi.UserInfo | undefined, fallback: string): string {
+  if (!user) return fallback
+  const nickname = user.nickname?.trim()
+  if (nickname) return nickname
+  const atIdx = user.email.indexOf('@')
+  return atIdx > 0 ? user.email.slice(0, atIdx) : user.email
+}
+
+async function buildConversationFromItem(item: vueapi.ConversationItem): Promise<Conversation> {
+  const convType = (item.conversation_type === 'group' ? 'group' : 'direct') as 'direct' | 'group'
+  const serverName = item.name?.trim() ?? ''
+  let title = serverName
+  let avatar = item.avatar ?? ''
+  const otherIds = (item.member_ids ?? []).filter((id: string) => id !== currentUserId.value)
+  const otherId = otherIds.length > 0 ? otherIds[0] : ''
+
+  if (convType === 'direct') {
+    if (!title && otherId !== '') {
+      try {
+        const userResp = await GetUserById(otherId)
+        if (userResp?.user) {
+          title = displayNameFromUser(userResp.user, `用户 ${otherId}`)
+          if (!avatar) avatar = userResp.user.avatar ?? ''
+        }
+      } catch { /* use placeholder */ }
+    }
+    if (!title) title = otherId !== '' ? `用户 ${otherId}` : `会话 ${item.conversation_id}`
+    return {
+      id: item.conversation_id,
+      title,
+      avatar,
+      lastMessage: '',
+      lastMessageAt: '',
+      unreadCount: 0,
+      isOnline: onlineUserIds.value.has(otherId),
+      conversationType: convType,
+      creatorId: item.creator_id,
+      memberIds: item.member_ids ?? [],
+    }
+  }
+
+  if (!title) title = `群聊 ${item.conversation_id}`
+
+  return {
+    id: item.conversation_id,
+    title,
+    avatar,
+    lastMessage: '',
+    lastMessageAt: '',
+    unreadCount: 0,
+    isOnline: false,
+    conversationType: convType,
+    creatorId: item.creator_id,
+    memberIds: item.member_ids ?? [],
+  }
+}
+
+function upsertConversation(conv: Conversation) {
+  const idx = conversations.value.findIndex((c) => c.id === conv.id)
+  if (idx >= 0) {
+    conversations.value.splice(idx, 1, conv)
+  } else {
+    conversations.value.unshift(conv)
+  }
+}
 
 // ─── Conversation history loader ──────────────────────────────────────────────
 
-async function loadConversationHistory(conversationId: number) {
+async function loadConversationHistory(conversationId: string) {
   if (historyLoadedSet.value.has(conversationId) || historyLoading.value) return
   if ((messagesMap.value.get(conversationId)?.length ?? 0) > 0) return
 
   historyLoading.value = true
   try {
-    const resp = await GetConversationHistory(conversationId, 0, 0, 50)
+    const resp = await GetConversationHistory(conversationId, '', 0, 50)
     if (!resp?.messages?.length) {
       historyLoadedSet.value.add(conversationId)
       return
     }
 
     const conv = conversations.value.find((c) => c.id === conversationId)
-    const remoteName = conv?.title ?? '未知用户'
 
-    const hist: ChatMessage[] = resp.messages.map((m: client.MessageItem) => ({
-      id: m.id,
-      conversationId: m.conversation_id,
-      senderId: m.sender_id,
-      senderName: m.sender_id === currentUserId.value ? currentUserLabel.value : remoteName,
-      senderAvatar: '',
-      content: m.content,
-      timestamp: new Date(m.created_at).toISOString(),
-      isMine: m.sender_id === currentUserId.value,
-    }))
+    const hist: ChatMessage[] = resp.messages.map((m: vueapi.MessageItem) => mapHistoryMessage(m, conv))
 
     if (!messagesMap.value.has(conversationId)) {
       messagesMap.value.set(conversationId, [])
@@ -188,21 +271,25 @@ function parseFrameEnvelope(val: unknown): WsFrameEnvelope | null {
 // ─── Create or get conversation from WS push ──────────────────────────────────
 
 async function ensureConversationForPush(
-  conversationId: number,
-  senderId: number,
+  conversationId: string,
+  senderId: string,
+  conversationType?: string,
 ): Promise<Conversation | null> {
   let conv = conversations.value.find((c) => c.id === conversationId)
   if (conv) return conv
 
-  // Try to resolve sender info from server
-  let title = `用户 ${senderId}`
+  const convType = conversationType === 'group' ? 'group' : 'direct'
+  let title = convType === 'group' ? `群聊 ${conversationId}` : `用户 ${senderId}`
   let avatar = ''
-  try {
-    const info = await resolveSenderInfo(senderId)
-    title = info.name
-    avatar = info.avatar
-  } catch {
-    // Use placeholder title
+
+  if (convType === 'direct' && senderId !== '') {
+    try {
+      const info = await resolveSenderInfo(senderId)
+      title = info.name
+      avatar = info.avatar
+    } catch {
+      // Use placeholder title
+    }
   }
 
   // Create local conversation using the push's conversationId (NOT a new one)
@@ -213,7 +300,8 @@ async function ensureConversationForPush(
     lastMessage: '',
     lastMessageAt: '',
     unreadCount: 0,
-    isOnline: onlineUserIds.value.has(senderId),
+    isOnline: convType === 'direct' ? onlineUserIds.value.has(senderId) : false,
+    conversationType: convType,
     memberIds: [senderId, currentUserId.value],
   }
   conversations.value.unshift(conv)
@@ -225,16 +313,30 @@ async function ensureConversationForPush(
   return conv
 }
 
-async function resolveSenderInfo(senderId: number): Promise<{ name: string; avatar: string }> {
+async function resolveSenderInfo(senderId: string): Promise<{ name: string; avatar: string }> {
   try {
     const resp = await GetUserById(senderId)
     if (resp?.user) {
-      const atIndex = resp.user.email.indexOf('@')
-      const name = atIndex > 0 ? resp.user.email.slice(0, atIndex) : resp.user.email
-      return { name, avatar: resp.user.avatar ?? '' }
+      return {
+        name: displayNameFromUser(resp.user, `用户 ${senderId}`),
+        avatar: resp.user.avatar ?? '',
+      }
     }
   } catch { /* ignore */ }
   return { name: `用户 ${senderId}`, avatar: '' }
+}
+
+async function refreshPendingFriendApplications() {
+  if (currentUserId.value === '') return
+  try {
+    const resp = await ListFriendApplications()
+    const pending = (resp?.applications ?? []).filter(
+      (item: { status: string }) => item.status === 'pending',
+    )
+    pendingFriendAppCount.value = pending.length
+  } catch {
+    // Best-effort
+  }
 }
 
 // ─── Wails event handlers ─────────────────────────────────────────────────────
@@ -248,13 +350,13 @@ onMounted(async () => {
   } catch { /* ignore */ }
 
   offHandlers.push(
-    EventsOn('aim:connection_state', async (state: main.SessionState) => {
+    EventsOn('aim:connection_state', async (state: vueapi.SessionState) => {
       if (state.ws_connected) {
         connectionState.value = 'connected'
         reconnectAttempt = 0
         startHeartbeat()
-        // Refresh presence after reconnect.
         refreshPresenceSnapshot()
+        refreshPendingFriendApplications()
       } else {
         connectionState.value = 'disconnected'
         stopHeartbeat()
@@ -278,31 +380,38 @@ onMounted(async () => {
       switch (frameType) {
         // ── PUSH_MESSAGE (101) ──────────────────────────────────────────
         case WS_FRAME.PUSH_MESSAGE: {
-          const conversationId = payload?.conversation_id as number | undefined
-          const senderId = (payload?.sender_id as number) ?? 0
-          const content = (payload?.content as string) ?? ''
+          const conversationId = payload?.conversation_id as string | undefined
+          const senderId = (payload?.sender_id as string) ?? ''
+          const rawContent = (payload?.content as string) ?? ''
           const msgType = (payload?.message_type as string) ?? 'text'
-          const msgId = (payload?.message_id as number) ?? Date.now()
+          const isSystem = isSystemMessageType(msgType, payload?.is_system as boolean | undefined)
+          const msgId = (payload?.message_id as string) ?? String(Date.now())
           const sentAt = payload?.sent_at as number | undefined
           const clientMsgId = payload?.client_msg_id as string | undefined
 
           if (!conversationId) break
 
-          // Skip own messages that we already have optimistically
-          if (senderId === currentUserId.value) break
+          // Skip own messages that we already have optimistically (non-system only)
+          if (!isSystem && senderId === currentUserId.value) break
 
-          const conv = await ensureConversationForPush(conversationId, senderId)
+          const convTypeFromPush = (payload?.conversation_type as string) ?? ''
+          const conv = await ensureConversationForPush(conversationId, senderId, convTypeFromPush)
           if (!conv) break
 
-          // Resolve sender info for the message
-          const senderInfo = await resolveSenderInfo(senderId)
-          // Also update conversation title if it's still a placeholder
-          if (conv.title.startsWith('用户 ')) {
-            conv.title = senderInfo.name
-            conv.avatar = senderInfo.avatar
-            conv.memberIds = conv.memberIds ?? [senderId, currentUserId.value]
+          let senderName = '系统'
+          let senderAvatar = ''
+          if (!isSystem) {
+            const senderInfo = await resolveSenderInfo(senderId)
+            senderName = senderInfo.name
+            senderAvatar = senderInfo.avatar
+            if (conv.conversationType !== 'group' && conv.title.startsWith('用户 ')) {
+              conv.title = senderInfo.name
+              conv.avatar = senderInfo.avatar
+              conv.memberIds = conv.memberIds ?? [senderId, currentUserId.value]
+            }
           }
 
+          const content = isSystem ? formatSystemMessage(rawContent) : rawContent
           const timestamp = sentAt ? new Date(sentAt).toISOString() : new Date().toISOString()
 
           // Check for duplicate
@@ -315,11 +424,12 @@ onMounted(async () => {
             id: msgId,
             conversationId,
             senderId,
-            senderName: senderInfo.name,
-            senderAvatar: senderInfo.avatar,
+            senderName,
+            senderAvatar,
             content,
             timestamp,
             isMine: false,
+            isSystem,
             clientMsgId,
           }
 
@@ -332,21 +442,26 @@ onMounted(async () => {
             messagesMap.value.get(conversationId)!.push(newMsg)
           }
 
-          conv.lastMessage = content
-          conv.lastMessageAt = timestamp
-
-          // Jump strategy
+          let unreadCount = conv.unreadCount ?? 0
           if (activeConversationId.value === null) {
-            // User idle — auto-activate this conversation
             activeConversationId.value = conversationId
-            conv.unreadCount = 0
+            unreadCount = 0
             loadConversationHistory(conversationId)
           } else if (activeConversationId.value === conversationId) {
-            conv.unreadCount = 0
-            // 活跃会话收到新消息时发送已读回执
+            unreadCount = 0
             SendReadReceipt(conversationId, msgId).catch(() => {})
           } else {
-            conv.unreadCount++
+            unreadCount++
+          }
+
+          const convIdx = conversations.value.findIndex((c) => c.id === conversationId)
+          if (convIdx >= 0) {
+            conversations.value.splice(convIdx, 1, {
+              ...conversations.value[convIdx],
+              lastMessage: content,
+              lastMessageAt: timestamp,
+              unreadCount,
+            })
           }
 
           // Send ACK
@@ -358,7 +473,7 @@ onMounted(async () => {
 
         // ── PUSH_PRESENCE (102) ────────────────────────────────────────
         case WS_FRAME.PUSH_PRESENCE: {
-          const userId = payload?.user_id as number | undefined
+          const userId = payload?.user_id as string | undefined
           const status = (payload?.status as string) ?? ''
           if (userId == null) break
 
@@ -388,7 +503,7 @@ onMounted(async () => {
           const notificationType = (payload?.notification_type as string) ?? ''
           const title = (payload?.title as string) ?? ''
           const body = (payload?.body as string) ?? ''
-          const relatedId = payload?.related_id as number | undefined
+          const relatedId = payload?.related_id as string | undefined
           const displayText = [title, body].filter(Boolean).join('：')
           if (displayText) {
             ElMessage.info(displayText)
@@ -399,9 +514,9 @@ onMounted(async () => {
 
         // ── PUSH_TYPING (104) ──────────────────────────────────────────
         case WS_FRAME.PUSH_TYPING: {
-          const conversationId = payload?.conversation_id as number | undefined
-          const userId = payload?.user_id as number | undefined
-          if (conversationId == null || userId == null) break
+          const conversationId = payload?.conversation_id as string | undefined
+          const userId = payload?.user_id as string | undefined
+          if (!conversationId || !userId) break
 
           // Clear any previous timer for this conversation.
           const prev = typingInfo.value.get(conversationId)
@@ -424,11 +539,11 @@ onMounted(async () => {
         case WS_FRAME.PUSH_FRIEND_APPLICATION: {
           const status = (payload?.status as string) ?? ''
           const userEmail = (payload?.user_id != null)
-            ? (await resolveSenderInfo(payload.user_id as number)).name
+            ? (await resolveSenderInfo(payload.user_id as string)).name
             : '有人'
 
           if (status === 'pending') {
-            pendingFriendAppCount.value++
+            await refreshPendingFriendApplications()
             ElMessage.info(`${userEmail} 向你发送了好友申请`)
           } else if (status === 'accepted') {
             ElMessage.success(`${userEmail} 已接受你的好友申请`)
@@ -520,13 +635,13 @@ onUnmounted(() => {
 // ─── Presence snapshot ────────────────────────────────────────────────────────
 
 async function refreshPresenceSnapshot() {
-  if (currentUserId.value <= 0) return
+  if (currentUserId.value === '') return
   try {
     // Dynamic import; GetFriendsPresence is exposed via wails bindings (step 15).
     const { GetFriendsPresence } = await import('../wailsjs/go/main/App')
     const resp = await GetFriendsPresence()
     if (!resp?.presences?.length) return
-    const next = new Set<number>()
+    const next = new Set<string>()
     for (const item of resp.presences) {
       if (item.status === 'online') {
         next.add(item.user_id)
@@ -599,7 +714,7 @@ async function handleLogin(payload: { email: string; password: string; device_id
     const resp = await Login({ email: payload.email, password: payload.password, device_id: payload.device_id })
     if (resp) {
       const state = await SessionState()
-      currentUserId.value = state.user_id ?? 0
+      currentUserId.value = state.user_id ?? ''
       currentUserLabel.value = payload.email.split('@')[0]
       intentionalDisconnect.value = false
       reconnectAttempt = 0
@@ -611,45 +726,20 @@ async function handleLogin(payload: { email: string; password: string; device_id
         await ConnectWS()
         connectionState.value = 'connected'
         // Pull presence snapshot after connect.
-        refreshPresenceSnapshot()
+        await refreshPresenceSnapshot()
+        await refreshPendingFriendApplications()
       } catch {
         ElMessage.warning('已登录，但无法建立实时连接')
       }
+
+      await refreshPendingFriendApplications()
 
       // Load existing conversations from server
       try {
         const listResp = await ListConversations()
         const items = listResp?.conversations ?? []
         if (items.length > 0) {
-          const convPromises = items.map(async (item) => {
-            // Determine the other member (for direct chats)
-            const otherIds = (item.member_ids ?? []).filter((id: number) => id !== currentUserId.value)
-            const otherId = otherIds.length > 0 ? otherIds[0] : 0
-            let title = `会话 ${item.conversation_id}`
-            let avatar = ''
-            if (otherId > 0) {
-              try {
-                const userResp = await GetUserById(otherId)
-                if (userResp?.user) {
-                  const atIdx = userResp.user.email.indexOf('@')
-                  title = atIdx > 0 ? userResp.user.email.slice(0, atIdx) : userResp.user.email
-                  avatar = userResp.user.avatar ?? ''
-                }
-              } catch { /* use placeholder title */ }
-            }
-            const conv: Conversation = {
-              id: item.conversation_id,
-              title,
-              avatar,
-              lastMessage: '',
-              lastMessageAt: '',
-              unreadCount: 0,
-              isOnline: onlineUserIds.value.has(otherId),
-              memberIds: item.member_ids ?? [],
-            }
-            return conv
-          })
-          const loadedConvs = await Promise.all(convPromises)
+          const loadedConvs = await Promise.all(items.map((item) => buildConversationFromItem(item)))
           conversations.value = loadedConvs
           // Load history for each conversation
           for (const conv of loadedConvs) {
@@ -697,7 +787,7 @@ async function handleLogout() {
   } catch {
     // best effort
   }
-  currentUserId.value = 0
+  currentUserId.value = ''
   currentUserLabel.value = ''
   conversations.value = []
   messagesMap.value.clear()
@@ -717,7 +807,7 @@ async function handleLogout() {
 // ─── Conversation handlers ───────────────────────────────────────────────────
 
 // ─── History pagination: 加载更早的历史消息 ──────────────────────────────
-async function handleLoadMoreHistory(conversationId: number) {
+async function handleLoadMoreHistory(conversationId: string) {
   if (historyLoading.value) return
   const conv = conversations.value.find((c) => c.id === conversationId)
   if (!conv?.historyCursor?.hasMore) return
@@ -727,8 +817,8 @@ async function handleLoadMoreHistory(conversationId: number) {
   try {
     const resp = await GetConversationHistory(
       conversationId,
-      cursor.cursorCreatedAt,
       cursor.cursorId,
+      cursor.cursorCreatedAt,
       50,
     )
     if (!resp?.messages?.length) {
@@ -736,17 +826,7 @@ async function handleLoadMoreHistory(conversationId: number) {
       return
     }
 
-    const remoteName = conv.title ?? '未知用户'
-    const olderMsgs: ChatMessage[] = resp.messages.map((m: client.MessageItem) => ({
-      id: m.id,
-      conversationId: m.conversation_id,
-      senderId: m.sender_id,
-      senderName: m.sender_id === currentUserId.value ? currentUserLabel.value : remoteName,
-      senderAvatar: '',
-      content: m.content,
-      timestamp: new Date(m.created_at).toISOString(),
-      isMine: m.sender_id === currentUserId.value,
-    }))
+    const olderMsgs: ChatMessage[] = resp.messages.map((m: vueapi.MessageItem) => mapHistoryMessage(m, conv))
 
     // 将更早的消息追加到列表头部（保持时间顺序）
     const existing = messagesMap.value.get(conversationId) ?? []
@@ -765,7 +845,7 @@ async function handleLoadMoreHistory(conversationId: number) {
   }
 }
 
-function handleSelectConversation(id: number) {
+function handleSelectConversation(id: string) {
   friendsViewVisible.value = false
   activeConversationId.value = id
   const conv = conversations.value.find((c) => c.id === id)
@@ -790,7 +870,7 @@ async function handleSendMessage(content: string) {
   const clientMsgId = Date.now().toString() + '-' + Math.random().toString(36).slice(2, 8)
 
   const optimisticMsg: ChatMessage = {
-    id: Date.now(),
+    id: String(Date.now()),
     conversationId,
     senderId: currentUserId.value,
     senderName: currentUserLabel.value,
@@ -857,13 +937,13 @@ async function handleSearchUsers(keyword: string) {
   }
 }
 
-async function handleStartDirect(userId: number) {
+async function handleStartDirect(userId: string) {
   const user = searchResults.value.find((item) => item.id === userId)
   createLoading.value = true
   creatingUserId.value = userId
   try {
     const resp = await CreateDirectConversation(userId)
-    const title = user ? displayUserName(user) : `用户 ${userId}`
+    const title = resp.name?.trim() || (user ? displayUserName(user) : `用户 ${userId}`)
     const newConv: Conversation = {
       id: resp.conversation_id,
       title,
@@ -872,6 +952,7 @@ async function handleStartDirect(userId: number) {
       lastMessageAt: '',
       unreadCount: 0,
       isOnline: onlineUserIds.value.has(userId),
+      conversationType: 'direct',
       memberIds: resp.member_ids ?? [userId, currentUserId.value],
     }
     const idx = conversations.value.findIndex((c) => c.id === resp.conversation_id)
@@ -898,17 +979,40 @@ async function handleStartDirect(userId: number) {
 // ─── Friends view handlers ────────────────────────────────────────────────────
 
 function handleOpenFriends() {
+  friendsInitialTab.value = pendingFriendAppCount.value > 0 ? 'applications' : 'friends'
   friendsViewVisible.value = true
-  pendingFriendAppCount.value = 0
+}
+
+async function handleAddFriend(userId: string) {
+  if (userId === currentUserId.value) return
+  if (addFriendLoading.value) return
+  addFriendLoading.value = true
+  addingFriendUserId.value = userId
+  // #region agent log
+  fetch('http://127.0.0.1:7448/ingest/f55c4ddd-4668-4f70-bd8a-b6b233ad8684',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'0bb7cd'},body:JSON.stringify({sessionId:'0bb7cd',hypothesisId:'A',location:'App.vue:handleAddFriend',message:'add friend user id',data:{userId,jsNumber:Number(userId)},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
+  try {
+    await AddFriend(userId)
+    ElMessage.success('好友申请已发送')
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : '添加好友失败'
+    ElMessage.error(msg)
+  } finally {
+    addFriendLoading.value = false
+    addingFriendUserId.value = null
+  }
+}
+
+function handleApplicationsUpdated() {
+  refreshPendingFriendApplications()
 }
 
 function handleFriendsStartConversation(
-  conversationId: number,
-  friendId: number,
+  conversationId: string,
+  friendId: string,
   title: string,
   avatar: string,
 ) {
-  // Build conversation entry
   const newConv: Conversation = {
     id: conversationId,
     title,
@@ -917,20 +1021,60 @@ function handleFriendsStartConversation(
     lastMessageAt: '',
     unreadCount: 0,
     isOnline: onlineUserIds.value.has(friendId),
+    conversationType: 'direct',
     memberIds: [friendId, currentUserId.value],
   }
-  const idx = conversations.value.findIndex((c) => c.id === conversationId)
-  if (idx >= 0) {
-    conversations.value.splice(idx, 1, newConv)
-  } else {
-    conversations.value.unshift(newConv)
-  }
+  upsertConversation(newConv)
   if (!messagesMap.value.has(conversationId)) {
     messagesMap.value.set(conversationId, [])
   }
   activeConversationId.value = conversationId
   friendsViewVisible.value = false
   loadConversationHistory(conversationId)
+}
+
+function handleFriendsStartGroup(
+  conversationId: string,
+  title: string,
+  avatar: string,
+  memberIds: string[],
+) {
+  const newConv: Conversation = {
+    id: conversationId,
+    title,
+    avatar,
+    lastMessage: '',
+    lastMessageAt: '',
+    unreadCount: 0,
+    isOnline: false,
+    conversationType: 'group',
+    creatorId: currentUserId.value,
+    memberIds,
+  }
+  upsertConversation(newConv)
+  if (!messagesMap.value.has(conversationId)) {
+    messagesMap.value.set(conversationId, [])
+  }
+  activeConversationId.value = conversationId
+  friendsViewVisible.value = false
+  loadConversationHistory(conversationId)
+}
+
+function handleGroupUpdated(updated: Conversation) {
+  upsertConversation(updated)
+}
+
+function handleGroupLeft(conversationId: string) {
+  conversations.value = conversations.value.filter((c) => c.id !== conversationId)
+  messagesMap.value.delete(conversationId)
+  if (activeConversationId.value === conversationId) {
+    activeConversationId.value = null
+  }
+  groupSettingsVisible.value = false
+}
+
+function handleGroupDismissed(conversationId: string) {
+  handleGroupLeft(conversationId)
 }
 
 function displayUserName(user: SearchUserItem): string {
@@ -968,6 +1112,7 @@ function displayUserName(user: SearchUserItem): string {
         :conversations="conversations"
         :active-conversation-id="activeConversationId"
         :current-user-label="currentUserLabel"
+        :current-user-id="currentUserId"
         :connected="isConnected"
         :pending-friend-count="pendingFriendAppCount"
         :search-keyword="searchKeyword"
@@ -975,18 +1120,24 @@ function displayUserName(user: SearchUserItem): string {
         :search-loading="searchLoading"
         :create-loading="createLoading"
         :creating-user-id="creatingUserId"
+        :add-friend-loading="addFriendLoading"
+        :adding-friend-user-id="addingFriendUserId"
         :search-error="searchError"
         @select="handleSelectConversation"
         @logout="handleLogout"
         @open-friends="handleOpenFriends"
         @search-user="handleSearchUsers"
         @start-direct="handleStartDirect"
+        @add-friend="handleAddFriend"
       />
       <FriendsView
         v-else
         :current-user-id="currentUserId"
         :online-user-ids="onlineUserIds"
+        :initial-tab="friendsInitialTab"
         @start-conversation="handleFriendsStartConversation"
+        @start-group="handleFriendsStartGroup"
+        @applications-updated="handleApplicationsUpdated"
         @back="friendsViewVisible = false"
       />
     </div>
@@ -996,6 +1147,15 @@ function displayUserName(user: SearchUserItem): string {
         :messages="activeMessages"
         :typing-user-id="typingUserId"
         @load-more="handleLoadMoreHistory"
+        @open-settings="groupSettingsVisible = true"
+      />
+      <GroupSettingsPanel
+        v-model:visible="groupSettingsVisible"
+        :conversation="activeConversation"
+        :current-user-id="currentUserId"
+        @updated="handleGroupUpdated"
+        @left="handleGroupLeft"
+        @dismissed="handleGroupDismissed"
       />
       <div class="input-area">
         <MessageInput
