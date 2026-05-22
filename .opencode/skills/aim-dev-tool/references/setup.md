@@ -62,6 +62,8 @@ protoc --python_out=../../dev-tool gateway/gateway.proto
 
 ## 目标服务端口
 
+### 本地开发环境
+
 | 服务 | 端口 | 协议 |
 |------|------|------|
 | aim-gateway | `8888` | HTTP REST |
@@ -71,6 +73,32 @@ protoc --python_out=../../dev-tool gateway/gateway.proto
 | aim-logic | `8082` | gRPC |
 
 > dev tool 只直接访问 gateway 的 `8888` 端口，所有后端通信由 gateway 代理。
+
+### 压测环境（`dev-tool/docker-compose.yaml`）
+
+| 服务 | 端口 | 协议 |
+|------|------|------|
+| bench-gateway | `18888` | HTTP REST |
+| bench-gateway | `19090` | gRPC（内部） |
+| bench-auth | `18989` | gRPC |
+| bench-core | `18081` | gRPC |
+| bench-logic | — | gRPC（内部） |
+| bench-postgres | `15432` | PostgreSQL |
+| bench-redis | `16379` | Redis |
+| bench-kafka | `19092` | Kafka |
+| bench-nacos | `18848` | Nacos HTTP |
+| bench-jaeger | `16686` | Jaeger UI |
+
+压测环境配置文件：`dev-tool/etc/{auth,core,gateway-api,logic}.yaml`
+
+启动/停止：
+
+```bash
+cd dev-tool
+docker compose up -d
+# ... 压测 ...
+docker compose down -v  # 停止并清理数据
+```
 
 ## Windows 注意事项
 

@@ -56,6 +56,8 @@ services:
     ports:
       - "8888:8888"  # REST API
       - "9090:9090"  # gRPC
+    environment:
+      AIM_GATEWAY_NODE_ID: 0
     volumes:
       - ./app/gateway/api/etc/gateway-api.yaml:/app/etc/gateway-api.yaml:ro
       - gateway_log:/app/log

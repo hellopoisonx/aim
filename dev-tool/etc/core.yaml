@@ -1,0 +1,81 @@
+Name: core.rpc
+ListenOn: 0.0.0.0:8080
+Telemetry:
+  Name: core.rpc
+  Endpoint: bench-jaeger:4318
+  Sampler: 1.0
+  Batcher: otlphttp
+  OtlpHttpPath: /v1/traces
+Nacos:
+  ServerAddr: bench-nacos:8848
+  NamespaceID: ""
+  Group: DEFAULT_GROUP
+  Cluster: DEFAULT
+  ServiceName: core.rpc
+  AdvertiseIP: bench-core
+  AdvertisePort: 8080
+  Ephemeral: true
+  Weight: 1
+  TimeoutMs: 5000
+  Username: ""
+  Password: ""
+  LogDir: /app/log/nacos
+  CacheDir: /tmp/nacos/cache
+  LogLevel: info
+SnowflakeMachineID: 1
+CacheRedis:
+  Addr: bench-redis:6379
+  Password: ""
+  DB: 0
+LogicRpc:
+  ServerAddr: bench-nacos:8848
+  NamespaceID: ""
+  Group: DEFAULT_GROUP
+  Cluster: DEFAULT
+  ServiceName: logic.rpc
+  AdvertiseIP: ""
+  AdvertisePort: 0
+  Ephemeral: true
+  Weight: 1
+  TimeoutMs: 5000
+  Username: ""
+  Password: ""
+  LogDir: /app/log/nacos
+  CacheDir: /tmp/nacos/cache
+  LogLevel: info
+KqPusherConf:
+  Brokers:
+    - bench-kafka:9092
+  Topic: aim-message-transfer
+KqConsumerConf:
+  Name: core-delivery-consumer
+  Brokers:
+    - bench-kafka:9092
+  Group: aim-core-delivery
+  Topic: aim-message-transfer
+  Offset: first
+  Consumers: 1
+  Processors: 1
+PresenceConsumerConf:
+  Name: core-presence-consumer
+  Brokers:
+    - bench-kafka:9092
+  Group: aim-core-presence
+  Topic: aim.presence.events
+  Offset: first
+  Consumers: 1
+  Processors: 1
+TypingConsumerConf:
+  Name: core-typing-consumer
+  Brokers:
+    - bench-kafka:9092
+  Group: aim-core-typing
+  Topic: aim.typing.events
+  Offset: first
+  Consumers: 1
+  Processors: 1
+GatewayRpc:
+  ServiceName: gateway.rpc
+  Target: bench-gateway:9090
+Presence:
+  TTLSeconds: 30

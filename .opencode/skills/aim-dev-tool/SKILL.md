@@ -132,6 +132,12 @@ dev-tool/aim_test.py
 - `ws_pb2.py` / `gateway_pb2.py`：编译自 `shared/proto/ws/ws.proto` / `shared/proto/gateway/gateway.proto`
 - `requests`, `websocket-client`, `protobuf`
 
+## 约定
+
+- 压测环境与本地开发环境通过端口 +10000 偏移隔离，互不影响；压测环境服务名统一 `bench-` 前缀。
+- Gateway 容器需设置 `AIM_GATEWAY_NODE_ID` 环境变量（Snowflake 机器 ID），主开发环境为 `0`，压测环境也为 `0`（因两者不会同时运行于同一数据库）。
+- Fixture 数据（`user.json`、`msg.txt`）由 `generate_fixtures.py` 生成，不要手动编辑；如需自定义数量用 `--count` 参数。
+
 ## 故障排查
 
 ### Windows 编码错误
@@ -187,6 +193,56 @@ func (f *fakeQuerier) ListFriends(ctx context.Context, userID int64) ([]model.Fr
 - `references/setup.md`：环境与配置（aim_test + benchmark 通用）
 - `references/commands.md`：aim_test 命令参考 + benchmark 命令参考
 
+### 压测环境（独立 Docker Compose）
+
+`dev-tool/docker-compose.yaml` 提供独立于本地开发的压测环境，所有端口 +10000 偏移避免冲突：
+
+| 服务 | 压测端口 | 开发端口 | 偏移 |
+|------|---------|---------|------|
+| gateway REST | 18888 | 8888 | +10000 |
+| gateway gRPC | 19090 | 9090 | +10000 |
+| auth gRPC | 18989 | 8989 | +10000 |
+| core gRPC | 18081 | 8080 | +10000 |
+| PostgreSQL | 15432 | 5432 | +10000 |
+| Redis | 16379 | 6379 | +10000 |
+| Kafka | 19092 | 9092 | +10000 |
+| Nacos | 18848 | 8848 | +10000 |
+| Jaeger UI | 16686 | 16686 | 共享 |
+
+压测环境配置文件在 `dev-tool/etc/`，服务名均以 `bench-` 前缀，容器间通过 `bench-network` 通信。
+
+启动压测环境：
+
+```bash
+cd dev-tool
+docker compose up -d                    # 启动压测环境
+python benchmark.py register --users 100
+python benchmark.py ws-message --users 20 --messages-per-user 100
+docker compose down -v                  # 停止并清理数据
+```
+
+压测时需指向压测端口：
+
+```bash
+export AIM_GATEWAY_HTTP=http://127.0.0.1:18888
+export AIM_GATEWAY_WS=ws://127.0.0.1:18888/ws
+```
+
+### Fixture 生成
+
+`dev-tool/generate_fixtures.py` 生成压测所需的测试数据：
+
+```bash
+cd dev-tool
+python generate_fixtures.py                # 默认 1000 条
+python generate_fixtures.py --count 5000   # 自定义数量
+```
+
+输出：
+- `user.json`：批量注册用户数据（email, password, username）
+- `msg.txt`：随机消息字符串（每行一条，混合中文/英文/数字）
+
 ## 最近变更
 
+- 2026-05-22: 新增独立压测 Docker Compose 环境（`dev-tool/docker-compose.yaml`，端口 +10000 偏移）、压测专属配置（`dev-tool/etc/`）、Fixture 生成器（`dev-tool/generate_fixtures.py`）。主 `docker-compose.yaml` 为 gateway 添加 `AIM_GATEWAY_NODE_ID: 0` 环境变量。
 - 2026-05-22: `--quiet` 彻底静默。现在会同时（1）设 `aim_test.VERBOSE=False` 拑制 WSClient 调试输出；（2）将 `websocket`/`urllib3`/`requests` logger 降为 CRITICAL；（3）为 setup-阶段 LoadGenerator 传 `verbose=False` 以去掉注册/创建会话阶段的进度条与中间汇总。CLI 所有场景（含 register/login/friend-chain）都支持 `--quiet`。

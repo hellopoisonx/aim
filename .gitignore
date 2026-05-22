@@ -9,6 +9,8 @@ coverage*
 *.exe
 /dev-tool/__pycache__
 /dev-tool/*.json
+/dev-tool/msg.txt
+/dev-tool/.aim_state.json
 /plan
 /plans
 /.mcp.json

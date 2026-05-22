@@ -1,0 +1,297 @@
+# AIM Benchmark Environment
+# ========================================================================
+# 独立于本地开发环境的压测环境，端口全部 +10000 偏移，避免冲突。
+#
+# 用法:
+#   docker compose up -d                    # 启动压测环境
+#   python benchmark.py register --users 100
+#   docker compose down -v                  # 停止并清理数据
+#
+# 环境变量:
+#   AIM_GATEWAY_HTTP=http://127.0.0.1:18888  (压测 gateway REST)
+#   AIM_GATEWAY_WS=ws://127.0.0.1:18888/ws   (压测 gateway WS)
+# ========================================================================
+
+services:
+  # ==================== AIM Services ====================
+
+  bench-auth:
+    build:
+      context: ..
+      dockerfile: app/auth/rpc/Dockerfile
+    container_name: bench-auth
+    ports:
+      - "18989:8989"
+    volumes:
+      - ./etc/auth.yaml:/app/etc/auth.yaml:ro
+      - bench_auth_log:/app/log
+    depends_on:
+      bench-auth-migrate:
+        condition: service_completed_successfully
+      bench-redis:
+        condition: service_healthy
+      bench-postgres:
+        condition: service_healthy
+      bench-kafka:
+        condition: service_healthy
+      bench-kafka-init:
+        condition: service_completed_successfully
+      bench-nacos:
+        condition: service_healthy
+      bench-jaeger:
+        condition: service_started
+    networks:
+      - bench-network
+
+  bench-auth-migrate:
+    image: postgres:17-alpine
+    container_name: bench-auth-migrate
+    depends_on:
+      bench-postgres:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: benchpassword
+    volumes:
+      - ../app/auth/rpc/model/migrations:/migrations:ro
+    command:
+      - sh
+      - -c
+      - |
+        psql -h bench-postgres -U benchuser -d postgres -tc "SELECT 1 FROM pg_database WHERE datname = 'aim_auth'" | grep -q 1 || psql -h bench-postgres -U benchuser -d postgres -c "CREATE DATABASE aim_auth"
+        psql -h bench-postgres -U benchuser -d aim_auth -f /migrations/000_init.sql
+    networks:
+      - bench-network
+
+  bench-gateway:
+    build:
+      context: ..
+      dockerfile: app/gateway/Dockerfile
+    container_name: bench-gateway
+    ports:
+      - "18888:8888"   # REST API (+10000)
+      - "19090:9090"   # gRPC   (+10000)
+    environment:
+      AIM_GATEWAY_NODE_ID: 0
+    volumes:
+      - ./etc/gateway-api.yaml:/app/etc/gateway-api.yaml:ro
+      - bench_gateway_log:/app/log
+    depends_on:
+      bench-redis:
+        condition: service_healthy
+      bench-postgres:
+        condition: service_healthy
+      bench-kafka:
+        condition: service_healthy
+      bench-kafka-init:
+        condition: service_completed_successfully
+      bench-nacos:
+        condition: service_healthy
+      bench-jaeger:
+        condition: service_started
+    networks:
+      - bench-network
+
+  bench-logic:
+    build:
+      context: ..
+      dockerfile: app/logic/rpc/Dockerfile
+    container_name: bench-logic
+    volumes:
+      - ./etc/logic.yaml:/app/etc/logic.yaml:ro
+      - bench_logic_log:/app/log
+    depends_on:
+      bench-logic-migrate:
+        condition: service_completed_successfully
+      bench-redis:
+        condition: service_healthy
+      bench-kafka:
+        condition: service_healthy
+      bench-kafka-init:
+        condition: service_completed_successfully
+      bench-nacos:
+        condition: service_healthy
+      bench-jaeger:
+        condition: service_started
+    networks:
+      - bench-network
+
+  bench-logic-migrate:
+    image: postgres:17-alpine
+    container_name: bench-logic-migrate
+    depends_on:
+      bench-postgres:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: benchpassword
+    volumes:
+      - ../app/logic/rpc/model/migrations:/migrations:ro
+    command:
+      - sh
+      - -c
+      - |
+        psql -h bench-postgres -U benchuser -d postgres -tc "SELECT 1 FROM pg_database WHERE datname = 'aim_logic'" | grep -q 1 || psql -h bench-postgres -U benchuser -d postgres -c "CREATE DATABASE aim_logic"
+        psql -h bench-postgres -U benchuser -d aim_logic -f /migrations/000_extensions.sql
+        psql -h bench-postgres -U benchuser -d aim_logic -f /migrations/001_initial_permission.sql
+        psql -h bench-postgres -U benchuser -d aim_logic -f /migrations/002_messages.sql
+        psql -h bench-postgres -U benchuser -d aim_logic -f /migrations/003_user_info.sql
+    networks:
+      - bench-network
+
+  bench-core:
+    build:
+      context: ..
+      dockerfile: app/core/rpc/Dockerfile
+    container_name: bench-core
+    ports:
+      - "18081:8080"
+    volumes:
+      - ./etc/core.yaml:/app/etc/core.yaml:ro
+      - bench_core_log:/app/log
+    depends_on:
+      bench-redis:
+        condition: service_healthy
+      bench-postgres:
+        condition: service_healthy
+      bench-kafka:
+        condition: service_healthy
+      bench-kafka-init:
+        condition: service_completed_successfully
+      bench-nacos:
+        condition: service_healthy
+      bench-jaeger:
+        condition: service_started
+      bench-logic:
+        condition: service_started
+    networks:
+      - bench-network
+
+  # ==================== Data Stores ====================
+
+  bench-postgres:
+    image: postgres:17-alpine
+    container_name: bench-postgres
+    environment:
+      POSTGRES_USER: benchuser
+      POSTGRES_PASSWORD: benchpassword
+      POSTGRES_DB: aim_auth
+    ports:
+      - "15432:5432"
+    volumes:
+      - bench_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U benchuser -d aim_auth"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - bench-network
+
+  bench-redis:
+    image: redis/redis-stack-server:7.4.0-v8
+    container_name: bench-redis
+    ports:
+      - "16379:6379"
+    volumes:
+      - bench_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - bench-network
+
+  bench-kafka:
+    image: apache/kafka:4.0.2
+    container_name: bench-kafka
+    environment:
+      - KAFKA_NODE_ID=0
+      - KAFKA_PROCESS_ROLES=broker,controller
+      - KAFKA_LISTENERS=PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+      - KAFKA_CONTROLLER_QUORUM_VOTERS=0@127.0.0.1:9093
+      - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://bench-kafka:9092
+      - KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER
+      - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      - KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1
+      - KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1
+      - KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1
+      - KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0
+      - KAFKA_NUM_PARTITIONS=3
+    ports:
+      - "19092:9092"
+    volumes:
+      - bench_kafka_data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - bench-network
+
+  bench-kafka-init:
+    image: apache/kafka:4.0.2
+    container_name: bench-kafka-init
+    depends_on:
+      bench-kafka:
+        condition: service_healthy
+    command:
+      - sh
+      - -c
+      - |
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server bench-kafka:9092 --create --if-not-exists --topic aim.user.events --partitions 3 --replication-factor 1
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server bench-kafka:9092 --create --if-not-exists --topic aim-message-transfer --partitions 3 --replication-factor 1
+    networks:
+      - bench-network
+
+  bench-nacos:
+    image: nacos/nacos-server:v2.5.1
+    container_name: bench-nacos
+    environment:
+      - MODE=standalone
+      - NACOS_AUTH_ENABLE=false
+    ports:
+      - "18848:8848"
+      - "19848:9848"
+      - "19849:9849"
+    volumes:
+      - bench_nacos_data:/home/nacos/data
+      - bench_nacos_logs:/home/nacos/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8848/nacos/index.html"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - bench-network
+
+  # ==================== Observability ====================
+
+  bench-jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: bench-jaeger
+    ports:
+      - "16686:16686"    # Jaeger UI（共享，本地开发未占用）
+      - "14317:4317"     # OTLP gRPC
+      - "14318:4318"     # OTLP HTTP
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+      - SPAN_STORAGE_TYPE=memory
+    networks:
+      - bench-network
+
+networks:
+  bench-network:
+    driver: bridge
+
+volumes:
+  bench_postgres_data:
+  bench_redis_data:
+  bench_kafka_data:
+  bench_nacos_data:
+  bench_nacos_logs:
+  bench_gateway_log:
+  bench_auth_log:
+  bench_logic_log:
+  bench_core_log:
