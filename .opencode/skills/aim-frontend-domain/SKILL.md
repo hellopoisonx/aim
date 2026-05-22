@@ -91,4 +91,5 @@ go test -cover ./app/frontend/...
 ```
 - 2026-05-22: 打通 presence/typing 推送链路：新增 `GetFriendsPresence()` REST 调用及快照接口；`typingInfo` 改为 Map 支持多会话同时输入；`MessageInput.vue` 加 2.5s 节流；PUSH_PRESENCE 严格 online/offline；连接/重连后拉快照；心跳从 30s 改 20s。
 - 2026-05-22: 新增 `CreateConversationRequest` 通用创建会话结构体（支持 direct/group + member_ids 数组）；`CreateConversation()` 参数校验统一返回 `errorx.CodeBadInput`（40000）；`CreateDirectConversation()` 改为薄包装；新增群聊创建测试和参数校验测试；Vue 新增自动重连（指数退避，最多 5 次）、历史消息游标分页（`historyCursor` + `load-more` emit）、活跃会话自动发送已读回执、TOKEN_EXPIRED 后自动重连 WS、ACK 状态图标显示；FriendsView 修复 key/id 错误；`ProtocolCatalog` 测试期望值修正为 15 REST + 13 帧；Wails 绑定重新生成。
+- 2026-05-22: 修复 `ensureConversationForPush` 错误创建新会话 Bug：收到推送时不再调 `CreateDirectConversation`，改用 push 中的原始 `conversationId` 创建本地会话；新增 `resolveSenderInfo` 获取用户信息（fallback 占位标题 `用户 ${senderId}`）。详见 `references/ws-frame-handling.md`。
 - 2026-05-20: 修复客户端消息回推处理：解析 PushMessagePayload 的 message_id/sent_at/client_msg_id，按 client_msg_id 替换乐观消息，并在未知 conversation_id 收到消息时创建真实会话条目。

@@ -66,7 +66,7 @@ const WS_FRAME = {
 
 | frameType | 值 | 处理逻辑 |
 |---|---|---|
-| `PUSH_MESSAGE` | 101 | 解析 `conversation_id`/`sender_id`/`content`/`message_id`/`sent_at`/`client_msg_id`。跳过自己的消息（`senderId === currentUserId`）。按 `client_msg_id` 替换乐观消息（去重）。未知 `conversation_id` 时通过 `ensureConversationForPush` 创建会话条目。活跃会话自动发送 `SendReadReceipt`。发送 `SendAck(seq)`。 |
+| `PUSH_MESSAGE` | 101 | 解析 `conversation_id`/`sender_id`/`content`/`message_id`/`sent_at`/`client_msg_id`。跳过自己的消息（`senderId === currentUserId`）。按 `client_msg_id` 替换乐观消息（去重）。未知 `conversation_id` 时通过 `ensureConversationForPush` 创建**本地**会话条目（**不再**调 `CreateDirectConversation` 创建新服务端会话）。活跃会话自动发送 `SendReadReceipt`。发送 `SendAck(seq)`。 |
 | `PUSH_PRESENCE` | 102 | 仅接受 `online`/`offline` 状态，更新 `onlineUserIds` Set，更新对应会话的 `isOnline` 状态。连接/重连后通过 `GetFriendsPresence()` 拉快照补齐。 |
 | `PUSH_NOTIFICATION` | 103 | 解析 `notification_type`/`title`/`body`，用 `ElMessage.info()` 显示通知。 |
 | `PUSH_TYPING` | 104 | 按 `conversation_id` 维度维护 `typingInfo` Map，4 秒后自动清除该条目。客户端发送 typing 帧时按 2.5s 节流。 |
@@ -100,6 +100,42 @@ WS 断开
 ### 已读回执自动发送
 
 活跃会话（`activeConversationId === conversationId`）收到 `PUSH_MESSAGE` 时，自动调用 `SendReadReceipt(conversationId, msgId)`，将最后一条已读消息 ID 回传服务端。
+
+### `ensureConversationForPush` — 推送时的本地会话创建
+
+当 `PUSH_MESSAGE` 指向一个本地不存在的 `conversation_id` 时调用。
+
+#### 行为（修复后）
+
+1. 先查本地 `conversations` 数组，命中则直接返回
+2. 尝试调 `resolveSenderInfo(senderId)` 获取对方 `name`/`avatar`（通过 `GetUserById`）
+   - 失败时使用占位标题 `用户 ${senderId}`
+3. 用 push 中的 `conversationId` 创建本地 `Conversation` 对象，**不再调 `CreateDirectConversation`**
+4. 插入 `conversations` 数组头部，初始化 `messagesMap` 空数组
+5. 后台调 `loadConversationHistory(conversationId)` 拉取历史
+
+```typescript
+// 关键：使用 push 中的 conversationId，不是服务端新分配的 ID
+conv = {
+  id: conversationId,  // ← 从 push 帧携带的 conversation_id
+  title,
+  avatar,
+  lastMessage: '',
+  lastMessageAt: '',
+  unreadCount: 0,
+  isOnline: onlineUserIds.value.has(senderId),
+  memberIds: [senderId, currentUserId.value],
+}
+conversations.value.unshift(conv)
+messagesMap.value.set(conversationId, [])
+loadConversationHistory(conversationId)
+```
+
+#### 反模式（已修复）
+
+- **不要**在 `ensureConversationForPush` 中调用 `CreateDirectConversation`。这会导致每次收到未知会话的推送都创建一个**新**服务端会话，产生新的 `conversation_id`，使得客户端本地与 push 中的 `conversationId` 不一致。用户点击该会话回复时会使用错误的 ID。
+- **不要**在 `ensureConversationForPush` 中 `await` 历史加载完成；`loadConversationHistory` 应后台异步执行，避免阻塞消息显示。
+- **不要**跳过 `resolveSenderInfo` 的异常捕获；`CreateDirectConversation` 可能已经不在调用链中，但 `GetUserById` 仍可能因网络问题失败，必须有 fallback 占位。
 
 ## 历史消息游标分页
 

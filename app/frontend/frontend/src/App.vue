@@ -194,39 +194,35 @@ async function ensureConversationForPush(
   let conv = conversations.value.find((c) => c.id === conversationId)
   if (conv) return conv
 
-  // Try to create a direct conversation
+  // Try to resolve sender info from server
+  let title = `用户 ${senderId}`
+  let avatar = ''
   try {
-    const resp = await CreateDirectConversation(senderId)
-    const title = `用户 ${senderId}`
-    conv = {
-      id: resp.conversation_id,
-      title,
-      avatar: '',
-      lastMessage: '',
-      lastMessageAt: '',
-      unreadCount: 0,
-      isOnline: onlineUserIds.value.has(senderId),
-      memberIds: resp.member_ids ?? [senderId, currentUserId.value],
-    }
-    conversations.value.unshift(conv)
-    messagesMap.value.set(conversationId, [])
-    return conv
+    const info = await resolveSenderInfo(senderId)
+    title = info.name
+    avatar = info.avatar
   } catch {
-    // Fallback: create a placeholder without server call
-    conv = {
-      id: conversationId,
-      title: `用户 ${senderId}`,
-      avatar: '',
-      lastMessage: '',
-      lastMessageAt: '',
-      unreadCount: 0,
-      isOnline: onlineUserIds.value.has(senderId),
-      memberIds: [senderId, currentUserId.value],
-    }
-    conversations.value.unshift(conv)
-    messagesMap.value.set(conversationId, [])
-    return conv
+    // Use placeholder title
   }
+
+  // Create local conversation using the push's conversationId (NOT a new one)
+  conv = {
+    id: conversationId,
+    title,
+    avatar,
+    lastMessage: '',
+    lastMessageAt: '',
+    unreadCount: 0,
+    isOnline: onlineUserIds.value.has(senderId),
+    memberIds: [senderId, currentUserId.value],
+  }
+  conversations.value.unshift(conv)
+  messagesMap.value.set(conversationId, [])
+
+  // Load history in background
+  loadConversationHistory(conversationId)
+
+  return conv
 }
 
 async function resolveSenderInfo(senderId: number): Promise<{ name: string; avatar: string }> {
