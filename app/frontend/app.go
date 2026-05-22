@@ -87,6 +87,22 @@ type ProtocolCatalog struct {
 type CreateConversationRequest struct {
 	ConversationType string  `json:"conversation_type" validate:"required,oneof=direct group"`
 	MemberIDs        []int64 `json:"member_ids" validate:"required,min=1"`
+	Name             string  `json:"name,optional"`
+}
+
+type CreateGroupRequest struct {
+	MemberIDs []int64 `json:"member_ids" validate:"required,min=1"`
+	Name      string  `json:"name,optional"`
+	Avatar    string  `json:"avatar,optional"`
+}
+
+type AddGroupMembersRequest struct {
+	MemberIDs []int64 `json:"member_ids" validate:"required,min=1"`
+}
+
+type UpdateGroupInfoRequest struct {
+	Name   *string `json:"name,optional"`
+	Avatar *string `json:"avatar,optional"`
 }
 
 type SendMessageRequest struct {
@@ -309,9 +325,141 @@ func (a *App) CreateConversation(req CreateConversationRequest) (*client.CreateC
 	payload := &client.CreateConversationRequest{
 		ConversationType: convType,
 		MemberIDs:        req.MemberIDs,
+		Name:             strings.TrimSpace(req.Name),
 	}
 
 	return a.restClient().CreateConversation(a.callContext(), payload, accessToken)
+}
+
+func (a *App) CreateGroup(req CreateGroupRequest) (*client.CreateConversationResponse, error) {
+	a.mu.RLock()
+	accessToken := a.accessToken
+	a.mu.RUnlock()
+
+	if accessToken == "" {
+		return nil, errorx.NewCodeError(errorx.CodeAuth, "missing access token")
+	}
+
+	if len(req.MemberIDs) == 0 {
+		return nil, errorx.NewCodeError(errorx.CodeBadInput, "member_ids must contain at least one user")
+	}
+
+	payload := &client.CreateGroupRequest{
+		MemberIDs: req.MemberIDs,
+		Name:      strings.TrimSpace(req.Name),
+		Avatar:    strings.TrimSpace(req.Avatar),
+	}
+
+	return a.restClient().CreateGroup(a.callContext(), payload, accessToken)
+}
+
+func (a *App) GetConversationMembers(conversationID int64) (*client.GetConversationMembersResponse, error) {
+	a.mu.RLock()
+	accessToken := a.accessToken
+	a.mu.RUnlock()
+
+	if accessToken == "" {
+		return nil, errorx.NewCodeError(errorx.CodeAuth, "missing access token")
+	}
+
+	if conversationID <= 0 {
+		return nil, errorx.NewCodeError(errorx.CodeBadInput, "conversation id is required")
+	}
+
+	return a.restClient().GetConversationMembers(a.callContext(), conversationID, accessToken)
+}
+
+func (a *App) AddGroupMembers(conversationID int64, req AddGroupMembersRequest) (*client.CreateConversationResponse, error) {
+	a.mu.RLock()
+	accessToken := a.accessToken
+	a.mu.RUnlock()
+
+	if accessToken == "" {
+		return nil, errorx.NewCodeError(errorx.CodeAuth, "missing access token")
+	}
+
+	if conversationID <= 0 {
+		return nil, errorx.NewCodeError(errorx.CodeBadInput, "conversation id is required")
+	}
+
+	if len(req.MemberIDs) == 0 {
+		return nil, errorx.NewCodeError(errorx.CodeBadInput, "member_ids must contain at least one user")
+	}
+
+	return a.restClient().AddGroupMembers(a.callContext(), conversationID, &client.AddGroupMembersRequest{
+		MemberIDs: req.MemberIDs,
+	}, accessToken)
+}
+
+func (a *App) RemoveGroupMember(conversationID, userID int64) error {
+	a.mu.RLock()
+	accessToken := a.accessToken
+	a.mu.RUnlock()
+
+	if accessToken == "" {
+		return errorx.NewCodeError(errorx.CodeAuth, "missing access token")
+	}
+
+	if conversationID <= 0 || userID <= 0 {
+		return errorx.NewCodeError(errorx.CodeBadInput, "conversation id and user id are required")
+	}
+
+	return a.restClient().RemoveGroupMember(a.callContext(), conversationID, userID, accessToken)
+}
+
+func (a *App) LeaveGroup(conversationID int64) error {
+	a.mu.RLock()
+	accessToken := a.accessToken
+	a.mu.RUnlock()
+
+	if accessToken == "" {
+		return errorx.NewCodeError(errorx.CodeAuth, "missing access token")
+	}
+
+	if conversationID <= 0 {
+		return errorx.NewCodeError(errorx.CodeBadInput, "conversation id is required")
+	}
+
+	return a.restClient().LeaveGroup(a.callContext(), conversationID, accessToken)
+}
+
+func (a *App) DismissGroup(conversationID int64) error {
+	a.mu.RLock()
+	accessToken := a.accessToken
+	a.mu.RUnlock()
+
+	if accessToken == "" {
+		return errorx.NewCodeError(errorx.CodeAuth, "missing access token")
+	}
+
+	if conversationID <= 0 {
+		return errorx.NewCodeError(errorx.CodeBadInput, "conversation id is required")
+	}
+
+	return a.restClient().DismissGroup(a.callContext(), conversationID, accessToken)
+}
+
+func (a *App) UpdateGroupInfo(conversationID int64, req UpdateGroupInfoRequest) (*client.UpdateGroupInfoResponse, error) {
+	a.mu.RLock()
+	accessToken := a.accessToken
+	a.mu.RUnlock()
+
+	if accessToken == "" {
+		return nil, errorx.NewCodeError(errorx.CodeAuth, "missing access token")
+	}
+
+	if conversationID <= 0 {
+		return nil, errorx.NewCodeError(errorx.CodeBadInput, "conversation id is required")
+	}
+
+	if req.Name == nil && req.Avatar == nil {
+		return nil, errorx.NewCodeError(errorx.CodeBadInput, "name or avatar is required")
+	}
+
+	return a.restClient().UpdateGroupInfo(a.callContext(), conversationID, &client.UpdateGroupInfoRequest{
+		Name:   req.Name,
+		Avatar: req.Avatar,
+	}, accessToken)
 }
 
 func (a *App) CreateDirectConversation(memberID int64) (*client.CreateConversationResponse, error) {
@@ -470,8 +618,15 @@ func (a *App) ProtocolCatalog() ProtocolCatalog {
 			"GET /api/friends/applications",
 			"GET /api/friends/me",
 			"POST /api/conversations",
+			"POST /api/conversations/group",
 			"GET /api/conversations",
 			"GET /api/conversations/history/{id}",
+			"GET /api/conversations/{id}/members",
+			"POST /api/conversations/{id}/members",
+			"DELETE /api/conversations/{id}/members/{uid}",
+			"POST /api/conversations/{id}/leave",
+			"DELETE /api/conversations/{id}",
+			"PUT /api/conversations/{id}",
 			"GET /ws",
 		},
 		Frames: []ProtocolFrame{

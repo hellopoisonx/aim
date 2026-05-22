@@ -25,10 +25,10 @@ func TestGetUserByNameLogic(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "Alice", client.nickname)
 	require.Len(t, got.Users, 2)
-	require.Equal(t, int64(7), got.Users[0].Id)
+	require.Equal(t, "7", got.Users[0].Id)
 	require.Equal(t, "alice@example.com", got.Users[0].Email)
 	require.Equal(t, "https://example.com/alice.png", got.Users[0].Avatar)
-	require.Equal(t, int64(8), got.Users[1].Id)
+	require.Equal(t, "8", got.Users[1].Id)
 }
 
 func TestGetUserByNameLogicRequiresName(t *testing.T) {

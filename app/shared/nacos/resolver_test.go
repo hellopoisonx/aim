@@ -150,7 +150,7 @@ func TestResolverBuilder_SubscribeCallback_RemovesInstances(t *testing.T) {
 	}, nil)
 
 	assert.Len(t, cc.state.Addresses, 1)
-	assert.Error(t, cc.err)
+	require.Error(t, cc.err)
 
 	r.Close()
 }

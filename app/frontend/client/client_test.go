@@ -161,7 +161,7 @@ func TestRESTClientSearchUsersByName(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(Envelope{
 			Code: 0,
 			Msg:  "ok",
-			Body: json.RawMessage(`{"users":[{"id":1001,"email":"alice@example.com","avatar":"https://example.com/alice.png"}]}`),
+			Body: json.RawMessage(`{"users":[{"id":"1001","email":"alice@example.com","avatar":"https://example.com/alice.png"}]}`),
 		})
 	}))
 	defer server.Close()
@@ -171,7 +171,7 @@ func TestRESTClientSearchUsersByName(t *testing.T) {
 		t.Fatalf("SearchUsersByName returned error: %v", err)
 	}
 
-	if len(got.Users) != 1 || got.Users[0].ID != 1001 || got.Users[0].Email != "alice@example.com" {
+	if len(got.Users) != 1 || got.Users[0].ID != "1001" || got.Users[0].Email != "alice@example.com" {
 		t.Fatalf("SearchUsersByName response = %+v", got)
 	}
 }
@@ -522,5 +522,47 @@ func TestRESTClientListConversationsEnvelopeError(t *testing.T) {
 
 	if codeErr.Code != errorx.CodeAuth || codeErr.Message != "auth failure" {
 		t.Fatalf("CodeError = %+v", codeErr)
+	}
+}
+
+func TestRESTClientCreateGroup(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/conversations/group" {
+			t.Fatalf("path = %s, want /api/conversations/group", r.URL.Path)
+		}
+
+		if r.Method != http.MethodPost {
+			t.Fatalf("method = %s, want POST", r.Method)
+		}
+
+		var req CreateGroupRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+
+		if req.Name != "dev-group" || len(req.MemberIDs) != 2 {
+			t.Fatalf("request = %+v", req)
+		}
+
+		_ = json.NewEncoder(w).Encode(Envelope{
+			Code: 0,
+			Msg:  "ok",
+			Body: json.RawMessage(`{"conversation_id":88,"conversation_type":"group","is_active":true,"created_at":1715679000000,"member_ids":[7,10,20],"name":"dev-group","creator_id":7}`),
+		})
+	}))
+	defer server.Close()
+
+	got, err := NewRESTClient(server.URL).CreateGroup(context.Background(), &CreateGroupRequest{
+		MemberIDs: []int64{10, 20},
+		Name:      "dev-group",
+	}, "token-group")
+	if err != nil {
+		t.Fatalf("CreateGroup returned error: %v", err)
+	}
+
+	if got.ConversationID != 88 || got.ConversationType != "group" || got.Name != "dev-group" || got.CreatorID != 7 {
+		t.Fatalf("CreateGroup response = %+v", got)
 	}
 }

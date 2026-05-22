@@ -33,8 +33,8 @@ func TestConfigureAndProtocolCatalog(t *testing.T) {
 	}
 
 	catalog := app.ProtocolCatalog()
-	if len(catalog.REST) != 15 {
-		t.Fatalf("REST endpoints = %d, want 15", len(catalog.REST))
+	if len(catalog.REST) != 22 {
+		t.Fatalf("REST endpoints = %d, want 22", len(catalog.REST))
 	}
 
 	if len(catalog.Frames) != 13 {
@@ -390,8 +390,8 @@ func TestAppSearchUsersByName(t *testing.T) {
 
 		writeEnvelope(t, w, map[string]any{
 			"users": []map[string]any{
-				{"id": int64(1001), "email": "alice@example.com", "avatar": "https://example.com/alice.png"},
-				{"id": int64(1002), "email": "alice2@example.com", "avatar": "https://example.com/alice2.png"},
+				{"id": "1001", "email": "alice@example.com", "avatar": "https://example.com/alice.png"},
+				{"id": "1002", "email": "alice2@example.com", "avatar": "https://example.com/alice2.png"},
 			},
 		})
 	}))
@@ -410,7 +410,7 @@ func TestAppSearchUsersByName(t *testing.T) {
 		t.Fatalf("users count = %d, want 2", len(users))
 	}
 
-	if users[0].ID != 1001 || users[0].Email != "alice@example.com" {
+	if users[0].ID != "1001" || users[0].Email != "alice@example.com" {
 		t.Fatalf("first user = %+v", users[0])
 	}
 }
@@ -468,7 +468,7 @@ func TestAppCreateGroupConversation(t *testing.T) {
 	t.Parallel()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/conversations" {
+		if r.URL.Path != "/api/conversations/group" {
 			t.Fatalf("path = %s", r.URL.Path)
 		}
 
@@ -476,13 +476,13 @@ func TestAppCreateGroupConversation(t *testing.T) {
 			t.Fatalf("Authorization = %q", got)
 		}
 
-		var req client.CreateConversationRequest
+		var req client.CreateGroupRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			t.Fatalf("decode request: %v", err)
 		}
 
-		if req.ConversationType != "group" {
-			t.Fatalf("conversation_type = %q, want group", req.ConversationType)
+		if req.Name != "测试群" {
+			t.Fatalf("name = %q, want 测试群", req.Name)
 		}
 		if len(req.MemberIDs) != 3 || req.MemberIDs[0] != 10 || req.MemberIDs[1] != 20 || req.MemberIDs[2] != 30 {
 			t.Fatalf("member_ids = %v", req.MemberIDs)
@@ -494,6 +494,8 @@ func TestAppCreateGroupConversation(t *testing.T) {
 			"is_active":         true,
 			"created_at":        int64(1715679000000),
 			"member_ids":        []int64{7, 10, 20, 30},
+			"name":              "测试群",
+			"creator_id":        int64(7),
 		})
 	}))
 	defer server.Close()
@@ -502,15 +504,15 @@ func TestAppCreateGroupConversation(t *testing.T) {
 	app.accessToken = "access-create-group"
 	app.Configure(AppConfig{GatewayHTTP: server.URL, GatewayWS: "ws://example.test/ws"})
 
-	resp, err := app.CreateConversation(CreateConversationRequest{
-		ConversationType: "group",
-		MemberIDs:        []int64{10, 20, 30},
+	resp, err := app.CreateGroup(CreateGroupRequest{
+		MemberIDs: []int64{10, 20, 30},
+		Name:      "测试群",
 	})
 	if err != nil {
-		t.Fatalf("CreateConversation returned error: %v", err)
+		t.Fatalf("CreateGroup returned error: %v", err)
 	}
 
-	if resp.ConversationID != 99999 || resp.ConversationType != "group" || !resp.IsActive {
+	if resp.ConversationID != 99999 || resp.ConversationType != "group" || !resp.IsActive || resp.Name != "测试群" {
 		t.Fatalf("response = %+v", resp)
 	}
 

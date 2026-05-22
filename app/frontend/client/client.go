@@ -82,7 +82,7 @@ type LogoutResponse struct {
 
 // UserListItem represents a user entry in search results.
 type UserListItem struct {
-	ID     int64  `json:"id"`
+	ID     string `json:"id"`
 	Email  string `json:"email"`
 	Avatar string `json:"avatar"`
 }
@@ -96,6 +96,14 @@ type SearchUsersResponse struct {
 type CreateConversationRequest struct {
 	ConversationType string  `json:"conversation_type"`
 	MemberIDs        []int64 `json:"member_ids"`
+	Name             string  `json:"name,omitempty"`
+}
+
+// CreateGroupRequest mirrors gateway.api CreateGroupRequest.
+type CreateGroupRequest struct {
+	MemberIDs []int64 `json:"member_ids"`
+	Name      string  `json:"name,omitempty"`
+	Avatar    string  `json:"avatar,omitempty"`
 }
 
 // CreateConversationResponse mirrors gateway.api CreateConversationResponse.
@@ -105,6 +113,9 @@ type CreateConversationResponse struct {
 	IsActive         bool    `json:"is_active"`
 	CreatedAt        int64   `json:"created_at"`
 	MemberIDs        []int64 `json:"member_ids"`
+	Name             string  `json:"name"`
+	Avatar           string  `json:"avatar"`
+	CreatorID        int64   `json:"creator_id"`
 }
 
 // ConversationItem mirrors gateway.api ConversationItem.
@@ -114,6 +125,44 @@ type ConversationItem struct {
 	IsActive         bool    `json:"is_active"`
 	CreatedAt        int64   `json:"created_at"`
 	MemberIDs        []int64 `json:"member_ids"`
+	Name             string  `json:"name"`
+	Avatar           string  `json:"avatar"`
+	CreatorID        int64   `json:"creator_id"`
+}
+
+// MemberDetailItem mirrors gateway.api MemberDetailItem.
+type MemberDetailItem struct {
+	UserID   int64  `json:"user_id"`
+	Email    string `json:"email"`
+	Avatar   string `json:"avatar"`
+	Role     string `json:"role"`
+	JoinedAt int64  `json:"joined_at"`
+}
+
+// GetConversationMembersResponse mirrors gateway.api GetConversationMembersResponse.
+type GetConversationMembersResponse struct {
+	Members []MemberDetailItem `json:"members"`
+}
+
+// AddGroupMembersRequest mirrors gateway.api AddGroupMembersRequest body.
+type AddGroupMembersRequest struct {
+	MemberIDs []int64 `json:"member_ids"`
+}
+
+// UpdateGroupInfoRequest mirrors gateway.api UpdateGroupInfoRequest body.
+type UpdateGroupInfoRequest struct {
+	Name   *string `json:"name,omitempty"`
+	Avatar *string `json:"avatar,omitempty"`
+}
+
+// UpdateGroupInfoResponse mirrors gateway.api UpdateGroupInfoResponse.
+type UpdateGroupInfoResponse struct {
+	ConversationID   int64  `json:"conversation_id"`
+	ConversationType string `json:"conversation_type"`
+	IsActive         bool   `json:"is_active"`
+	Name             string `json:"name"`
+	Avatar           string `json:"avatar"`
+	CreatorID        int64  `json:"creator_id"`
 }
 
 // ListConversationsResponse mirrors gateway.api ListConversationsResponse.
@@ -309,6 +358,67 @@ func (c *RESTClient) SearchUsersByName(ctx context.Context, name string, accessT
 func (c *RESTClient) CreateConversation(ctx context.Context, req *CreateConversationRequest, accessToken string) (*CreateConversationResponse, error) {
 	var resp CreateConversationResponse
 	if err := c.doRequest(ctx, http.MethodPost, "/api/conversations", req, &resp, accessToken); err != nil {
+		return nil, err
+	}
+
+	return &resp, nil
+}
+
+// CreateGroup calls POST /api/conversations/group with Bearer access token.
+func (c *RESTClient) CreateGroup(ctx context.Context, req *CreateGroupRequest, accessToken string) (*CreateConversationResponse, error) {
+	var resp CreateConversationResponse
+	if err := c.doRequest(ctx, http.MethodPost, "/api/conversations/group", req, &resp, accessToken); err != nil {
+		return nil, err
+	}
+
+	return &resp, nil
+}
+
+// GetConversationMembers calls GET /api/conversations/{id}/members.
+func (c *RESTClient) GetConversationMembers(ctx context.Context, conversationID int64, accessToken string) (*GetConversationMembersResponse, error) {
+	var resp GetConversationMembersResponse
+	path := "/api/conversations/" + strconv.FormatInt(conversationID, 10) + "/members"
+	if err := c.doRequest(ctx, http.MethodGet, path, nil, &resp, accessToken); err != nil {
+		return nil, err
+	}
+
+	return &resp, nil
+}
+
+// AddGroupMembers calls POST /api/conversations/{id}/members.
+func (c *RESTClient) AddGroupMembers(ctx context.Context, conversationID int64, req *AddGroupMembersRequest, accessToken string) (*CreateConversationResponse, error) {
+	var resp CreateConversationResponse
+	path := "/api/conversations/" + strconv.FormatInt(conversationID, 10) + "/members"
+	if err := c.doRequest(ctx, http.MethodPost, path, req, &resp, accessToken); err != nil {
+		return nil, err
+	}
+
+	return &resp, nil
+}
+
+// RemoveGroupMember calls DELETE /api/conversations/{id}/members/{uid}.
+func (c *RESTClient) RemoveGroupMember(ctx context.Context, conversationID, userID int64, accessToken string) error {
+	path := "/api/conversations/" + strconv.FormatInt(conversationID, 10) + "/members/" + strconv.FormatInt(userID, 10)
+	return c.doRequest(ctx, http.MethodDelete, path, nil, nil, accessToken)
+}
+
+// LeaveGroup calls POST /api/conversations/{id}/leave.
+func (c *RESTClient) LeaveGroup(ctx context.Context, conversationID int64, accessToken string) error {
+	path := "/api/conversations/" + strconv.FormatInt(conversationID, 10) + "/leave"
+	return c.doRequest(ctx, http.MethodPost, path, nil, nil, accessToken)
+}
+
+// DismissGroup calls DELETE /api/conversations/{id}.
+func (c *RESTClient) DismissGroup(ctx context.Context, conversationID int64, accessToken string) error {
+	path := "/api/conversations/" + strconv.FormatInt(conversationID, 10)
+	return c.doRequest(ctx, http.MethodDelete, path, nil, nil, accessToken)
+}
+
+// UpdateGroupInfo calls PUT /api/conversations/{id}.
+func (c *RESTClient) UpdateGroupInfo(ctx context.Context, conversationID int64, req *UpdateGroupInfoRequest, accessToken string) (*UpdateGroupInfoResponse, error) {
+	var resp UpdateGroupInfoResponse
+	path := "/api/conversations/" + strconv.FormatInt(conversationID, 10)
+	if err := c.doRequest(ctx, http.MethodPut, path, req, &resp, accessToken); err != nil {
 		return nil, err
 	}
 

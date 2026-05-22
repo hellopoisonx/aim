@@ -24,6 +24,7 @@ func (s *PresenceStore) SetUserOnline(ctx context.Context, userID int64, deviceI
 	pipe := s.client.Pipeline()
 	presKey := fmt.Sprintf("aim:presence:%d", userID)
 	gwKey := fmt.Sprintf("aim:user_gateway:%d", userID)
+
 	pipe.SAdd(ctx, presKey, deviceID)
 	pipe.Expire(ctx, presKey, s.ttl)
 	pipe.SAdd(ctx, gwKey, nodeID)
@@ -49,6 +50,7 @@ func (s *PresenceStore) GetUserGateway(ctx context.Context, userID int64) (strin
 	if err != nil {
 		return "", err
 	}
+
 	if len(nodes) == 0 {
 		return "", fmt.Errorf("user %d is offline", userID)
 	}

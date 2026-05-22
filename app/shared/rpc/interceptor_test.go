@@ -49,7 +49,7 @@ func TestUnaryErrorInterceptor_ConvertsGrpcStatusToCodeError(t *testing.T) {
 		return nil, grpcErr
 	})
 	require.Nil(t, resp)
-	require.NotNil(t, err)
+	require.Error(t, err)
 
 	codeErr, ok := errors.AsType[*errorx.CodeError](err)
 	require.True(t, ok)

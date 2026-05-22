@@ -23,6 +23,7 @@ func UnaryErrorInterceptor() grpc.UnaryServerInterceptor {
 		defer func() {
 			if r := recover(); r != nil {
 				panicErr := errorx.NewCodeError(errorx.CodeInternal, "internal error")
+
 				logx.WithContext(ctx).Errorf("panic in %s: %v\n%s", info.FullMethod, r, debug.Stack())
 				recordSpanError(ctx, panicErr)
 				err = panicErr
@@ -42,6 +43,7 @@ func UnaryErrorInterceptor() grpc.UnaryServerInterceptor {
 
 		if codeErr := errorx.FromGRPCError(err); codeErr != nil {
 			recordSpanError(ctx, codeErr)
+
 			if codeErr.Code == errorx.CodeInternal {
 				logx.WithContext(ctx).Errorf("rpc error in %s: %v", info.FullMethod, err)
 			}
@@ -50,6 +52,7 @@ func UnaryErrorInterceptor() grpc.UnaryServerInterceptor {
 		}
 
 		internalErr := errorx.NewCodeError(errorx.CodeInternal, "internal error")
+
 		recordSpanError(ctx, err)
 		logx.WithContext(ctx).Errorf("rpc error in %s: %v", info.FullMethod, err)
 
