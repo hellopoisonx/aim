@@ -30,3 +30,21 @@ go test -run 'Test.*WebSocket|Test.*Gateway|Test.*Manager' ./app/gateway/api/...
 ```
 
 并发、timer、goroutine 相关修改必须保留 `goleak` 覆盖；新增 manager 行为优先加同包白盒测试。
+
+## PushPresence
+
+向目标用户推送在线状态变更（`FRAME_TYPE_PUSH_PRESENCE`）。
+
+输入 `PushPresenceReq`：
+- `user_id`：状态变更的用户 ID（用于 payload）
+- `target_user_id`：接收推送的目标用户 ID（用于寻址连接；`== 0` 时回退到 `user_id`）
+- `status`：online/offline
+- `updated_at`：状态变更时间戳
+
+关键逻辑：
+1. 用 `target_user_id`（或回退的 `user_id`）通过 `manager.ForEachUser` 遍历该用户在本节点上的所有连接
+2. 构造 `PushPresencePayload` 写入每个连接的 WebSocket 帧（`user_id` 仍是状态变更者，不是目标用户）
+
+兼容性：旧版 caller 未设置 `target_user_id`（值为 0）时自动回退，保证升级期间行为不变。
+
+修复记录：2026-05-22 修复前错误地使用 `req.UserId`（状态变更者）查找连接，导致推送不达。

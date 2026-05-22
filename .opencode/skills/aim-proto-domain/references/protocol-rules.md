@@ -14,6 +14,25 @@ shared/proto/
 
 ## 协议规则
 
+### 字段约定
+
+- `PushPresenceReq` 字段号：
+  - `1` = `user_id`（状态变更者）
+  - `2` = `status`（online/offline）
+  - `3` = `updated_at`
+  - `4` = `target_user_id`（接收推送的目标用户；未设置时网关回退用 `user_id` 寻址）
+- `PushTypingReq` 字段号：
+  - `1` = `target_user_id`
+  - `2` = `from_user_id`
+  - `3` = `conversation_id`
+  - `4` = `timestamp`
+
+### 向后兼容规则
+
+- 服务端 `PushPresence` 收到 `target_user_id == 0` 时，自动回退到 `user_id` 寻址连接，保证旧版 caller（未设置 `target_user_id` 的 core 部署）行为不变。
+
+## 一般规则
+
 - WebSocket 只使用 Protobuf binary frame；不要新增 JSON/text frame 协议。
 - `WsFrame.seq` 用于请求/ACK 关联；客户端发消息必须带稳定 `client_msg_id` 以支持重试和幂等。
 - `FrameType` 编号保持区间语义：客户端到网关使用低编号，网关到客户端推送/ACK 使用高编号；新增值只追加，不复用旧编号。

@@ -113,6 +113,13 @@ func (s *GatewayServer) PushPresence(ctx context.Context, req *pb.PushPresenceRe
 		return nil, status.Errorf(codes.InvalidArgument, "user_id is required")
 	}
 
+	// TargetUserId specifies the user whose connections should receive the push.
+	// Fall back to UserId for backward compatibility if TargetUserId is not set.
+	targetUserID := req.TargetUserId
+	if targetUserID == 0 {
+		targetUserID = req.UserId
+	}
+
 	// Build PushPresencePayload.
 	payload := &wspb.PushPresencePayload{
 		UserId:    req.UserId,
@@ -123,7 +130,7 @@ func (s *GatewayServer) PushPresence(ctx context.Context, req *pb.PushPresenceRe
 	// Deliver to all connections of the target user.
 	var pushErr error
 
-	s.manager.ForEachUser(req.UserId, func(conn *Connection) {
+	s.manager.ForEachUser(targetUserID, func(conn *Connection) {
 		if err := conn.WriteFrame(ctx, wspb.FrameType_FRAME_TYPE_PUSH_PRESENCE, payload); err != nil {
 			logx.WithContext(ctx).Errorf("PushPresence: failed to write to user_id=%d device_id=%s: %v",
 				conn.Identity.UserID, conn.Identity.DeviceID, err)

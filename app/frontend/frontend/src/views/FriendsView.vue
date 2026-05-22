@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import { computed, onMounted, ref } from 'vue'
-import { ElAvatar, ElButton, ElEmpty, ElTabs, ElTabPane, ElBadge } from 'element-plus'
+import { ElAvatar, ElButton, ElEmpty, ElMessage, ElTabs, ElTabPane, ElBadge } from 'element-plus'
 import {
   AcceptFriend,
   CreateDirectConversation,
@@ -126,8 +126,9 @@ async function handleAccept(id: number) {
     applications.value = applications.value.filter((a) => a.id !== id)
     // Reload friends to reflect the new friend
     await loadAll()
-  } catch {
-    // Error handled silently
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : '接受好友申请失败'
+    ElMessage.error(msg)
   } finally {
     actionLoading.value.delete(id)
   }
@@ -139,8 +140,9 @@ async function handleReject(id: number) {
   try {
     await RejectFriend(id)
     applications.value = applications.value.filter((a) => a.id !== id)
-  } catch {
-    // Error handled silently
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : '拒绝好友申请失败'
+    ElMessage.error(msg)
   } finally {
     actionLoading.value.delete(id)
   }

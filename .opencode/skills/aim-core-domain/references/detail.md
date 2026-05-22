@@ -8,6 +8,19 @@
 - Typing Consumer：消费 `aim.typing.events`，查会话成员 → 查 `aim:user_gateway:{member_id}` → 调 `gateway.PushTyping`
 - GatewayRouter：按 `node_id` 路由 gRPC 请求到目标网关实例（Nacos 服务发现 + `node_id` 元数据）
 
+## 关键修复：PresenceConsumer 推送寻址
+
+**Bug 背景**：`PushPresenceReq` 最初只有 `user_id`（状态变更者的 userId），`GatewayServer.PushPresence` 用 `req.UserId` 查 Manager 连接。由于状态变更者本人不在目标好友的网关节点上，推送永远到达不了目标客户端。
+
+**根因**：proto 缺少区分"谁变了状态"和"推送给谁"这两个语义的字段。
+
+**修复**：
+1. `PushPresenceReq` 新增 `target_user_id` 字段（proto 字段号 4）
+2. `PresenceConsumer` 遍历好友时，对每个 `friendID` 设置 `TargetUserId = friendID`
+3. `GatewayServer.PushPresence` 改用 `TargetUserId` 查连接；兼容 `TargetUserId == 0`（旧版 caller）时回退到 `UserId`
+
+**测试覆盖**：新增 `TestGatewayServerPushPresenceFallbackToUserId` 验证回退路径。
+
 ## TransferService RPC 契约
 
 Proto 定义：`app/core/rpc/core.proto`，生成的 pb 代码在 `app/core/rpc/pb/`。

@@ -82,9 +82,10 @@ func (c *PresenceConsumer) Consume(ctx context.Context, key string, value string
 
 		for _, nodeID := range nodeIDs {
 			req := &gwpb.PushPresenceReq{
-				UserId:    event.UserID,
-				Status:    event.Status,
-				UpdatedAt: event.UpdatedAt,
+				UserId:       event.UserID,
+				Status:       event.Status,
+				UpdatedAt:    event.UpdatedAt,
+				TargetUserId: friendID,
 			}
 
 			// For single-gateway setups we always hit the default client.
