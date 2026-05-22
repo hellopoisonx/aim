@@ -1,27 +1,121 @@
 ---
 name: aim-dev-tool
-description: AIM 开发测试工具（dev-tool）。Python CLI，覆盖 gateway 全部 REST 端点与 WebSocket 帧协议，支持多 profile 多用户并行测试。当需要调试 REST/WS 接口、运行集成测试、或新增命令时使用。
+description: AIM 开发测试工具（dev-tool）。Python CLI，覆盖 gateway 全部 REST 端点与 WebSocket 帧协议，支持多 profile 多用户并行测试、并发压测。当需要调试 REST/WS 接口、运行集成测试、压力测试、或新增命令时使用。
 ---
 # aim-dev-tool
 
-`dev-tool/aim_test.py` — AIM 的后端接口交互式测试工具。通过 gateway HTTP/WS 与后端服务通信，
-无需前端客户端即可完成注册、登录、好友、会话、消息的全流程验证。
+## 工具概览
+
+| 工具 | 文件 | 用途 |
+|------|------|------|
+| 功能测试 | `dev-tool/aim_test.py` | 单端点调试、冒烟测试、交互探索 |
+| 压力测试 | `dev-tool/benchmark.py` | 并发压测、QPS/延迟分布、容量评估 |
+
+两个工具共享 `RESTClient` / `WSClient` / `TokenManager` 和 Protobuf 编解码层。
 
 ## 使用顺序
 
 - 先看 `references/setup.md`，确认 Python 环境和依赖就绪。
 - 再看 `references/commands.md`，了解所有可用命令和交互模式。
 - 改命令或新增端点时：改 `dev-tool/aim_test.py`，然后更新本 Skill 的 `references/commands.md`。
+- 压测时：`python benchmark.py <scenario>`，详见下方 "压力测试" 段落。
 
-## 适用场景
+## 压力测试
 
-| 场景 | 操作 |
+`dev-tool/benchmark.py` — 并发压测工具，复用 `aim_test.py` 的 REST/WS 客户端。
+
+### 压测架构
+
+```
+dev-tool/benchmark.py
+├── MetricsCollector    → 线程安全的指标采集（延迟、错误、状态码）
+├── RateLimiter         → 令牌桶速率控制 + 渐进加压
+├── LoadGenerator       → ThreadPoolExecutor 并发引擎
+├── ReportPrinter       → 实时进度 + ASCII 延迟直方图
+├── RegisterScenario    → 批量注册压测
+├── LoginScenario       → 批量登录压测
+├── FriendChainScenario → 好友链压测（注册→登录→加好友→接受）
+├── WsMessageScenario   → WS 消息并发压测
+├── MixedScenario       → REST + WS 混合负载
+└── CLI (argparse)      → 子命令模式
+```
+
+### 压测场景
+
+| 命令 | 说明 | 示例 |
+|------|------|------|
+| `register` | 批量注册用户 | `python benchmark.py register --users 100 --rps 50` |
+| `login` | 批量登录 | `python benchmark.py login --users 100` |
+| `friend-chain` | 好友链（注册→登录→加好友→接受） | `python benchmark.py friend-chain --users 50` |
+| `ws-message` | WS 消息并发发送 | `python benchmark.py ws-message --users 20 --messages-per-user 100` |
+| `mixed` | REST + WS 混合负载 | `python benchmark.py mixed --users 100 --duration 30 --rps 200` |
+
+### 通用参数
+
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `--users N` | 100 | 并发用户数 |
+| `--rps N` | 0 (不限) | 目标每秒请求数 |
+| `--duration N` | 0 (跑完即止) | 持续时间（秒） |
+| `--ramp-up N` | 0 | 渐进加压时间（秒） |
+| `--output PATH` | — | 输出 JSON 报告路径 |
+| `--quiet` | — | 静默模式（屏蔽 WS 帧日志） |
+
+### 指标说明
+
+压测输出包含以下指标：
+
+| 指标 | 说明 |
 |------|------|
-| 冒烟测试 | `python aim_test.py run-all` |
-| 单端点调试 | `python aim_test.py <command> --<args>` |
-| 多用户流程 | `--profile alice` / `--profile bob` |
-| 交互探索 | `python aim_test.py interactive` |
-| 新增 REST 端点 | 在 `RESTClient` 加方法 → 加 CLI handler → 加 parser → 更新 help/interactive/run-all → 更新本文档 |
+| **Total Requests** | 总请求数 |
+| **Success / Errors** | 成功/失败数及比例 |
+| **Avg QPS** | 平均每秒请求数 |
+| **Min / Avg / Max** | 延迟最小值/均值/最大值 |
+| **P50 / P90 / P95 / P99** | 延迟百分位分布 |
+| **Error Types** | 错误类型细分（`api_40400`、`ConnectionError` 等） |
+| **Latency Histogram** | ASCII 延迟分布直方图 |
+
+### 典型用法
+
+```bash
+cd dev-tool
+
+# 快速验证：小规模注册
+python benchmark.py register --users 10
+
+# 容量评估：500 用户注册 + 50 RPS 限速 + 10s 渐进加压
+python benchmark.py register --users 500 --rps 50 --ramp-up 10
+
+# WS 消息压测：50 用户每用户发 500 条消息
+python benchmark.py ws-message --users 50 --messages-per-user 500 --quiet
+
+# 混合负载：100 用户持续 60 秒，限速 200 RPS，输出 JSON 报告
+python benchmark.py mixed --users 100 --duration 60 --rps 200 --output report.json
+```
+
+### 输入/输出格式
+
+**JSON 报告格式** (`--output`):
+
+```json
+{
+  "title": "mixed",
+  "duration_s": 60.0,
+  "total_requests": 12000,
+  "success": 11950,
+  "errors": 50,
+  "error_rate": 0.004,
+  "avg_qps": 200.0,
+  "latency_ms": {
+    "min": 0.5, "avg": 5.2, "max": 150.3,
+    "p50": 3.1, "p90": 8.5, "p95": 12.2, "p99": 25.8
+  },
+  "error_types": {
+    "api_50000": 45,
+    "ConnectionError": 5
+  }
+}
+```
 
 ## 架构
 
@@ -88,7 +182,11 @@ func (f *fakeQuerier) ListFriends(ctx context.Context, userID int64) ([]model.Fr
 }
 ```
 
-## 参考资料
+## 文档结构
 
-- `references/setup.md`
-- `references/commands.md`
+- `references/setup.md`：环境与配置（aim_test + benchmark 通用）
+- `references/commands.md`：aim_test 命令参考 + benchmark 命令参考
+
+## 最近变更
+
+- 2026-05-22: `--quiet` 彻底静默。现在会同时（1）设 `aim_test.VERBOSE=False` 拑制 WSClient 调试输出；（2）将 `websocket`/`urllib3`/`requests` logger 降为 CRITICAL；（3）为 setup-阶段 LoadGenerator 传 `verbose=False` 以去掉注册/创建会话阶段的进度条与中间汇总。CLI 所有场景（含 register/login/friend-chain）都支持 `--quiet`。

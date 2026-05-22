@@ -58,6 +58,17 @@ import gateway_pb2
 # multi-second fallback latency on every REST request and WS connection timeout.
 GATEWAY_HTTP = os.environ.get("AIM_GATEWAY_HTTP", "http://127.0.0.1:8888")
 GATEWAY_WS = os.environ.get("AIM_GATEWAY_WS", "ws://127.0.0.1:8888/ws")
+
+# VERBOSE 控制 WSClient 默认的逓帧调试打印（连接/帧发送/帧接收/错误）。
+# benchmark.py 在 --quiet 模式下将其设为 False。
+# aim_test.py CLI 仅供交互调试，默认保持 True。
+VERBOSE = True
+
+
+def set_verbose(v: bool):
+    """Enable/disable WSClient debug prints process-wide."""
+    global VERBOSE
+    VERBOSE = bool(v)
 def _state_file(profile: str = "") -> str:
     """Return per-profile state file path.
     Empty profile → .aim_state.json (backward compat).
@@ -162,8 +173,8 @@ class TokenManager:
 class RESTClient:
     """Covers all AIM gateway REST endpoints."""
 
-    def __init__(self, base_url: str = GATEWAY_HTTP, token: TokenManager = None, profile: str = ""):
-        self.base_url = base_url.rstrip("/")
+    def __init__(self, base_url: str = None, token: TokenManager = None, profile: str = ""):
+        self.base_url = (base_url or GATEWAY_HTTP).rstrip("/")
         self.token = token or TokenManager.load(profile)
         self.profile = self.token.profile
         self.session = requests.Session()
@@ -287,8 +298,8 @@ class RESTClient:
 class WSClient:
     """WebSocket client with automatic protobuf frame encoding/decoding."""
 
-    def __init__(self, url: str = GATEWAY_WS, token: TokenManager = None):
-        self.url = url
+    def __init__(self, url: str = None, token: TokenManager = None):
+        self.url = url or GATEWAY_WS
         self.token = token or TokenManager.load()
         self.ws: Optional[websocket.WebSocketApp] = None
         self.seq = 0
@@ -323,19 +334,22 @@ class WSClient:
         deadline = time.time() + connect_timeout
         while not self._connected and time.time() < deadline:
             if self._error:
-                print(f"  ✗ WS connection failed: {self._error}")
+                if VERBOSE:
+                    print(f"  ✗ WS connection failed: {self._error}")
                 self.disconnect()
                 return
             if not t.is_alive():
-                print(f"  ✗ WS thread died unexpectedly")
+                if VERBOSE:
+                    print(f"  ✗ WS thread died unexpectedly")
                 self.disconnect()
                 return
             time.sleep(0.1)
         if not self._connected:
-            if self._error:
-                print(f"  ✗ WS connection failed: {self._error}")
-            else:
-                print(f"  ✗ WS connection timed out after {int(connect_timeout)}s")
+            if VERBOSE:
+                if self._error:
+                    print(f"  ✗ WS connection failed: {self._error}")
+                else:
+                    print(f"  ✗ WS connection timed out after {int(connect_timeout)}s")
             self.disconnect()
 
     def disconnect(self):
@@ -347,7 +361,8 @@ class WSClient:
 
     def _on_open(self, ws):
         self._connected = True
-        print(f"  ✓ WS connected to {self.url}")
+        if VERBOSE:
+            print(f"  ✓ WS connected to {self.url}")
 
     def _on_message(self, ws, data: bytes):
         try:
@@ -355,21 +370,25 @@ class WSClient:
             frame.ParseFromString(data)
             ftype = FRAME_TYPE_NAMES.get(frame.type, f"UNKNOWN({frame.type})")
             payload = self._decode_payload(frame)
-            print(f"\n  ← [{ftype}] seq={frame.seq}")
-            if payload:
-                print(f"    {json_format.MessageToDict(payload, preserving_proto_field_name=True)}")
+            if VERBOSE:
+                print(f"\n  ← [{ftype}] seq={frame.seq}")
+                if payload:
+                    print(f"    {json_format.MessageToDict(payload, preserving_proto_field_name=True)}")
             if self.on_frame:
                 self.on_frame(frame, payload)
         except Exception as e:
-            print(f"  ✗ Decode error: {e}")
+            if VERBOSE:
+                print(f"  ✗ Decode error: {e}")
 
     def _on_error(self, ws, error):
         self._error = str(error)
-        print(f"  ✗ WS error: {error}")
+        if VERBOSE:
+            print(f"  ✗ WS error: {error}")
 
     def _on_close(self, ws, status, msg):
         self._connected = False
-        print(f"  ✓ WS closed (status={status})")
+        if VERBOSE:
+            print(f"  ✓ WS closed (status={status})")
 
     def _decode_payload(self, frame: ws_pb2.WsFrame):
         """Decode payload based on frame type."""
@@ -406,12 +425,13 @@ class WSClient:
             frame.payload = payload_msg.SerializeToString()
         data = frame.SerializeToString()
         self.ws.send(data, opcode=websocket.ABNF.OPCODE_BINARY)
-        ftype = FRAME_TYPE_NAMES.get(frame_type, f"UNKNOWN({frame_type})")
-        payload_info = ""
-        if payload_msg:
-            d = json_format.MessageToDict(payload_msg, preserving_proto_field_name=True)
-            payload_info = f" {d}"
-        print(f"  → [{ftype}] seq={frame.seq}{payload_info}")
+        if VERBOSE:
+            ftype = FRAME_TYPE_NAMES.get(frame_type, f"UNKNOWN({frame_type})")
+            payload_info = ""
+            if payload_msg:
+                d = json_format.MessageToDict(payload_msg, preserving_proto_field_name=True)
+                payload_info = f" {d}"
+            print(f"  → [{ftype}] seq={frame.seq}{payload_info}")
 
     # ── Convenience methods ──
 

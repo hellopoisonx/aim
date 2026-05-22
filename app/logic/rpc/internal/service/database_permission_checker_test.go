@@ -373,6 +373,47 @@ func TestDatabasePermissionChecker_DirectTemporaryConversationLimitReached(t *te
 	assert.Contains(t, decision.Reason, "temporary conversation message limit reached")
 }
 
+func TestDatabasePermissionChecker_DirectTemporaryConversationCustomLimit(t *testing.T) {
+	fq := &fakeQuerier{
+		conversations: map[int64]model.Conversation{
+			200: {ID: 200, ConversationType: "direct", IsActive: true},
+		},
+		members: map[string]model.GetMemberRow{},
+		friendships: map[string][]model.GetFriendshipBidirectionalRow{
+			friendshipKey(100, 200): {
+				{UserID: 100, FriendID: 200, Status: "pending"},
+			},
+		},
+		messageCounts: map[int64]int64{200: 50},
+	}
+
+	// limit=100 时汇总 50 条仍在限额内，应放行
+	checker := NewDatabasePermissionCheckerWithLimit(fq, 100)
+	decision, err := checker.CheckMessagePermission(context.Background(), PermissionCheck{
+		SenderID: 100, ConversationID: 200,
+	})
+	require.NoError(t, err)
+	assert.True(t, decision.Allowed)
+	assert.Equal(t, CodeOK, decision.Code)
+
+	// limit=0 表示不限制（压测场景）
+	checkerUnlimited := NewDatabasePermissionCheckerWithLimit(fq, 0)
+	decision, err = checkerUnlimited.CheckMessagePermission(context.Background(), PermissionCheck{
+		SenderID: 100, ConversationID: 200,
+	})
+	require.NoError(t, err)
+	assert.True(t, decision.Allowed)
+
+	// limit=5 且计数 50，应拒绝
+	checkerStrict := NewDatabasePermissionCheckerWithLimit(fq, 5)
+	decision, err = checkerStrict.CheckMessagePermission(context.Background(), PermissionCheck{
+		SenderID: 100, ConversationID: 200,
+	})
+	require.NoError(t, err)
+	assert.False(t, decision.Allowed)
+	assert.Equal(t, CodePermissionDenied, decision.Code)
+}
+
 func TestDatabasePermissionChecker_DirectBlocked(t *testing.T) {
 	fq := &fakeQuerier{
 		conversations: map[int64]model.Conversation{

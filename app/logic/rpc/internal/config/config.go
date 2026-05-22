@@ -16,6 +16,7 @@ type Config struct {
 	UserCreatedConsumerConf kq.KqConf    `json:",optional"`
 	CacheRedis              RedisConf    `json:",optional"`
 	Quota                   QuotaConf    `json:",optional"`
+	Dev                     DevConf      `json:",optional"`
 }
 
 type PostgresConf struct {
@@ -31,6 +32,13 @@ type RedisConf struct {
 type QuotaConf struct {
 	WindowSeconds int   `json:",default=60"`
 	MaxRequests   int64 `json:",default=100"`
+}
+
+// DevConf 用于开发/压测场景下的可调旋钮，生产配置请保持默认值。
+type DevConf struct {
+	// TemporaryConversationMessageLimit 控制非好友（临时会话）单会话累计可发送的消息上限。
+	// 默认 10。设为 0 或负数表示不限制（仅供开发/压测使用）。
+	TemporaryConversationMessageLimit int64 `json:",default=10"`
 }
 
 // IsUserCreatedConsumerConfigured returns true if the user-created consumer is properly configured.

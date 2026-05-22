@@ -16,6 +16,8 @@ description: aim 的逻辑域。对应 `logic` 模块。
 
 ## 最近变更
 
+- 2026-05-22: 新增 `config.DevConf` 及 yaml `Dev:` 块，提供 `TemporaryConversationMessageLimit`（默认 10，设 0/负数为不限制）；`DatabasePermissionChecker` 新增 `NewDatabasePermissionCheckerWithLimit` 构造函数。仅供本地开发 / 压测使用，生产保持默认。
+
 - 2026-05-19: logic RPC 本地 docker 监听/注册端口从 8080 调整为 8082，避免与 core RPC 端口冲突。
 - 2026-05-19: 为 logic Kafka consumers 补充 span.RecordError 观测，并修复 WS ACK 冲突映射；接入 RPC 统一 unary 错误拦截器。
 - 2026-05-20: ConversationService RPC 暴露 GetConversationMembers，用于 core 投递链路查询 direct/group 会话成员。

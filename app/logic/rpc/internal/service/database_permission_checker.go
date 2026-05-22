@@ -9,14 +9,24 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-const temporaryConversationMessageLimit int64 = 10
+const DefaultTemporaryConversationMessageLimit int64 = 10
+
+// temporaryConversationMessageLimit 保留为默认值别名，供现有测试使用。
+const temporaryConversationMessageLimit = DefaultTemporaryConversationMessageLimit
 
 type DatabasePermissionChecker struct {
-	queries model.Querier
+	queries                           model.Querier
+	temporaryConversationMessageLimit int64
 }
 
 func NewDatabasePermissionChecker(queries model.Querier) *DatabasePermissionChecker {
-	return &DatabasePermissionChecker{queries: queries}
+	return NewDatabasePermissionCheckerWithLimit(queries, DefaultTemporaryConversationMessageLimit)
+}
+
+// NewDatabasePermissionCheckerWithLimit 允许调用方自定义临时会话消息上限。
+// limit <= 0 表示不限制（仅供开发/压测使用）。
+func NewDatabasePermissionCheckerWithLimit(queries model.Querier, limit int64) *DatabasePermissionChecker {
+	return &DatabasePermissionChecker{queries: queries, temporaryConversationMessageLimit: limit}
 }
 
 func (c *DatabasePermissionChecker) CheckMessagePermission(ctx context.Context, check PermissionCheck) (PermissionDecision, error) {
@@ -109,7 +119,7 @@ func (c *DatabasePermissionChecker) checkDirectPermission(ctx context.Context, c
 			return PermissionDecision{}, err
 		}
 
-		if count >= temporaryConversationMessageLimit {
+		if c.temporaryConversationMessageLimit > 0 && count >= c.temporaryConversationMessageLimit {
 			return PermissionDecision{Allowed: false, Code: CodePermissionDenied, Reason: "temporary conversation message limit reached"}, nil
 		}
 

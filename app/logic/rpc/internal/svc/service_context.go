@@ -43,11 +43,19 @@ func NewServiceContext(c config.Config) *ServiceContext {
 
 			svcCtx.DB = pool
 			queries := model.New(pool)
-			svcCtx.PermissionChecker = service.NewDatabasePermissionChecker(queries)
+			limit := c.Dev.TemporaryConversationMessageLimit
+			if limit == 0 {
+				limit = service.DefaultTemporaryConversationMessageLimit
+			}
+			svcCtx.PermissionChecker = service.NewDatabasePermissionCheckerWithLimit(queries, limit)
 			svcCtx.UserInfoService = service.NewUserInfoService(queries)
 			svcCtx.ConversationService = service.NewConversationService(queries)
 
-			logx.Infof("Postgres connected, using DatabasePermissionChecker, UserInfoService and ConversationService")
+			if limit != service.DefaultTemporaryConversationMessageLimit {
+				logx.Infof("Postgres connected, using DatabasePermissionChecker (temporary conversation message limit=%d), UserInfoService and ConversationService", limit)
+			} else {
+				logx.Infof("Postgres connected, using DatabasePermissionChecker, UserInfoService and ConversationService")
+			}
 		}
 	}
 

@@ -194,3 +194,102 @@ aim [bob] [#2] ·> login bob@t.com 12345678
 - [ ] `run-all` 流程中加入验证步骤（如适用）
 - [ ] 模块 docstring 添加使用示例
 - [ ] 更新本文档的对应表格
+
+---
+
+## Benchmark 压测命令
+
+```bash
+cd dev-tool
+python benchmark.py <scenario> [--args]
+```
+
+### 压测场景
+
+| 命令 | 参数 | 说明 |
+|------|------|------|
+| `register` | `--users` [`--rps`] [`--ramp-up`] [`--quiet`] [`--output`] | 批量注册用户 |
+| `login` | `--users` [`--rps`] [`--ramp-up`] [`--quiet`] [`--output`] | 批量登录 |
+| `friend-chain` | `--users` [`--rps`] [`--ramp-up`] [`--quiet`] [`--output`] | 好友链全流程 |
+| `ws-message` | `--users` `--messages-per-user` [`--rps`] [`--duration`] [`--ramp-up`] [`--quiet`] [`--output`] | WS 消息并发 |
+| `mixed` | `--users` `--duration` [`--rps`] [`--ramp-up`] [`--ws-ratio`] [`--quiet`] [`--output`] | 混合负载 |
+
+### 通用参数
+
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `--users` | int | 100 | 并发用户数 |
+| `--rps` | float | 0 | 目标 RPS（0 = 不限） |
+| `--duration` | float | 0 | 持续时间秒（0 = 跑完即止） |
+| `--ramp-up` | float | 0 | 渐进加压秒数 |
+| `--output` | str | — | JSON 报告输出路径 |
+| `--quiet` | flag | — | 静默模式：拑制 WSClient 逓帧调试输出、setup-阶段 LoadGenerator 进度条/小计、websocket-client/urllib3 logger，只保留场景标题、步骤指示与最终报告。适用于所有场景。 |
+
+### 场景特有参数
+
+| 场景 | 参数 | 类型 | 默认值 | 说明 |
+|------|------|------|--------|------|
+| `ws-message` | `--messages-per-user` | int | 100 | 每用户消息数 |
+| `mixed` | `--ws-ratio` | float | 0.7 | WS 请求占比 |
+| `mixed` | `--duration` | float | 30 | 持续时间（秒） |
+
+### 示例
+
+```bash
+# 快速容量验证
+python benchmark.py register --users 10
+
+# 渐进加压：500 用户、50 RPS、10s ramp-up
+python benchmark.py register --users 500 --rps 50 --ramp-up 10
+
+# WS 消息压测 + 静默
+python benchmark.py ws-message --users 50 --messages-per-user 500 --quiet
+
+# 混合持续负载 + JSON 报告
+python benchmark.py mixed --users 100 --duration 60 --rps 200 --output report.json
+
+# 全力压测（不限速）
+python benchmark.py ws-message --users 100 --messages-per-user 1000 --quiet
+```
+
+### 输出示例
+
+```
+  Scenario: Register -- 100 users, RPS=50.0
+
+[==============================]  100%  req=100  qps=50.0  p50=105ms  p95=108ms
+
+------------------------------------------------------------
+  Benchmark Results
+------------------------------------------------------------
+  Duration:        2.0s
+  Total Requests:  100
+  Success:         100
+  Errors:          0 (0.0%)
+  Avg QPS:         50.0
+  -- Latency (ms) --
+  Min:  102.0ms   Avg:  105.5ms   Max:  110.0ms
+  P50:  105.0ms   P90:  108.0ms   P95:  108.0ms   P99:  110.0ms
+  -- Latency Histogram --
+     < 1ms                        (0)
+     1-5ms                        (0)
+    5-10ms                        (0)
+   10-25ms                        (0)
+   25-50ms                        (0)
+  50-100ms                        (0)
+  100-250ms  ####################  (100)
+  ...
+------------------------------------------------------------
+```
+
+### 指标含义
+
+| 指标 | 含义 |
+|------|------|
+| `Duration` | 压测实际耗时 |
+| `Total Requests` | 总请求数（含失败） |
+| `Avg QPS` | 平均每秒请求数 |
+| `P50` | 50% 请求延迟低于此值（中位数） |
+| `P95` | 95% 请求延迟低于此值 |
+| `P99` | 99% 请求延迟低于此值（长尾） |
+| `Error Types` | 错误细分：`api_40400`、`ConnectionError` 等 |
