@@ -11,7 +11,13 @@ coverage*
 /dev-tool/*.json
 /dev-tool/msg.txt
 /dev-tool/.aim_state.json
+/dev-tool/.state.json
+/dev-tool/msg.txt
+/dev-tool/user.json
+/dev-tool/result.json
 /plan
 /plans
 /.mcp.json
 /.pi
+/.opencode
+/.trae

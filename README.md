@@ -4,7 +4,7 @@
 
 ## 文档
 
-技术文档由 agent + skills 维护，详见 `.opencode/skills/`：
+技术文档由 agent + skills 维护，详见 `skills/`：
 
 | 技能 | 对应模块 |
 |------|----------|
