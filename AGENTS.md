@@ -14,7 +14,7 @@ AIM 是多人在线即时通讯系统，内置可自部署 AI 助手。后端为
 ## 工作流
 
 - 代码更改后必须执行测试、覆盖率测试、lint
-- 任务完成后及时更新相关文档 (`.opencode/skills/`)
+- 任务完成后及时更新相关文档 (`skills/`)
 - 总结工作区改动并 `git commit`
 
 ## 结构
@@ -28,13 +28,13 @@ aim/
 ├── app/frontend/        # 桌面客户端
 ├── app/shared/          # 共享库
 ├── shared/proto/        # Protobuf 协议
-├── .opencode/skills/    # 领域 Skill
+├── skills/             # 领域 Skill（.opencode/skills、.pi/skills 均为 junction）
 └── docker-compose.yaml  # 本地基础设施
 ```
 
 ## 领域 Skill 导航
 
-领域知识查阅 `.opencode/skills/` 下对应 Skill：
+领域知识查阅 `skills/` 下对应 Skill：
 
 - aim-repo-mapping: 仓库路由
 - aim-auth-domain: 认证域
