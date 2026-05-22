@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/hellopoisonx/aim/app/logic/rpc/model"
+	"github.com/hellopoisonx/aim/app/shared/tools"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/stretchr/testify/assert"
@@ -165,6 +166,15 @@ func (f *fakeConversationStore) GetDirectConversationByMembers(ctx context.Conte
 	return model.Conversation{}, pgx.ErrNoRows
 }
 
+// testSnowflake is a shared Snowflake instance for tests.
+var testSnowflake = func() *tools.Snowflake {
+	s, err := tools.NewSnowflake(1)
+	if err != nil {
+		panic(err)
+	}
+	return s
+}()
+
 func newFakeConversationStore() *fakeConversationStore {
 	return &fakeConversationStore{
 		conversations: make(map[int64]model.Conversation),
@@ -179,7 +189,7 @@ func newFakeConversationStore() *fakeConversationStore {
 
 func TestConversationService_CreateConversation_ValidDirect(t *testing.T) {
 	store := newFakeConversationStore()
-	svc := NewConversationService(store)
+	svc := NewConversationService(store, testSnowflake)
 
 	conv, err := svc.CreateConversation(context.Background(), "direct", 1, []int64{1, 2})
 	require.NoError(t, err)
@@ -194,7 +204,7 @@ func TestConversationService_CreateConversation_ValidDirect(t *testing.T) {
 
 func TestConversationService_CreateConversation_ValidGroup(t *testing.T) {
 	store := newFakeConversationStore()
-	svc := NewConversationService(store)
+	svc := NewConversationService(store, testSnowflake)
 
 	conv, err := svc.CreateConversation(context.Background(), "group", 1, []int64{1, 2, 3, 4})
 	require.NoError(t, err)
@@ -220,7 +230,7 @@ func TestConversationService_CreateConversation_InvalidType(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			store := newFakeConversationStore()
-			svc := NewConversationService(store)
+			svc := NewConversationService(store, testSnowflake)
 
 			_, err := svc.CreateConversation(context.Background(), tt.conversationType, 1, []int64{1, 2})
 			require.Error(t, err)
@@ -231,7 +241,7 @@ func TestConversationService_CreateConversation_InvalidType(t *testing.T) {
 
 func TestConversationService_CreateConversation_EmptyMembers(t *testing.T) {
 	store := newFakeConversationStore()
-	svc := NewConversationService(store)
+	svc := NewConversationService(store, testSnowflake)
 
 	_, err := svc.CreateConversation(context.Background(), "group", 1, []int64{})
 	require.Error(t, err)
@@ -251,7 +261,7 @@ func TestConversationService_CreateConversation_DirectWithNotTwoMembers(t *testi
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			store := newFakeConversationStore()
-			svc := NewConversationService(store)
+			svc := NewConversationService(store, testSnowflake)
 
 			_, err := svc.CreateConversation(context.Background(), "direct", 1, tt.memberIDs)
 			require.Error(t, err)
@@ -262,7 +272,7 @@ func TestConversationService_CreateConversation_DirectWithNotTwoMembers(t *testi
 
 func TestConversationService_CreateConversation_DirectWithCreatorNotInMembers(t *testing.T) {
 	store := newFakeConversationStore()
-	svc := NewConversationService(store)
+	svc := NewConversationService(store, testSnowflake)
 
 	// Creator (1) is not in the member list
 	conv, err := svc.CreateConversation(context.Background(), "direct", 1, []int64{2})
@@ -287,7 +297,7 @@ func TestConversationService_CreateConversation_DirectWithCreatorNotInMembers(t 
 func TestConversationService_CreateConversation_StoreError(t *testing.T) {
 	store := newFakeConversationStore()
 	store.createErr = errors.New("database connection error")
-	svc := NewConversationService(store)
+	svc := NewConversationService(store, testSnowflake)
 
 	_, err := svc.CreateConversation(context.Background(), "group", 1, []int64{1, 2})
 	require.Error(t, err)
@@ -297,7 +307,7 @@ func TestConversationService_CreateConversation_StoreError(t *testing.T) {
 func TestConversationService_CreateConversation_AddMemberError(t *testing.T) {
 	store := newFakeConversationStore()
 	store.addMemberErr = errors.New("failed to add member")
-	svc := NewConversationService(store)
+	svc := NewConversationService(store, testSnowflake)
 
 	_, err := svc.CreateConversation(context.Background(), "group", 1, []int64{1, 2, 3})
 	require.Error(t, err)
@@ -306,7 +316,7 @@ func TestConversationService_CreateConversation_AddMemberError(t *testing.T) {
 
 func TestConversationService_CreateConversation_DirectDedup_Existing(t *testing.T) {
 	store := newFakeConversationStore()
-	svc := NewConversationService(store)
+	svc := NewConversationService(store, testSnowflake)
 
 	// First call: create a direct conversation between users 1 and 2
 	conv1, err := svc.CreateConversation(context.Background(), "direct", 1, []int64{1, 2})
@@ -324,7 +334,7 @@ func TestConversationService_CreateConversation_DirectDedup_Existing(t *testing.
 
 func TestConversationService_CreateConversation_DirectDedup_NewMembers(t *testing.T) {
 	store := newFakeConversationStore()
-	svc := NewConversationService(store)
+	svc := NewConversationService(store, testSnowflake)
 
 	// Create conversation between users 1 and 2
 	conv1, err := svc.CreateConversation(context.Background(), "direct", 1, []int64{1, 2})
@@ -341,7 +351,7 @@ func TestConversationService_CreateConversation_DirectDedup_NewMembers(t *testin
 func TestConversationService_CreateConversation_DirectDedup_StoreError(t *testing.T) {
 	store := newFakeConversationStore()
 	store.getErr = errors.New("database connection error")
-	svc := NewConversationService(store)
+	svc := NewConversationService(store, testSnowflake)
 
 	_, err := svc.CreateConversation(context.Background(), "direct", 1, []int64{1, 2})
 	require.Error(t, err)
@@ -360,7 +370,7 @@ func TestConversationService_GetConversationByID_Found(t *testing.T) {
 		IsActive:         true,
 		CreatedAt: pgtype.Timestamptz{Time: time.Now(), Valid: true},
 	}
-	svc := NewConversationService(store)
+	svc := NewConversationService(store, testSnowflake)
 
 	conv, err := svc.GetConversationByID(context.Background(), 100)
 	require.NoError(t, err)
@@ -370,7 +380,7 @@ func TestConversationService_GetConversationByID_Found(t *testing.T) {
 
 func TestConversationService_GetConversationByID_NotFound(t *testing.T) {
 	store := newFakeConversationStore()
-	svc := NewConversationService(store)
+	svc := NewConversationService(store, testSnowflake)
 
 	_, err := svc.GetConversationByID(context.Background(), 999)
 	require.Error(t, err)
@@ -380,7 +390,7 @@ func TestConversationService_GetConversationByID_NotFound(t *testing.T) {
 func TestConversationService_GetConversationByID_StoreError(t *testing.T) {
 	store := newFakeConversationStore()
 	store.getErr = errors.New("database connection error")
-	svc := NewConversationService(store)
+	svc := NewConversationService(store, testSnowflake)
 
 	_, err := svc.GetConversationByID(context.Background(), 100)
 	require.Error(t, err)
@@ -407,7 +417,7 @@ func TestConversationService_GetConversationHistory_WithCursor(t *testing.T) {
 		{ID: 2, ConversationID: 1, SenderID: 2, Content: []byte("msg2"), CreatedAt: pgtype.Timestamptz{Time: now.Add(time.Second), Valid: true}},
 		{ID: 3, ConversationID: 1, SenderID: 1, Content: []byte("msg3"), CreatedAt: pgtype.Timestamptz{Time: now.Add(2 * time.Second), Valid: true}},
 	}
-	svc := NewConversationService(store)
+	svc := NewConversationService(store, testSnowflake)
 
 	// Get messages with cursor at message ID 2
 	messages, err := svc.GetConversationHistory(context.Background(), 1, 0, 2, 10)
@@ -429,7 +439,7 @@ func TestConversationService_GetConversationHistory_InitialPage(t *testing.T) {
 		{ID: 1, ConversationID: 1, SenderID: 1, Content: []byte("first"), CreatedAt: pgtype.Timestamptz{Time: now, Valid: true}},
 		{ID: 2, ConversationID: 1, SenderID: 2, Content: []byte("second"), CreatedAt: pgtype.Timestamptz{Time: now.Add(time.Second), Valid: true}},
 	}
-	svc := NewConversationService(store)
+	svc := NewConversationService(store, testSnowflake)
 
 	// When cursor is 0,0 it should call GetConversationHistoryInitial
 	messages, err := svc.GetConversationHistory(context.Background(), 1, 0, 0, 10)
@@ -439,7 +449,7 @@ func TestConversationService_GetConversationHistory_InitialPage(t *testing.T) {
 
 func TestConversationService_GetConversationHistory_ConversationNotFound(t *testing.T) {
 	store := newFakeConversationStore()
-	svc := NewConversationService(store)
+	svc := NewConversationService(store, testSnowflake)
 
 	_, err := svc.GetConversationHistory(context.Background(), 999, 0, 1, 10)
 	require.Error(t, err)
@@ -455,7 +465,7 @@ func TestConversationService_GetConversationHistory_StoreError(t *testing.T) {
 		CreatedAt:        pgtype.Timestamptz{Time: time.Now(), Valid: true},
 	}
 	store.listMessagesErr = errors.New("database error")
-	svc := NewConversationService(store)
+	svc := NewConversationService(store, testSnowflake)
 
 	_, err := svc.GetConversationHistory(context.Background(), 1, 0, 1, 10)
 	require.Error(t, err)
@@ -483,7 +493,7 @@ func TestConversationService_GetConversationHistory_LimitNormalization(t *testin
 		})
 	}
 	store.messages[1] = msgs
-	svc := NewConversationService(store)
+	svc := NewConversationService(store, testSnowflake)
 
 	// When limit > 100, it should be normalized to 50
 	messages, err := svc.GetConversationHistory(context.Background(), 1, 0, 0, 200)
@@ -503,7 +513,7 @@ func TestConversationService_GetConversationHistory_ZeroLimit(t *testing.T) {
 	store.messages[1] = []model.Message{
 		{ID: 1, ConversationID: 1, SenderID: 1, Content: []byte("msg"), CreatedAt: pgtype.Timestamptz{Time: now, Valid: true}},
 	}
-	svc := NewConversationService(store)
+	svc := NewConversationService(store, testSnowflake)
 
 	// When limit <= 0, it should default to 50
 	messages, err := svc.GetConversationHistory(context.Background(), 1, 0, 0, 0)
@@ -528,7 +538,7 @@ func TestConversationService_GetConversationHistoryInitial_Found(t *testing.T) {
 		{ID: 1, ConversationID: 1, SenderID: 1, Content: []byte("first"), CreatedAt: pgtype.Timestamptz{Time: now, Valid: true}},
 		{ID: 2, ConversationID: 1, SenderID: 2, Content: []byte("second"), CreatedAt: pgtype.Timestamptz{Time: now.Add(time.Second), Valid: true}},
 	}
-	svc := NewConversationService(store)
+	svc := NewConversationService(store, testSnowflake)
 
 	messages, err := svc.GetConversationHistoryInitial(context.Background(), 1, 10)
 	require.NoError(t, err)
@@ -537,7 +547,7 @@ func TestConversationService_GetConversationHistoryInitial_Found(t *testing.T) {
 
 func TestConversationService_GetConversationHistoryInitial_NotFound(t *testing.T) {
 	store := newFakeConversationStore()
-	svc := NewConversationService(store)
+	svc := NewConversationService(store, testSnowflake)
 
 	_, err := svc.GetConversationHistoryInitial(context.Background(), 999, 10)
 	require.Error(t, err)
@@ -553,7 +563,7 @@ func TestConversationService_GetConversationHistoryInitial_StoreError(t *testing
 		CreatedAt:        pgtype.Timestamptz{Time: time.Now(), Valid: true},
 	}
 	store.listMessagesInitErr = errors.New("database error")
-	svc := NewConversationService(store)
+	svc := NewConversationService(store, testSnowflake)
 
 	_, err := svc.GetConversationHistoryInitial(context.Background(), 1, 10)
 	require.Error(t, err)
@@ -581,7 +591,7 @@ func TestConversationService_GetConversationHistoryInitial_LimitNormalization(t 
 		})
 	}
 	store.messages[1] = msgs
-	svc := NewConversationService(store)
+	svc := NewConversationService(store, testSnowflake)
 
 	// When limit > 100, it should be normalized to 50
 	messages, err := svc.GetConversationHistoryInitial(context.Background(), 1, 200)
@@ -605,7 +615,7 @@ func TestConversationService_GetConversationMembers_Success(t *testing.T) {
 		{ConversationID: 1, UserID: 1, IsMuted: false, JoinedAt: pgtype.Timestamptz{Time: time.Now(), Valid: true}},
 		{ConversationID: 1, UserID: 2, IsMuted: false, JoinedAt: pgtype.Timestamptz{Time: time.Now(), Valid: true}},
 	}
-	svc := NewConversationService(store)
+	svc := NewConversationService(store, testSnowflake)
 
 	members, err := svc.GetConversationMembers(context.Background(), 1)
 	require.NoError(t, err)
@@ -614,7 +624,7 @@ func TestConversationService_GetConversationMembers_Success(t *testing.T) {
 
 func TestConversationService_GetConversationMembers_ConversationNotFound(t *testing.T) {
 	store := newFakeConversationStore()
-	svc := NewConversationService(store)
+	svc := NewConversationService(store, testSnowflake)
 
 	_, err := svc.GetConversationMembers(context.Background(), 999)
 	require.Error(t, err)
@@ -630,7 +640,7 @@ func TestConversationService_GetConversationMembers_StoreError(t *testing.T) {
 		CreatedAt:        pgtype.Timestamptz{Time: time.Now(), Valid: true},
 	}
 	store.getMembersErr = errors.New("database error")
-	svc := NewConversationService(store)
+	svc := NewConversationService(store, testSnowflake)
 
 	_, err := svc.GetConversationMembers(context.Background(), 1)
 	require.Error(t, err)
@@ -646,7 +656,7 @@ func TestConversationService_GetConversationMembers_EmptyMembers(t *testing.T) {
 		CreatedAt:        pgtype.Timestamptz{Time: time.Now(), Valid: true},
 	}
 	// No members added
-	svc := NewConversationService(store)
+	svc := NewConversationService(store, testSnowflake)
 
 	members, err := svc.GetConversationMembers(context.Background(), 1)
 	require.NoError(t, err)
@@ -669,7 +679,7 @@ func TestConversationService_IsMember_True(t *testing.T) {
 		{ConversationID: 1, UserID: 1, IsMuted: false, JoinedAt: pgtype.Timestamptz{Time: time.Now(), Valid: true}},
 		{ConversationID: 1, UserID: 2, IsMuted: false, JoinedAt: pgtype.Timestamptz{Time: time.Now(), Valid: true}},
 	}
-	svc := NewConversationService(store)
+	svc := NewConversationService(store, testSnowflake)
 
 	isMember, err := svc.IsMember(context.Background(), 1, 1)
 	require.NoError(t, err)
@@ -687,7 +697,7 @@ func TestConversationService_IsMember_False(t *testing.T) {
 	store.members[1] = []model.ConversationMember{
 		{ConversationID: 1, UserID: 1, IsMuted: false, JoinedAt: pgtype.Timestamptz{Time: time.Now(), Valid: true}},
 	}
-	svc := NewConversationService(store)
+	svc := NewConversationService(store, testSnowflake)
 
 	isMember, err := svc.IsMember(context.Background(), 1, 999)
 	require.NoError(t, err)
@@ -696,7 +706,7 @@ func TestConversationService_IsMember_False(t *testing.T) {
 
 func TestConversationService_IsMember_ConversationNotFound(t *testing.T) {
 	store := newFakeConversationStore()
-	svc := NewConversationService(store)
+	svc := NewConversationService(store, testSnowflake)
 
 	_, err := svc.IsMember(context.Background(), 999, 1)
 	require.Error(t, err)
@@ -712,7 +722,7 @@ func TestConversationService_IsMember_StoreError(t *testing.T) {
 		CreatedAt:        pgtype.Timestamptz{Time: time.Now(), Valid: true},
 	}
 	store.getMembersErr = errors.New("database error")
-	svc := NewConversationService(store)
+	svc := NewConversationService(store, testSnowflake)
 
 	_, err := svc.IsMember(context.Background(), 1, 1)
 	require.Error(t, err)
@@ -813,7 +823,7 @@ func TestConversationService_CreateConversation_TableDriven(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			store := newFakeConversationStore()
-			svc := NewConversationService(store)
+			svc := NewConversationService(store, testSnowflake)
 
 			conv, err := svc.CreateConversation(context.Background(), tt.convType, tt.creatorID, tt.memberIDs)
 
@@ -846,7 +856,7 @@ func TestConversationService_GetConversationHistory_TableDriven(t *testing.T) {
 		{ID: 2, ConversationID: 1, SenderID: 2, Content: []byte("msg2"), CreatedAt: pgtype.Timestamptz{Time: now.Add(time.Second), Valid: true}},
 		{ID: 3, ConversationID: 1, SenderID: 1, Content: []byte("msg3"), CreatedAt: pgtype.Timestamptz{Time: now.Add(2 * time.Second), Valid: true}},
 	}
-	svc := NewConversationService(store)
+	svc := NewConversationService(store, testSnowflake)
 
 	tests := []struct {
 		name           string
@@ -923,7 +933,7 @@ func TestConversationService_IsMember_TableDriven(t *testing.T) {
 		{ConversationID: 1, UserID: 1, IsMuted: false, JoinedAt: pgtype.Timestamptz{Time: time.Now(), Valid: true}},
 		{ConversationID: 1, UserID: 2, IsMuted: false, JoinedAt: pgtype.Timestamptz{Time: time.Now(), Valid: true}},
 	}
-	svc := NewConversationService(store)
+	svc := NewConversationService(store, testSnowflake)
 
 	tests := []struct {
 		name           string

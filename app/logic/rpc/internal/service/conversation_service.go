@@ -6,6 +6,7 @@ import (
 
 	"github.com/hellopoisonx/aim/app/logic/rpc/model"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
+	"github.com/hellopoisonx/aim/app/shared/tools"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -47,11 +48,12 @@ type ConversationStore interface {
 // ConversationService handles conversation business logic.
 type ConversationService struct {
 	store ConversationStore
+	idGen *tools.Snowflake
 }
 
 // NewConversationService creates a new ConversationService.
-func NewConversationService(store ConversationStore) *ConversationService {
-	return &ConversationService{store: store}
+func NewConversationService(store ConversationStore, idGen *tools.Snowflake) *ConversationService {
+	return &ConversationService{store: store, idGen: idGen}
 }
 
 // CreateConversation creates a new conversation with the given type and members.
@@ -101,7 +103,10 @@ func (s ConversationService) CreateConversation(ctx context.Context, conversatio
 		// ErrNoRows means no existing conversation → continue creating
 	}
 
-	conversationID := generateConversationID()
+	conversationID, err := s.idGen.NextID()
+	if err != nil {
+		return model.Conversation{}, errorx.NewCodeError(errorx.CodeInternal, "failed to generate conversation id")
+	}
 
 	conv, err := s.store.CreateConversation(ctx, model.CreateConversationParams{
 		ID:               conversationID,

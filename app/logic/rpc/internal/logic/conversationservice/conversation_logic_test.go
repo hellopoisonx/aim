@@ -9,6 +9,7 @@ import (
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/service"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
+	"github.com/hellopoisonx/aim/app/shared/tools"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/stretchr/testify/assert"
@@ -107,9 +108,26 @@ func (f *fakeConversationStore) GetDirectConversationByMembers(_ context.Context
 	return model.Conversation{}, pgx.ErrNoRows
 }
 
+// testSnowflake is a shared Snowflake instance for tests.
+var testSnowflake = func() *tools.Snowflake {
+	s, err := tools.NewSnowflake(1)
+	if err != nil {
+		panic(err)
+	}
+	return s
+}()
+
+func generateTestConversationID() int64 {
+	id, err := testSnowflake.NextID()
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 func setupTestSvc() *svc.ServiceContext {
 	store := newFakeStore()
-	convSvc := service.NewConversationService(store)
+	convSvc := service.NewConversationService(store, testSnowflake)
 	return &svc.ServiceContext{
 		ConversationService: convSvc,
 	}
@@ -208,7 +226,7 @@ func TestCreateConversationLogic(t *testing.T) {
 
 func TestGetConversationHistoryLogic(t *testing.T) {
 	store := newFakeStore()
-	convID := service.GenerateConversationID()
+	convID := generateTestConversationID()
 	store.conversations[convID] = model.Conversation{
 		ID:               convID,
 		ConversationType: "direct",
@@ -224,7 +242,7 @@ func TestGetConversationHistoryLogic(t *testing.T) {
 		{ID: 2, ConversationID: convID, SenderID: 2, MessageType: "text", Content: []byte(`"world"`), CreatedAt: newTS()},
 	}
 
-	convSvc := service.NewConversationService(store)
+	convSvc := service.NewConversationService(store, testSnowflake)
 	svcCtx := &svc.ServiceContext{
 		ConversationService: convSvc,
 	}
@@ -312,7 +330,7 @@ func TestCreateConversationLogic_NilService(t *testing.T) {
 }
 func TestGetConversationMembersLogic(t *testing.T) {
 	store := newFakeStore()
-	convID := service.GenerateConversationID()
+	convID := generateTestConversationID()
 	store.conversations[convID] = model.Conversation{
 		ID:               convID,
 		ConversationType: "direct",
@@ -324,7 +342,7 @@ func TestGetConversationMembersLogic(t *testing.T) {
 		{ConversationID: convID, UserID: 2, JoinedAt: newTS()},
 	}
 
-	svcCtx := &svc.ServiceContext{ConversationService: service.NewConversationService(store)}
+	svcCtx := &svc.ServiceContext{ConversationService: service.NewConversationService(store, testSnowflake)}
 	resp, err := NewGetConversationMembersLogic(context.Background(), svcCtx).GetConversationMembers(&pb.GetConversationMembersReq{ConversationId: convID})
 	require.NoError(t, err)
 	require.Equal(t, convID, resp.GetConversationId())

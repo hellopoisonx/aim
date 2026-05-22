@@ -7,6 +7,7 @@ import (
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/config"
 	"github.com/hellopoisonx/aim/app/logic/rpc/model"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/service"
+	"github.com/hellopoisonx/aim/app/shared/tools"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
@@ -20,6 +21,7 @@ type ServiceContext struct {
 	ConversationService   service.ConversationQuerier
 	DB                    model.DBTX
 	QuotaStore            *cache.QuotaStore
+	IDGen                 *tools.Snowflake
 }
 
 func NewServiceContext(c config.Config) *ServiceContext {
@@ -27,6 +29,15 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		Config:            c,
 		PermissionChecker: service.DenyAllPermissionChecker{},
 	}
+
+	// Create Snowflake ID generator
+	snowflake, err := tools.NewSnowflake(c.MachineID)
+	if err != nil {
+		logx.Errorf("failed to create Snowflake generator with machineID=%d: %v", c.MachineID, err)
+		return svcCtx
+	}
+
+	svcCtx.IDGen = snowflake
 
 	// Connect to Postgres if configured
 	if c.Postgres.DataSource != "" {
@@ -49,7 +60,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 			}
 			svcCtx.PermissionChecker = service.NewDatabasePermissionCheckerWithLimit(queries, limit)
 			svcCtx.UserInfoService = service.NewUserInfoService(queries)
-			svcCtx.ConversationService = service.NewConversationService(queries)
+			svcCtx.ConversationService = service.NewConversationService(queries, snowflake)
 
 			if limit != service.DefaultTemporaryConversationMessageLimit {
 				logx.Infof("Postgres connected, using DatabasePermissionChecker (temporary conversation message limit=%d), UserInfoService and ConversationService", limit)

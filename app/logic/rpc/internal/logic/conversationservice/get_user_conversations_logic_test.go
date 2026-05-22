@@ -14,20 +14,20 @@ import (
 
 func TestGetUserConversationsLogic(t *testing.T) {
 	store := newFakeStore()
-	convID1 := service.GenerateConversationID()
+	convID1 := generateTestConversationID()
 	store.conversations[convID1] = newConv(convID1, "direct")
 	store.members[convID1] = newMember(convID1, 1)
 
-	convID2 := service.GenerateConversationID()
+	convID2 := generateTestConversationID()
 	store.conversations[convID2] = newConv(convID2, "group")
 	store.members[convID2] = newMember(convID2, 1, 3)
 
 	// convID3: user 2 only (not user 1)
-	convID3 := service.GenerateConversationID()
+	convID3 := generateTestConversationID()
 	store.conversations[convID3] = newConv(convID3, "direct")
 	store.members[convID3] = newMember(convID3, 2, 4)
 
-	convSvc := service.NewConversationService(store)
+	convSvc := service.NewConversationService(store, testSnowflake)
 	svcCtx := &svc.ServiceContext{
 		ConversationService: convSvc,
 	}

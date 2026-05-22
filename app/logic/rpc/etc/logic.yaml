@@ -53,3 +53,5 @@ Dev:
   # 临时会话（非好友）单会话最多可发送的消息数。
   # 默认 10。设为 0 或负数表示不限制（仅供本地开发 / 压测使用，切勿在生产开启）。
   TemporaryConversationMessageLimit: 10
+# Snowflake 机器 ID，范围 0-1023。同一 logic 实例集群中每台机器必须唯一。
+MachineID: 1

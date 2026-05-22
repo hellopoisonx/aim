@@ -17,6 +17,7 @@ type Config struct {
 	CacheRedis              RedisConf    `json:",optional"`
 	Quota                   QuotaConf    `json:",optional"`
 	Dev                     DevConf      `json:",optional"`
+	MachineID               int64        `json:",default=1"`
 }
 
 type PostgresConf struct {
