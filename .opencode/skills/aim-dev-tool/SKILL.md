@@ -35,7 +35,7 @@ dev-tool/benchmark.py
 ├── RegisterScenario    → 批量注册压测
 ├── LoginScenario       → 批量登录压测
 ├── FriendChainScenario → 好友链压测（注册→登录→加好友→接受）
-├── WsMessageScenario   → WS 消息并发压测
+├── WsMessageScenario   → WS 消息并发压测（端到端延迟：A→服务器→B）
 ├── MixedScenario       → REST + WS 混合负载
 └── CLI (argparse)      → 子命令模式
 ```
@@ -72,8 +72,10 @@ dev-tool/benchmark.py
 | **Avg QPS** | 平均每秒请求数 |
 | **Min / Avg / Max** | 延迟最小值/均值/最大值 |
 | **P50 / P90 / P95 / P99** | 延迟百分位分布 |
-| **Error Types** | 错误类型细分（`api_40400`、`ConnectionError` 等） |
+| **Error Types** | 错误类型细分（`api_40400`、`recv_timeout`、`orphaned`、`ConnectionError` 等） |
 | **Latency Histogram** | ASCII 延迟分布直方图 |
+
+> **ws-message 延迟语义**：端到端延迟，A 发送消息 → 服务器 → B 收到 PUSH_MESSAGE。通过 `client_msg_id` 关联发送与接收，超时 30 秒未收到推送则记录 `recv_timeout` 错误。
 
 ### 典型用法
 
@@ -244,5 +246,6 @@ python generate_fixtures.py --count 5000   # 自定义数量
 
 ## 最近变更
 
+- 2026-05-22: `ws-message` 延迟语义改为端到端（A 发送 → 服务器 → B 收到 PUSH_MESSAGE）。发送方和接收方均建立 WS 连接，通过 `client_msg_id` 关联发送与接收，30s 超时未收到则记录 `recv_timeout` 错误。步骤从 4 步扩展为 5 步（Step 3: 接收方连接，Step 4: 发送方连接，Step 5: 发送消息+等待回执）。`WSClient.send_message()` 现在返回 `client_msg_id`。`LoadGenerator._worker_loop` 支持 `_SKIP_METRICS` 哨兵值，允许 task_fn 自行管理指标记录。
 - 2026-05-22: 新增独立压测 Docker Compose 环境（`dev-tool/docker-compose.yaml`，端口 +10000 偏移）、压测专属配置（`dev-tool/etc/`）、Fixture 生成器（`dev-tool/generate_fixtures.py`）。主 `docker-compose.yaml` 为 gateway 添加 `AIM_GATEWAY_NODE_ID: 0` 环境变量。
 - 2026-05-22: `--quiet` 彻底静默。现在会同时（1）设 `aim_test.VERBOSE=False` 拑制 WSClient 调试输出；（2）将 `websocket`/`urllib3`/`requests` logger 降为 CRITICAL；（3）为 setup-阶段 LoadGenerator 传 `verbose=False` 以去掉注册/创建会话阶段的进度条与中间汇总。CLI 所有场景（含 register/login/friend-chain）都支持 `--quiet`。

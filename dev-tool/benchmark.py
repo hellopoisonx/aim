@@ -74,6 +74,10 @@ def _apply_quiet(quiet: bool):
         _logging.getLogger("requests").setLevel(_logging.CRITICAL)
 
 
+# 哨兵值：task_fn 返回此值时，_worker_loop 跳过自动指标记录（由 task_fn 自行管理）
+_SKIP_METRICS = object()
+
+
 # ===============================================================================
 # Metrics Collector
 # ===============================================================================
@@ -480,8 +484,12 @@ class LoadGenerator:
             t0 = time.time()
             try:
                 result = task_fn()
-                latency = time.time() - t0
-                self.metrics.record_success(latency)
+                # 返回 _SKIP_METRICS 表示 task_fn 自行管理指标记录
+                if result is _SKIP_METRICS:
+                    pass
+                else:
+                    latency = time.time() - t0
+                    self.metrics.record_success(latency)
             except APIError as e:
                 latency = time.time() - t0
                 error_type = f"api_{e.code}"
@@ -829,8 +837,15 @@ class FriendChainScenario:
 class WsMessageScenario:
     """WebSocket message send/receive benchmark.
 
+    延迟度量：端到端延迟 (A 发送 → 服务器 → B 收到 PUSH_MESSAGE)。
+    每个 conversation pair 中 A 为发送方，B 为接收方；
+    通过 client_msg_id 关联发送与接收，计算 A_send_time → B_recv_time。
+
     支持从 msg.txt 加载预生成消息内容，确保稳定可复现。
     """
+
+    # 接收方等待单条消息的超时时间（秒）
+    RECV_TIMEOUT = 30.0
 
     def __init__(self, users: int, messages_per_user: int = 100,
                  rps: float = 0, ramp_up: float = 0, duration: float = 0,
@@ -852,13 +867,13 @@ class WsMessageScenario:
             print("  x Need at least 2 users for WS benchmark")
             return self.metrics.snapshot()
 
-        print(f"\n  Scenario: WS Message -- {pairs} pairs, {self.messages_per_user} msgs/user"
+        print(f"\n  Scenario: WS Message (e2e) -- {pairs} pairs, {self.messages_per_user} msgs/user"
               + (f", RPS={self.rate_limiter._target_rps}" if self.rate_limiter._target_rps > 0 else ""))
 
         # Step 1: Register & login
-        print("  [1/4] Registering & logging in...")
+        print("  [1/5] Registering & logging in...")
         user_creds: List[tuple] = []  # (user_id, token)
-        conv_pairs: List[tuple] = []  # (conv_id, sender_user_id, sender_token, receiver_user_id)
+        conv_pairs: List[tuple] = []  # (conv_id, sender_user_id, sender_token, receiver_user_id, receiver_token)
         cred_lock = threading.Lock()
 
         def reg_login_and_conv():
@@ -884,13 +899,12 @@ class WsMessageScenario:
         time.sleep(5)
 
         # Step 2: Create conversations (pair users)
-        print("  [2/4] Creating conversations...")
+        print("  [2/5] Creating conversations...")
         conv_lock = threading.Lock()
 
         def create_conv():
             if not user_creds:
                 return
-            # Pick next available pair
             with conv_lock:
                 idx = len(conv_pairs)
             if idx * 2 + 1 >= len(user_creds):
@@ -903,7 +917,7 @@ class WsMessageScenario:
             resp = client.create_conversation([b_id])
             conv_id = resp["conversation_id"]
             with conv_lock:
-                conv_pairs.append((conv_id, a_id, a_token, b_id))
+                conv_pairs.append((conv_id, a_id, a_token, b_id, b_token))
 
         gen2 = LoadGenerator(MetricsCollector(), RateLimiter(),
                              workers=min(pairs, 20), verbose=False)
@@ -913,47 +927,80 @@ class WsMessageScenario:
             print("  x No conversations created")
             return self.metrics.snapshot()
 
-        # Step 3: Connect WS clients
-        print("  [3/4] Connecting WebSocket clients...")
-        ws_clients: List[dict] = []
-        ws_lock = threading.Lock()
+        # Step 3: Connect receiver WS clients (B side)
+        print("  [3/5] Connecting receiver WebSocket clients...")
 
-        # Connect receivers first (they listen)
-        receiver_tokens = {}  # user_id -> token
-        for conv_id, a_id, a_token, b_id in conv_pairs:
-            receiver_tokens[b_id] = next(
-                t for uid, t in user_creds if uid == b_id
-            )
+        # pending_sends: client_msg_id → threading.Event
+        # send_times:    client_msg_id → send_timestamp
+        pending_sends: Dict[str, threading.Event] = {}
+        send_times: Dict[str, float] = {}
+        pending_lock = threading.Lock()
+        # Track messages that timed out or were orphaned
+        timed_out_count = {"value": 0}
 
-        # Track received messages
-        received_count = {"total": 0}
-        recv_lock = threading.Lock()
+        receiver_ws_clients: List[tuple] = []  # (conv_id, receiver_user_id, WSClient)
 
-        def connect_receiver():
-            pass  # We'll connect senders and receivers together
+        for i, (conv_id, a_id, a_token, b_id, b_token) in enumerate(conv_pairs):
+            token_mgr = TokenManager.load()
+            token_mgr.access_token = b_token
+            token_mgr.user_id = b_id
+            ws = WSClient(token=token_mgr)
 
-        # Actually, let's connect all senders as WS clients
-        # Each sender will send messages through its WS connection
-        ws_connected = []
-        connect_lock = threading.Lock()
-        total_expected = pairs * self.messages_per_user
+            # 注册 on_frame 回调，接收方监听 PUSH_MESSAGE
+            def make_on_frame(receiver_uid: int):
+                def on_frame(frame, payload):
+                    if frame.type == ws_pb2.FRAME_TYPE_PUSH_MESSAGE and payload is not None:
+                        msg_id = getattr(payload, "client_msg_id", "")
+                        if msg_id:
+                            recv_time = time.time()
+                            with pending_lock:
+                                t0 = send_times.pop(msg_id, None)
+                                evt = pending_sends.pop(msg_id, None)
+                            if t0 is not None:
+                                latency = recv_time - t0
+                                self.metrics.record_success(latency)
+                                if evt:
+                                    evt.set()
+                return on_frame
 
-        for i, (conv_id, a_id, a_token, b_id) in enumerate(conv_pairs):
+            ws.on_frame = make_on_frame(b_id)
+            ws.connect()
+            if ws.is_connected():
+                receiver_ws_clients.append((conv_id, b_id, ws))
+            else:
+                _vprint(f"    x Receiver WS connection #{i} failed")
+
+        active_receivers = len(receiver_ws_clients)
+        print(f"    {active_receivers}/{pairs} receiver WS connections established")
+
+        # Step 4: Connect sender WS clients (A side)
+        print("  [4/5] Connecting sender WebSocket clients...")
+        sender_ws_clients: List[tuple] = []  # (conv_id, WSClient)
+
+        # 构建 conv_id → receiver 映射，方便查找哪些 conv 有活跃接收方
+        active_conv_ids = {c for c, _, _ in receiver_ws_clients}
+
+        for conv_id, a_id, a_token, b_id, b_token in conv_pairs:
+            if conv_id not in active_conv_ids:
+                _vprint(f"    x Skipping sender for conv {conv_id} (no receiver)")
+                continue
             token_mgr = TokenManager.load()
             token_mgr.access_token = a_token
             token_mgr.user_id = a_id
             ws = WSClient(token=token_mgr)
             ws.connect()
             if ws.is_connected():
-                ws_connected.append((conv_id, ws))
+                sender_ws_clients.append((conv_id, ws))
             else:
-                _vprint(f"    x WS connection #{i} failed")
+                _vprint(f"    x Sender WS connection for conv {conv_id} failed")
 
-        active_senders = len(ws_connected)
-        print(f"    {active_senders}/{pairs} WS connections established")
+        active_senders = len(sender_ws_clients)
+        print(f"    {active_senders}/{pairs} sender WS connections established")
 
-        if not ws_connected:
-            print("  x No WS connections established")
+        if not sender_ws_clients:
+            print("  x No sender WS connections established")
+            for _, _, ws in receiver_ws_clients:
+                ws.disconnect()
             return self.metrics.snapshot()
 
         # 加载消息 fixture
@@ -963,8 +1010,9 @@ class WsMessageScenario:
             if msg_fixtures:
                 print(f"  Loaded {len(msg_fixtures)} message fixtures from msg.txt")
 
-        # Step 4: Send messages
-        print(f"  [4/4] Sending messages ({total_expected} total)..."
+        # Step 5: Send messages & measure e2e latency
+        total_expected = active_senders * self.messages_per_user
+        print(f"  [5/5] Sending messages ({total_expected} total, e2e latency)..."
               + (f", fixtures={'on' if msg_fixtures else 'off'}" if self.use_fixtures else ""))
         self.metrics.reset()
 
@@ -975,17 +1023,37 @@ class WsMessageScenario:
             nonlocal msg_idx
             with idx_lock:
                 if msg_idx >= total_expected:
-                    return
+                    return _SKIP_METRICS
                 msg_idx += 1
             # Round-robin across senders
-            sender_idx = (msg_idx - 1) % len(ws_connected)
-            conv_id, ws = ws_connected[sender_idx]
+            sender_idx = (msg_idx - 1) % len(sender_ws_clients)
+            conv_id, ws = sender_ws_clients[sender_idx]
             # 优先使用 fixture 数据
             if msg_fixtures:
                 content = msg_fixtures[(msg_idx - 1) % len(msg_fixtures)]
             else:
                 content = f"bench_msg_{msg_idx}"
-            ws.send_message(conv_id, content, "text")
+
+            # 注册 pending 追踪，再发送
+            evt = threading.Event()
+            t0 = time.time()
+            client_msg_id = ws.send_message(conv_id, content, "text")
+            with pending_lock:
+                send_times[client_msg_id] = t0
+                pending_sends[client_msg_id] = evt
+
+            # 等待接收方确认（带超时）
+            if not evt.wait(timeout=self.RECV_TIMEOUT):
+                # 超时：清理并记录错误
+                with pending_lock:
+                    send_times.pop(client_msg_id, None)
+                    pending_sends.pop(client_msg_id, None)
+                timed_out_count["value"] += 1
+                latency = time.time() - t0
+                self.metrics.record_error(latency, "recv_timeout")
+
+            # 返回 _SKIP_METRICS: 本函数自行管理 record_success/record_error
+            return _SKIP_METRICS
 
         gen3 = LoadGenerator(self.metrics, self.rate_limiter,
                              workers=min(active_senders, 20),
@@ -998,8 +1066,23 @@ class WsMessageScenario:
             snap = self.metrics.snapshot()
             print(ReportPrinter.summary(snap))
 
+        # 清理残留 pending（压测 duration 模式可能中途中断）
+        with pending_lock:
+            remaining = len(pending_sends)
+            if remaining > 0:
+                for mid in list(pending_sends.keys()):
+                    t0 = send_times.pop(mid, time.time())
+                    latency = time.time() - t0
+                    self.metrics.record_error(latency, "orphaned")
+                pending_sends.clear()
+
+        if timed_out_count["value"] > 0 or remaining > 0:
+            print(f"  ⚠ {timed_out_count['value']} timed out, {remaining} orphaned messages")
+
         # Disconnect all
-        for conv_id, ws in ws_connected:
+        for _, ws in sender_ws_clients:
+            ws.disconnect()
+        for _, _, ws in receiver_ws_clients:
             ws.disconnect()
 
         # Cleanup

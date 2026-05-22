@@ -435,13 +435,16 @@ class WSClient:
 
     # ── Convenience methods ──
 
-    def send_message(self, conversation_id: int, content: str, message_type: str = "text"):
+    def send_message(self, conversation_id: int, content: str, message_type: str = "text") -> str:
+        """Send a chat message and return the client_msg_id for correlation."""
         payload = ws_pb2.SendMessagePayload()
         payload.conversation_id = conversation_id
         payload.message_type = message_type
         payload.content = content
-        payload.client_msg_id = str(uuid.uuid4())
+        client_msg_id = str(uuid.uuid4())
+        payload.client_msg_id = client_msg_id
         self._send_frame(ws_pb2.FRAME_TYPE_SEND_MESSAGE, payload)
+        return client_msg_id
 
     def send_heartbeat(self):
         payload = ws_pb2.HeartbeatPayload()
