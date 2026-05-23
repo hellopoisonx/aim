@@ -14,6 +14,7 @@ type Config struct {
 	Postgres                      PostgresConf `json:",optional"`
 	KqConsumerConf                kq.KqConf    `json:",optional"`
 	UserCreatedConsumerConf       kq.KqConf    `json:",optional"`
+	BotWebhookConsumerConf        kq.KqConf    `json:",optional"`
 	ConversationEventProducerConf KqPusherConf `json:",optional"`
 	CacheRedis                    RedisConf    `json:",optional"`
 	Quota                         QuotaConf    `json:",optional"`
@@ -51,4 +52,9 @@ type DevConf struct {
 // IsUserCreatedConsumerConfigured returns true if the user-created consumer is properly configured.
 func (c *Config) IsUserCreatedConsumerConfigured() bool {
 	return c.UserCreatedConsumerConf.Topic != "" && len(c.UserCreatedConsumerConf.Brokers) > 0
+}
+
+// IsBotWebhookConsumerConfigured returns true if the bot-webhook consumer is properly configured.
+func (c *Config) IsBotWebhookConsumerConfigured() bool {
+	return c.BotWebhookConsumerConf.Topic != "" && len(c.BotWebhookConsumerConf.Brokers) > 0
 }

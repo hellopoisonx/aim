@@ -115,7 +115,7 @@ func TestRESTClientRegisterAndRefresh(t *testing.T) {
 
 	rest := NewRESTClient(server.URL + "/")
 
-	registered, err := rest.Register(context.Background(), &RegisterRequest{Email: "b@example.com", Password: "password123", DeviceId: "device-2"})
+	registered, err := rest.Register(context.Background(), &RegisterRequest{Email: "b@example.com", Password: "password123", Username: "Bob", DeviceId: "device-2"})
 	if err != nil {
 		t.Fatalf("Register returned error: %v", err)
 	}

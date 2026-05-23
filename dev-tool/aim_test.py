@@ -47,6 +47,13 @@ import requests
 import websocket
 from google.protobuf import json_format
 
+try:
+    from prompt_toolkit import PromptSession
+    from prompt_toolkit.patch_stdout import patch_stdout
+except ImportError:  # pragma: no cover - optional interactive dependency
+    PromptSession = None
+    patch_stdout = None
+
 # Import compiled proto modules
 import ws_pb2
 import gateway_pb2
@@ -63,12 +70,25 @@ GATEWAY_WS = os.environ.get("AIM_GATEWAY_WS", "ws://127.0.0.1:8888/ws")
 # benchmark.py 在 --quiet 模式下将其设为 False。
 # aim_test.py CLI 仅供交互调试，默认保持 True。
 VERBOSE = True
+_PRINT_LOCK = threading.RLock()
 
 
 def set_verbose(v: bool):
     """Enable/disable WSClient debug prints process-wide."""
     global VERBOSE
     VERBOSE = bool(v)
+
+
+def _safe_print(*args, **kwargs):
+    """Thread-safe print used by WS callbacks and CLI output."""
+    with _PRINT_LOCK:
+        print(*args, **kwargs)
+
+
+def _ws_debug_print(*args, **kwargs):
+    """Print WS debug output without corrupting interactive prompt."""
+    if VERBOSE:
+        _safe_print(*args, **kwargs)
 def _state_file(profile: str = "") -> str:
     """Return per-profile state file path.
     Empty profile → .aim_state.json (backward compat).
@@ -260,6 +280,9 @@ class RESTClient:
     def list_friends(self) -> list:
         return self._get("/api/friends/me")["friends"]
 
+    def get_friends_presence(self) -> list:
+        return self._get("/api/presence/friends").get("friends", [])
+
     def accept_friend(self, friend_id: int) -> dict:
         """NEW: accept pending friend request."""
         return self._post(f"/api/friends/accept/{friend_id}")["friendship"]
@@ -406,21 +429,21 @@ class WSClient:
         while not self._connected and time.time() < deadline:
             if self._error:
                 if VERBOSE:
-                    print(f"  ✗ WS connection failed: {self._error}")
+                    _ws_debug_print(f"  ✗ WS connection failed: {self._error}")
                 self.disconnect()
                 return
             if not t.is_alive():
                 if VERBOSE:
-                    print(f"  ✗ WS thread died unexpectedly")
+                    _ws_debug_print(f"  ✗ WS thread died unexpectedly")
                 self.disconnect()
                 return
             time.sleep(0.1)
         if not self._connected:
             if VERBOSE:
                 if self._error:
-                    print(f"  ✗ WS connection failed: {self._error}")
+                    _ws_debug_print(f"  ✗ WS connection failed: {self._error}")
                 else:
-                    print(f"  ✗ WS connection timed out after {int(connect_timeout)}s")
+                    _ws_debug_print(f"  ✗ WS connection timed out after {int(connect_timeout)}s")
             self.disconnect()
         else:
             # 连接成功，启动心跳
@@ -440,15 +463,15 @@ class WSClient:
         for attempt in range(retries):
             backoff = self.RECONNECT_BACKOFF_BASE * (2 ** attempt)
             if VERBOSE:
-                print(f"  ↻ WS reconnect attempt {attempt + 1}/{retries} in {backoff:.1f}s...")
+                _ws_debug_print(f"  ↻ WS reconnect attempt {attempt + 1}/{retries} in {backoff:.1f}s...")
             time.sleep(backoff)
             self.connect()
             if self._connected:
                 if VERBOSE:
-                    print(f"  ✓ WS reconnected on attempt {attempt + 1}")
+                    _ws_debug_print(f"  ✓ WS reconnected on attempt {attempt + 1}")
                 return True
         if VERBOSE:
-            print(f"  ✗ WS reconnect failed after {retries} attempts")
+            _ws_debug_print(f"  ✗ WS reconnect failed after {retries} attempts")
         return False
 
     def _try_refresh_token(self):
@@ -457,15 +480,15 @@ class WSClient:
             return
         if self._rest_client is None:
             if VERBOSE:
-                print("  ⚠ Token expired but no RESTClient for refresh")
+                _ws_debug_print("  ⚠ Token expired but no RESTClient for refresh")
             return
         try:
             self._rest_client.refresh()
             if VERBOSE:
-                print(f"  ✓ Token refreshed (user_id={self.token.user_id})")
+                _ws_debug_print(f"  ✓ Token refreshed (user_id={self.token.user_id})")
         except Exception as e:
             if VERBOSE:
-                print(f"  ✗ Token refresh failed: {e}")
+                _ws_debug_print(f"  ✗ Token refresh failed: {e}")
 
     def _start_heartbeat(self):
         """Start periodic heartbeat."""
@@ -504,7 +527,7 @@ class WSClient:
     def _on_open(self, ws):
         self._connected = True
         if VERBOSE:
-            print(f"  ✓ WS connected to {self.url}")
+            _ws_debug_print(f"  ✓ WS connected to {self.url}")
 
     def _on_message(self, ws, data: bytes):
         try:
@@ -513,25 +536,25 @@ class WSClient:
             ftype = FRAME_TYPE_NAMES.get(frame.type, f"UNKNOWN({frame.type})")
             payload = self._decode_payload(frame)
             if VERBOSE:
-                print(f"\n  ← [{ftype}] seq={frame.seq}")
+                _ws_debug_print(f"\n  ← [{ftype}] seq={frame.seq}")
                 if payload:
-                    print(f"    {json_format.MessageToDict(payload, preserving_proto_field_name=True)}")
+                    _ws_debug_print(f"    {json_format.MessageToDict(payload, preserving_proto_field_name=True)}")
             if self.on_frame:
                 self.on_frame(frame, payload)
         except Exception as e:
             if VERBOSE:
-                print(f"  ✗ Decode error: {e}")
+                _ws_debug_print(f"  ✗ Decode error: {e}")
 
     def _on_error(self, ws, error):
         self._error = str(error)
         if VERBOSE:
-            print(f"  ✗ WS error: {error}")
+            _ws_debug_print(f"  ✗ WS error: {error}")
 
     def _on_close(self, ws, status, msg):
         self._connected = False
         self._stop_heartbeat()
         if VERBOSE:
-            print(f"  ✓ WS closed (status={status})")
+            _ws_debug_print(f"  ✓ WS closed (status={status})")
         # 非主动关闭时尝试自动重连
         if not self._intentional_close and self._reconnect_max > 0:
             self._reconnect_count += 1
@@ -583,7 +606,7 @@ class WSClient:
             if payload_msg:
                 d = json_format.MessageToDict(payload_msg, preserving_proto_field_name=True)
                 payload_info = f" {d}"
-            print(f"  → [{ftype}] seq={frame.seq}{payload_info}")
+            _ws_debug_print(f"  → [{ftype}] seq={frame.seq}{payload_info}")
 
     # ── Convenience methods ──
 
@@ -623,6 +646,11 @@ class WSClient:
         payload.conversation_id = conversation_id
         payload.last_msg_id = last_msg_id
         self._send_frame(ws_pb2.FRAME_TYPE_READ_RECEIPT, payload)
+
+    def send_ack(self, ack_seq: int):
+        payload = ws_pb2.ClientAckPayload()
+        payload.ack_seq = ack_seq
+        self._send_frame(ws_pb2.FRAME_TYPE_ACK, payload)
 
 
 # ── Error ──────────────────────────────────────────────────────────────────────
@@ -749,6 +777,16 @@ def cmd_friend_list(args):
         print_json(friends)
     except APIError as e:
         print(f"✗ List friends failed: {e}")
+
+
+def cmd_presence_friends(args):
+    client = RESTClient()
+    try:
+        friends = client.get_friends_presence()
+        print(f"✓ {len(friends)} friend presence record(s):")
+        print_json(friends)
+    except APIError as e:
+        print(f"✗ Get friends presence failed: {e}")
 
 
 def cmd_create_conversation(args):
@@ -935,6 +973,24 @@ def cmd_ws_typing(args):
     ws.send_typing(args.conversation_id)
 
 
+def cmd_ws_read_receipt(args):
+    profile = getattr(args, "profile", "") or ""
+    ws = _get_ws_client(profile)
+    if not ws or not ws.is_connected():
+        print("✗ Not connected. Run 'ws-connect' first.")
+        return
+    ws.send_read_receipt(args.conversation_id, args.last_msg_id)
+
+
+def cmd_ws_ack(args):
+    profile = getattr(args, "profile", "") or ""
+    ws = _get_ws_client(profile)
+    if not ws or not ws.is_connected():
+        print("✗ Not connected. Run 'ws-connect' first.")
+        return
+    ws.send_ack(args.ack_seq)
+
+
 def _auth_status_line(token: TokenManager) -> str:
     """Build a compact status line showing current auth state."""
     if not token.access_token:
@@ -976,7 +1032,7 @@ def _print_help():
 │  search <name>          user <id>                 │
 │  friend-add <id>        friend-apps               │
 │  friend-accept <id>     friend-reject <id>        │
-│  friend-list                                       │
+│  friend-list          presence-friends             │
 ├─ Conversations ──────────────────────────────────┤
 │  conv-list                                         │
 │  conv-create <member_id> [name]  (or comma-sep)    │
@@ -993,6 +1049,8 @@ def _print_help():
 │  ws-send <conv_id> <text> [--profile NAME]        │
 │  ws-heartbeat [--profile NAME]                    │
 │  ws-typing <id> [--profile NAME]                  │
+│  ws-read-receipt <conv_id> <last_msg_id>          │
+│  ws-ack <ack_seq> [--profile NAME]                │
 │  ws-recv (wait for incoming frames)               │
 ├─ Profiles ────────────────────────────────────────┤
 │  switch <profile>   change active profile          │
@@ -1000,6 +1058,81 @@ def _print_help():
 ├─ Meta ────────────────────────────────────────────┤
 │  help | quit | exit | status                      │
 └───────────────────────────────────────────────────┘""")
+
+
+def _bot_token_for(args) -> str:
+    """Resolve the Bot OpenAPI token from --token flag or AIM_BOT_TOKEN env."""
+    tok = getattr(args, "token", None) or os.environ.get("AIM_BOT_TOKEN", "")
+    if not tok:
+        raise SystemExit("missing bot token: pass --token <token> or set AIM_BOT_TOKEN")
+    return tok
+
+
+def _bot_request(method: str, path: str, token: str, body=None) -> dict:
+    """Issue a Bot OpenAPI request and unwrap the {code,msg,body} envelope."""
+    url = f"{GATEWAY_HTTP}{path}"
+    headers = {"Authorization": f"Bot {token}", "Content-Type": "application/json"}
+    r = requests.request(method, url, headers=headers, json=body, timeout=10)
+    try:
+        data = r.json()
+    except ValueError:
+        raise SystemExit(f"bot {method} {path} failed: {r.status_code} {r.text!r}")
+    if data.get("code", 0) != 0:
+        raise SystemExit(f"bot {method} {path} failed: code={data.get('code')} msg={data.get('msg')}")
+    return data.get("body", {}) or {}
+
+
+def cmd_bot_me(args):
+    body = _bot_request("GET", "/api/bot/v1/me", _bot_token_for(args))
+    print_json(body)
+
+
+def cmd_bot_conv_list(args):
+    body = _bot_request("GET", "/api/bot/v1/conversations", _bot_token_for(args))
+    convs = body.get("conversations") or []
+    print(f"✓ Bot is in {len(convs)} conversation(s):")
+    print_json(convs)
+
+
+def cmd_bot_send(args):
+    payload = {
+        "conversation_id": args.conversation_id,
+        "message_type": args.message_type,
+        "content": args.content,
+        "client_msg_id": args.client_msg_id or str(uuid.uuid4()),
+    }
+    if args.mentions:
+        payload["mentions"] = [m.strip() for m in args.mentions.split(",") if m.strip()]
+    body = _bot_request("POST", "/api/bot/v1/messages", _bot_token_for(args), payload)
+    print(f"✓ Sent message_id={body.get('message_id')} client_msg_id={body.get('client_msg_id')}")
+    print_json(body)
+
+
+def cmd_bot_webhook_get(args):
+    body = _bot_request("GET", "/api/bot/v1/webhook", _bot_token_for(args))
+    print_json(body)
+
+
+def cmd_bot_webhook_set(args):
+    payload = {"url": args.url}
+    if args.events:
+        payload["events"] = [e.strip() for e in args.events.split(",") if e.strip()]
+    if args.enabled is not None:
+        payload["enabled"] = args.enabled
+    if args.secret:
+        payload["secret"] = args.secret
+    if args.rotate_secret:
+        payload["rotate_secret"] = True
+    body = _bot_request("PUT", "/api/bot/v1/webhook", _bot_token_for(args), payload)
+    if body.get("plaintext_secret"):
+        print("⚠  Plaintext webhook secret (shown once):")
+        print(f"   {body['plaintext_secret']}")
+    print_json(body.get("webhook"))
+
+
+def cmd_bot_webhook_delete(args):
+    body = _bot_request("DELETE", "/api/bot/v1/webhook", _bot_token_for(args))
+    print_json(body)
 
 
 def cmd_interactive(args):
@@ -1045,6 +1178,8 @@ Type 'help' for commands, 'quit' to exit.
 
     _banner()
 
+    session = PromptSession() if PromptSession is not None else None
+
     while True:
         try:
             # Build dynamic prompt with compact status
@@ -1052,7 +1187,12 @@ Type 'help' for commands, 'quit' to exit.
             ws = _get_ws_client(_profile_key())
             ws_hint = "⚡" if (ws and ws.is_connected()) else "·"
             profile_hint = _active_profile
-            line = input(f"aim [{profile_hint}] [{auth_hint}] {ws_hint}> ").strip()
+            prompt = f"aim [{profile_hint}] [{auth_hint}] {ws_hint}> "
+            if session is not None and patch_stdout is not None:
+                with patch_stdout(raw=True):
+                    line = session.prompt(prompt).strip()
+            else:
+                line = input(prompt).strip()
 
             if not line:
                 continue
@@ -1115,6 +1255,10 @@ Type 'help' for commands, 'quit' to exit.
             elif cmd == "friend-list" or cmd == "friends":
                 friends = client.list_friends()
                 print(f"✓ {len(friends)} friend(s):")
+                print_json(friends)
+            elif cmd == "presence-friends":
+                friends = client.get_friends_presence()
+                print(f"✓ {len(friends)} friend presence record(s):")
                 print_json(friends)
             elif cmd == "conv-list" or cmd == "list-conversations" or cmd == "conversations":
                 convs = client.list_conversations()
@@ -1232,6 +1376,18 @@ Type 'help' for commands, 'quit' to exit.
                     print(f"✗ Not connected (profile={_active_profile}). Run 'ws-connect' first.")
                     continue
                 ws.send_typing(int(parts[1]))
+            elif cmd == "ws-read-receipt" and len(parts) >= 3:
+                ws = _get_ws_client(_profile_key())
+                if not ws or not ws.is_connected():
+                    print(f"✗ Not connected (profile={_active_profile}). Run 'ws-connect' first.")
+                    continue
+                ws.send_read_receipt(int(parts[1]), int(parts[2]))
+            elif cmd == "ws-ack" and len(parts) >= 2:
+                ws = _get_ws_client(_profile_key())
+                if not ws or not ws.is_connected():
+                    print(f"✗ Not connected (profile={_active_profile}). Run 'ws-connect' first.")
+                    continue
+                ws.send_ack(int(parts[1]))
             elif cmd == "ws-recv":
                 print("Waiting for frames... (Ctrl+C to stop)")
                 try:
@@ -1306,6 +1462,11 @@ def cmd_run_all(args):
     print(f"  ✓ Alice has {len(alice_friends)} friend(s)")
     bob_friends = client_bob.list_friends()
     print(f"  ✓ Bob has {len(bob_friends)} friend(s)")
+
+    # 4.6. Check friend presence endpoint
+    print("\n── 4.6. Friend Presence ──")
+    alice_presence = client_alice.get_friends_presence()
+    print(f"  ✓ Alice sees {len(alice_presence)} friend presence record(s)")
 
     # 5. Create conversation
     print("\n── 5. Create Conversation ──")
@@ -1439,6 +1600,7 @@ Examples:
     p.add_argument("--id", type=int, required=True)
 
     sub.add_parser("friend-list", help="List friends")
+    sub.add_parser("presence-friends", help="List friends presence")
 
     # Conversations
     p = sub.add_parser("conv-list", help="List conversations")
@@ -1494,6 +1656,47 @@ Examples:
     p = sub.add_parser("ws-typing", help="Send typing indicator")
     p.add_argument("--conversation-id", type=int, required=True)
     p.add_argument("--profile", default="", help="Profile name")
+    p = sub.add_parser("ws-read-receipt", help="Send read receipt via WebSocket")
+    p.add_argument("--conversation-id", type=int, required=True)
+    p.add_argument("--last-msg-id", type=int, required=True)
+    p.add_argument("--profile", default="", help="Profile name")
+    p = sub.add_parser("ws-ack", help="Send client ACK via WebSocket")
+    p.add_argument("--ack-seq", type=int, required=True)
+    p.add_argument("--profile", default="", help="Profile name")
+
+    # Bot OpenAPI
+    bot_token_help = "Bot token (defaults to AIM_BOT_TOKEN env)"
+
+    p = sub.add_parser("bot-me", help="GET /api/bot/v1/me")
+    p.add_argument("--token", default="", help=bot_token_help)
+
+    p = sub.add_parser("bot-conv-list", help="GET /api/bot/v1/conversations")
+    p.add_argument("--token", default="", help=bot_token_help)
+
+    p = sub.add_parser("bot-send", help="POST /api/bot/v1/messages")
+    p.add_argument("--token", default="", help=bot_token_help)
+    p.add_argument("--conversation-id", type=int, required=True)
+    p.add_argument("--content", required=True)
+    p.add_argument("--message-type", default="text")
+    p.add_argument("--client-msg-id", default="", help="Idempotency key (defaults to a fresh UUID)")
+    p.add_argument("--mentions", default="", help="Comma-separated user IDs to mention")
+
+    p = sub.add_parser("bot-webhook-get", help="GET /api/bot/v1/webhook")
+    p.add_argument("--token", default="", help=bot_token_help)
+
+    p = sub.add_parser("bot-webhook-set", help="PUT /api/bot/v1/webhook")
+    p.add_argument("--token", default="", help=bot_token_help)
+    p.add_argument("--url", required=True)
+    p.add_argument("--events", default="", help="Comma-separated event names (default: message.created)")
+    enabled_group = p.add_mutually_exclusive_group()
+    enabled_group.add_argument("--enable", dest="enabled", action="store_true", default=None)
+    enabled_group.add_argument("--disable", dest="enabled", action="store_false", default=None)
+    secret_group = p.add_mutually_exclusive_group()
+    secret_group.add_argument("--secret", default="", help="Provide a webhook signing secret")
+    secret_group.add_argument("--rotate-secret", action="store_true", help="Generate a fresh signing secret server-side")
+
+    p = sub.add_parser("bot-webhook-delete", help="DELETE /api/bot/v1/webhook")
+    p.add_argument("--token", default="", help=bot_token_help)
 
     # Meta
     sub.add_parser("interactive", help="Interactive mode")
@@ -1517,6 +1720,7 @@ Examples:
         "friend-accept": cmd_accept_friend,
         "friend-reject": cmd_reject_friend,
         "friend-list": cmd_friend_list,
+        "presence-friends": cmd_presence_friends,
         "conv-list": cmd_list_conversations,
         "conv-create": cmd_create_conversation,
         "group-create": cmd_create_group,
@@ -1531,6 +1735,14 @@ Examples:
         "ws-send": cmd_ws_send,
         "ws-heartbeat": cmd_ws_heartbeat,
         "ws-typing": cmd_ws_typing,
+        "ws-read-receipt": cmd_ws_read_receipt,
+        "ws-ack": cmd_ws_ack,
+        "bot-me": cmd_bot_me,
+        "bot-conv-list": cmd_bot_conv_list,
+        "bot-send": cmd_bot_send,
+        "bot-webhook-get": cmd_bot_webhook_get,
+        "bot-webhook-set": cmd_bot_webhook_set,
+        "bot-webhook-delete": cmd_bot_webhook_delete,
         "interactive": cmd_interactive,
         "run-all": cmd_run_all,
     }

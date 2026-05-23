@@ -12,7 +12,7 @@ PYTHONIOENCODING=utf-8 python aim_test.py <command> [--args]
 
 | 命令 | 参数 | 鉴权 | 对应 API |
 |------|------|------|----------|
-| `register` | `--email` `--password` [`--username`] [`--avatar`] | 无 | `POST /api/auth/register` |
+| `register` | `--email` `--password` `--username` [`--avatar`] | 无 | `POST /api/auth/register` |
 | `login` | `--email` `--password` [`--profile`] | 无 | `POST /api/auth/login` |
 | `refresh` | [`--profile`] | 无 | `POST /api/auth/refresh` |
 | `logout` | [`--profile`] | Bearer | `POST /api/auth/logout` |
@@ -33,6 +33,7 @@ PYTHONIOENCODING=utf-8 python aim_test.py <command> [--args]
 | `friend-accept` | `--id` | Bearer | `POST /api/friends/accept/:id` |
 | `friend-reject` | `--id` | Bearer | `POST /api/friends/reject/:id` |
 | `friend-list` | — | Bearer | `GET /api/friends/me` |
+| `presence-friends` | — | Bearer | `GET /api/presence/friends` |
 
 ### 会话
 
@@ -56,6 +57,8 @@ PYTHONIOENCODING=utf-8 python aim_test.py <command> [--args]
 | `ws-send` | `--conversation-id` `--content` [`--message-type`] [`--profile`] | Bearer | `SEND_MESSAGE` |
 | `ws-heartbeat` | [`--profile`] | Bearer | `HEARTBEAT` |
 | `ws-typing` | `--conversation-id` [`--profile`] | Bearer | `TYPING` |
+| `ws-read-receipt` | `--conversation-id` `--last-msg-id` [`--profile`] | Bearer | `READ_RECEIPT` |
+| `ws-ack` | `--ack-seq` [`--profile`] | Bearer | `ACK` |
 
 ### 元命令
 
@@ -98,14 +101,14 @@ python aim_test.py interactive
 
 ```
 ┌─ Auth ───────────────────────────────────────────┐
-│  register <email> <password> [username]           │
+│  register <email> <password> <username>           │
 │  login <email> <password> [--profile NAME]        │
 │  refresh | logout                                 │
 ├─ Users & Friends ────────────────────────────────┤
 │  search <name>          user <id>                 │
 │  friend-add <id>        friend-apps               │
 │  friend-accept <id>     friend-reject <id>        │
-│  friend-list                                       │
+│  friend-list          presence-friends             │
 ├─ Conversations ──────────────────────────────────┤
 │  conv-create <member_id> [name]  (or comma-sep)    │
 │  group-create <member_id> [name] (or comma-sep)    │
@@ -121,6 +124,8 @@ python aim_test.py interactive
 │  ws-send <conv_id> <text> [--profile NAME]        │
 │  ws-heartbeat [--profile NAME]                    │
 │  ws-typing <id> [--profile NAME]                  │
+│  ws-read-receipt <conv_id> <last_msg_id>          │
+│  ws-ack <ack_seq> [--profile NAME]                │
 │  ws-recv (wait for incoming frames)               │
 ├─ Profiles ────────────────────────────────────────┤
 │  switch <profile>   change active profile          │
@@ -165,6 +170,7 @@ aim [bob] [#2] ·> login bob@t.com 12345678
 3.  Friend request (Alice → Bob)
 4.  Accept friend (Bob → Alice)
 4.5 Friend lists (verify both sides)
+4.6 Friend presence endpoint
 5.  Create conversation
 6.  Get history (empty)
 7.  WebSocket connect (both)
@@ -235,6 +241,7 @@ python benchmark.py <scenario> [--args]
 | `login` | `--users` [`--rps`] [`--ramp-up`] [`--quiet`] [`--output`] | 批量登录 |
 | `friend-chain` | `--users` [`--rps`] [`--ramp-up`] [`--quiet`] [`--output`] | 好友链全流程 |
 | `ws-message` | `--users` `--messages-per-user` [`--rps`] [`--duration`] [`--ramp-up`] [`--quiet`] [`--output`] | WS 消息并发 |
+| `presence` | `--users` [`--rps`] [`--ramp-up`] [`--quiet`] [`--output`] | 好友在线状态查询压测 |
 | `mixed` | `--users` `--duration` [`--rps`] [`--ramp-up`] [`--ws-ratio`] [`--quiet`] [`--output`] | 混合负载 |
 
 ### 通用参数
@@ -264,6 +271,9 @@ python benchmark.py register --users 10
 
 # 渐进加压：500 用户、50 RPS、10s ramp-up
 python benchmark.py register --users 500 --rps 50 --ramp-up 10
+
+# 好友在线状态查询压测
+python benchmark.py presence --users 50 --rps 100
 
 # WS 消息压测 + 静默
 python benchmark.py ws-message --users 50 --messages-per-user 500 --quiet

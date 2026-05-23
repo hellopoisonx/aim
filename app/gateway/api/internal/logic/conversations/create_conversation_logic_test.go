@@ -68,7 +68,8 @@ func TestCreateConversation(t *testing.T) {
 			name: "unauthorized - no identity in context",
 			req: &types.CreateConversationRequest{
 				ConversationType: "direct",
-				MemberIds:        []int64{1, 2},
+				MemberIds:        []int64{1},
+				Name:             "Direct Chat",
 			},
 			mockSetup: func(*mockConversationService) {},
 			wantResp:  nil,
@@ -79,6 +80,7 @@ func TestCreateConversation(t *testing.T) {
 			req: &types.CreateConversationRequest{
 				ConversationType: "",
 				MemberIds:        []int64{1, 2},
+				Name:             "Invalid Chat",
 			},
 			mockSetup: func(*mockConversationService) {},
 			wantResp:  nil,
@@ -89,6 +91,7 @@ func TestCreateConversation(t *testing.T) {
 			req: &types.CreateConversationRequest{
 				ConversationType: "channel",
 				MemberIds:        []int64{1, 2},
+				Name:             "Invalid Chat",
 			},
 			mockSetup: func(*mockConversationService) {},
 			wantResp:  nil,
@@ -99,16 +102,18 @@ func TestCreateConversation(t *testing.T) {
 			req: &types.CreateConversationRequest{
 				ConversationType: "direct",
 				MemberIds:        []int64{},
+				Name:             "Direct Chat",
 			},
 			mockSetup: func(*mockConversationService) {},
 			wantResp:  nil,
-			wantErr:   errorx.NewCodeError(errorx.CodeBadInput, "member_ids must not be empty"),
+			wantErr:   errorx.NewCodeError(errorx.CodeBadInput, "direct conversation member_ids must contain exactly one peer user id"),
 		},
 		{
 			name: "nil client",
 			req: &types.CreateConversationRequest{
 				ConversationType: "direct",
-				MemberIds:        []int64{1, 2},
+				MemberIds:        []int64{1},
+				Name:             "Direct Chat",
 			},
 			mockSetup: func(ms *mockConversationService) {
 				*ms = mockConversationService{}
@@ -120,7 +125,8 @@ func TestCreateConversation(t *testing.T) {
 			name: "rpc error - gRPC application error",
 			req: &types.CreateConversationRequest{
 				ConversationType: "direct",
-				MemberIds:        []int64{1, 2},
+				MemberIds:        []int64{1},
+				Name:             "Direct Chat",
 			},
 			mockSetup: func(ms *mockConversationService) {
 				ms.CreateConversationFunc = func(ctx context.Context, in *conversationservice.CreateConversationReq) (*conversationservice.CreateConversationResp, error) {
@@ -135,7 +141,8 @@ func TestCreateConversation(t *testing.T) {
 			name: "rpc error - gRPC infrastructure error",
 			req: &types.CreateConversationRequest{
 				ConversationType: "direct",
-				MemberIds:        []int64{1, 2},
+				MemberIds:        []int64{1},
+				Name:             "Direct Chat",
 			},
 			mockSetup: func(ms *mockConversationService) {
 				ms.CreateConversationFunc = func(ctx context.Context, in *conversationservice.CreateConversationReq) (*conversationservice.CreateConversationResp, error) {
@@ -150,7 +157,8 @@ func TestCreateConversation(t *testing.T) {
 			name: "rpc error - non-gRPC error",
 			req: &types.CreateConversationRequest{
 				ConversationType: "direct",
-				MemberIds:        []int64{1, 2},
+				MemberIds:        []int64{1},
+				Name:             "Direct Chat",
 			},
 			mockSetup: func(ms *mockConversationService) {
 				ms.CreateConversationFunc = func(ctx context.Context, in *conversationservice.CreateConversationReq) (*conversationservice.CreateConversationResp, error) {
@@ -164,7 +172,8 @@ func TestCreateConversation(t *testing.T) {
 			name: "nil conversation in response",
 			req: &types.CreateConversationRequest{
 				ConversationType: "direct",
-				MemberIds:        []int64{1, 2},
+				MemberIds:        []int64{1},
+				Name:             "Direct Chat",
 			},
 			mockSetup: func(ms *mockConversationService) {
 				ms.CreateConversationFunc = func(ctx context.Context, in *conversationservice.CreateConversationReq) (*conversationservice.CreateConversationResp, error) {
@@ -178,7 +187,8 @@ func TestCreateConversation(t *testing.T) {
 			name: "success - direct conversation",
 			req: &types.CreateConversationRequest{
 				ConversationType: "direct",
-				MemberIds:        []int64{1, 2},
+				MemberIds:        []int64{1},
+				Name:             "Direct Chat",
 			},
 			mockSetup: func(ms *mockConversationService) {
 				ms.CreateConversationFunc = func(ctx context.Context, in *conversationservice.CreateConversationReq) (*conversationservice.CreateConversationResp, error) {
@@ -208,6 +218,7 @@ func TestCreateConversation(t *testing.T) {
 			req: &types.CreateConversationRequest{
 				ConversationType: "group",
 				MemberIds:        []int64{1, 2, 3, 4},
+				Name:             "Group Chat",
 			},
 			mockSetup: func(ms *mockConversationService) {
 				ms.CreateConversationFunc = func(ctx context.Context, in *conversationservice.CreateConversationReq) (*conversationservice.CreateConversationResp, error) {
@@ -236,6 +247,7 @@ func TestCreateConversation(t *testing.T) {
 			req: &types.CreateConversationRequest{
 				ConversationType: "direct",
 				MemberIds:        []int64{1},
+				Name:             "Direct Chat",
 			},
 			mockSetup: func(ms *mockConversationService) {
 				ms.CreateConversationFunc = func(ctx context.Context, in *conversationservice.CreateConversationReq) (*conversationservice.CreateConversationResp, error) {
@@ -311,4 +323,10 @@ func (m *mockConversationService) UpdateGroupInfo(ctx context.Context, in *pb.Up
 }
 func (m *mockConversationService) GetConversationMembersDetail(ctx context.Context, in *pb.GetConversationMembersDetailReq, opts ...grpc.CallOption) (*pb.GetConversationMembersDetailResp, error) {
 	return nil, errors.New("GetConversationMembersDetail not implemented")
+}
+func (m *mockConversationService) UpdateReadReceipt(ctx context.Context, in *pb.UpdateReadReceiptReq, opts ...grpc.CallOption) (*pb.UpdateReadReceiptResp, error) {
+	return nil, errors.New("UpdateReadReceipt not implemented")
+}
+func (m *mockConversationService) ListConversationReadStates(ctx context.Context, in *pb.ListConversationReadStatesReq, opts ...grpc.CallOption) (*pb.ListConversationReadStatesResp, error) {
+	return nil, errors.New("ListConversationReadStates not implemented")
 }

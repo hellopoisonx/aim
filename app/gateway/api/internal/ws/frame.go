@@ -117,6 +117,13 @@ func DecodePayload(frame *pb.WsFrame) (proto.Message, error) {
 		}
 
 		return &payload, nil
+	case pb.FrameType_FRAME_TYPE_PUSH_READ_RECEIPT:
+		var payload pb.PushReadReceiptPayload
+		if err := proto.Unmarshal(frame.GetPayload(), &payload); err != nil {
+			return nil, fmt.Errorf("decode pushreadreceipt: %w", err)
+		}
+
+		return &payload, nil
 	case pb.FrameType_FRAME_TYPE_RECONNECT:
 		var payload pb.ReconnectPayload
 		if err := proto.Unmarshal(frame.GetPayload(), &payload); err != nil {

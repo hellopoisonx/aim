@@ -49,11 +49,13 @@ func TestAuthClosedLoop(t *testing.T) {
 	registered, err := NewRegisterLogic(ctx, svcCtx).Register(&pb.RegisterReq{
 		Email:    "Ada@Example.COM",
 		Password: "password123",
+		Username: "Ada",
 		DeviceId: "desktop-1",
 	})
 	require.NoError(t, err)
 	require.Equal(t, int64(1), registered.UserId)
 	require.NotEqual(t, "password123", users.byEmail["ada@example.com"].PasswordHash)
+	require.Equal(t, "Ada", users.byEmail["ada@example.com"].Name)
 
 	loggedIn, err := NewLoginLogic(ctx, svcCtx).Login(&pb.LoginReq{Email: "ada@example.com", Password: "password123", DeviceId: "desktop-1"})
 	require.NoError(t, err)
@@ -84,7 +86,7 @@ func TestLoginRejectsWrongPassword(t *testing.T) {
 	sessions := newMemorySessionStore()
 	svcCtx := svc.NewServiceContextWithStores(config.Config{}, users, sessions, fixedIssuer{}, nil)
 
-	_, err := NewRegisterLogic(ctx, svcCtx).Register(&pb.RegisterReq{Email: "ada@example.com", Password: "password123", DeviceId: "desktop-1"})
+	_, err := NewRegisterLogic(ctx, svcCtx).Register(&pb.RegisterReq{Email: "ada@example.com", Password: "password123", Username: "Ada", DeviceId: "desktop-1"})
 	require.NoError(t, err)
 
 	_, err = NewLoginLogic(ctx, svcCtx).Login(&pb.LoginReq{Email: "ada@example.com", Password: "wrong-password", DeviceId: "desktop-1"})
@@ -100,6 +102,7 @@ func TestRepeatedLoginCleansUpOldRefreshToken(t *testing.T) {
 	_, err := NewRegisterLogic(ctx, svcCtx).Register(&pb.RegisterReq{
 		Email:    "ada@example.com",
 		Password: "password123",
+		Username: "Ada",
 		DeviceId: "desktop-1",
 	})
 	require.NoError(t, err)
@@ -138,6 +141,9 @@ func TestAuthValidationErrors(t *testing.T) {
 	_, err := NewRegisterLogic(ctx, svcCtx).Register(&pb.RegisterReq{Email: "ada@example.com", Password: "password123"})
 	require.Error(t, err)
 
+	_, err = NewRegisterLogic(ctx, svcCtx).Register(&pb.RegisterReq{Email: "ada@example.com", Password: "password123", Username: "   ", DeviceId: "desktop-1"})
+	require.Error(t, err)
+
 	_, err = NewLoginLogic(ctx, svcCtx).Login(&pb.LoginReq{Email: "ada@example.com", Password: "password123", DeviceId: "desktop-1"})
 	require.Error(t, err)
 
@@ -154,7 +160,7 @@ func TestAuthLogicInternalErrorBranches(t *testing.T) {
 	sessions := newMemorySessionStore()
 	svcCtx := svc.NewServiceContextWithStores(config.Config{}, users, sessions, fixedIssuer{}, nil)
 
-	_, err := NewRegisterLogic(ctx, svcCtx).Register(&pb.RegisterReq{Email: "ada@example.com", Password: "password123", DeviceId: "desktop-1"})
+	_, err := NewRegisterLogic(ctx, svcCtx).Register(&pb.RegisterReq{Email: "ada@example.com", Password: "password123", Username: "Ada", DeviceId: "desktop-1"})
 	require.NoError(t, err)
 
 	users.err = errors.New("database down")
@@ -196,7 +202,7 @@ func newMemoryUserStore(t *testing.T) *memoryUserStore {
 	return &memoryUserStore{nextID: 1, byEmail: map[string]authsvc.UserCredential{}}
 }
 
-func (s *memoryUserStore) CreateUser(_ context.Context, email, passwordHash string) (authsvc.UserCredential, error) {
+func (s *memoryUserStore) CreateUser(_ context.Context, email, passwordHash, name string) (authsvc.UserCredential, error) {
 	if s.err != nil {
 		return authsvc.UserCredential{}, s.err
 	}
@@ -206,7 +212,7 @@ func (s *memoryUserStore) CreateUser(_ context.Context, email, passwordHash stri
 		return authsvc.UserCredential{}, errorx.NewCodeError(authsvc.CodeConflict, "email already registered")
 	}
 
-	user := authsvc.UserCredential{ID: s.nextID, Email: email, PasswordHash: passwordHash, Status: authsvc.StatusNormal}
+	user := authsvc.UserCredential{ID: s.nextID, Email: email, PasswordHash: passwordHash, Name: name, Status: authsvc.StatusNormal}
 	s.nextID++
 	s.byEmail[email] = user
 
@@ -358,6 +364,7 @@ func TestRegister_DoesNotPublishWhenCreateFails(t *testing.T) {
 	_, err := NewRegisterLogic(ctx, svcCtx).Register(&pb.RegisterReq{
 		Email:    "ada@example.com",
 		Password: "password123",
+		Username: "Ada",
 		DeviceId: "desktop-1",
 	})
 	require.Error(t, err)
@@ -374,6 +381,7 @@ func TestRegister_DoesNotPublishOnDuplicateEmail(t *testing.T) {
 	_, err := NewRegisterLogic(ctx, svcCtx).Register(&pb.RegisterReq{
 		Email:    "ada@example.com",
 		Password: "password123",
+		Username: "Ada",
 		DeviceId: "desktop-1",
 	})
 	require.NoError(t, err)
@@ -383,6 +391,7 @@ func TestRegister_DoesNotPublishOnDuplicateEmail(t *testing.T) {
 	_, err = NewRegisterLogic(ctx, svcCtx).Register(&pb.RegisterReq{
 		Email:    "ada@example.com",
 		Password: "password456",
+		Username: "Ada",
 		DeviceId: "desktop-2",
 	})
 	require.Error(t, err)
@@ -399,6 +408,7 @@ func TestRegister_ReturnsErrorWhenPublisherFails(t *testing.T) {
 	_, err := NewRegisterLogic(ctx, svcCtx).Register(&pb.RegisterReq{
 		Email:    "ada@example.com",
 		Password: "password123",
+		Username: "Ada",
 		DeviceId: "desktop-1",
 	})
 	require.Error(t, err)

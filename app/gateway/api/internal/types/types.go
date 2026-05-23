@@ -35,6 +35,73 @@ type AddGroupMembersResponse struct {
 	CreatorId        int64   `json:"creator_id"`
 }
 
+type BotConversationItem struct {
+	ConversationId   int64  `json:"conversation_id"`
+	ConversationType string `json:"conversation_type"`
+	Name             string `json:"name"`
+	Avatar           string `json:"avatar"`
+	CreatedAt        int64  `json:"created_at"`
+}
+
+type BotDeleteWebhookResponse struct {
+	Deleted bool `json:"deleted"`
+}
+
+type BotGetWebhookResponse struct {
+	Configured bool             `json:"configured"`
+	Webhook    BotWebhookConfig `json:"webhook"`
+}
+
+type BotListConversationsResponse struct {
+	Conversations []BotConversationItem `json:"conversations"`
+}
+
+type BotMe struct {
+	BotUserId int64    `json:"bot_user_id"`
+	Nickname  string   `json:"nickname"`
+	Avatar    string   `json:"avatar"`
+	Status    int32    `json:"status"`
+	Scopes    []string `json:"scopes"`
+}
+
+type BotMeResponse struct {
+	Bot BotMe `json:"bot"`
+}
+
+type BotSendMessageRequest struct {
+	ConversationId int64    `json:"conversation_id" validate:"required"`
+	MessageType    string   `json:"message_type" validate:"required,max=32"`
+	Content        string   `json:"content" validate:"required"`
+	ClientMsgId    string   `json:"client_msg_id" validate:"required"`
+	Mentions       []string `json:"mentions,optional"`
+}
+
+type BotSendMessageResponse struct {
+	MessageId   int64  `json:"message_id"`
+	ClientMsgId string `json:"client_msg_id"`
+	AcceptedAt  int64  `json:"accepted_at"`
+}
+
+type BotSetWebhookRequest struct {
+	Url          string   `json:"url" validate:"required,url"`
+	Events       []string `json:"events,optional"`
+	Enabled      *bool    `json:"enabled,optional"`
+	Secret       string   `json:"secret,optional"`
+	RotateSecret bool     `json:"rotate_secret,optional"`
+}
+
+type BotSetWebhookResponse struct {
+	Webhook         BotWebhookConfig `json:"webhook"`
+	PlaintextSecret string           `json:"plaintext_secret,omitempty"`
+}
+
+type BotWebhookConfig struct {
+	Url       string   `json:"url"`
+	Events    []string `json:"events"`
+	Enabled   bool     `json:"enabled"`
+	UpdatedAt int64    `json:"updated_at"`
+}
+
 type ConversationItem struct {
 	ConversationId   int64   `json:"conversation_id"`
 	ConversationType string  `json:"conversation_type"`
@@ -49,7 +116,8 @@ type ConversationItem struct {
 type CreateConversationRequest struct {
 	ConversationType string  `json:"conversation_type" validate:"required,oneof=direct group"`
 	MemberIds        []int64 `json:"member_ids" validate:"required,min=1"`
-	Name             string  `json:"name,optional"`
+	Name             string  `json:"name" validate:"required"`
+	Avatar           string  `json:"avatar,optional"`
 }
 
 type CreateConversationResponse struct {
@@ -65,7 +133,7 @@ type CreateConversationResponse struct {
 
 type CreateGroupRequest struct {
 	MemberIds []int64 `json:"member_ids" validate:"required,min=1"`
-	Name      string  `json:"name,optional"`
+	Name      string  `json:"name" validate:"required"`
 	Avatar    string  `json:"avatar,optional"`
 }
 
@@ -89,10 +157,11 @@ type GetConversationHistoryRequest struct {
 }
 
 type GetConversationHistoryResponse struct {
-	Messages            []MessageItem `json:"messages"`
-	NextCursorCreatedAt int64         `json:"next_cursor_created_at"`
-	NextCursorId        int64         `json:"next_cursor_id"`
-	HasMore             bool          `json:"has_more"`
+	Messages            []MessageItem   `json:"messages"`
+	NextCursorCreatedAt int64           `json:"next_cursor_created_at"`
+	NextCursorId        int64           `json:"next_cursor_id"`
+	HasMore             bool            `json:"has_more"`
+	ReadStates          []ReadStateItem `json:"read_states"`
 }
 
 type GetConversationMembersDetailRequest struct {
@@ -165,19 +234,27 @@ type MemberDetailItem struct {
 }
 
 type MessageItem struct {
-	Id             int64  `json:"id"`
-	ConversationId int64  `json:"conversation_id"`
-	SenderId       int64  `json:"sender_id"`
-	MessageType    string `json:"message_type"`
-	Content        string `json:"content"`
-	ClientMsgId    string `json:"client_msg_id"`
-	CreatedAt      int64  `json:"created_at"`
+	Id             int64      `json:"id"`
+	ConversationId int64      `json:"conversation_id"`
+	SenderId       int64      `json:"sender_id"`
+	SenderInfo     SenderInfo `json:"sender_info"`
+	MessageType    string     `json:"message_type"`
+	Content        string     `json:"content"`
+	ClientMsgId    string     `json:"client_msg_id"`
+	CreatedAt      int64      `json:"created_at"`
+	Mentions       []string   `json:"mentions,optional"`
 }
 
 type PresenceItem struct {
 	UserId    int64  `json:"user_id"`
 	Status    string `json:"status"`
 	UpdatedAt int64  `json:"updated_at"`
+}
+
+type ReadStateItem struct {
+	UserId            int64 `json:"user_id"`
+	LastReadMessageId int64 `json:"last_read_message_id"`
+	UpdatedAt         int64 `json:"updated_at"`
 }
 
 type RefreshRequest struct {
@@ -193,7 +270,7 @@ type RefreshResponse struct {
 type RegisterRequest struct {
 	Email    string `json:"email" validate:"required,email"`
 	Password string `json:"password" validate:"required,min=8"`
-	Username string `json:"username,optional"`
+	Username string `json:"username" validate:"required"`
 	Avatar   string `json:"avatar,optional"`
 	DeviceId string `json:"device_id" validate:"required"`
 }
@@ -213,6 +290,11 @@ type RejectFriendResponse struct {
 type RemoveGroupMemberRequest struct {
 	Id  int64 `path:"id" validate:"required"`
 	Uid int64 `path:"uid" validate:"required"`
+}
+
+type SenderInfo struct {
+	Name  string `json:"name"`
+	Email string `json:"email"`
 }
 
 type UpdateGroupInfoRequest struct {
@@ -242,7 +324,8 @@ type UserInfo struct {
 }
 
 type UserListItem struct {
-	Id     string `json:"id"`
-	Email  string `json:"email"`
-	Avatar string `json:"avatar"`
+	Id       string `json:"id"`
+	Nickname string `json:"nickname"`
+	Email    string `json:"email"`
+	Avatar   string `json:"avatar"`
 }

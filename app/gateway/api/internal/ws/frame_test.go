@@ -170,6 +170,17 @@ func TestDecodePayloadAllFrameTypes(t *testing.T) {
 			wantType:  &pb.PushTypingPayload{},
 		},
 		{
+			name:      "push read receipt",
+			frameType: pb.FrameType_FRAME_TYPE_PUSH_READ_RECEIPT,
+			payload: &pb.PushReadReceiptPayload{
+				ConversationId:    100,
+				UserId:            42,
+				LastReadMessageId: 9999,
+				UpdatedAt:         1700000000000,
+			},
+			wantType: &pb.PushReadReceiptPayload{},
+		},
+		{
 			name:      "reconnect",
 			frameType: pb.FrameType_FRAME_TYPE_RECONNECT,
 			payload:   &pb.ReconnectPayload{ReconnectDelayMs: 5000, GatewayNodeId: "gateway-1"},

@@ -38,7 +38,7 @@ func (e *Envelope) EnvelopeError() error {
 type RegisterRequest struct {
 	Email    string `json:"email" validate:"required,email"`
 	Password string `json:"password" validate:"required,min=8"`
-	Username string `json:"username,omitempty"`
+	Username string `json:"username"`
 	Avatar   string `json:"avatar,omitempty"`
 	DeviceId string `json:"device_id" validate:"required"`
 }
@@ -82,9 +82,10 @@ type LogoutResponse struct {
 
 // UserListItem represents a user entry in search results.
 type UserListItem struct {
-	ID     string `json:"id"`
-	Email  string `json:"email"`
-	Avatar string `json:"avatar"`
+	ID       string `json:"id"`
+	Nickname string `json:"nickname"`
+	Email    string `json:"email"`
+	Avatar   string `json:"avatar"`
 }
 
 // SearchUsersResponse mirrors gateway.api GetUserByNameResponse.
@@ -186,23 +187,40 @@ type GetUserByIdResponse struct {
 	User UserInfo `json:"user"`
 }
 
+// SenderInfo mirrors gateway.api SenderInfo.
+type SenderInfo struct {
+	Name  string `json:"name"`
+	Email string `json:"email"`
+}
+
 // MessageItem mirrors gateway.api MessageItem.
 type MessageItem struct {
-	ID             int64  `json:"id"`
-	ConversationID int64  `json:"conversation_id"`
-	SenderID       int64  `json:"sender_id"`
-	MessageType    string `json:"message_type"`
-	Content        string `json:"content"`
-	ClientMsgID    string `json:"client_msg_id"`
-	CreatedAt      int64  `json:"created_at"`
+	ID             int64      `json:"id"`
+	ConversationID int64      `json:"conversation_id"`
+	SenderID       int64      `json:"sender_id"`
+	SenderInfo     SenderInfo `json:"sender_info"`
+	MessageType    string     `json:"message_type"`
+	Content        string     `json:"content"`
+	ClientMsgID    string     `json:"client_msg_id"`
+	CreatedAt      int64      `json:"created_at"`
+	IsSystem       bool       `json:"is_system,omitempty"`
+	Mentions       []string   `json:"mentions,omitempty"`
+}
+
+// ReadStateItem mirrors gateway.api ReadStateItem.
+type ReadStateItem struct {
+	UserID            int64 `json:"user_id"`
+	LastReadMessageID int64 `json:"last_read_message_id"`
+	UpdatedAt         int64 `json:"updated_at"`
 }
 
 // GetConversationHistoryResponse mirrors gateway.api GetConversationHistoryResponse.
 type GetConversationHistoryResponse struct {
-	Messages            []MessageItem `json:"messages"`
-	NextCursorCreatedAt int64         `json:"next_cursor_created_at"`
-	NextCursorID        int64         `json:"next_cursor_id"`
-	HasMore             bool          `json:"has_more"`
+	Messages            []MessageItem   `json:"messages"`
+	NextCursorCreatedAt int64           `json:"next_cursor_created_at"`
+	NextCursorID        int64           `json:"next_cursor_id"`
+	HasMore             bool            `json:"has_more"`
+	ReadStates          []ReadStateItem `json:"read_states"`
 }
 
 // FriendshipItem mirrors gateway.api FriendshipItem.

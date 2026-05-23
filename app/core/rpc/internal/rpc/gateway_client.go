@@ -21,6 +21,8 @@ type GatewayPusher interface {
 	PushMessage(ctx context.Context, req *gwpb.PushMessageReq) (*gwpb.PushMessageResp, error)
 	PushPresence(ctx context.Context, req *gwpb.PushPresenceReq) (*gwpb.PushPresenceResp, error)
 	PushTyping(ctx context.Context, req *gwpb.PushTypingReq) (*gwpb.PushTypingResp, error)
+	PushReadReceipt(ctx context.Context, req *gwpb.PushReadReceiptReq) (*gwpb.PushReadReceiptResp, error)
+	PushNotification(ctx context.Context, req *gwpb.PushNotificationReq) (*gwpb.PushNotificationResp, error)
 }
 
 type GatewayClient struct {
@@ -74,6 +76,30 @@ func (c *GatewayClient) PushTyping(ctx context.Context, req *gwpb.PushTypingReq)
 		return nil, fmt.Errorf("gateway client for %s is not initialized", c.target)
 	}
 	return c.client.PushTyping(ctx, req)
+}
+
+func (c *GatewayClient) PushReadReceipt(ctx context.Context, req *gwpb.PushReadReceiptReq) (*gwpb.PushReadReceiptResp, error) {
+	if c.initErr != nil {
+		return nil, c.initErr
+	}
+
+	if c.client == nil {
+		return nil, fmt.Errorf("gateway client for %s is not initialized", c.target)
+	}
+
+	return c.client.PushReadReceipt(ctx, req)
+}
+
+func (c *GatewayClient) PushNotification(ctx context.Context, req *gwpb.PushNotificationReq) (*gwpb.PushNotificationResp, error) {
+	if c.initErr != nil {
+		return nil, c.initErr
+	}
+
+	if c.client == nil {
+		return nil, fmt.Errorf("gateway client for %s is not initialized", c.target)
+	}
+
+	return c.client.PushNotification(ctx, req)
 }
 
 func (c *GatewayClient) Close() error {

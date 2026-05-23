@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/hellopoisonx/aim/app/auth/rpc/internal/svc"
@@ -33,7 +34,9 @@ func NewRegisterLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Register
 
 func (l *RegisterLogic) Register(in *pb.RegisterReq) (*pb.RegisterResp, error) {
 	email := authsvc.NormalizeEmail(in.GetEmail())
-	if email == "" || in.GetPassword() == "" || in.GetDeviceId() == "" {
+	name := strings.TrimSpace(in.GetUsername())
+
+	if email == "" || in.GetPassword() == "" || name == "" || in.GetDeviceId() == "" {
 		return nil, errorx.NewCodeError(authsvc.CodeInvalidArgument, "missing required auth fields")
 	}
 
@@ -42,7 +45,7 @@ func (l *RegisterLogic) Register(in *pb.RegisterReq) (*pb.RegisterResp, error) {
 		return nil, errorx.NewCodeError(authsvc.CodeInternal, "hash password failed")
 	}
 
-	user, err := l.svcCtx.Users.CreateUser(l.ctx, email, passwordHash)
+	user, err := l.svcCtx.Users.CreateUser(l.ctx, email, passwordHash, name)
 	if err != nil {
 		if authsvc.IsDuplicateEmail(err) {
 			return nil, errorx.NewCodeError(authsvc.CodeConflict, "email already registered")
@@ -57,7 +60,7 @@ func (l *RegisterLogic) Register(in *pb.RegisterReq) (*pb.RegisterResp, error) {
 			TraceContextFields: tracing.InjectTraceContext(l.ctx),
 			UserID:             user.ID,
 			Email:              email,
-			Nickname:           in.GetUsername(),
+			Nickname:           name,
 			Avatar:             in.GetAvatar(),
 			CreatedAt:          time.Now().UnixMilli(),
 		}

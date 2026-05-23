@@ -75,7 +75,7 @@ func (c *TypingConsumer) Consume(ctx context.Context, key string, value string) 
 			continue
 		}
 
-		for range nodeIDs {
+		for _, nodeID := range nodeIDs {
 			req := &gwpb.PushTypingReq{
 				TargetUserId:   memberID,
 				FromUserId:     event.FromUserID,
@@ -83,14 +83,13 @@ func (c *TypingConsumer) Consume(ctx context.Context, key string, value string) 
 				Timestamp:      event.Timestamp,
 			}
 
-			// TODO: router will select by nodeID in step 11.
-			_, err := c.svcCtx.GatewayClient.PushTyping(ctx, req)
-			if err != nil {
-				logx.WithContext(ctx).Errorf("PushTyping for member %d failed: %v", memberID, err)
+			if _, err := pushTypingToNode(ctx, c.svcCtx.GatewayClient, nodeID, req); err != nil {
+				logx.WithContext(ctx).Errorf("PushTyping to node %s for member %d failed: %v", nodeID, memberID, err)
 				continue
 			}
 
-			logx.WithContext(ctx).Debugf("typing pushed: from=%d to member=%d conv=%d", event.FromUserID, memberID, event.ConversationID)
+			logx.WithContext(ctx).Debugf("typing pushed: from=%d to member=%d conv=%d node=%s",
+				event.FromUserID, memberID, event.ConversationID, nodeID)
 		}
 	}
 

@@ -18,6 +18,7 @@ description: aim 的网关域。对应 `gateway` 模块。
 
 ## 最近变更
 
+- 2026-05-23: 已读回执后端接入。WS handler 新增 `handleReadReceipt` 分支（解码 `ReadReceiptPayload` → 调 `logic.UpdateReadReceipt` upsert → 发布 `aim.read_receipt.events` Kafka 事件 → SERVER_ACK）。`GatewayServer` 新增 `PushReadReceipt` RPC，按 `target_user_id` 把 `FRAME_TYPE_PUSH_READ_RECEIPT` 推到目标用户的所有连接。`GET /api/conversations/history/:id` 响应新增 `read_states` 数组（`user_id / last_read_message_id / updated_at`）。新增 `ReadReceiptPublisher` 与配置项 `Kafka.ReadReceiptTopic`（默认 `aim.read_receipt.events`）。
 - 2026-05-22: 新增 `POST /api/conversations/group` 专用创建群聊端点。请求体只需 `member_ids`（必填）、`name`/`avatar`（可选），无需指定 `conversation_type`。底层复用 `ConversationService.CreateConversation` RPC（固定 `conversation_type="group"`），响应类型与 `POST /api/conversations` 一致。详见 `references/api.md`。
 - 2026-05-22: 新增群管理 REST 端点：`GET /api/conversations/:id/members`（成员详情）、`POST /api/conversations/:id/members`（添加成员）、`DELETE /api/conversations/:id/members/:uid`（移除成员）、`POST /api/conversations/:id/leave`（退出群聊）、`DELETE /api/conversations/:id`（解散群聊）、`PUT /api/conversations/:id`（更新群信息）。`ConversationItem` 和 `CreateConversationResponse` 新增 name/avatar/creator_id 字段。`PushMessage` 传递 `is_system` 字段标识群变更系统消息。详见 `references/api.md` §群管理 REST 端点。
 - 2026-05-22: 修复 `PushPresence` 推送寻址 Bug：`PushPresenceReq` 改用 `TargetUserId` 查找目标用户连接，兼容 `TargetUserId == 0` 时回退到 `UserId`。新增 `TestGatewayServerPushPresenceFallbackToUserId` 测试覆盖回退兼容路径。参见 `references/ws-internals.md` §PushPresence。

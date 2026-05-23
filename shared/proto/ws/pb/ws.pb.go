@@ -40,6 +40,7 @@ const (
 	FrameType_FRAME_TYPE_SERVER_ACK              FrameType = 106 // 服务端确认
 	FrameType_FRAME_TYPE_TOKEN_EXPIRED           FrameType = 107 // Token 已过期
 	FrameType_FRAME_TYPE_PUSH_FRIEND_APPLICATION FrameType = 108 // 推送好友申请
+	FrameType_FRAME_TYPE_PUSH_READ_RECEIPT       FrameType = 109 // 推送已读回执更新
 )
 
 // Enum value maps for FrameType.
@@ -59,6 +60,7 @@ var (
 		106: "FRAME_TYPE_SERVER_ACK",
 		107: "FRAME_TYPE_TOKEN_EXPIRED",
 		108: "FRAME_TYPE_PUSH_FRIEND_APPLICATION",
+		109: "FRAME_TYPE_PUSH_READ_RECEIPT",
 	}
 	FrameType_value = map[string]int32{
 		"FRAME_TYPE_UNSPECIFIED":             0,
@@ -75,6 +77,7 @@ var (
 		"FRAME_TYPE_SERVER_ACK":              106,
 		"FRAME_TYPE_TOKEN_EXPIRED":           107,
 		"FRAME_TYPE_PUSH_FRIEND_APPLICATION": 108,
+		"FRAME_TYPE_PUSH_READ_RECEIPT":       109,
 	}
 )
 
@@ -490,6 +493,58 @@ func (x *ClientAckPayload) GetAckSeq() int64 {
 	return 0
 }
 
+type SenderInfo struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Email         string                 `protobuf:"bytes,2,opt,name=email,proto3" json:"email,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SenderInfo) Reset() {
+	*x = SenderInfo{}
+	mi := &file_shared_proto_ws_ws_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SenderInfo) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SenderInfo) ProtoMessage() {}
+
+func (x *SenderInfo) ProtoReflect() protoreflect.Message {
+	mi := &file_shared_proto_ws_ws_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SenderInfo.ProtoReflect.Descriptor instead.
+func (*SenderInfo) Descriptor() ([]byte, []int) {
+	return file_shared_proto_ws_ws_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *SenderInfo) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *SenderInfo) GetEmail() string {
+	if x != nil {
+		return x.Email
+	}
+	return ""
+}
+
 // PushMessagePayload — 推送聊天消息
 type PushMessagePayload struct {
 	state            protoimpl.MessageState `protogen:"open.v1"`
@@ -502,13 +557,15 @@ type PushMessagePayload struct {
 	ConversationType string                 `protobuf:"bytes,7,opt,name=conversation_type,json=conversationType,proto3" json:"conversation_type,omitempty"`
 	ClientMsgId      string                 `protobuf:"bytes,8,opt,name=client_msg_id,json=clientMsgId,proto3" json:"client_msg_id,omitempty"`
 	IsSystem         bool                   `protobuf:"varint,9,opt,name=is_system,json=isSystem,proto3" json:"is_system,omitempty"`
+	SenderInfo       *SenderInfo            `protobuf:"bytes,10,opt,name=sender_info,json=senderInfo,proto3" json:"sender_info,omitempty"`
+	Mentions         []string               `protobuf:"bytes,11,rep,name=mentions,proto3" json:"mentions,omitempty"` // decimal user id strings
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
 
 func (x *PushMessagePayload) Reset() {
 	*x = PushMessagePayload{}
-	mi := &file_shared_proto_ws_ws_proto_msgTypes[6]
+	mi := &file_shared_proto_ws_ws_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -520,7 +577,7 @@ func (x *PushMessagePayload) String() string {
 func (*PushMessagePayload) ProtoMessage() {}
 
 func (x *PushMessagePayload) ProtoReflect() protoreflect.Message {
-	mi := &file_shared_proto_ws_ws_proto_msgTypes[6]
+	mi := &file_shared_proto_ws_ws_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -533,7 +590,7 @@ func (x *PushMessagePayload) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PushMessagePayload.ProtoReflect.Descriptor instead.
 func (*PushMessagePayload) Descriptor() ([]byte, []int) {
-	return file_shared_proto_ws_ws_proto_rawDescGZIP(), []int{6}
+	return file_shared_proto_ws_ws_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *PushMessagePayload) GetMessageId() int64 {
@@ -599,6 +656,20 @@ func (x *PushMessagePayload) GetIsSystem() bool {
 	return false
 }
 
+func (x *PushMessagePayload) GetSenderInfo() *SenderInfo {
+	if x != nil {
+		return x.SenderInfo
+	}
+	return nil
+}
+
+func (x *PushMessagePayload) GetMentions() []string {
+	if x != nil {
+		return x.Mentions
+	}
+	return nil
+}
+
 // PushPresencePayload — 推送在线状态变更
 type PushPresencePayload struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -611,7 +682,7 @@ type PushPresencePayload struct {
 
 func (x *PushPresencePayload) Reset() {
 	*x = PushPresencePayload{}
-	mi := &file_shared_proto_ws_ws_proto_msgTypes[7]
+	mi := &file_shared_proto_ws_ws_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -623,7 +694,7 @@ func (x *PushPresencePayload) String() string {
 func (*PushPresencePayload) ProtoMessage() {}
 
 func (x *PushPresencePayload) ProtoReflect() protoreflect.Message {
-	mi := &file_shared_proto_ws_ws_proto_msgTypes[7]
+	mi := &file_shared_proto_ws_ws_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -636,7 +707,7 @@ func (x *PushPresencePayload) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PushPresencePayload.ProtoReflect.Descriptor instead.
 func (*PushPresencePayload) Descriptor() ([]byte, []int) {
-	return file_shared_proto_ws_ws_proto_rawDescGZIP(), []int{7}
+	return file_shared_proto_ws_ws_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *PushPresencePayload) GetUserId() int64 {
@@ -673,7 +744,7 @@ type PushNotificationPayload struct {
 
 func (x *PushNotificationPayload) Reset() {
 	*x = PushNotificationPayload{}
-	mi := &file_shared_proto_ws_ws_proto_msgTypes[8]
+	mi := &file_shared_proto_ws_ws_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -685,7 +756,7 @@ func (x *PushNotificationPayload) String() string {
 func (*PushNotificationPayload) ProtoMessage() {}
 
 func (x *PushNotificationPayload) ProtoReflect() protoreflect.Message {
-	mi := &file_shared_proto_ws_ws_proto_msgTypes[8]
+	mi := &file_shared_proto_ws_ws_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -698,7 +769,7 @@ func (x *PushNotificationPayload) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PushNotificationPayload.ProtoReflect.Descriptor instead.
 func (*PushNotificationPayload) Descriptor() ([]byte, []int) {
-	return file_shared_proto_ws_ws_proto_rawDescGZIP(), []int{8}
+	return file_shared_proto_ws_ws_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *PushNotificationPayload) GetNotificationType() string {
@@ -743,7 +814,7 @@ type PushFriendApplicationPayload struct {
 
 func (x *PushFriendApplicationPayload) Reset() {
 	*x = PushFriendApplicationPayload{}
-	mi := &file_shared_proto_ws_ws_proto_msgTypes[9]
+	mi := &file_shared_proto_ws_ws_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -755,7 +826,7 @@ func (x *PushFriendApplicationPayload) String() string {
 func (*PushFriendApplicationPayload) ProtoMessage() {}
 
 func (x *PushFriendApplicationPayload) ProtoReflect() protoreflect.Message {
-	mi := &file_shared_proto_ws_ws_proto_msgTypes[9]
+	mi := &file_shared_proto_ws_ws_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -768,7 +839,7 @@ func (x *PushFriendApplicationPayload) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PushFriendApplicationPayload.ProtoReflect.Descriptor instead.
 func (*PushFriendApplicationPayload) Descriptor() ([]byte, []int) {
-	return file_shared_proto_ws_ws_proto_rawDescGZIP(), []int{9}
+	return file_shared_proto_ws_ws_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *PushFriendApplicationPayload) GetUserId() int64 {
@@ -817,7 +888,7 @@ type PushTypingPayload struct {
 
 func (x *PushTypingPayload) Reset() {
 	*x = PushTypingPayload{}
-	mi := &file_shared_proto_ws_ws_proto_msgTypes[10]
+	mi := &file_shared_proto_ws_ws_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -829,7 +900,7 @@ func (x *PushTypingPayload) String() string {
 func (*PushTypingPayload) ProtoMessage() {}
 
 func (x *PushTypingPayload) ProtoReflect() protoreflect.Message {
-	mi := &file_shared_proto_ws_ws_proto_msgTypes[10]
+	mi := &file_shared_proto_ws_ws_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -842,7 +913,7 @@ func (x *PushTypingPayload) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PushTypingPayload.ProtoReflect.Descriptor instead.
 func (*PushTypingPayload) Descriptor() ([]byte, []int) {
-	return file_shared_proto_ws_ws_proto_rawDescGZIP(), []int{10}
+	return file_shared_proto_ws_ws_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *PushTypingPayload) GetUserId() int64 {
@@ -859,6 +930,75 @@ func (x *PushTypingPayload) GetConversationId() int64 {
 	return 0
 }
 
+// PushReadReceiptPayload — 推送已读回执更新（会话内某成员推进了已读游标）
+type PushReadReceiptPayload struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	ConversationId    int64                  `protobuf:"varint,1,opt,name=conversation_id,json=conversationId,proto3" json:"conversation_id,omitempty"`
+	UserId            int64                  `protobuf:"varint,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"` // 推进游标的成员
+	LastReadMessageId int64                  `protobuf:"varint,3,opt,name=last_read_message_id,json=lastReadMessageId,proto3" json:"last_read_message_id,omitempty"`
+	UpdatedAt         int64                  `protobuf:"varint,4,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"` // unix milliseconds
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *PushReadReceiptPayload) Reset() {
+	*x = PushReadReceiptPayload{}
+	mi := &file_shared_proto_ws_ws_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PushReadReceiptPayload) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PushReadReceiptPayload) ProtoMessage() {}
+
+func (x *PushReadReceiptPayload) ProtoReflect() protoreflect.Message {
+	mi := &file_shared_proto_ws_ws_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PushReadReceiptPayload.ProtoReflect.Descriptor instead.
+func (*PushReadReceiptPayload) Descriptor() ([]byte, []int) {
+	return file_shared_proto_ws_ws_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *PushReadReceiptPayload) GetConversationId() int64 {
+	if x != nil {
+		return x.ConversationId
+	}
+	return 0
+}
+
+func (x *PushReadReceiptPayload) GetUserId() int64 {
+	if x != nil {
+		return x.UserId
+	}
+	return 0
+}
+
+func (x *PushReadReceiptPayload) GetLastReadMessageId() int64 {
+	if x != nil {
+		return x.LastReadMessageId
+	}
+	return 0
+}
+
+func (x *PushReadReceiptPayload) GetUpdatedAt() int64 {
+	if x != nil {
+		return x.UpdatedAt
+	}
+	return 0
+}
+
 // ReconnectPayload — 网关要求客户端重连（drain 窗口）
 type ReconnectPayload struct {
 	state            protoimpl.MessageState `protogen:"open.v1"`
@@ -870,7 +1010,7 @@ type ReconnectPayload struct {
 
 func (x *ReconnectPayload) Reset() {
 	*x = ReconnectPayload{}
-	mi := &file_shared_proto_ws_ws_proto_msgTypes[11]
+	mi := &file_shared_proto_ws_ws_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -882,7 +1022,7 @@ func (x *ReconnectPayload) String() string {
 func (*ReconnectPayload) ProtoMessage() {}
 
 func (x *ReconnectPayload) ProtoReflect() protoreflect.Message {
-	mi := &file_shared_proto_ws_ws_proto_msgTypes[11]
+	mi := &file_shared_proto_ws_ws_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -895,7 +1035,7 @@ func (x *ReconnectPayload) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReconnectPayload.ProtoReflect.Descriptor instead.
 func (*ReconnectPayload) Descriptor() ([]byte, []int) {
-	return file_shared_proto_ws_ws_proto_rawDescGZIP(), []int{11}
+	return file_shared_proto_ws_ws_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *ReconnectPayload) GetReconnectDelayMs() int64 {
@@ -923,7 +1063,7 @@ type TokenExpiredPayload struct {
 
 func (x *TokenExpiredPayload) Reset() {
 	*x = TokenExpiredPayload{}
-	mi := &file_shared_proto_ws_ws_proto_msgTypes[12]
+	mi := &file_shared_proto_ws_ws_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -935,7 +1075,7 @@ func (x *TokenExpiredPayload) String() string {
 func (*TokenExpiredPayload) ProtoMessage() {}
 
 func (x *TokenExpiredPayload) ProtoReflect() protoreflect.Message {
-	mi := &file_shared_proto_ws_ws_proto_msgTypes[12]
+	mi := &file_shared_proto_ws_ws_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -948,7 +1088,7 @@ func (x *TokenExpiredPayload) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TokenExpiredPayload.ProtoReflect.Descriptor instead.
 func (*TokenExpiredPayload) Descriptor() ([]byte, []int) {
-	return file_shared_proto_ws_ws_proto_rawDescGZIP(), []int{12}
+	return file_shared_proto_ws_ws_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *TokenExpiredPayload) GetExpiredAt() int64 {
@@ -980,7 +1120,7 @@ type ServerAckPayload struct {
 
 func (x *ServerAckPayload) Reset() {
 	*x = ServerAckPayload{}
-	mi := &file_shared_proto_ws_ws_proto_msgTypes[13]
+	mi := &file_shared_proto_ws_ws_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -992,7 +1132,7 @@ func (x *ServerAckPayload) String() string {
 func (*ServerAckPayload) ProtoMessage() {}
 
 func (x *ServerAckPayload) ProtoReflect() protoreflect.Message {
-	mi := &file_shared_proto_ws_ws_proto_msgTypes[13]
+	mi := &file_shared_proto_ws_ws_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1005,7 +1145,7 @@ func (x *ServerAckPayload) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ServerAckPayload.ProtoReflect.Descriptor instead.
 func (*ServerAckPayload) Descriptor() ([]byte, []int) {
-	return file_shared_proto_ws_ws_proto_rawDescGZIP(), []int{13}
+	return file_shared_proto_ws_ws_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *ServerAckPayload) GetAckSeq() int64 {
@@ -1074,7 +1214,11 @@ const file_shared_proto_ws_ws_proto_rawDesc = "" +
 	"\x0fconversation_id\x18\x01 \x01(\x03R\x0econversationId\x12\x1e\n" +
 	"\vlast_msg_id\x18\x02 \x01(\x03R\tlastMsgId\"+\n" +
 	"\x10ClientAckPayload\x12\x17\n" +
-	"\aack_seq\x18\x01 \x01(\x03R\x06ackSeq\"\xbd\x02\n" +
+	"\aack_seq\x18\x01 \x01(\x03R\x06ackSeq\"6\n" +
+	"\n" +
+	"SenderInfo\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x14\n" +
+	"\x05email\x18\x02 \x01(\tR\x05email\"\x8a\x03\n" +
 	"\x12PushMessagePayload\x12\x1d\n" +
 	"\n" +
 	"message_id\x18\x01 \x01(\x03R\tmessageId\x12'\n" +
@@ -1085,7 +1229,11 @@ const file_shared_proto_ws_ws_proto_rawDesc = "" +
 	"\asent_at\x18\x06 \x01(\x03R\x06sentAt\x12+\n" +
 	"\x11conversation_type\x18\a \x01(\tR\x10conversationType\x12\"\n" +
 	"\rclient_msg_id\x18\b \x01(\tR\vclientMsgId\x12\x1b\n" +
-	"\tis_system\x18\t \x01(\bR\bisSystem\"e\n" +
+	"\tis_system\x18\t \x01(\bR\bisSystem\x12/\n" +
+	"\vsender_info\x18\n" +
+	" \x01(\v2\x0e.ws.SenderInfoR\n" +
+	"senderInfo\x12\x1a\n" +
+	"\bmentions\x18\v \x03(\tR\bmentions\"e\n" +
 	"\x13PushPresencePayload\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\x03R\x06userId\x12\x16\n" +
 	"\x06status\x18\x02 \x01(\tR\x06status\x12\x1d\n" +
@@ -1107,7 +1255,13 @@ const file_shared_proto_ws_ws_proto_rawDesc = "" +
 	"updated_at\x18\x05 \x01(\x03R\tupdatedAt\"U\n" +
 	"\x11PushTypingPayload\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\x03R\x06userId\x12'\n" +
-	"\x0fconversation_id\x18\x02 \x01(\x03R\x0econversationId\"h\n" +
+	"\x0fconversation_id\x18\x02 \x01(\x03R\x0econversationId\"\xaa\x01\n" +
+	"\x16PushReadReceiptPayload\x12'\n" +
+	"\x0fconversation_id\x18\x01 \x01(\x03R\x0econversationId\x12\x17\n" +
+	"\auser_id\x18\x02 \x01(\x03R\x06userId\x12/\n" +
+	"\x14last_read_message_id\x18\x03 \x01(\x03R\x11lastReadMessageId\x12\x1d\n" +
+	"\n" +
+	"updated_at\x18\x04 \x01(\x03R\tupdatedAt\"h\n" +
 	"\x10ReconnectPayload\x12,\n" +
 	"\x12reconnect_delay_ms\x18\x01 \x01(\x03R\x10reconnectDelayMs\x12&\n" +
 	"\x0fgateway_node_id\x18\x02 \x01(\tR\rgatewayNodeId\"L\n" +
@@ -1122,7 +1276,7 @@ const file_shared_proto_ws_ws_proto_rawDesc = "" +
 	"\x03msg\x18\x04 \x01(\tR\x03msg\x12%\n" +
 	"\x06status\x18\x05 \x01(\x0e2\r.ws.AckStatusR\x06status\x12\x1d\n" +
 	"\n" +
-	"message_id\x18\x06 \x01(\x03R\tmessageId*\x9a\x03\n" +
+	"message_id\x18\x06 \x01(\x03R\tmessageId*\xbc\x03\n" +
 	"\tFrameType\x12\x1a\n" +
 	"\x16FRAME_TYPE_UNSPECIFIED\x10\x00\x12\x1b\n" +
 	"\x17FRAME_TYPE_SEND_MESSAGE\x10\x01\x12\x18\n" +
@@ -1137,7 +1291,8 @@ const file_shared_proto_ws_ws_proto_rawDesc = "" +
 	"\x14FRAME_TYPE_RECONNECT\x10i\x12\x19\n" +
 	"\x15FRAME_TYPE_SERVER_ACK\x10j\x12\x1c\n" +
 	"\x18FRAME_TYPE_TOKEN_EXPIRED\x10k\x12&\n" +
-	"\"FRAME_TYPE_PUSH_FRIEND_APPLICATION\x10l*s\n" +
+	"\"FRAME_TYPE_PUSH_FRIEND_APPLICATION\x10l\x12 \n" +
+	"\x1cFRAME_TYPE_PUSH_READ_RECEIPT\x10m*s\n" +
 	"\tAckStatus\x12\x1a\n" +
 	"\x16ACK_STATUS_UNSPECIFIED\x10\x00\x12\x17\n" +
 	"\x13ACK_STATUS_ACCEPTED\x10\x01\x12\x17\n" +
@@ -1157,7 +1312,7 @@ func file_shared_proto_ws_ws_proto_rawDescGZIP() []byte {
 }
 
 var file_shared_proto_ws_ws_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_shared_proto_ws_ws_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
+var file_shared_proto_ws_ws_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
 var file_shared_proto_ws_ws_proto_goTypes = []any{
 	(FrameType)(0),                       // 0: ws.FrameType
 	(AckStatus)(0),                       // 1: ws.AckStatus
@@ -1167,23 +1322,26 @@ var file_shared_proto_ws_ws_proto_goTypes = []any{
 	(*TypingPayload)(nil),                // 5: ws.TypingPayload
 	(*ReadReceiptPayload)(nil),           // 6: ws.ReadReceiptPayload
 	(*ClientAckPayload)(nil),             // 7: ws.ClientAckPayload
-	(*PushMessagePayload)(nil),           // 8: ws.PushMessagePayload
-	(*PushPresencePayload)(nil),          // 9: ws.PushPresencePayload
-	(*PushNotificationPayload)(nil),      // 10: ws.PushNotificationPayload
-	(*PushFriendApplicationPayload)(nil), // 11: ws.PushFriendApplicationPayload
-	(*PushTypingPayload)(nil),            // 12: ws.PushTypingPayload
-	(*ReconnectPayload)(nil),             // 13: ws.ReconnectPayload
-	(*TokenExpiredPayload)(nil),          // 14: ws.TokenExpiredPayload
-	(*ServerAckPayload)(nil),             // 15: ws.ServerAckPayload
+	(*SenderInfo)(nil),                   // 8: ws.SenderInfo
+	(*PushMessagePayload)(nil),           // 9: ws.PushMessagePayload
+	(*PushPresencePayload)(nil),          // 10: ws.PushPresencePayload
+	(*PushNotificationPayload)(nil),      // 11: ws.PushNotificationPayload
+	(*PushFriendApplicationPayload)(nil), // 12: ws.PushFriendApplicationPayload
+	(*PushTypingPayload)(nil),            // 13: ws.PushTypingPayload
+	(*PushReadReceiptPayload)(nil),       // 14: ws.PushReadReceiptPayload
+	(*ReconnectPayload)(nil),             // 15: ws.ReconnectPayload
+	(*TokenExpiredPayload)(nil),          // 16: ws.TokenExpiredPayload
+	(*ServerAckPayload)(nil),             // 17: ws.ServerAckPayload
 }
 var file_shared_proto_ws_ws_proto_depIdxs = []int32{
 	0, // 0: ws.WsFrame.type:type_name -> ws.FrameType
-	1, // 1: ws.ServerAckPayload.status:type_name -> ws.AckStatus
-	2, // [2:2] is the sub-list for method output_type
-	2, // [2:2] is the sub-list for method input_type
-	2, // [2:2] is the sub-list for extension type_name
-	2, // [2:2] is the sub-list for extension extendee
-	0, // [0:2] is the sub-list for field type_name
+	8, // 1: ws.PushMessagePayload.sender_info:type_name -> ws.SenderInfo
+	1, // 2: ws.ServerAckPayload.status:type_name -> ws.AckStatus
+	3, // [3:3] is the sub-list for method output_type
+	3, // [3:3] is the sub-list for method input_type
+	3, // [3:3] is the sub-list for extension type_name
+	3, // [3:3] is the sub-list for extension extendee
+	0, // [0:3] is the sub-list for field type_name
 }
 
 func init() { file_shared_proto_ws_ws_proto_init() }
@@ -1197,7 +1355,7 @@ func file_shared_proto_ws_ws_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_shared_proto_ws_ws_proto_rawDesc), len(file_shared_proto_ws_ws_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   14,
+			NumMessages:   16,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

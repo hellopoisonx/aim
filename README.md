@@ -6,35 +6,35 @@
 
 技术文档由 agent + skills 维护，详见 `skills/`：
 
-| 技能 | 对应模块 |
-|------|----------|
-| `aim-repo-mapping` | 仓库导航（模块边界、入口、影响面） |
-| `aim-auth-domain` | 认证服务 |
-| `aim-core-domain` | 消息投递域 |
-| `aim-gateway-domain` | 网关/连接层 |
-| `aim-logic-domain` | 业务上下文域 |
-| `aim-frontend-domain` | 桌面客户端 |
-| `aim-shared-domain` | 进程内共享包 |
-| `aim-proto-domain` | Protobuf 协议 |
-| `aim-database-migration` | 数据库迁移 |
-| `aim-dev-tool` | 开发测试工具 |
-| `zero-skills` | go-zero 框架 |
+| 技能                       | 对应模块              |
+|--------------------------|-------------------|
+| `aim-repo-mapping`       | 仓库导航（模块边界、入口、影响面） |
+| `aim-auth-domain`        | 认证服务              |
+| `aim-core-domain`        | 消息投递域             |
+| `aim-gateway-domain`     | 网关/连接层            |
+| `aim-logic-domain`       | 业务上下文域            |
+| `aim-tui-domain`         | tui 客户端           |
+| `aim-shared-domain`      | 进程内共享包            |
+| `aim-proto-domain`       | Protobuf 协议       |
+| `aim-database-migration` | 数据库迁移             |
+| `aim-dev-tool`           | 开发测试工具            |
+| `zero-skills`            | go-zero 框架        |
 
 ## 技术栈
 
-| 层 | 技术 | 说明 |
-|----|------|------|
-| 微服务框架 | `go-zero` v1.10 | HTTP/gRPC 骨架 + goctl 代码生成 |
-| WebSocket | `coder/websocket` | Protobuf 帧协议 |
-| 消息队列 | Kafka（`go-queue` → `segmentio/kafka-go`） | `conversation_id` 分区保序 |
-| 缓存 | Redis Stack（`go-redis/v9`） | 在线状态、网关路由、滑动窗口限频 |
-| 持久化 | PostgreSQL 17 + pgvector | JSONB 文档存储、向量检索（扩展） |
-| 注册中心 | Nacos v2 | 服务发现与配置管理 |
-| 链路追踪 | OpenTelemetry → Jaeger | gRPC + Kafka trace 传播 |
-| 数据模型 | sqlc | 类型安全的 SQL 生成 |
-| 序列化 | Protobuf + gRPC | WS 帧协议 / 服务间通信 |
-| 桌面客户端 | Wails v2 + Vue 3 + Element Plus + Vite | 桌面端 UI |
-| 容器化 | Docker Compose | 本地基础设施 + 服务编排 |
+| 层         | 技术                                       | 说明                        |
+|-----------|------------------------------------------|---------------------------|
+| 微服务框架     | `go-zero` v1.10                          | HTTP/gRPC 骨架 + goctl 代码生成 |
+| WebSocket | `coder/websocket`                        | Protobuf 帧协议              |
+| 消息队列      | Kafka（`go-queue` → `segmentio/kafka-go`） | `conversation_id` 分区保序    |
+| 缓存        | Redis Stack（`go-redis/v9`）               | 在线状态、网关路由、滑动窗口限频          |
+| 持久化       | PostgreSQL 17 + pgvector                 | JSONB 文档存储、向量检索（扩展）       |
+| 注册中心      | Nacos v2                                 | 服务发现与配置管理                 |
+| 链路追踪      | OpenTelemetry → Jaeger                   | gRPC + Kafka trace 传播     |
+| 数据模型      | sqlc                                     | 类型安全的 SQL 生成              |
+| 序列化       | Protobuf + gRPC                          | WS 帧协议 / 服务间通信            |
+| tui 客户端   | bubbletea                                | tui                       |
+| 容器化       | Docker Compose                           | 本地基础设施 + 服务编排             |
 
 ## 架构总览
 

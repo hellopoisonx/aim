@@ -62,9 +62,10 @@ func userListItemFromRPC(user *pb.UserInfoResponse) types.UserListItem {
 	}
 
 	return types.UserListItem{
-		Id:     strconv.FormatInt(user.GetId(), 10),
-		Email:  user.GetEmail(),
-		Avatar: user.GetAvatar(),
+		Id:       strconv.FormatInt(user.GetId(), 10),
+		Nickname: user.GetNickname(),
+		Email:    user.GetEmail(),
+		Avatar:   user.GetAvatar(),
 	}
 }
 

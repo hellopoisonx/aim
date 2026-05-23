@@ -2,7 +2,7 @@
 
 ## 概览
 
-`app/shared` 是 AIM 的进程内共享 Go 包集合，不是微服务。这里的包可以被 `app/auth`、`app/core`、`app/gateway`、`app/logic`、`app/frontend` 引用，但不能反向依赖任何业务服务目录。
+`app/shared` 是 AIM 的进程内共享 Go 包集合，不是微服务。这里的包可以被 `app/auth`、`app/core`、`app/gateway`、`app/logic`、`app/tui` 引用，但不能反向依赖任何业务服务目录。
 
 ## 包地图
 
@@ -20,7 +20,7 @@
 ## 规则
 
 - 新增 shared 包前确认它是横切能力；只被单一服务使用的代码留在该服务目录。
-- `app/shared/*` 不得 import `app/auth`、`app/core`、`app/gateway`、`app/logic`、`app/frontend`。
+- `app/shared/*` 不得 import `app/auth`、`app/core`、`app/gateway`、`app/logic`、`app/tui`。
 - 共享包只暴露小接口或稳定 DTO；不要把服务级 `ServiceContext`、go-zero config、生成的 pb client 泄漏进 shared。
 - 业务错误统一走 `errorx.NewCodeError`；跨 gRPC 边界用 `errorx.FromGRPCError` 还原并清洗基础设施错误。
 - Kafka 事件结构需要携带 `tracing.TraceContextFields` 时直接嵌入字段，避免依赖 Kafka header。

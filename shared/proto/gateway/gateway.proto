@@ -39,6 +39,20 @@ service GatewayService {
   // PushFriendApplication pushes a friend application to connected clients.
   rpc PushFriendApplication(PushFriendApplicationReq) returns (PushFriendApplicationResp);
 
+  // PushReadReceipt — 推送已读回执更新
+  //
+  // 使用场景：
+  //   - 由 aim-core ReadReceiptConsumer 调用，投递到会话内其他成员所在的网关节点
+  //   - 网关按 target_user_id 把 FRAME_TYPE_PUSH_READ_RECEIPT 投给该用户的所有连接
+  rpc PushReadReceipt(PushReadReceiptReq) returns (PushReadReceiptResp);
+
+  // PushNotification — 推送系统通知
+  //
+  // 使用场景：
+  //   - 服务端业务（公告、维护提醒、强制更新）通过 gateway 推送 FRAME_TYPE_PUSH_NOTIFICATION 给目标用户
+  //   - target_user_id == 0 表示广播给本节点所有在线连接
+  rpc PushNotification(PushNotificationReq) returns (PushNotificationResp);
+
   // KickUser — 踢出用户连接
   //
   // 使用场景：
@@ -58,11 +72,16 @@ service GatewayService {
 // PushMessage — 聊天消息投递
 // ============================================================
 
+message SenderInfo {
+  string name = 1;
+  string email = 2;
+}
+
 // PushMessageReq — 投递聊天消息请求
 message PushMessageReq {
   int64 message_id = 1;           // 消息全局唯一 ID
   int64 conversation_id = 2;     // 会话 ID
-  string conversation_type = 3;   // 会话类型：single/group
+  string conversation_type = 3;   // 会话类型：direct/group（与 logic.conversations.conversation_type 一致）
   string message_type = 4;        // 消息类型：text/image/voice/etc
   string content = 5;            // 消息内容
   int64 sender_id = 6;           // 发送者用户 ID
@@ -71,6 +90,7 @@ message PushMessageReq {
   repeated string mentions = 9;  // 被 @ 的用户 ID 列表
   int64 target_user_id = 10;     // 目标用户 ID（投递到此用户在本节点的所有连接）
   bool is_system = 11;           // true 表示群变更系统消息
+  SenderInfo sender_info = 12;   // 发送者信息快照
 }
 
 // PushMessageResp — 投递聊天消息响应
@@ -127,6 +147,43 @@ message PushFriendApplicationReq {
 
 message PushFriendApplicationResp {
   bool success = 1;
+}
+
+// ============================================================
+// PushReadReceipt — 已读回执推送
+// ============================================================
+
+// PushReadReceiptReq — 推送已读回执请求
+message PushReadReceiptReq {
+  int64 target_user_id = 1;       // 目标用户 ID（投递到此用户在本节点的所有连接）
+  int64 conversation_id = 2;      // 会话 ID
+  int64 from_user_id = 3;         // 推进游标的成员
+  int64 last_read_message_id = 4; // 该成员已读到的最大消息 ID
+  int64 updated_at = 5;           // 已读游标的更新时间（毫秒）
+}
+
+// PushReadReceiptResp — 推送已读回执响应
+message PushReadReceiptResp {
+  bool success = 1;
+}
+
+// ============================================================
+// PushNotification — 系统通知推送
+// ============================================================
+
+// PushNotificationReq — 推送系统通知请求
+message PushNotificationReq {
+  int64 target_user_id = 1;        // 目标用户 ID，0 表示广播本节点所有连接
+  string notification_type = 2;    // 通知类型：announcement / maintenance / force_update / ...
+  string title = 3;                // 标题
+  string body = 4;                 // 正文
+  int64 related_id = 5;            // 关联 ID（业务自定义，可为 0）
+}
+
+// PushNotificationResp — 推送系统通知响应
+message PushNotificationResp {
+  bool success = 1;        // 是否成功推送（任一连接失败时返回 false）
+  int32 affected_count = 2; // 实际推送到的连接数
 }
 
 // ============================================================

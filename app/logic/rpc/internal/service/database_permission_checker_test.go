@@ -177,6 +177,58 @@ func (f *fakeQuerier) GetConversationMembersDetail(ctx context.Context, conversa
 	return nil, nil
 }
 
+func (f *fakeQuerier) UpsertConversationReadState(ctx context.Context, arg model.UpsertConversationReadStateParams) (model.ConversationReadState, error) {
+	return model.ConversationReadState{}, nil
+}
+
+func (f *fakeQuerier) GetConversationReadState(ctx context.Context, arg model.GetConversationReadStateParams) (model.ConversationReadState, error) {
+	return model.ConversationReadState{}, nil
+}
+
+func (f *fakeQuerier) ListConversationReadStates(ctx context.Context, conversationID int64) ([]model.ConversationReadState, error) {
+	return nil, nil
+}
+
+func (f *fakeQuerier) GetUserType(ctx context.Context, id int64) (string, error) {
+	return "human", nil
+}
+
+func (f *fakeQuerier) UpdateUserInfoType(ctx context.Context, arg model.UpdateUserInfoTypeParams) (int64, error) {
+	return 0, nil
+}
+
+func (f *fakeQuerier) CreateBotToken(ctx context.Context, arg model.CreateBotTokenParams) (model.BotToken, error) {
+	return model.BotToken{}, nil
+}
+
+func (f *fakeQuerier) GetBotTokenByHash(ctx context.Context, tokenHash string) (model.GetBotTokenByHashRow, error) {
+	return model.GetBotTokenByHashRow{}, pgx.ErrNoRows
+}
+
+func (f *fakeQuerier) ListBotTokensByBot(ctx context.Context, botUserID int64) ([]model.BotToken, error) {
+	return nil, nil
+}
+
+func (f *fakeQuerier) RevokeBotToken(ctx context.Context, arg model.RevokeBotTokenParams) (int64, error) {
+	return 0, nil
+}
+
+func (f *fakeQuerier) UpsertBotWebhook(ctx context.Context, arg model.UpsertBotWebhookParams) (model.BotWebhook, error) {
+	return model.BotWebhook{}, nil
+}
+
+func (f *fakeQuerier) GetBotWebhook(ctx context.Context, botUserID int64) (model.BotWebhook, error) {
+	return model.BotWebhook{}, pgx.ErrNoRows
+}
+
+func (f *fakeQuerier) DeleteBotWebhook(ctx context.Context, botUserID int64) (int64, error) {
+	return 0, nil
+}
+
+func (f *fakeQuerier) ListActiveBotWebhooksForConversation(ctx context.Context, conversationID int64) ([]model.BotWebhook, error) {
+	return nil, nil
+}
+
 func (f *fakeQuerier) GetDirectConversationByMembers(ctx context.Context, arg model.GetDirectConversationByMembersParams) (model.GetDirectConversationByMembersRow, error) {
 	if f.getConvErr != nil {
 		return model.GetDirectConversationByMembersRow{}, f.getConvErr

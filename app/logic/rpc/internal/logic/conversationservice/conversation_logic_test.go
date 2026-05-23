@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hellopoisonx/aim/app/logic/rpc/model"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/service"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
+	"github.com/hellopoisonx/aim/app/logic/rpc/model"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/tools"
 	"github.com/jackc/pgx/v5"
@@ -25,6 +25,7 @@ type fakeConversationStore struct {
 	conversations map[int64]model.GetConversationRow
 	members       map[int64][]model.GetConversationMembersRow
 	messages      map[int64][]model.Message
+	readStates    map[int64]map[int64]model.ConversationReadState // conv_id -> user_id -> state
 }
 
 func newFakeStore() *fakeConversationStore {
@@ -32,6 +33,7 @@ func newFakeStore() *fakeConversationStore {
 		conversations: make(map[int64]model.GetConversationRow),
 		members:       make(map[int64][]model.GetConversationMembersRow),
 		messages:      make(map[int64][]model.Message),
+		readStates:    make(map[int64]map[int64]model.ConversationReadState),
 	}
 }
 
@@ -41,6 +43,9 @@ func (f *fakeConversationStore) CreateConversation(_ context.Context, arg model.
 		ConversationType: arg.ConversationType,
 		IsActive:         true,
 		CreatedAt:        newTS(),
+		Name:             arg.Name,
+		Avatar:           arg.Avatar,
+		CreatorID:        arg.CreatorID,
 	}
 	f.conversations[arg.ID] = conv
 	return model.CreateConversationRow{
@@ -214,6 +219,39 @@ func (f *fakeConversationStore) GetConversationMembersDetail(_ context.Context, 
 	return result, nil
 }
 
+func (f *fakeConversationStore) UpsertConversationReadState(_ context.Context, arg model.UpsertConversationReadStateParams) (model.ConversationReadState, error) {
+	conv, ok := f.readStates[arg.ConversationID]
+	if !ok {
+		conv = make(map[int64]model.ConversationReadState)
+		f.readStates[arg.ConversationID] = conv
+	}
+
+	state, exists := conv[arg.UserID]
+	if !exists {
+		state = model.ConversationReadState{
+			ConversationID:    arg.ConversationID,
+			UserID:            arg.UserID,
+			LastReadMessageID: arg.LastReadMessageID,
+			UpdatedAt:         newTS(),
+		}
+	} else if arg.LastReadMessageID > state.LastReadMessageID {
+		state.LastReadMessageID = arg.LastReadMessageID
+		state.UpdatedAt = newTS()
+	}
+
+	conv[arg.UserID] = state
+	return state, nil
+}
+
+func (f *fakeConversationStore) ListConversationReadStates(_ context.Context, conversationID int64) ([]model.ConversationReadState, error) {
+	conv := f.readStates[conversationID]
+	items := make([]model.ConversationReadState, 0, len(conv))
+	for _, state := range conv {
+		items = append(items, state)
+	}
+	return items, nil
+}
+
 func (f *fakeConversationStore) InsertMessage(_ context.Context, arg model.InsertMessageParams) error {
 	f.messages[arg.ConversationID] = append(f.messages[arg.ConversationID], model.Message{
 		ID:             arg.ID,
@@ -264,7 +302,8 @@ func TestCreateConversationLogic(t *testing.T) {
 			req: &pb.CreateConversationReq{
 				ConversationType: "direct",
 				CreatorId:        1,
-				MemberIds:        []int64{1, 2},
+				MemberIds:        []int64{2},
+				Name:             "Direct Chat",
 			},
 			wantErr: false,
 		},
@@ -274,15 +313,17 @@ func TestCreateConversationLogic(t *testing.T) {
 				ConversationType: "group",
 				CreatorId:        1,
 				MemberIds:        []int64{1, 2, 3},
+				Name:             "Group Chat",
 			},
 			wantErr: false,
 		},
 		{
-			name: "direct with more than 2 members",
+			name: "direct with more than one peer in request",
 			req: &pb.CreateConversationReq{
 				ConversationType: "direct",
 				CreatorId:        1,
-				MemberIds:        []int64{1, 2, 3},
+				MemberIds:        []int64{2, 3},
+				Name:             "Invalid Direct",
 			},
 			wantErr: true,
 		},
@@ -310,6 +351,7 @@ func TestCreateConversationLogic(t *testing.T) {
 				ConversationType: "direct",
 				CreatorId:        1,
 				MemberIds:        []int64{2},
+				Name:             "Auto Add",
 			},
 			wantErr: false,
 		},
@@ -355,14 +397,19 @@ func TestGetConversationHistoryLogic(t *testing.T) {
 		{ConversationID: convID, UserID: 1, JoinedAt: newTS()},
 		{ConversationID: convID, UserID: 2, JoinedAt: newTS()},
 	}
+	clientMsg := "client-1"
 	store.messages[convID] = []model.Message{
-		{ID: 1, ConversationID: convID, SenderID: 1, MessageType: "text", Content: []byte(`"hello"`), CreatedAt: newTS()},
+		{ID: 1, ConversationID: convID, SenderID: 1, MessageType: "text", Content: []byte(`"hello"`), ClientMsgID: &clientMsg, Mentions: []byte(`["2"]`), CreatedAt: newTS()},
 		{ID: 2, ConversationID: convID, SenderID: 2, MessageType: "text", Content: []byte(`"world"`), CreatedAt: newTS()},
 	}
 
 	convSvc := service.NewConversationService(store, testSnowflake, nil, nil)
 	svcCtx := &svc.ServiceContext{
 		ConversationService: convSvc,
+		UserInfoService: &fakeUserInfoService{users: map[int64]model.UserInfo{
+			1: {ID: 1, Email: "user1@example.com", Nickname: "User 1"},
+			2: {ID: 2, Email: "user2@example.com", Nickname: "User 2"},
+		}},
 	}
 
 	tests := []struct {
@@ -418,6 +465,10 @@ func TestGetConversationHistoryLogic(t *testing.T) {
 			require.NoError(t, err)
 			assert.NotNil(t, resp)
 			assert.Len(t, resp.GetMessages(), tt.wantLen)
+			if tt.name == "initial page" && len(resp.GetMessages()) > 0 {
+				assert.Equal(t, "client-1", resp.GetMessages()[0].GetClientMsgId())
+				assert.Equal(t, []string{"2"}, resp.GetMessages()[0].GetMentions())
+			}
 		})
 	}
 }
@@ -470,4 +521,88 @@ func TestGetConversationMembersLogic(t *testing.T) {
 func TestGetConversationMembersLogic_InvalidRequest(t *testing.T) {
 	_, err := NewGetConversationMembersLogic(context.Background(), setupTestSvc()).GetConversationMembers(&pb.GetConversationMembersReq{})
 	require.Error(t, err)
+}
+
+func TestUpdateReadReceiptLogic_HappyPath(t *testing.T) {
+	store := newFakeStore()
+	convID := generateTestConversationID()
+	store.conversations[convID] = model.GetConversationRow{
+		ID:               convID,
+		ConversationType: "group",
+		IsActive:         true,
+		CreatedAt:        newTS(),
+	}
+	store.members[convID] = []model.GetConversationMembersRow{
+		{ConversationID: convID, UserID: 11, JoinedAt: newTS()},
+		{ConversationID: convID, UserID: 22, JoinedAt: newTS()},
+	}
+
+	svcCtx := &svc.ServiceContext{ConversationService: service.NewConversationService(store, testSnowflake, nil, nil)}
+
+	logic := NewUpdateReadReceiptLogic(context.Background(), svcCtx)
+	resp, err := logic.UpdateReadReceipt(&pb.UpdateReadReceiptReq{
+		ConversationId:    convID,
+		UserId:            11,
+		LastReadMessageId: 500,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, resp.GetReadState())
+	require.Equal(t, int64(11), resp.GetReadState().GetUserId())
+	require.Equal(t, int64(500), resp.GetReadState().GetLastReadMessageId())
+}
+
+func TestUpdateReadReceiptLogic_NotMemberRejected(t *testing.T) {
+	store := newFakeStore()
+	convID := generateTestConversationID()
+	store.conversations[convID] = model.GetConversationRow{
+		ID:               convID,
+		ConversationType: "group",
+		IsActive:         true,
+		CreatedAt:        newTS(),
+	}
+	store.members[convID] = []model.GetConversationMembersRow{
+		{ConversationID: convID, UserID: 11, JoinedAt: newTS()},
+	}
+
+	svcCtx := &svc.ServiceContext{ConversationService: service.NewConversationService(store, testSnowflake, nil, nil)}
+
+	logic := NewUpdateReadReceiptLogic(context.Background(), svcCtx)
+	_, err := logic.UpdateReadReceipt(&pb.UpdateReadReceiptReq{
+		ConversationId:    convID,
+		UserId:            999,
+		LastReadMessageId: 500,
+	})
+	require.Error(t, err)
+}
+
+func TestListConversationReadStatesLogic_HappyPath(t *testing.T) {
+	store := newFakeStore()
+	convID := generateTestConversationID()
+	store.conversations[convID] = model.GetConversationRow{
+		ID:               convID,
+		ConversationType: "group",
+		IsActive:         true,
+		CreatedAt:        newTS(),
+	}
+	store.members[convID] = []model.GetConversationMembersRow{
+		{ConversationID: convID, UserID: 11, JoinedAt: newTS()},
+		{ConversationID: convID, UserID: 22, JoinedAt: newTS()},
+	}
+
+	svcCtx := &svc.ServiceContext{ConversationService: service.NewConversationService(store, testSnowflake, nil, nil)}
+
+	// Seed two cursors.
+	_, err := NewUpdateReadReceiptLogic(context.Background(), svcCtx).UpdateReadReceipt(&pb.UpdateReadReceiptReq{
+		ConversationId: convID, UserId: 11, LastReadMessageId: 500,
+	})
+	require.NoError(t, err)
+	_, err = NewUpdateReadReceiptLogic(context.Background(), svcCtx).UpdateReadReceipt(&pb.UpdateReadReceiptReq{
+		ConversationId: convID, UserId: 22, LastReadMessageId: 700,
+	})
+	require.NoError(t, err)
+
+	logic := NewListConversationReadStatesLogic(context.Background(), svcCtx)
+	resp, err := logic.ListConversationReadStates(&pb.ListConversationReadStatesReq{ConversationId: convID})
+	require.NoError(t, err)
+	require.Len(t, resp.GetReadStates(), 2)
 }

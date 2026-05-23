@@ -7,27 +7,46 @@ package model
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const createUser = `-- name: CreateUser :one
-INSERT INTO user_credentials (id, email, password_hash, status)
-VALUES ($1, $2, $3, 1)
-RETURNING id, email, password_hash, status, created_at, updated_at
+INSERT INTO user_credentials (id, email, password_hash, name, status)
+VALUES ($1, $2, $3, $4, 1)
+RETURNING id, email, password_hash, name, status, created_at, updated_at
 `
 
 type CreateUserParams struct {
 	ID           int64  `json:"id"`
 	Email        string `json:"email"`
 	PasswordHash string `json:"password_hash"`
+	Name         string `json:"name"`
 }
 
-func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (UserCredential, error) {
-	row := q.db.QueryRow(ctx, createUser, arg.ID, arg.Email, arg.PasswordHash)
-	var i UserCredential
+type CreateUserRow struct {
+	ID           int64              `json:"id"`
+	Email        string             `json:"email"`
+	PasswordHash string             `json:"password_hash"`
+	Name         string             `json:"name"`
+	Status       int16              `json:"status"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (CreateUserRow, error) {
+	row := q.db.QueryRow(ctx, createUser,
+		arg.ID,
+		arg.Email,
+		arg.PasswordHash,
+		arg.Name,
+	)
+	var i CreateUserRow
 	err := row.Scan(
 		&i.ID,
 		&i.Email,
 		&i.PasswordHash,
+		&i.Name,
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -36,18 +55,29 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (UserCre
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, email, password_hash, status, created_at, updated_at
+SELECT id, email, password_hash, name, status, created_at, updated_at
 FROM user_credentials
 WHERE email = $1
 `
 
-func (q *Queries) GetUserByEmail(ctx context.Context, email string) (UserCredential, error) {
+type GetUserByEmailRow struct {
+	ID           int64              `json:"id"`
+	Email        string             `json:"email"`
+	PasswordHash string             `json:"password_hash"`
+	Name         string             `json:"name"`
+	Status       int16              `json:"status"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) GetUserByEmail(ctx context.Context, email string) (GetUserByEmailRow, error) {
 	row := q.db.QueryRow(ctx, getUserByEmail, email)
-	var i UserCredential
+	var i GetUserByEmailRow
 	err := row.Scan(
 		&i.ID,
 		&i.Email,
 		&i.PasswordHash,
+		&i.Name,
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -56,18 +86,29 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (UserCredent
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, email, password_hash, status, created_at, updated_at
+SELECT id, email, password_hash, name, status, created_at, updated_at
 FROM user_credentials
 WHERE id = $1
 `
 
-func (q *Queries) GetUserByID(ctx context.Context, id int64) (UserCredential, error) {
+type GetUserByIDRow struct {
+	ID           int64              `json:"id"`
+	Email        string             `json:"email"`
+	PasswordHash string             `json:"password_hash"`
+	Name         string             `json:"name"`
+	Status       int16              `json:"status"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) GetUserByID(ctx context.Context, id int64) (GetUserByIDRow, error) {
 	row := q.db.QueryRow(ctx, getUserByID, id)
-	var i UserCredential
+	var i GetUserByIDRow
 	err := row.Scan(
 		&i.ID,
 		&i.Email,
 		&i.PasswordHash,
+		&i.Name,
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -79,7 +120,7 @@ const updatePassword = `-- name: UpdatePassword :one
 UPDATE user_credentials
 SET password_hash = $2, updated_at = NOW()
 WHERE id = $1
-RETURNING id, email, password_hash, status, created_at, updated_at
+RETURNING id, email, password_hash, name, status, created_at, updated_at
 `
 
 type UpdatePasswordParams struct {
@@ -87,13 +128,24 @@ type UpdatePasswordParams struct {
 	PasswordHash string `json:"password_hash"`
 }
 
-func (q *Queries) UpdatePassword(ctx context.Context, arg UpdatePasswordParams) (UserCredential, error) {
+type UpdatePasswordRow struct {
+	ID           int64              `json:"id"`
+	Email        string             `json:"email"`
+	PasswordHash string             `json:"password_hash"`
+	Name         string             `json:"name"`
+	Status       int16              `json:"status"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) UpdatePassword(ctx context.Context, arg UpdatePasswordParams) (UpdatePasswordRow, error) {
 	row := q.db.QueryRow(ctx, updatePassword, arg.ID, arg.PasswordHash)
-	var i UserCredential
+	var i UpdatePasswordRow
 	err := row.Scan(
 		&i.ID,
 		&i.Email,
 		&i.PasswordHash,
+		&i.Name,
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -105,7 +157,7 @@ const updateStatus = `-- name: UpdateStatus :one
 UPDATE user_credentials
 SET status = $2, updated_at = NOW()
 WHERE id = $1
-RETURNING id, email, password_hash, status, created_at, updated_at
+RETURNING id, email, password_hash, name, status, created_at, updated_at
 `
 
 type UpdateStatusParams struct {
@@ -113,13 +165,24 @@ type UpdateStatusParams struct {
 	Status int16 `json:"status"`
 }
 
-func (q *Queries) UpdateStatus(ctx context.Context, arg UpdateStatusParams) (UserCredential, error) {
+type UpdateStatusRow struct {
+	ID           int64              `json:"id"`
+	Email        string             `json:"email"`
+	PasswordHash string             `json:"password_hash"`
+	Name         string             `json:"name"`
+	Status       int16              `json:"status"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) UpdateStatus(ctx context.Context, arg UpdateStatusParams) (UpdateStatusRow, error) {
 	row := q.db.QueryRow(ctx, updateStatus, arg.ID, arg.Status)
-	var i UserCredential
+	var i UpdateStatusRow
 	err := row.Scan(
 		&i.ID,
 		&i.Email,
 		&i.PasswordHash,
+		&i.Name,
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,

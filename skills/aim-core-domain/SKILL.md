@@ -18,6 +18,7 @@ description: aim 的核心域。对应 `core` 模块。
 
 ## 最近变更
 
+- 2026-05-23: 新增 `ReadReceiptConsumer`：消费 `aim.read_receipt.events`，查会话成员后通过 `GatewayClient.PushReadReceipt` 把已读游标推到除发送者外的成员所在网关节点。`GatewayPusher` 接口与 `GatewayRouter` 同步新增 `PushReadReceipt`。配置结构 `ReadReceiptConsumerConf kq.KqConf`。
 - 2026-05-22: 新增 `ConversationEventConsumer`：消费 `aim.conversation.events` topic，将群变更系统消息（AddGroupMembers, RemoveGroupMembers, LeaveGroup, DismissGroup, UpdateGroupInfo）通过 `GatewayClient.PushMessage`（`is_system=true`）推送给每个 target_user_id。配置结构 `ConversationEventConsumerConf kq.KqConf`。详见 `references/detail.md` §ConversationEventConsumer。
 - 2026-05-22: 修复 `PresenceConsumer` 在线状态推送无法到达目标客户端 Bug：`PushPresenceReq` 新增 `TargetUserId` 字段，consumer 将 `friendID` 写入 `TargetUserId`，`GatewayServer.PushPresence` 改用 `TargetUserId` 寻址，避免错误使用状态变更者本人的 userId 查连接。详见 `references/detail.md` §PresenceConsumer 修复。
 - 2026-05-22: 新增 `PresenceConsumer`（消费 `aim.presence.events`，查好友 → 查目录 → 调 `gateway.PushPresence`）和 `TypingConsumer`（消费 `aim.typing.events`，查成员 → 查目录 → 调 `gateway.PushTyping`）；`PresenceStore` 改为 Set 语义；`GatewayRouter` 按 `node_id` 路由。

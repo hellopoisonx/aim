@@ -7,6 +7,7 @@ import (
 
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/config"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/mqs"
+	serverbotservice "github.com/hellopoisonx/aim/app/logic/rpc/internal/server/botservice"
 	serverpermissionservice "github.com/hellopoisonx/aim/app/logic/rpc/internal/server/permissionservice"
 	serverconversationservice "github.com/hellopoisonx/aim/app/logic/rpc/internal/server/conversationservice"
 	serveruserservice "github.com/hellopoisonx/aim/app/logic/rpc/internal/server/userservice"
@@ -51,6 +52,7 @@ func main() {
 		pb.RegisterUserServiceServer(grpcServer, serveruserservice.NewUserServiceServer(ctx))
 		pb.RegisterConversationServiceServer(grpcServer, serverconversationservice.NewConversationServiceServer(ctx))
 		pb.RegisterFriendshipServiceServer(grpcServer, serverfriendshipservice.NewFriendshipServiceServer(ctx))
+		pb.RegisterBotServiceServer(grpcServer, serverbotservice.NewBotServiceServer(ctx))
 
 		if c.Mode == service.DevMode || c.Mode == service.TestMode {
 			reflection.Register(grpcServer)

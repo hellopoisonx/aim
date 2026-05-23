@@ -45,6 +45,7 @@ services:
       - |
         psql -h postgres -U user -d postgres -tc "SELECT 1 FROM pg_database WHERE datname = 'aim_auth'" | grep -q 1 || psql -h postgres -U user -d postgres -c "CREATE DATABASE aim_auth"
         psql -h postgres -U user -d aim_auth -f /migrations/000_init.sql
+        psql -h postgres -U user -d aim_auth -f /migrations/001_require_user_name.sql
     networks:
       - aim-network
 
@@ -121,6 +122,10 @@ services:
         psql -h postgres -U user -d aim_logic -f /migrations/002_messages.sql
         psql -h postgres -U user -d aim_logic -f /migrations/003_user_info.sql
         psql -h postgres -U user -d aim_logic -f /migrations/004_group_management.sql
+        psql -h postgres -U user -d aim_logic -f /migrations/005_conversation_read_states.sql
+        psql -h postgres -U user -d aim_logic -f /migrations/006_user_type.sql
+        psql -h postgres -U user -d aim_logic -f /migrations/007_bot_tokens.sql
+        psql -h postgres -U user -d aim_logic -f /migrations/008_bot_webhooks.sql
     networks:
       - aim-network
 

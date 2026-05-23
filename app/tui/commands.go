@@ -65,7 +65,19 @@ func (m *model) runCommand(line string) teaCmd {
 	case "conversations", "conv-list":
 		return m.async(func(ctx context.Context) string { return m.cmdConversations(ctx) })
 	case "open":
-		return lineCmd(m.cmdOpen(args))
+		return m.async(func(ctx context.Context) string {
+			if msg := m.cmdOpen(args); strings.HasPrefix(msg, "ERR ") {
+				return msg
+			}
+			histArgs := []string{"history"}
+			if len(args) > 1 {
+				histArgs = append(histArgs, args[1])
+			}
+			if len(args) > 2 {
+				histArgs = append(histArgs, args[2])
+			}
+			return m.cmdHistory(ctx, histArgs)
+		})
 	case "history":
 		return m.async(func(ctx context.Context) string { return m.cmdHistory(ctx, args) })
 	case "send":
@@ -144,17 +156,18 @@ func (m *model) statusText() string {
 }
 
 func (m *model) cmdRegister(ctx context.Context, args []string) string {
-	if len(args) < 3 {
-		return "ERR usage: register <email> <password> [username] [avatar]"
+	if len(args) < 4 {
+		return "ERR usage: register <email> <password> <username> [avatar]"
 	}
 	p := m.currentProfile()
-	username, avatar := "", ""
-	if len(args) > 3 {
-		username = args[3]
+	username, avatar := strings.TrimSpace(args[3]), ""
+	if username == "" {
+		return "ERR username is required"
 	}
 	if len(args) > 4 {
 		avatar = args[4]
 	}
+	p.DeviceID = fmt.Sprintf("tui-%s-%s", m.instanceID, uuid.NewString()[:8])
 	resp, err := m.rest.Register(ctx, &client.RegisterRequest{Email: args[1], Password: args[2], Username: username, Avatar: avatar, DeviceId: p.DeviceID})
 	if err != nil {
 		return errLine(err)
@@ -167,6 +180,7 @@ func (m *model) cmdLogin(ctx context.Context, args []string) string {
 		return "ERR usage: login <email> <password>"
 	}
 	p := m.currentProfile()
+	p.DeviceID = fmt.Sprintf("tui-%s-%s", m.instanceID, uuid.NewString()[:8])
 	resp, err := m.rest.Login(ctx, &client.LoginRequest{Email: args[1], Password: args[2], DeviceId: p.DeviceID})
 	if err != nil {
 		return errLine(err)
@@ -185,6 +199,8 @@ func (m *model) cmdLogin(ctx context.Context, args []string) string {
 	}
 	if convMsg := m.cmdConversations(ctx); strings.HasPrefix(convMsg, "ERR ") {
 		msg += "\n" + convMsg
+	} else if hist := m.syncSelectedConversation(ctx); strings.HasPrefix(hist, "ERR ") {
+		msg += "\n" + hist
 	}
 	return msg
 }
@@ -243,6 +259,11 @@ func (m *model) cmdLogout(ctx context.Context) string {
 	_ = m.cmdWSDisconnect()
 	p.AccessToken = ""
 	p.RefreshToken = ""
+	p.UserID = 0
+	p.Email = ""
+	m.phase = phaseAuth
+	m.authMode = authLogin
+	m.authField = authFieldEmail
 	if err := m.store.DeleteToken(ctx); err != nil {
 		return errLine(err)
 	}
@@ -257,6 +278,7 @@ func (m *model) cmdSearch(ctx context.Context, args []string) string {
 	if err != nil {
 		return errLine(err)
 	}
+	m.rememberUserLabels(resp.Users)
 	m.state.mu.Lock()
 	m.state.friendSearchResultQuery = args[1]
 	m.state.friendSearchResults = resp.Users
@@ -264,7 +286,11 @@ func (m *model) cmdSearch(ctx context.Context, args []string) string {
 	m.state.mu.Unlock()
 	rows := []string{fmt.Sprintf("OK %d user(s)", len(resp.Users))}
 	for _, u := range resp.Users {
-		rows = append(rows, fmt.Sprintf("- id=%s email=%s avatar=%s", u.ID, u.Email, u.Avatar))
+		name := displayNameFromListItem(u)
+		if name == "" {
+			name = u.Email
+		}
+		rows = append(rows, fmt.Sprintf("- %s", name))
 	}
 	return strings.Join(rows, "\n")
 }
@@ -295,15 +321,67 @@ func (m *model) cmdFriendAdd(ctx context.Context, args []string) string {
 }
 
 func (m *model) cmdFriendApplications(ctx context.Context) string {
-	resp, err := m.rest.ListFriendApplications(ctx, m.currentProfile().AccessToken)
+	p := m.currentProfile()
+	if p.AccessToken == "" {
+		return "OK friend applications skipped: not logged in"
+	}
+	resp, err := m.rest.ListFriendApplications(ctx, p.AccessToken)
 	if err != nil {
 		return errLine(err)
 	}
+	m.state.mu.Lock()
+	m.state.friendApplications = resp.Applications
+	if m.state.selectedApplication >= len(resp.Applications) {
+		m.state.selectedApplication = max(0, len(resp.Applications)-1)
+	}
+	m.state.mu.Unlock()
 	rows := []string{fmt.Sprintf("OK %d application(s)", len(resp.Applications))}
 	for _, f := range resp.Applications {
 		rows = append(rows, friendshipLine("-", f))
 	}
 	return strings.Join(rows, "\n")
+}
+
+func (m *model) cmdBootstrapSession(ctx context.Context) string {
+	p := m.currentProfile()
+	if p.AccessToken == "" {
+		return "OK bootstrap skipped: not logged in"
+	}
+	m.enterMainPhase()
+	parts := []string{"OK session bootstrap"}
+	if msg := m.cmdAutoRefresh(ctx); !strings.HasPrefix(msg, "ERR ") {
+		parts = append(parts, msg)
+	}
+	if msg := m.cmdWSConnect(ctx); strings.HasPrefix(msg, "ERR ") {
+		parts = append(parts, msg)
+	} else {
+		parts = append(parts, msg)
+	}
+	for _, fn := range []func(context.Context) string{
+		m.cmdConversations,
+		m.cmdFriendList,
+		m.cmdFriendApplications,
+		m.cmdPresence,
+	} {
+		if msg := fn(ctx); strings.HasPrefix(msg, "ERR ") {
+			parts = append(parts, msg)
+		}
+	}
+	if hist := m.syncSelectedConversation(ctx); hist != "" {
+		parts = append(parts, hist)
+	}
+	return strings.Join(parts, "\n")
+}
+
+func (m *model) syncSelectedConversation(ctx context.Context) string {
+	if _, err := m.selectedConversationID(); err != nil {
+		return ""
+	}
+	return m.cmdHistory(ctx, []string{"history"})
+}
+
+func (m *model) cmdReadSelected(ctx context.Context) string {
+	return m.markConversationRead(ctx, 0, 0)
 }
 
 func (m *model) cmdFriendAccept(ctx context.Context, args []string) string {
@@ -345,6 +423,7 @@ func (m *model) cmdFriendList(ctx context.Context) string {
 		m.state.selectedFriend = max(0, len(resp.Friends)-1)
 	}
 	m.state.mu.Unlock()
+	m.enrichUserLabels(ctx, m.collectFriendUserIDs())
 	rows := []string{fmt.Sprintf("OK %d friend(s)", len(resp.Friends))}
 	for _, f := range resp.Friends {
 		rows = append(rows, friendshipLine("-", f))
@@ -387,7 +466,18 @@ func (m *model) cmdGroupCreate(ctx context.Context, args []string) string {
 	if len(args) > 3 {
 		avatar = args[3]
 	}
-	resp, err := m.rest.CreateGroup(ctx, &client.CreateGroupRequest{MemberIDs: ids, Name: args[2], Avatar: avatar}, m.currentProfile().AccessToken)
+	return m.cmdGroupCreateIDs(ctx, args[2], ids, avatar)
+}
+
+func (m *model) cmdGroupCreateIDs(ctx context.Context, name string, ids []int64, avatars ...string) string {
+	if len(ids) == 0 {
+		return "ERR no members selected"
+	}
+	avatar := ""
+	if len(avatars) > 0 {
+		avatar = avatars[0]
+	}
+	resp, err := m.rest.CreateGroup(ctx, &client.CreateGroupRequest{MemberIDs: ids, Name: name, Avatar: avatar}, m.currentProfile().AccessToken)
 	if err != nil {
 		return errLine(err)
 	}
@@ -406,10 +496,23 @@ func (m *model) cmdConversations(ctx context.Context) string {
 	if err := m.store.SaveConversations(ctx, resp.Conversations); err != nil {
 		return errLine(err)
 	}
+	m.state.mu.Lock()
+	prevReadStates := make(map[int64][]client.ReadStateItem, len(m.state.conversations))
+	for _, v := range m.state.conversations {
+		if len(v.ReadStates) > 0 {
+			prevReadStates[v.Item.ConversationID] = append([]client.ReadStateItem(nil), v.ReadStates...)
+		}
+	}
+	m.state.mu.Unlock()
 	views := make([]conversationView, 0, len(resp.Conversations))
 	for _, c := range resp.Conversations {
+		c.ConversationType = normalizeConversationType(c.ConversationType)
 		msgs, _ := m.store.LoadMessages(ctx, c.ConversationID, messageCacheLimit)
-		views = append(views, conversationView{Item: c, Messages: msgs})
+		views = append(views, conversationView{
+			Item:       c,
+			Messages:   msgs,
+			ReadStates: prevReadStates[c.ConversationID],
+		})
 	}
 	m.state.mu.Lock()
 	m.state.conversations = views
@@ -471,7 +574,13 @@ func (m *model) cmdHistory(ctx context.Context, args []string) string {
 	if err := m.store.SaveMessages(ctx, resp.Messages); err != nil {
 		return errLine(err)
 	}
+	m.rememberMessageSenders(resp.Messages)
+	m.setConversationReadStates(id, resp.ReadStates)
 	m.replaceMessages(id, resp.Messages)
+	read := m.markConversationRead(ctx, id, lastMessageID(resp.Messages))
+	if strings.HasPrefix(read, "ERR ") {
+		return fmt.Sprintf("OK %d message(s) has_more=%t\n%s", len(resp.Messages), resp.HasMore, read)
+	}
 	return fmt.Sprintf("OK %d message(s) has_more=%t", len(resp.Messages), resp.HasMore)
 }
 
@@ -479,11 +588,15 @@ func (m *model) cmdSendSelected(ctx context.Context, args []string) string {
 	if len(args) < 2 {
 		return "ERR usage: send <text>"
 	}
+	return m.cmdSendSelectedWithMentions(ctx, strings.Join(args[1:], " "), nil)
+}
+
+func (m *model) cmdSendSelectedWithMentions(ctx context.Context, text string, mentions []string) string {
 	id, err := m.selectedConversationID()
 	if err != nil {
 		return errLine(err)
 	}
-	return m.cmdWSSend(ctx, []string{"ws-send", strconv.FormatInt(id, 10), strings.Join(args[1:], " ")})
+	return m.cmdWSSendWithMentions(ctx, id, "text", text, mentions)
 }
 
 func (m *model) cmdConvMembers(ctx context.Context, args []string) string {
@@ -605,14 +718,18 @@ func (m *model) cmdWSConnect(ctx context.Context) string {
 	}
 	client := wsclient.NewClient(m.wsURL, &wsclient.ClientOptions{
 		AccessToken: p.AccessToken,
-		OnConnect:   func() { m.events <- "OK websocket connected" },
+		OnConnect:   func() { m.postEvent("OK websocket connected") },
 		OnDisconnect: func(err error) {
-			p.WSConnected = false
+			m.notifyUI(func(m *model) {
+				if prof := m.currentProfile(); prof != nil {
+					prof.WSConnected = false
+				}
+			}, "")
 			if err != nil {
-				m.events <- "ERR websocket disconnected: " + err.Error()
+				m.postEvent("ERR websocket disconnected: " + err.Error())
 				return
 			}
-			m.events <- "OK websocket disconnected"
+			m.postEvent("OK websocket disconnected")
 		},
 		OnFrame: func(frame *wsclient.WsFrame) {
 			m.handleFrame(frame)
@@ -643,10 +760,6 @@ func (m *model) cmdWSSend(ctx context.Context, args []string) string {
 	if len(args) < 3 {
 		return "ERR usage: ws-send <conversation_id> <text> [message_type]"
 	}
-	p := m.currentProfile()
-	if err := requireWS(p); err != nil {
-		return errLine(err)
-	}
 	id, err := strconv.ParseInt(args[1], 10, 64)
 	if err != nil {
 		return errLine(err)
@@ -655,13 +768,31 @@ func (m *model) cmdWSSend(ctx context.Context, args []string) string {
 	if len(args) > 3 {
 		msgType = args[3]
 	}
-	clientMsgID := uuid.NewString()
-	if err := p.WS.SendMessage(ctx, id, msgType, args[2], clientMsgID, nil); err != nil {
+	return m.cmdWSSendWithMentions(ctx, id, msgType, args[2], nil)
+}
+
+func (m *model) cmdWSSendWithMentions(ctx context.Context, convID int64, msgType, content string, mentions []string) string {
+	p := m.currentProfile()
+	if err := requireWS(p); err != nil {
 		return errLine(err)
 	}
-	optimistic := client.MessageItem{ID: time.Now().UnixNano(), ConversationID: id, SenderID: p.UserID, MessageType: msgType, Content: args[2], ClientMsgID: clientMsgID, CreatedAt: time.Now().UnixMilli()}
+	clientMsgID := uuid.NewString()
+	if err := p.WS.SendMessage(ctx, convID, msgType, content, clientMsgID, mentions); err != nil {
+		return errLine(err)
+	}
+	optimistic := client.MessageItem{
+		ID:             time.Now().UnixNano(),
+		ConversationID: convID,
+		SenderID:       p.UserID,
+		MessageType:    msgType,
+		Content:        content,
+		ClientMsgID:    clientMsgID,
+		CreatedAt:      time.Now().UnixMilli(),
+		Mentions:       append([]string(nil), mentions...),
+	}
 	m.appendMessage(optimistic)
 	_ = m.store.SaveMessages(ctx, []client.MessageItem{optimistic})
+	m.maybeMarkReadAfterMessage(convID)
 	return fmt.Sprintf("OK sent client_msg_id=%s", clientMsgID)
 }
 
@@ -683,7 +814,7 @@ func (m *model) cmdWSTyping(ctx context.Context, args []string) string {
 func (m *model) cmdWSHeartbeat(ctx context.Context) string {
 	p := m.currentProfile()
 	if err := requireWS(p); err != nil {
-		return errLine(err)
+		return "OK heartbeat skipped"
 	}
 	if err := p.WS.SendHeartbeat(ctx, p.WS.ReadSeq()); err != nil {
 		return errLine(err)
@@ -731,24 +862,69 @@ func (m *model) cmdWSAck(ctx context.Context, args []string) string {
 func (m *model) handleFrame(frame *wsclient.WsFrame) {
 	payload, err := wsclient.DecodePayload(frame)
 	if err != nil {
-		m.events <- fmt.Sprintf("WS frame type=%s seq=%d payload_error=%v", frame.Type, frame.Seq, err)
+		m.postEvent(fmt.Sprintf("WS frame type=%s seq=%d payload_error=%v", frame.Type, frame.Seq, err))
 		return
 	}
 	switch p := payload.(type) {
 	case *wspb.PushMessagePayload:
-		msg := client.MessageItem{ID: p.MessageId, ConversationID: p.ConversationId, SenderID: p.SenderId, MessageType: p.MessageType, Content: p.Content, ClientMsgID: p.ClientMsgId, CreatedAt: time.Now().UnixMilli()}
-		m.appendMessage(msg)
-		_ = m.store.SaveMessages(context.Background(), []client.MessageItem{msg})
+		msg := pushMessageToItem(p)
+		convID := p.ConversationId
+		m.notifyUI(func(m *model) {
+			if name := displayNameFromWSSenderInfo(p.SenderInfo); name != "" {
+				m.setUserLabel(p.SenderId, name)
+			}
+			m.appendMessage(msg)
+		}, describeFrame(frame))
+		go func() { _ = m.store.SaveMessages(context.Background(), []client.MessageItem{msg}) }()
+		m.maybeMarkReadAfterMessage(convID)
 	case *wspb.PushPresencePayload:
-		m.state.mu.Lock()
-		m.state.presence[p.UserId] = p.Status
-		m.state.mu.Unlock()
-		_ = m.store.SavePresence(context.Background(), p.UserId, p.Status, p.UpdatedAt)
+		userID, status, updatedAt := p.UserId, p.Status, p.UpdatedAt
+		m.notifyUI(func(m *model) {
+			m.state.mu.Lock()
+			if m.state.presence == nil {
+				m.state.presence = make(map[int64]string)
+			}
+			m.state.presence[userID] = status
+			m.state.mu.Unlock()
+		}, describeFrame(frame))
+		go func() { _ = m.store.SavePresence(context.Background(), userID, status, updatedAt) }()
+	case *wspb.PushFriendApplicationPayload:
+		go func() { m.postEvent(m.cmdFriendApplications(context.Background())) }()
+	case *wspb.PushReadReceiptPayload:
+		payload := *p
+		m.notifyUI(func(m *model) { m.handlePushReadReceipt(&payload) }, describeFrame(frame))
+	case *wspb.PushTypingPayload:
+		payload := *p
+		m.notifyUI(func(m *model) { m.handlePushTyping(&payload) }, describeFrame(frame))
+	case *wspb.PushNotificationPayload:
+		m.postEvent(fmt.Sprintf("通知 [%s] %s: %s", p.NotificationType, p.Title, p.Body))
+	case *wspb.ReconnectPayload:
+		m.postEvent(fmt.Sprintf("WS RECONNECT seq=%d delay_ms=%d gateway=%s", frame.Seq, p.ReconnectDelayMs, p.GatewayNodeId))
+		delayMs := p.ReconnectDelayMs
+		go func() {
+			if delayMs > 0 {
+				time.Sleep(time.Duration(delayMs) * time.Millisecond)
+			}
+			m.notifyUI(func(m *model) { m.scheduleWSReconnectOnMain() }, "OK gateway drain: reconnecting")
+		}()
+	case *wspb.ServerAckPayload:
+		ack := *p
+		m.notifyUI(func(m *model) { m.handleServerAck(&ack) }, describeFrame(frame))
 	case *wspb.TokenExpiredPayload:
-		m.events <- fmt.Sprintf("WS TOKEN_EXPIRED seq=%d expired_at=%d reason=%s; refreshing", frame.Seq, p.ExpiredAt, p.Reason)
-		go func() { m.events <- m.cmdRefresh(context.Background(), false) }()
+		m.postEvent(fmt.Sprintf("WS TOKEN_EXPIRED seq=%d expired_at=%d reason=%s; refreshing", frame.Seq, p.ExpiredAt, p.Reason))
+		m.notifyUI(func(m *model) {
+			if line := m.cmdRefresh(context.Background(), false); line != "" {
+				m.postEvent(line)
+			}
+		}, "")
 	}
-	m.events <- describeFrame(frame)
+	m.maybeAckFrame(frame)
+	switch payload.(type) {
+	case *wspb.PushMessagePayload, *wspb.PushPresencePayload, *wspb.PushReadReceiptPayload, *wspb.PushTypingPayload, *wspb.ServerAckPayload:
+		// UI/log delivered via notifyUI.
+	default:
+		m.postEvent(describeFrame(frame))
+	}
 }
 
 func (m *model) appendMessage(msg client.MessageItem) {
@@ -761,6 +937,22 @@ func (m *model) appendMessage(msg client.MessageItem) {
 				m.state.conversations[i].Messages = m.state.conversations[i].Messages[len(m.state.conversations[i].Messages)-messageCacheLimit:]
 			}
 			return
+		}
+	}
+}
+
+func (m *model) reconcileMessageID(clientMsgID string, messageID int64) {
+	if clientMsgID == "" || messageID == 0 {
+		return
+	}
+	m.state.mu.Lock()
+	defer m.state.mu.Unlock()
+	for i := range m.state.conversations {
+		for j := range m.state.conversations[i].Messages {
+			if m.state.conversations[i].Messages[j].ClientMsgID == clientMsgID {
+				m.state.conversations[i].Messages[j].ID = messageID
+				return
+			}
 		}
 	}
 }
@@ -790,8 +982,12 @@ func describeFrame(frame *wsclient.WsFrame) string {
 		return fmt.Sprintf("WS PRESENCE seq=%d user=%d status=%s updated_at=%d", frame.Seq, p.UserId, p.Status, p.UpdatedAt)
 	case *wspb.PushTypingPayload:
 		return fmt.Sprintf("WS TYPING seq=%d user=%d conversation=%d", frame.Seq, p.UserId, p.ConversationId)
+	case *wspb.PushReadReceiptPayload:
+		return fmt.Sprintf("WS READ_RECEIPT seq=%d conv=%d user=%d last=%d", frame.Seq, p.ConversationId, p.UserId, p.LastReadMessageId)
 	case *wspb.PushFriendApplicationPayload:
 		return fmt.Sprintf("WS FRIEND_APPLICATION seq=%d user=%d friend=%d status=%s", frame.Seq, p.UserId, p.FriendId, p.Status)
+	case *wspb.PushNotificationPayload:
+		return fmt.Sprintf("WS NOTIFICATION seq=%d type=%s title=%s body=%s", frame.Seq, p.NotificationType, p.Title, p.Body)
 	case *wspb.ReconnectPayload:
 		return fmt.Sprintf("WS RECONNECT seq=%d delay_ms=%d gateway=%s", frame.Seq, p.ReconnectDelayMs, p.GatewayNodeId)
 	case *wspb.TokenExpiredPayload:
@@ -803,7 +999,7 @@ func describeFrame(frame *wsclient.WsFrame) string {
 
 func helpText() string {
 	return `OK commands:
-Auth: register <email> <password> [username] [avatar] | login <email> <password> | refresh | logout
+Auth: register <email> <password> <username> [avatar] | login <email> <password> | refresh | logout
 UI: open <conv_id> | send <text> | ↑/↓ select conversation
 Profiles: switch <profile> | status | config
 Users/Friends: search <name> | user <id> | friend-add <id> | friend-apps | friend-accept <id> | friend-reject <id> | friend-list

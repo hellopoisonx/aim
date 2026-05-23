@@ -19,6 +19,21 @@ const (
 	CodeUserBanned         = 1006
 )
 
+// Bot OpenAPI error codes (40110-40130). They live in the 401xx range so the
+// responseEnvelope mapper drives a 401 HTTP status by default.
+const (
+	// CodeBotTokenInvalid — `Authorization: Bot <token>` missing/malformed/unknown.
+	CodeBotTokenInvalid = 40110
+	// CodeBotTokenRevoked — token is revoked or expired.
+	CodeBotTokenRevoked = 40111
+	// CodeBotDisabled — owner user_info.status indicates the bot identity is disabled.
+	CodeBotDisabled = 40112
+	// CodeBotScopeDenied — token does not carry the required scope (e.g. messages:send).
+	CodeBotScopeDenied = 40310
+	// CodeBotWebhookInvalid — webhook URL or events list failed validation.
+	CodeBotWebhookInvalid = 40010
+)
+
 // RPC-level error code ranges (service-side).
 // Category = code / 100 maps to HTTP status:
 //

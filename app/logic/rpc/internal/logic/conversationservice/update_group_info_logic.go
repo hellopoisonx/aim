@@ -2,6 +2,7 @@ package conversationservicelogic
 
 import (
 	"context"
+	"strings"
 
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/service"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
@@ -40,10 +41,16 @@ func (l *UpdateGroupInfoLogic) UpdateGroupInfo(in *pb.UpdateGroupInfoReq) (*pb.U
 
 	var name, avatar *string
 	if in.Name != nil {
-		name = in.Name
+		trimmed := strings.TrimSpace(in.GetName())
+		if trimmed != "" {
+			name = &trimmed
+		}
 	}
 	if in.Avatar != nil {
-		avatar = in.Avatar
+		trimmed := strings.TrimSpace(in.GetAvatar())
+		if trimmed != "" {
+			avatar = &trimmed
+		}
 	}
 
 	conv, err := convSvc.UpdateGroupInfo(l.ctx, in.GetConversationId(), in.GetOperatorId(), in.GetOperatorName(), name, avatar)

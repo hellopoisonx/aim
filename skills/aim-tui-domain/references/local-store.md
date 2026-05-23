@@ -21,6 +21,7 @@
 
 - SQLite 使用 WAL、foreign_keys、busy_timeout。
 - 单进程连接池限制为 1 个打开连接，降低 TUI 内并发写锁复杂度。
+- 同一 `--db` 文件在**跨进程**时通过 `*.lock` 文件互斥：第二个 TUI 进程会启动失败并提示换 `--instance`/`--db`；同一进程内可打开多个 `Store`（不同 `instance_id` 分区）。
 - 业务操作全部使用 `context.Context` 和参数化 SQL。
 
 ## 数据语义

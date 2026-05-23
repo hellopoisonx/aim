@@ -46,12 +46,17 @@ func (l *ListConversationsLogic) ListConversations() (resp *types.ListConversati
 	convos := rpcResp.GetConversations()
 	items := make([]types.ConversationItem, 0, len(convos))
 	for _, conv := range convos {
+		memberIDs := conv.GetMemberIds()
+		if memberIDs == nil {
+			memberIDs = []int64{}
+		}
+
 		items = append(items, types.ConversationItem{
 			ConversationId:   conv.GetId(),
 			ConversationType: conv.GetConversationType(),
 			IsActive:         conv.GetIsActive(),
 			CreatedAt:        conv.GetCreatedAt(),
-			MemberIds:        conv.GetMemberIds(),
+			MemberIds:        memberIDs,
 			Name:             conv.GetName(),
 			Avatar:           conv.GetAvatar(),
 			CreatorId:        conv.GetCreatorId(),

@@ -12,7 +12,7 @@ import (
 const createUserInfo = `-- name: CreateUserInfo :one
 INSERT INTO user_info (id, email, nickname, avatar, status)
 VALUES ($1, $2, $3, $4, 1)
-RETURNING id, email, status, nickname, avatar, created_at, updated_at
+RETURNING id, email, status, nickname, avatar, created_at, updated_at, user_type
 `
 
 type CreateUserInfoParams struct {
@@ -38,12 +38,13 @@ func (q *Queries) CreateUserInfo(ctx context.Context, arg CreateUserInfoParams) 
 		&i.Avatar,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.UserType,
 	)
 	return i, err
 }
 
 const getUserInfoByEmail = `-- name: GetUserInfoByEmail :one
-SELECT id, email, status, nickname, avatar, created_at, updated_at
+SELECT id, email, status, nickname, avatar, created_at, updated_at, user_type
 FROM user_info
 WHERE email = $1
 `
@@ -59,12 +60,13 @@ func (q *Queries) GetUserInfoByEmail(ctx context.Context, email string) (UserInf
 		&i.Avatar,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.UserType,
 	)
 	return i, err
 }
 
 const getUserInfoByID = `-- name: GetUserInfoByID :one
-SELECT id, email, status, nickname, avatar, created_at, updated_at
+SELECT id, email, status, nickname, avatar, created_at, updated_at, user_type
 FROM user_info
 WHERE id = $1
 `
@@ -80,12 +82,13 @@ func (q *Queries) GetUserInfoByID(ctx context.Context, id int64) (UserInfo, erro
 		&i.Avatar,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.UserType,
 	)
 	return i, err
 }
 
 const getUserInfoByNickname = `-- name: GetUserInfoByNickname :one
-SELECT id, email, status, nickname, avatar, created_at, updated_at
+SELECT id, email, status, nickname, avatar, created_at, updated_at, user_type
 FROM user_info
 WHERE nickname = $1
 `
@@ -101,12 +104,24 @@ func (q *Queries) GetUserInfoByNickname(ctx context.Context, nickname string) (U
 		&i.Avatar,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.UserType,
 	)
 	return i, err
 }
 
+const getUserType = `-- name: GetUserType :one
+SELECT user_type FROM user_info WHERE id = $1
+`
+
+func (q *Queries) GetUserType(ctx context.Context, id int64) (string, error) {
+	row := q.db.QueryRow(ctx, getUserType, id)
+	var user_type string
+	err := row.Scan(&user_type)
+	return user_type, err
+}
+
 const searchUserInfoByNickname = `-- name: SearchUserInfoByNickname :many
-SELECT id, email, status, nickname, avatar, created_at, updated_at
+SELECT id, email, status, nickname, avatar, created_at, updated_at, user_type
 FROM user_info
 WHERE nickname ILIKE '%' || $1 || '%'
 ORDER BY similarity(nickname, $1) DESC, created_at DESC, id ASC
@@ -135,6 +150,7 @@ func (q *Queries) SearchUserInfoByNickname(ctx context.Context, arg SearchUserIn
 			&i.Avatar,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.UserType,
 		); err != nil {
 			return nil, err
 		}
@@ -150,7 +166,7 @@ const updateUserInfoProfile = `-- name: UpdateUserInfoProfile :one
 UPDATE user_info
 SET nickname = $2, avatar = $3, updated_at = NOW()
 WHERE id = $1
-RETURNING id, email, status, nickname, avatar, created_at, updated_at
+RETURNING id, email, status, nickname, avatar, created_at, updated_at, user_type
 `
 
 type UpdateUserInfoProfileParams struct {
@@ -170,6 +186,7 @@ func (q *Queries) UpdateUserInfoProfile(ctx context.Context, arg UpdateUserInfoP
 		&i.Avatar,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.UserType,
 	)
 	return i, err
 }
@@ -178,7 +195,7 @@ const updateUserInfoStatus = `-- name: UpdateUserInfoStatus :one
 UPDATE user_info
 SET status = $2, updated_at = NOW()
 WHERE id = $1
-RETURNING id, email, status, nickname, avatar, created_at, updated_at
+RETURNING id, email, status, nickname, avatar, created_at, updated_at, user_type
 `
 
 type UpdateUserInfoStatusParams struct {
@@ -197,6 +214,24 @@ func (q *Queries) UpdateUserInfoStatus(ctx context.Context, arg UpdateUserInfoSt
 		&i.Avatar,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.UserType,
 	)
 	return i, err
+}
+
+const updateUserInfoType = `-- name: UpdateUserInfoType :execrows
+UPDATE user_info SET user_type = $2, updated_at = NOW() WHERE id = $1
+`
+
+type UpdateUserInfoTypeParams struct {
+	ID       int64  `json:"id"`
+	UserType string `json:"user_type"`
+}
+
+func (q *Queries) UpdateUserInfoType(ctx context.Context, arg UpdateUserInfoTypeParams) (int64, error) {
+	result, err := q.db.Exec(ctx, updateUserInfoType, arg.ID, arg.UserType)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }

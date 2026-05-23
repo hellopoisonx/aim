@@ -46,6 +46,17 @@ UserCreatedConsumerConf:
   Offset: first
   Consumers: 1
   Processors: 1
+# Bot Webhook 投递消费者：与 ArchiveConsumer 共用 topic，但独立消费组，
+# 确保 webhook 投递失败不会拖慢消息归档 offset。
+BotWebhookConsumerConf:
+  Name: logic-bot-webhook-consumer
+  Brokers:
+    - kafka:9092
+  Group: aim-logic-bot-webhook
+  Topic: aim-message-transfer
+  Offset: last
+  Consumers: 1
+  Processors: 1
 Quota:
   WindowSeconds: 60
   MaxRequests: 100

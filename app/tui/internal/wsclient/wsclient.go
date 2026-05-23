@@ -30,6 +30,7 @@ const (
 	FrameTypePushNotification      = pb.FrameType_FRAME_TYPE_PUSH_NOTIFICATION
 	FrameTypePushFriendApplication = pb.FrameType_FRAME_TYPE_PUSH_FRIEND_APPLICATION
 	FrameTypePushTyping            = pb.FrameType_FRAME_TYPE_PUSH_TYPING
+	FrameTypePushReadReceipt       = pb.FrameType_FRAME_TYPE_PUSH_READ_RECEIPT
 	FrameTypeReconnect             = pb.FrameType_FRAME_TYPE_RECONNECT
 	FrameTypeServerAck             = pb.FrameType_FRAME_TYPE_SERVER_ACK
 	FrameTypeTokenExpired          = pb.FrameType_FRAME_TYPE_TOKEN_EXPIRED
@@ -394,6 +395,8 @@ func DecodePayload(frame *WsFrame) (proto.Message, error) {
 		payload = &pb.PushFriendApplicationPayload{}
 	case FrameTypePushTyping:
 		payload = &pb.PushTypingPayload{}
+	case FrameTypePushReadReceipt:
+		payload = &pb.PushReadReceiptPayload{}
 	case FrameTypeReconnect:
 		payload = &pb.ReconnectPayload{}
 	case FrameTypeServerAck:

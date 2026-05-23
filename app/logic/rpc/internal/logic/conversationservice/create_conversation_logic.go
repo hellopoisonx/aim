@@ -2,6 +2,7 @@ package conversationservicelogic
 
 import (
 	"context"
+	"strings"
 
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/service"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
@@ -34,7 +35,23 @@ func (l *CreateConversationLogic) CreateConversation(in *pb.CreateConversationRe
 		return nil, errorx.NewCodeError(errorx.CodeBadInput, "conversation_type must be 'direct' or 'group'")
 	}
 
-	if len(in.GetMemberIds()) == 0 {
+	name := strings.TrimSpace(in.GetName())
+	if name == "" {
+		return nil, errorx.NewCodeError(errorx.CodeBadInput, "name is required")
+	}
+
+	memberIDs := in.GetMemberIds()
+	if in.GetConversationType() == "direct" {
+		if len(memberIDs) != 1 {
+			return nil, errorx.NewCodeError(errorx.CodeBadInput, "direct conversation member_ids must contain exactly one peer user id")
+		}
+		if memberIDs[0] <= 0 {
+			return nil, errorx.NewCodeError(errorx.CodeBadInput, "member_ids must contain positive user ids")
+		}
+		if memberIDs[0] == in.GetCreatorId() {
+			return nil, errorx.NewCodeError(errorx.CodeBadInput, "direct conversation peer must not be creator")
+		}
+	} else if len(memberIDs) == 0 {
 		return nil, errorx.NewCodeError(errorx.CodeBadInput, "member_ids must not be empty")
 	}
 
@@ -43,7 +60,7 @@ func (l *CreateConversationLogic) CreateConversation(in *pb.CreateConversationRe
 		return nil, errorx.NewCodeError(errorx.CodeInternal, "conversation service is not configured")
 	}
 
-	conv, err := convSvc.CreateConversation(l.ctx, in.GetConversationType(), in.GetCreatorId(), in.GetMemberIds(), in.GetName(), in.GetAvatar())
+	conv, err := convSvc.CreateConversation(l.ctx, in.GetConversationType(), in.GetCreatorId(), memberIDs, name, in.GetAvatar())
 	if err != nil {
 		return nil, service.ConversationToGRPCError(err)
 	}
@@ -53,9 +70,9 @@ func (l *CreateConversationLogic) CreateConversation(in *pb.CreateConversationRe
 		return nil, service.ConversationToGRPCError(err)
 	}
 
-	memberIDs := make([]int64, len(members))
+	respMemberIDs := make([]int64, len(members))
 	for i, m := range members {
-		memberIDs[i] = m.UserID
+		respMemberIDs[i] = m.UserID
 	}
 
 	return &pb.CreateConversationResp{
@@ -64,7 +81,7 @@ func (l *CreateConversationLogic) CreateConversation(in *pb.CreateConversationRe
 			ConversationType: conv.ConversationType,
 			IsActive:         conv.IsActive,
 			CreatedAt:        service.UnixFromPGTimestamptz(conv.CreatedAt),
-			MemberIds:        memberIDs,
+			MemberIds:        respMemberIDs,
 			Name:             conv.Name,
 			Avatar:           conv.Avatar,
 			CreatorId:        conv.CreatorID,

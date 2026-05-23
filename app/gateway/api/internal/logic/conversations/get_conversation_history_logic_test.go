@@ -178,15 +178,18 @@ func TestGetConversationHistory(t *testing.T) {
 								Id:             1,
 								ConversationId: 123,
 								SenderId:       100,
+								SenderInfo:     &pb.SenderInfo{Name: "Alice", Email: "alice@example.com"},
 								MessageType:    "text",
 								Content:        "hello",
 								ClientMsgId:    "client-msg-1",
 								CreatedAt:      1700000000,
+								Mentions:       []string{"200"},
 							},
 							{
 								Id:             2,
 								ConversationId: 123,
 								SenderId:       200,
+								SenderInfo:     &pb.SenderInfo{Name: "Bob", Email: "bob@example.com"},
 								MessageType:    "text",
 								Content:        "hi there",
 								ClientMsgId:    "client-msg-2",
@@ -205,15 +208,18 @@ func TestGetConversationHistory(t *testing.T) {
 						Id:             1,
 						ConversationId: 123,
 						SenderId:       100,
+						SenderInfo:     types.SenderInfo{Name: "Alice", Email: "alice@example.com"},
 						MessageType:    "text",
 						Content:        "hello",
 						ClientMsgId:    "client-msg-1",
 						CreatedAt:      1700000000,
+						Mentions:       []string{"200"},
 					},
 					{
 						Id:             2,
 						ConversationId: 123,
 						SenderId:       200,
+						SenderInfo:     types.SenderInfo{Name: "Bob", Email: "bob@example.com"},
 						MessageType:    "text",
 						Content:        "hi there",
 						ClientMsgId:    "client-msg-2",
@@ -385,4 +391,10 @@ func (m *mockGetHistoryConversationService) UpdateGroupInfo(ctx context.Context,
 }
 func (m *mockGetHistoryConversationService) GetConversationMembersDetail(ctx context.Context, in *pb.GetConversationMembersDetailReq, opts ...grpc.CallOption) (*pb.GetConversationMembersDetailResp, error) {
 	return nil, errors.New("GetConversationMembersDetail not implemented")
+}
+func (m *mockGetHistoryConversationService) UpdateReadReceipt(ctx context.Context, in *pb.UpdateReadReceiptReq, opts ...grpc.CallOption) (*pb.UpdateReadReceiptResp, error) {
+	return nil, errors.New("UpdateReadReceipt not implemented")
+}
+func (m *mockGetHistoryConversationService) ListConversationReadStates(ctx context.Context, in *pb.ListConversationReadStatesReq, opts ...grpc.CallOption) (*pb.ListConversationReadStatesResp, error) {
+	return nil, errors.New("ListConversationReadStates not implemented")
 }

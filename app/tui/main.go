@@ -26,8 +26,11 @@ const (
 	tokenRefreshSkew    = 60 * time.Second
 	minRefreshInterval  = 10 * time.Second
 	presencePollPeriod  = 20 * time.Second
+	wsHeartbeatPeriod   = 20 * time.Second
 	conversationRefresh = 30 * time.Second
 	friendsRefresh      = 45 * time.Second
+	friendAppsRefresh   = 30 * time.Second
+	typingExpirePeriod  = 1 * time.Second
 )
 
 type menuKind int
@@ -35,6 +38,8 @@ type menuKind int
 const (
 	menuMessages menuKind = iota
 	menuFriends
+	menuCreateGroup
+	menuLogout
 )
 
 type focusKind int
@@ -44,7 +49,9 @@ const (
 	focusConversationList
 	focusMessageInput
 	focusFriendSearch
+	focusFriendApplications
 	focusFriendList
+	focusCommand
 )
 
 type profile struct {
@@ -60,8 +67,9 @@ type profile struct {
 }
 
 type conversationView struct {
-	Item     client.ConversationItem
-	Messages []client.MessageItem
+	Item       client.ConversationItem
+	Messages   []client.MessageItem
+	ReadStates []client.ReadStateItem
 }
 
 type appState struct {
@@ -69,10 +77,15 @@ type appState struct {
 	conversations           []conversationView
 	selected                int
 	friends                 []client.FriendshipItem
+	friendApplications      []client.FriendshipItem
 	selectedFriend          int
+	selectedApplication     int
 	friendSearchResults     []client.UserListItem
 	friendSearchResultQuery string
 	presence                map[int64]string
+	typing                  map[int64]map[int64]time.Time
+	lastReadSent            map[int64]int64
+	userLabels              map[int64]string
 }
 
 type model struct {
@@ -85,7 +98,8 @@ type model struct {
 	wsURL      string
 	instanceID string
 	dbPath     string
-	events     chan string
+	events   chan string
+	notifyCh chan wsNotifyMsg
 
 	active   string
 	profiles map[string]*profile
@@ -101,12 +115,38 @@ type model struct {
 	messageInput  string
 	friendSearch  string
 	autoLoginLine string
-	logs          []string
+	phase         appPhase
+	authMode      authMode
+	authField     authField
+	authEmail     string
+	authPassword  string
+	authUsername  string
+	authStatus    string
+	commandMode      bool
+	overlay          overlayKind
+	groupName         string
+	groupField        groupField
+	groupCandidates   []pickUser
+	groupMemberCursor int
+	overlayStatus       string
+	lastTypingNotify      time.Time
+	mentionPickerActive   bool
+	mentionCursor         int
+	mentionCandidates     []pickUser
+	pendingMentions       []string
+	mentionMembersCache   map[int64][]pickUser
+	logs                  []string
 }
 
 type resultMsg struct{ line string }
 type eventMsg struct{ line string }
 type tickMsg struct{ kind string }
+
+// wsNotifyMsg applies WS-driven state updates on the Bubble Tea goroutine.
+type wsNotifyMsg struct {
+	apply func(*model)
+	log   string
+}
 
 type appConfig struct {
 	Gateway    string
@@ -250,15 +290,22 @@ func newModel(parent context.Context, cfg appConfig, store *Store) (model, error
 		instanceID:   cfg.InstanceID,
 		dbPath:       cfg.DBPath,
 		events:       make(chan string, 128),
+		notifyCh:     make(chan wsNotifyMsg, 128),
 		active:       "default",
 		profiles:     map[string]*profile{"default": p},
 		state:        &appState{conversations: views, presence: presence},
 		windowWidth:  120,
 		windowHeight: 40,
+		phase:     phaseAuth,
+		authMode:  authLogin,
+		authField: authFieldEmail,
 		logs: []string{
-			"AIM TUI ready. --email/--password 自动登录；↑/↓ 选择会话；send <text> 发送；Ctrl+C 退出。",
+			"AIM TUI ready. 未登录时显示注册/登录页；/ 进入命令模式。",
 			"REST=" + cfg.Gateway + " WS=" + cfg.WSURL + " instance=" + cfg.InstanceID + " db=" + cfg.DBPath,
 		},
+	}
+	if p.AccessToken != "" {
+		m.phase = phaseMain
 	}
 	if cfg.Email != "" || cfg.Password != "" {
 		if cfg.Email == "" || cfg.Password == "" {
@@ -271,10 +318,22 @@ func newModel(parent context.Context, cfg appConfig, store *Store) (model, error
 }
 
 func (m model) Init() tea.Cmd {
-	cmds := []tea.Cmd{waitEvent(m.events), tickEvery("refresh", minRefreshInterval), tickEvery("presence", presencePollPeriod), tickEvery("conversations", 2*time.Second), tickEvery("friends", 3*time.Second)}
+	cmds := []tea.Cmd{
+		waitEvent(m.events),
+		waitNotify(m.notifyCh),
+		tickEvery("refresh", minRefreshInterval),
+		tickEvery("presence", presencePollPeriod),
+		tickEvery("heartbeat", wsHeartbeatPeriod),
+		tickEvery("conversations", conversationRefresh),
+		tickEvery("friends", friendsRefresh),
+		tickEvery("friend-apps", friendAppsRefresh),
+		tickEvery("typing", typingExpirePeriod),
+	}
 	if m.autoLoginLine != "" {
 		line := m.autoLoginLine
 		cmds = append(cmds, func() tea.Msg { return resultMsg{line: "AUTO " + line} })
+	} else if m.phase == phaseMain {
+		cmds = append(cmds, m.async(func(ctx context.Context) string { return m.cmdBootstrapSession(ctx) }))
 	}
 	return tea.Batch(cmds...)
 }
@@ -285,13 +344,54 @@ func waitEvent(ch <-chan string) tea.Cmd {
 	}
 }
 
+func waitNotify(ch <-chan wsNotifyMsg) tea.Cmd {
+	return func() tea.Msg {
+		return <-ch
+	}
+}
+
+// postEvent delivers a background log line without blocking the Bubble Tea loop.
+func (m *model) postEvent(line string) {
+	if m == nil || line == "" || m.events == nil {
+		return
+	}
+	select {
+	case m.events <- line:
+	default:
+	}
+}
+
 func tickEvery(kind string, d time.Duration) tea.Cmd {
 	return tea.Tick(d, func(time.Time) tea.Msg { return tickMsg{kind: kind} })
+}
+
+func (m model) tickContinue(kind string) tea.Cmd {
+	switch kind {
+	case "refresh":
+		return tickEvery("refresh", minRefreshInterval)
+	case "presence":
+		return tickEvery("presence", presencePollPeriod)
+	case "conversations":
+		return tickEvery("conversations", conversationRefresh)
+	case "friends":
+		return tickEvery("friends", friendsRefresh)
+	case "friend-apps":
+		return tickEvery("friend-apps", friendAppsRefresh)
+	case "heartbeat":
+		return tickEvery("heartbeat", wsHeartbeatPeriod)
+	case "typing":
+		return tickEvery("typing", typingExpirePeriod)
+	default:
+		return nil
+	}
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tickMsg:
+		if m.phase != phaseMain || !m.isLoggedIn() {
+			return m, m.tickContinue(msg.kind)
+		}
 		switch msg.kind {
 		case "refresh":
 			return m, tea.Batch(tickEvery("refresh", minRefreshInterval), m.async(func(ctx context.Context) string { return m.cmdAutoRefresh(ctx) }))
@@ -301,6 +401,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Batch(tickEvery("conversations", conversationRefresh), m.async(func(ctx context.Context) string { return m.cmdConversations(ctx) }))
 		case "friends":
 			return m, tea.Batch(tickEvery("friends", friendsRefresh), m.async(func(ctx context.Context) string { return m.cmdFriendList(ctx) }))
+		case "friend-apps":
+			return m, tea.Batch(tickEvery("friend-apps", friendAppsRefresh), m.async(func(ctx context.Context) string { return m.cmdFriendApplications(ctx) }))
+		case "heartbeat":
+			return m, tea.Batch(tickEvery("heartbeat", wsHeartbeatPeriod), m.async(func(ctx context.Context) string { return m.cmdWSHeartbeat(ctx) }))
+		case "typing":
+			m.pruneTyping()
+			return m, tickEvery("typing", typingExpirePeriod)
 		}
 	case tea.WindowSizeMsg:
 		m.windowWidth = msg.Width
@@ -309,20 +416,53 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case eventMsg:
 		m.addLog(msg.line)
 		return m, waitEvent(m.events)
+	case wsNotifyMsg:
+		if msg.apply != nil {
+			msg.apply(&m)
+		}
+		if msg.log != "" {
+			m.addLog(msg.log)
+		}
+		return m, tea.Batch(waitNotify(m.notifyCh), waitEvent(m.events))
 	case resultMsg:
 		if strings.HasPrefix(msg.line, "AUTO ") {
 			line := strings.TrimPrefix(msg.line, "AUTO ")
 			m.addLog("> " + line)
 			cmd := (&m).runCommand(line)
+			return m, tea.Batch(cmd, waitEvent(m.events))
+		}
+		if msg.line != "" {
+			m.handleAsyncResult(msg.line)
+			m.addLog(msg.line)
+		}
+		return m, waitEvent(m.events)
+	case tea.KeyMsg:
+		if m.phase == phaseAuth {
+			return m.handleAuthKey(msg)
+		}
+		if m.overlay != overlayNone {
+			return m.handleOverlayKey(msg)
+		}
+		if handled, cmd := m.handleMentionKey(msg); handled {
 			return m, cmd
 		}
-		m.addLog(msg.line)
-		return m, nil
-	case tea.KeyMsg:
 		switch msg.Type {
-		case tea.KeyCtrlC, tea.KeyEsc:
+		case tea.KeyCtrlC:
 			m.shutdown()
 			return m, tea.Quit
+		case tea.KeyEsc:
+			if m.commandMode {
+				m.commandMode = false
+				m.input = ""
+				return m, nil
+			}
+			m.shutdown()
+			return m, tea.Quit
+		case '/':
+			m.commandMode = true
+			m.focus = focusCommand
+			m.input = ""
+			return m, nil
 		case tea.KeyLeft:
 			m.moveFocus(-1)
 			return m, nil
@@ -330,28 +470,135 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.moveFocus(1)
 			return m, nil
 		case tea.KeyUp:
+			prev := m.state.selected
+			if m.focus == focusConversationList {
+				m.state.mu.RLock()
+				prev = m.state.selected
+				m.state.mu.RUnlock()
+			}
 			m.moveSelection(-1)
+			if m.focus == focusConversationList {
+				m.state.mu.RLock()
+				cur := m.state.selected
+				m.state.mu.RUnlock()
+				if cur != prev {
+					return m, m.onConversationFocused()
+				}
+			}
 			return m, nil
 		case tea.KeyDown:
+			prev := -1
+			if m.focus == focusConversationList {
+				m.state.mu.RLock()
+				prev = m.state.selected
+				m.state.mu.RUnlock()
+			}
 			m.moveSelection(1)
+			if m.focus == focusConversationList {
+				m.state.mu.RLock()
+				cur := m.state.selected
+				m.state.mu.RUnlock()
+				if cur != prev {
+					return m, m.onConversationFocused()
+				}
+			}
 			return m, nil
 		case tea.KeyEnter:
+			if m.commandMode {
+				line := strings.TrimSpace(m.input)
+				m.input = ""
+				m.commandMode = false
+				if line == "" {
+					return m, nil
+				}
+				m.addLog("> " + line)
+				return m, m.runCommand(line)
+			}
 			cmd := m.activateFocusedInput()
 			return m, cmd
 		case tea.KeyBackspace, tea.KeyCtrlH:
 			m.backspaceFocusedInput()
+			if m.focus == focusMessageInput {
+				return m, m.typingNotifyCmd()
+			}
 		case tea.KeySpace:
 			m.appendFocusedInput(" ")
+			if m.focus == focusMessageInput {
+				if m.mentionPickerActive {
+					m.refreshMentionCandidates()
+				}
+				return m, m.typingNotifyCmd()
+			}
 		default:
 			if len(msg.Runes) > 0 {
-				m.appendFocusedInput(string(msg.Runes))
+				switch string(msg.Runes) {
+				case "r", "R":
+					if m.focus == focusFriendApplications && !m.commandMode {
+						return m, m.rejectSelectedApplication()
+					}
+				}
+				added := string(msg.Runes)
+				m.appendFocusedInput(added)
+				if m.focus == focusMessageInput {
+					var cmds []tea.Cmd
+					if strings.Contains(added, "@") {
+						cmds = append(cmds, m.openMentionPicker())
+					} else if m.mentionPickerActive {
+						m.refreshMentionCandidates()
+					}
+					cmds = append(cmds, m.typingNotifyCmd())
+					return m, tea.Batch(cmds...)
+				}
 			}
 		}
 	}
 	return m, nil
 }
 
+func (m *model) rejectSelectedApplication() tea.Cmd {
+	return m.async(func(ctx context.Context) string {
+		m.state.mu.RLock()
+		idx := m.state.selectedApplication
+		apps := m.state.friendApplications
+		m.state.mu.RUnlock()
+		if idx >= len(apps) {
+			return "ERR no application selected"
+		}
+		applicantID := apps[idx].UserID
+		if applicantID == m.currentProfile().UserID {
+			applicantID = apps[idx].FriendID
+		}
+		return m.cmdFriendReject(ctx, []string{"friend-reject", strconv.FormatInt(applicantID, 10)})
+	})
+}
+
+func (m *model) handleAsyncResult(line string) {
+	if strings.HasPrefix(line, "OK logged in") || strings.HasPrefix(line, "OK registered") {
+		m.enterMainPhase()
+		m.authStatus = line
+	}
+	if strings.HasPrefix(line, "OK logout") {
+		m.closeOverlay()
+		m.state.mu.Lock()
+		m.state.conversations = nil
+		m.state.friends = nil
+		m.state.friendApplications = nil
+		m.state.typing = nil
+		m.state.lastReadSent = nil
+		m.state.userLabels = nil
+		m.state.mu.Unlock()
+	}
+	if strings.HasPrefix(line, "ERR ") && m.phase == phaseAuth {
+		m.authStatus = line
+	}
+}
+
 func (m model) View() string {
+	_, bodyWidth, bodyHeight := m.layoutMetrics()
+	if m.phase == phaseAuth {
+		return m.renderAuthPage(bodyWidth, bodyHeight)
+	}
+
 	p := m.currentProfile()
 	wsState := "·"
 	user := "#?"
@@ -359,15 +606,24 @@ func (m model) View() string {
 		if p.WSConnected {
 			wsState = "⚡"
 		}
-		if p.UserID > 0 {
-			user = fmt.Sprintf("#%d", p.UserID)
+		if p.Email != "" {
+			user = p.Email
+		} else if p.UserID > 0 {
+			user = m.userLabelLocked(p.UserID)
 		}
+	}
+
+	if m.overlay != overlayNone {
+		return m.renderOverlay(m.windowWidth, max(12, m.windowHeight))
 	}
 
 	header := styles.title.Render("AIM TUI") + " " + styles.status.Render(fmt.Sprintf("[%s] %s %s", m.instanceID, user, wsState))
 	menuWidth, bodyWidth, bodyHeight := m.layoutMetrics()
 	layout := m.renderPage(menuWidth, bodyWidth, bodyHeight)
-	footer := styles.help.Render("方向键移动焦点｜Enter 提交/切换｜消息页输入直接发送｜好友页搜索后 Enter 搜索｜Ctrl+C 退出")
+	footer := styles.help.Render("←/→ 切换区域｜↑/↓ 选择｜Enter 确认｜/ 命令｜菜单含建群/退出｜Ctrl+C 退出")
+	if m.commandMode {
+		footer = styles.prompt.Render(": ") + m.input + styles.prompt.Render("▌") + "\n" + footer
+	}
 	return header + "\n" + layout + "\n" + footer
 }
 
@@ -378,11 +634,12 @@ func (m model) renderPage(menuWidth, bodyWidth, bodyHeight int) string {
 			styles.right.Width(bodyWidth).Height(bodyHeight).Render(m.renderFriendsPage(bodyWidth, bodyHeight)),
 		)
 	}
-	leftWidth := clampInt(bodyWidth/3, 26, 44)
-	rightWidth := max(30, bodyWidth-leftWidth-1)
+	convWidth := clampInt(bodyWidth/3, 22, 38)
+	chatWidth := max(30, bodyWidth-convWidth-1)
 	return lipgloss.JoinHorizontal(lipgloss.Top,
-		styles.left.Width(leftWidth).Height(bodyHeight).Render(m.renderConversationList(leftWidth, bodyHeight)),
-		styles.right.Width(rightWidth).Height(bodyHeight).Render(m.renderConversationWindow(rightWidth, bodyHeight)),
+		styles.left.Width(menuWidth).Height(bodyHeight).Render(m.renderMenu(menuWidth, bodyHeight)),
+		styles.left.Width(convWidth).Height(bodyHeight).Render(m.renderConversationList(convWidth, bodyHeight)),
+		styles.right.Width(chatWidth).Height(bodyHeight).Render(m.renderConversationWindow(chatWidth, bodyHeight)),
 	)
 }
 
@@ -393,11 +650,17 @@ func (m model) renderMenu(menuWidth, bodyHeight int) string {
 	}{
 		{menuMessages, "消息"},
 		{menuFriends, "好友"},
+		{menuCreateGroup, "创建群聊"},
+		{menuLogout, "退出登录"},
 	}
 	rows := []string{styles.title.Render("菜单")}
 	for _, item := range items {
 		line := "  " + item.label
-		if item.kind == m.activeMenu {
+		pageKind := m.activeMenu
+		if pageKind == menuCreateGroup || pageKind == menuLogout {
+			pageKind = menuMessages
+		}
+		if item.kind == pageKind && item.kind != menuCreateGroup && item.kind != menuLogout {
 			line = "› " + item.label
 		}
 		if m.focus == focusMenu && item.kind == m.activeMenu {
@@ -405,7 +668,7 @@ func (m model) renderMenu(menuWidth, bodyHeight int) string {
 		}
 		rows = append(rows, line)
 	}
-	rows = append(rows, "", styles.muted.Render("←/→ 切换区域\n↑/↓ 选择菜单"))
+	rows = append(rows, "", styles.muted.Render("↑/↓ 选择\nEnter 进入/执行"))
 	return fitLines(rows, bodyHeight)
 }
 
@@ -429,13 +692,13 @@ func (m model) renderConversationList(width, bodyHeight int) string {
 		dot := m.conversationPresenceDot(conv.Item)
 		name := conv.Item.Name
 		if name == "" {
-			name = conv.Item.ConversationType + " #" + strconv.FormatInt(conv.Item.ConversationID, 10)
+			name = conv.Item.ConversationType
 		}
 		last := ""
 		if len(conv.Messages) > 0 {
 			last = truncate(conv.Messages[len(conv.Messages)-1].Content, max(8, width-10))
 		}
-		line := fmt.Sprintf("%s %s\n  #%d %s", dot, truncate(name, max(8, width-10)), conv.Item.ConversationID, styles.muted.Render(last))
+		line := fmt.Sprintf("%s %s\n  %s", dot, truncate(name, max(8, width-10)), styles.muted.Render(last))
 		if i == m.state.selected {
 			line = styles.selected.Render(line)
 		}
@@ -454,11 +717,17 @@ func (m model) renderConversationWindow(width, bodyHeight int) string {
 	conv := m.state.conversations[m.state.selected]
 	name := conv.Item.Name
 	if name == "" {
-		name = fmt.Sprintf("%s #%d", conv.Item.ConversationType, conv.Item.ConversationID)
+		name = conv.Item.ConversationType
 	}
 	title := styles.title.Render(name) + styles.muted.Render(fmt.Sprintf("  members=%v", conv.Item.MemberIDs))
 	rows := []string{title}
-	messageBudget := bodyHeight - 4
+	if line := m.formatTypingLine(conv.Item.ConversationID); line != "" {
+		rows = append(rows, line)
+	}
+	if line := m.formatReadStatesLine(conv.ReadStates); line != "" {
+		rows = append(rows, line)
+	}
+	messageBudget := bodyHeight - 6
 	if len(conv.Messages) == 0 {
 		rows = append(rows, styles.muted.Render("暂无本地消息缓存；输入 history 拉取历史。"))
 	} else {
@@ -467,7 +736,7 @@ func (m model) renderConversationWindow(width, bodyHeight int) string {
 			if len(msgRows) > 0 {
 				msgRows = append(msgRows, styles.muted.Render("────────"))
 			}
-			msgRows = append(msgRows, strings.Split(m.renderMessage(msg), "\n")...)
+			msgRows = append(msgRows, strings.Split(m.renderMessage(msg, conv), "\n")...)
 		}
 		rows = append(rows, trimLines(msgRows, max(1, messageBudget))...)
 	}
@@ -478,6 +747,9 @@ func (m model) renderConversationWindow(width, bodyHeight int) string {
 		inputTitle = styles.title.Render(inputTitle)
 	}
 	rows = append(rows, styles.muted.Render("────────────────────────────────────────────────────────────────────────"))
+	if mentionRows := m.renderMentionPickerLines(width); len(mentionRows) > 0 {
+		rows = append(rows, mentionRows...)
+	}
 	rows = append(rows, inputTitle+" "+styles.prompt.Render("> ")+truncate(m.messageInput, max(0, width-8)))
 	logs := m.recentLogs()
 	if len(logs) > 0 {
@@ -511,7 +783,11 @@ func (m *model) moveFocus(delta int) {
 
 func (m model) focusChain() []focusKind {
 	if m.activeMenu == menuFriends {
-		return []focusKind{focusMenu, focusFriendSearch, focusFriendList}
+		chain := []focusKind{focusMenu, focusFriendSearch}
+		if len(m.state.friendApplications) > 0 {
+			chain = append(chain, focusFriendApplications)
+		}
+		return append(chain, focusFriendList)
 	}
 	return []focusKind{focusMenu, focusConversationList, focusMessageInput}
 }
@@ -521,15 +797,20 @@ func (m *model) moveSelection(delta int) {
 	defer m.state.mu.Unlock()
 	switch m.focus {
 	case focusMenu:
-		if delta < 0 {
-			m.activeMenu = menuMessages
-			m.focus = focusConversationList
-		} else if delta > 0 {
-			m.activeMenu = menuFriends
-			m.focus = focusFriendSearch
+		order := []menuKind{menuMessages, menuFriends, menuCreateGroup, menuLogout}
+		idx := 0
+		for i, k := range order {
+			if k == m.activeMenu {
+				idx = i
+				break
+			}
 		}
+		idx = clampIndex(idx+delta, len(order))
+		m.activeMenu = order[idx]
 	case focusConversationList:
 		m.state.selected = clampIndex(m.state.selected+delta, len(m.state.conversations))
+	case focusFriendApplications:
+		m.state.selectedApplication = clampIndex(m.state.selectedApplication+delta, len(m.state.friendApplications))
 	case focusFriendList:
 		m.state.selectedFriend = clampIndex(m.state.selectedFriend+delta, m.friendListLengthLocked())
 	}
@@ -539,12 +820,15 @@ func (m *model) activateFocusedInput() tea.Cmd {
 	switch m.focus {
 	case focusMessageInput:
 		text := strings.TrimSpace(m.messageInput)
+		mentions := append([]string(nil), m.pendingMentions...)
 		m.messageInput = ""
+		m.pendingMentions = nil
+		m.closeMentionPicker()
 		if text == "" {
 			return nil
 		}
 		m.addLog("> send " + text)
-		return m.async(func(ctx context.Context) string { return m.cmdSendSelected(ctx, []string{"send", text}) })
+		return m.async(func(ctx context.Context) string { return m.cmdSendSelectedWithMentions(ctx, text, mentions) })
 	case focusFriendSearch:
 		text := strings.TrimSpace(m.friendSearch)
 		if text == "" {
@@ -552,19 +836,89 @@ func (m *model) activateFocusedInput() tea.Cmd {
 		}
 		m.addLog("> search " + text)
 		return m.async(func(ctx context.Context) string { return m.cmdSearch(ctx, []string{"search", text}) })
+	case focusFriendApplications:
+		return m.async(func(ctx context.Context) string {
+			m.state.mu.RLock()
+			idx := m.state.selectedApplication
+			apps := m.state.friendApplications
+			m.state.mu.RUnlock()
+			if idx >= len(apps) {
+				return "ERR no application selected"
+			}
+			applicantID := apps[idx].UserID
+			if applicantID == m.currentProfile().UserID {
+				applicantID = apps[idx].FriendID
+			}
+			return m.cmdFriendAccept(ctx, []string{"friend-accept", strconv.FormatInt(applicantID, 10)})
+		})
+	case focusFriendList:
+		return m.activateFriendList()
 	case focusMenu:
-		if m.activeMenu == menuFriends {
+		switch m.activeMenu {
+		case menuFriends:
 			m.focus = focusFriendSearch
-		} else {
+		case menuCreateGroup:
+			return m.openCreateGroupOverlay()
+		case menuLogout:
+			return m.async(func(ctx context.Context) string { return m.cmdLogout(ctx) })
+		default:
 			m.focus = focusConversationList
+			return m.onConversationFocused()
 		}
 	case focusConversationList:
-		return m.runCommand("history")
+		return m.onConversationFocused()
 	}
 	return nil
 }
 
+func (m *model) activateFriendList() tea.Cmd {
+	m.state.mu.RLock()
+	query := strings.TrimSpace(m.friendSearch)
+	isSearch := query != "" && query == m.state.friendSearchResultQuery && len(m.state.friendSearchResults) > 0
+	idx := m.state.selectedFriend
+	m.state.mu.RUnlock()
+
+	if isSearch {
+		m.state.mu.RLock()
+		if idx >= len(m.state.friendSearchResults) {
+			m.state.mu.RUnlock()
+			return nil
+		}
+		userID := m.state.friendSearchResults[idx].ID
+		m.state.mu.RUnlock()
+		return m.async(func(ctx context.Context) string {
+			return m.cmdFriendAdd(ctx, []string{"friend-add", userID})
+		})
+	}
+
+	m.state.mu.RLock()
+	friends := m.filteredFriendsLocked()
+	if idx >= len(friends) {
+		m.state.mu.RUnlock()
+		return nil
+	}
+	f := friends[idx]
+	friendID := f.FriendID
+	if friendID == m.currentProfile().UserID {
+		friendID = f.UserID
+	}
+	m.state.mu.RUnlock()
+	return m.async(func(ctx context.Context) string {
+		msg := m.cmdConvCreate(ctx, []string{"conv-create", strconv.FormatInt(friendID, 10), fmt.Sprintf("chat-%d", friendID)})
+		if strings.HasPrefix(msg, "OK ") {
+			m.activeMenu = menuMessages
+			m.focus = focusConversationList
+			_ = m.cmdConversations(ctx)
+		}
+		return msg
+	})
+}
+
 func (m *model) appendFocusedInput(s string) {
+	if m.commandMode {
+		m.input += s
+		return
+	}
 	switch m.focus {
 	case focusMessageInput:
 		m.messageInput += s
@@ -576,9 +930,20 @@ func (m *model) appendFocusedInput(s string) {
 }
 
 func (m *model) backspaceFocusedInput() {
+	if m.commandMode {
+		m.input = trimLastRune(m.input)
+		return
+	}
 	switch m.focus {
 	case focusMessageInput:
 		m.messageInput = trimLastRune(m.messageInput)
+		if m.mentionPickerActive {
+			if !strings.Contains(m.messageInput, "@") {
+				m.closeMentionPicker()
+			} else {
+				m.refreshMentionCandidates()
+			}
+		}
 	case focusFriendSearch:
 		m.friendSearch = trimLastRune(m.friendSearch)
 	default:
@@ -586,14 +951,30 @@ func (m *model) backspaceFocusedInput() {
 	}
 }
 
-func (m model) renderMessage(msg client.MessageItem) string {
-	sender := strconv.FormatInt(msg.SenderID, 10)
-	if msg.SenderID == m.currentProfile().UserID {
-		sender = "me"
+func (m model) renderMessage(msg client.MessageItem, conv conversationView) string {
+	if msg.IsSystem || msg.MessageType == "system" {
+		return styles.muted.Render(fmt.Sprintf("[系统] %s", msg.Content))
+	}
+	sender := m.userLabelLocked(msg.SenderID)
+	if name := displayNameFromSenderInfo(msg.SenderInfo); name != "" {
+		sender = name
+	}
+	selfID := int64(0)
+	if p := m.currentProfile(); p != nil {
+		selfID = p.UserID
+	}
+	if msg.SenderID == selfID {
+		sender = "我"
 	}
 	when := formatUnixMillis(msg.CreatedAt)
 	body := fmt.Sprintf("时间：%s\n发送人：%s\n内容：%s", when, sender, msg.Content)
-	if msg.SenderID == m.currentProfile().UserID {
+	if mentionLine := formatMentionLabels(&m, msg.Mentions); mentionLine != "" {
+		body += "\n提及：" + mentionLine
+	}
+	if suffix := m.messageReadSuffix(msg.ID, selfID, conv.ReadStates); suffix != "" {
+		body += suffix
+	}
+	if msg.SenderID == selfID {
 		return styles.messageMine.Render(body)
 	}
 	return body
@@ -609,13 +990,36 @@ func (m model) renderFriendsPage(width, bodyHeight int) string {
 	} else {
 		searchTitle = styles.title.Render(searchTitle)
 	}
+	appTitle := "好友申请"
+	if m.focus == focusFriendApplications {
+		appTitle = styles.selected.Render(appTitle)
+	} else {
+		appTitle = styles.title.Render(appTitle)
+	}
 	listTitle := "好友列表"
 	if m.focus == focusFriendList {
 		listTitle = styles.selected.Render(listTitle)
 	} else {
 		listTitle = styles.title.Render(listTitle)
 	}
-	rows := []string{searchTitle + " " + styles.prompt.Render("> ") + truncate(m.friendSearch, max(0, width-8)), "", listTitle}
+	rows := []string{searchTitle + " " + styles.prompt.Render("> ") + truncate(m.friendSearch, max(0, width-8)), "", appTitle}
+	if len(m.state.friendApplications) == 0 {
+		rows = append(rows, styles.muted.Render("  暂无待处理申请"))
+	} else {
+		for i, app := range m.state.friendApplications {
+			applicant := app.UserID
+			if applicant == m.currentProfile().UserID {
+				applicant = app.FriendID
+			}
+			line := fmt.Sprintf("  %s (%s)", m.userLabelLocked(applicant), app.Status)
+			if i == m.state.selectedApplication && m.focus == focusFriendApplications {
+				line = styles.selected.Render(line)
+			}
+			rows = append(rows, line)
+		}
+		rows = append(rows, styles.muted.Render("  Enter 接受｜r 拒绝"))
+	}
+	rows = append(rows, "", listTitle)
 	if query := strings.TrimSpace(m.friendSearch); query != "" && query == m.state.friendSearchResultQuery {
 		if len(m.state.friendSearchResults) == 0 {
 			rows = append(rows, styles.muted.Render("暂无搜索结果；可继续修改关键词后回车。"))
@@ -623,12 +1027,17 @@ func (m model) renderFriendsPage(width, bodyHeight int) string {
 		}
 		selected := clampIndex(m.state.selectedFriend, len(m.state.friendSearchResults))
 		for i, u := range m.state.friendSearchResults {
-			line := fmt.Sprintf("user=%s email=%s avatar=%s", u.ID, u.Email, u.Avatar)
-			if i == selected {
+			label := displayNameFromListItem(u)
+			if label == "" {
+				label = "未知用户"
+			}
+			line := "  " + label
+			if i == selected && m.focus == focusFriendList {
 				line = styles.selected.Render(line)
 			}
 			rows = append(rows, line)
 		}
+		rows = append(rows, styles.muted.Render("Enter 添加好友"))
 		return fitLines(rows, bodyHeight)
 	}
 	friends := m.filteredFriendsLocked()
@@ -646,12 +1055,13 @@ func (m model) renderFriendsPage(width, bodyHeight int) string {
 		if m.state.presence[friendID] == "online" {
 			dot = styles.onlineDot.Render("●")
 		}
-		line := fmt.Sprintf("%s user=%d status=%s", dot, friendID, f.Status)
-		if i == selected {
+		line := fmt.Sprintf("%s %s", dot, m.userLabelLocked(friendID))
+		if i == selected && m.focus == focusFriendList {
 			line = styles.selected.Render(line)
 		}
 		rows = append(rows, line)
 	}
+	rows = append(rows, styles.muted.Render("Enter 发起私聊"))
 	return fitLines(rows, bodyHeight)
 }
 

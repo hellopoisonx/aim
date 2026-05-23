@@ -17,7 +17,7 @@
 ## 本地规则
 
 - `interfaces.go` 中的 `idempotencyStore`、`messagePublisher` 是测试缝，不要绕过后直接在测试中打 Redis/Kafka。
-- 新字段进入 Transfer event 时，同步更新 logic archive consumer、frontend/gateway 需要的 ACK 或 push payload。
+- 新字段进入 Transfer event 时，同步更新 logic archive consumer、gateway/客户端需要的 ACK 或 push payload。
 - 权限失败、参数错误、限流等业务拒绝返回 `errorx.CodeError`；Kafka/Redis/Snowflake 基础设施失败返回 `CodeInternal`。
 - core 可以调用 logic 的 pb/client；logic 绝不能导入 core。
 - 幂等键 TTL 当前为 24h；修改 TTL 需要更新重复发送测试。

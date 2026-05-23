@@ -42,7 +42,7 @@ service AuthService {
 message RegisterReq {
   string email           = 1; // 邮箱（唯一标识）
   string password       = 2; // 密码（已哈希）
-  string username       = 3; // 用户名（昵称）
+  string username       = 3; // 用户名（昵称，必填）
   string avatar          = 4; // 用户头像 URL
   string device_id      = 5; // 设备 ID
 }

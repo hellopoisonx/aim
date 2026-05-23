@@ -10,17 +10,19 @@ import (
 
 type Config struct {
 	zrpc.RpcServerConf
-	Nacos                          nacos.Config   `json:",optional"`
-	KqPusherConf                   KqPusherConf   `json:",optional"`
-	KqConsumerConf                 kq.KqConf      `json:",optional"`
-	PresenceConsumerConf           kq.KqConf      `json:",optional"`
-	TypingConsumerConf             kq.KqConf      `json:",optional"`
-	ConversationEventConsumerConf  kq.KqConf      `json:",optional"`
-	LogicRpc                       nacos.Config   `json:",optional"`
-	GatewayRpc                     GatewayRpcConf `json:",optional"`
-	CacheRedis                     RedisConf      `json:",optional"`
-	SnowflakeMachineID             int64          `json:",default=1"`
-	Presence                       PresenceConf   `json:",optional"`
+	Nacos                         nacos.Config   `json:",optional"`
+	KqPusherConf                  KqPusherConf   `json:",optional"`
+	KqConsumerConf                kq.KqConf      `json:",optional"`
+	PresenceConsumerConf          kq.KqConf      `json:",optional"`
+	TypingConsumerConf            kq.KqConf      `json:",optional"`
+	ReadReceiptConsumerConf       kq.KqConf      `json:",optional"`
+	ConversationEventConsumerConf kq.KqConf      `json:",optional"`
+	LogicRpc                      nacos.Config   `json:",optional"`
+	GatewayRpc                    GatewayRpcConf `json:",optional"`
+	CacheRedis                    RedisConf         `json:",optional"`
+	SnowflakeMachineID            int64             `json:",default=1"`
+	Presence                      PresenceConf      `json:",optional"`
+	TransferQuota                 TransferQuotaConf `json:",optional"`
 }
 
 type RedisConf struct {
@@ -35,10 +37,25 @@ type KqPusherConf struct {
 }
 
 type GatewayRpcConf struct {
-	ServiceName string `json:",default=gateway.rpc"`
-	Target      string `json:",default=127.0.0.1:9090"`
+	ServiceName string                 `json:",default=gateway.rpc"`
+	Target      string                 `json:",default=127.0.0.1:9090"`
+	Nodes       []GatewayNodeTarget    `json:",optional"`
+}
+
+// GatewayNodeTarget configures a per-node gateway client. NodeID must match
+// the AIM_GATEWAY_NODE_ID set on the corresponding gateway instance.
+type GatewayNodeTarget struct {
+	NodeID string `json:"node_id"`
+	Target string `json:"target"`
 }
 
 type PresenceConf struct {
 	TTLSeconds int `json:",default=30"`
+}
+
+// TransferQuotaConf configures the Redis sliding-window rate limit applied in
+// core.Transfer. MaxRequests<=0 disables the limiter.
+type TransferQuotaConf struct {
+	WindowSeconds int   `json:",default=10"`
+	MaxRequests   int64 `json:",default=0"`
 }

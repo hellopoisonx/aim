@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	auth "github.com/hellopoisonx/aim/app/gateway/api/internal/handler/auth"
+	bot "github.com/hellopoisonx/aim/app/gateway/api/internal/handler/bot"
 	conversations "github.com/hellopoisonx/aim/app/gateway/api/internal/handler/conversations"
 	friends "github.com/hellopoisonx/aim/app/gateway/api/internal/handler/friends"
 	presence "github.com/hellopoisonx/aim/app/gateway/api/internal/handler/presence"
@@ -41,6 +42,45 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 			},
 		},
 		rest.WithPrefix("/api/auth"),
+	)
+
+	server.AddRoutes(
+		rest.WithMiddlewares(
+			[]rest.Middleware{serverCtx.BotAuth},
+			[]rest.Route{
+				{
+					Method:  http.MethodGet,
+					Path:    "/conversations",
+					Handler: bot.BotListConversationsHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodGet,
+					Path:    "/me",
+					Handler: bot.BotGetMeHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/messages",
+					Handler: bot.BotSendMessageHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodGet,
+					Path:    "/webhook",
+					Handler: bot.BotGetWebhookHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPut,
+					Path:    "/webhook",
+					Handler: bot.BotSetWebhookHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodDelete,
+					Path:    "/webhook",
+					Handler: bot.BotDeleteWebhookHandler(serverCtx),
+				},
+			}...,
+		),
+		rest.WithPrefix("/api/bot/v1"),
 	)
 
 	server.AddRoutes(

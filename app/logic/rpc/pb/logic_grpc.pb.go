@@ -479,6 +479,8 @@ const (
 	ConversationService_DismissGroup_FullMethodName                 = "/logic.ConversationService/DismissGroup"
 	ConversationService_UpdateGroupInfo_FullMethodName              = "/logic.ConversationService/UpdateGroupInfo"
 	ConversationService_GetConversationMembersDetail_FullMethodName = "/logic.ConversationService/GetConversationMembersDetail"
+	ConversationService_UpdateReadReceipt_FullMethodName            = "/logic.ConversationService/UpdateReadReceipt"
+	ConversationService_ListConversationReadStates_FullMethodName   = "/logic.ConversationService/ListConversationReadStates"
 )
 
 // ConversationServiceClient is the client API for ConversationService service.
@@ -495,6 +497,11 @@ type ConversationServiceClient interface {
 	DismissGroup(ctx context.Context, in *DismissGroupReq, opts ...grpc.CallOption) (*DismissGroupResp, error)
 	UpdateGroupInfo(ctx context.Context, in *UpdateGroupInfoReq, opts ...grpc.CallOption) (*UpdateGroupInfoResp, error)
 	GetConversationMembersDetail(ctx context.Context, in *GetConversationMembersDetailReq, opts ...grpc.CallOption) (*GetConversationMembersDetailResp, error)
+	// UpdateReadReceipt upserts the caller's last-read cursor for a conversation.
+	// Validates membership and ensures last_read_message_id only advances monotonically.
+	UpdateReadReceipt(ctx context.Context, in *UpdateReadReceiptReq, opts ...grpc.CallOption) (*UpdateReadReceiptResp, error)
+	// ListConversationReadStates returns the per-member last-read cursors for a conversation.
+	ListConversationReadStates(ctx context.Context, in *ListConversationReadStatesReq, opts ...grpc.CallOption) (*ListConversationReadStatesResp, error)
 }
 
 type conversationServiceClient struct {
@@ -605,6 +612,26 @@ func (c *conversationServiceClient) GetConversationMembersDetail(ctx context.Con
 	return out, nil
 }
 
+func (c *conversationServiceClient) UpdateReadReceipt(ctx context.Context, in *UpdateReadReceiptReq, opts ...grpc.CallOption) (*UpdateReadReceiptResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UpdateReadReceiptResp)
+	err := c.cc.Invoke(ctx, ConversationService_UpdateReadReceipt_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *conversationServiceClient) ListConversationReadStates(ctx context.Context, in *ListConversationReadStatesReq, opts ...grpc.CallOption) (*ListConversationReadStatesResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListConversationReadStatesResp)
+	err := c.cc.Invoke(ctx, ConversationService_ListConversationReadStates_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ConversationServiceServer is the server API for ConversationService service.
 // All implementations must embed UnimplementedConversationServiceServer
 // for forward compatibility.
@@ -619,6 +646,11 @@ type ConversationServiceServer interface {
 	DismissGroup(context.Context, *DismissGroupReq) (*DismissGroupResp, error)
 	UpdateGroupInfo(context.Context, *UpdateGroupInfoReq) (*UpdateGroupInfoResp, error)
 	GetConversationMembersDetail(context.Context, *GetConversationMembersDetailReq) (*GetConversationMembersDetailResp, error)
+	// UpdateReadReceipt upserts the caller's last-read cursor for a conversation.
+	// Validates membership and ensures last_read_message_id only advances monotonically.
+	UpdateReadReceipt(context.Context, *UpdateReadReceiptReq) (*UpdateReadReceiptResp, error)
+	// ListConversationReadStates returns the per-member last-read cursors for a conversation.
+	ListConversationReadStates(context.Context, *ListConversationReadStatesReq) (*ListConversationReadStatesResp, error)
 	mustEmbedUnimplementedConversationServiceServer()
 }
 
@@ -658,6 +690,12 @@ func (UnimplementedConversationServiceServer) UpdateGroupInfo(context.Context, *
 }
 func (UnimplementedConversationServiceServer) GetConversationMembersDetail(context.Context, *GetConversationMembersDetailReq) (*GetConversationMembersDetailResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetConversationMembersDetail not implemented")
+}
+func (UnimplementedConversationServiceServer) UpdateReadReceipt(context.Context, *UpdateReadReceiptReq) (*UpdateReadReceiptResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UpdateReadReceipt not implemented")
+}
+func (UnimplementedConversationServiceServer) ListConversationReadStates(context.Context, *ListConversationReadStatesReq) (*ListConversationReadStatesResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListConversationReadStates not implemented")
 }
 func (UnimplementedConversationServiceServer) mustEmbedUnimplementedConversationServiceServer() {}
 func (UnimplementedConversationServiceServer) testEmbeddedByValue()                             {}
@@ -860,6 +898,42 @@ func _ConversationService_GetConversationMembersDetail_Handler(srv interface{}, 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ConversationService_UpdateReadReceipt_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateReadReceiptReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ConversationServiceServer).UpdateReadReceipt(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ConversationService_UpdateReadReceipt_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ConversationServiceServer).UpdateReadReceipt(ctx, req.(*UpdateReadReceiptReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ConversationService_ListConversationReadStates_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListConversationReadStatesReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ConversationServiceServer).ListConversationReadStates(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ConversationService_ListConversationReadStates_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ConversationServiceServer).ListConversationReadStates(ctx, req.(*ListConversationReadStatesReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ConversationService_ServiceDesc is the grpc.ServiceDesc for ConversationService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -906,6 +980,14 @@ var ConversationService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetConversationMembersDetail",
 			Handler:    _ConversationService_GetConversationMembersDetail_Handler,
+		},
+		{
+			MethodName: "UpdateReadReceipt",
+			Handler:    _ConversationService_UpdateReadReceipt_Handler,
+		},
+		{
+			MethodName: "ListConversationReadStates",
+			Handler:    _ConversationService_ListConversationReadStates_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
@@ -1178,6 +1260,330 @@ var FriendshipService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListFriends",
 			Handler:    _FriendshipService_ListFriends_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "app/logic/rpc/logic.proto",
+}
+
+const (
+	BotService_ValidateBotToken_FullMethodName     = "/logic.BotService/ValidateBotToken"
+	BotService_GetBotProfile_FullMethodName        = "/logic.BotService/GetBotProfile"
+	BotService_ListBotConversations_FullMethodName = "/logic.BotService/ListBotConversations"
+	BotService_GetBotWebhook_FullMethodName        = "/logic.BotService/GetBotWebhook"
+	BotService_SetBotWebhook_FullMethodName        = "/logic.BotService/SetBotWebhook"
+	BotService_DeleteBotWebhook_FullMethodName     = "/logic.BotService/DeleteBotWebhook"
+)
+
+// BotServiceClient is the client API for BotService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+//
+// BotService manages OpenAPI bots: token validation, profile lookup,
+// conversation listing for the authenticated bot, and webhook configuration.
+// gateway calls these RPCs after the BotAuth middleware has resolved a
+// `Authorization: Bot <token>` header into a bot identity.
+type BotServiceClient interface {
+	// ValidateBotToken resolves a plaintext token into a bot identity.
+	// Returns NotFound when the token hash does not match an active row.
+	// Used by the gateway BotAuth middleware on every Bot OpenAPI request.
+	ValidateBotToken(ctx context.Context, in *ValidateBotTokenReq, opts ...grpc.CallOption) (*ValidateBotTokenResp, error)
+	// GetBotProfile returns the bot's user_info snapshot for `/api/bot/v1/me`.
+	GetBotProfile(ctx context.Context, in *GetBotProfileReq, opts ...grpc.CallOption) (*GetBotProfileResp, error)
+	// ListBotConversations returns every conversation the bot is a member of.
+	ListBotConversations(ctx context.Context, in *ListBotConversationsReq, opts ...grpc.CallOption) (*ListBotConversationsResp, error)
+	// GetBotWebhook returns the bot's webhook configuration without the
+	// plaintext signing secret (only secret_hash is stored server-side).
+	GetBotWebhook(ctx context.Context, in *GetBotWebhookReq, opts ...grpc.CallOption) (*GetBotWebhookResp, error)
+	// SetBotWebhook upserts the bot's webhook configuration. The plaintext
+	// `secret` is hashed before persistence; the same plaintext value is
+	// returned to the caller so they can store it client-side once.
+	SetBotWebhook(ctx context.Context, in *SetBotWebhookReq, opts ...grpc.CallOption) (*SetBotWebhookResp, error)
+	// DeleteBotWebhook removes the bot's webhook configuration entirely.
+	DeleteBotWebhook(ctx context.Context, in *DeleteBotWebhookReq, opts ...grpc.CallOption) (*DeleteBotWebhookResp, error)
+}
+
+type botServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewBotServiceClient(cc grpc.ClientConnInterface) BotServiceClient {
+	return &botServiceClient{cc}
+}
+
+func (c *botServiceClient) ValidateBotToken(ctx context.Context, in *ValidateBotTokenReq, opts ...grpc.CallOption) (*ValidateBotTokenResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ValidateBotTokenResp)
+	err := c.cc.Invoke(ctx, BotService_ValidateBotToken_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *botServiceClient) GetBotProfile(ctx context.Context, in *GetBotProfileReq, opts ...grpc.CallOption) (*GetBotProfileResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetBotProfileResp)
+	err := c.cc.Invoke(ctx, BotService_GetBotProfile_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *botServiceClient) ListBotConversations(ctx context.Context, in *ListBotConversationsReq, opts ...grpc.CallOption) (*ListBotConversationsResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListBotConversationsResp)
+	err := c.cc.Invoke(ctx, BotService_ListBotConversations_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *botServiceClient) GetBotWebhook(ctx context.Context, in *GetBotWebhookReq, opts ...grpc.CallOption) (*GetBotWebhookResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetBotWebhookResp)
+	err := c.cc.Invoke(ctx, BotService_GetBotWebhook_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *botServiceClient) SetBotWebhook(ctx context.Context, in *SetBotWebhookReq, opts ...grpc.CallOption) (*SetBotWebhookResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetBotWebhookResp)
+	err := c.cc.Invoke(ctx, BotService_SetBotWebhook_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *botServiceClient) DeleteBotWebhook(ctx context.Context, in *DeleteBotWebhookReq, opts ...grpc.CallOption) (*DeleteBotWebhookResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteBotWebhookResp)
+	err := c.cc.Invoke(ctx, BotService_DeleteBotWebhook_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// BotServiceServer is the server API for BotService service.
+// All implementations must embed UnimplementedBotServiceServer
+// for forward compatibility.
+//
+// BotService manages OpenAPI bots: token validation, profile lookup,
+// conversation listing for the authenticated bot, and webhook configuration.
+// gateway calls these RPCs after the BotAuth middleware has resolved a
+// `Authorization: Bot <token>` header into a bot identity.
+type BotServiceServer interface {
+	// ValidateBotToken resolves a plaintext token into a bot identity.
+	// Returns NotFound when the token hash does not match an active row.
+	// Used by the gateway BotAuth middleware on every Bot OpenAPI request.
+	ValidateBotToken(context.Context, *ValidateBotTokenReq) (*ValidateBotTokenResp, error)
+	// GetBotProfile returns the bot's user_info snapshot for `/api/bot/v1/me`.
+	GetBotProfile(context.Context, *GetBotProfileReq) (*GetBotProfileResp, error)
+	// ListBotConversations returns every conversation the bot is a member of.
+	ListBotConversations(context.Context, *ListBotConversationsReq) (*ListBotConversationsResp, error)
+	// GetBotWebhook returns the bot's webhook configuration without the
+	// plaintext signing secret (only secret_hash is stored server-side).
+	GetBotWebhook(context.Context, *GetBotWebhookReq) (*GetBotWebhookResp, error)
+	// SetBotWebhook upserts the bot's webhook configuration. The plaintext
+	// `secret` is hashed before persistence; the same plaintext value is
+	// returned to the caller so they can store it client-side once.
+	SetBotWebhook(context.Context, *SetBotWebhookReq) (*SetBotWebhookResp, error)
+	// DeleteBotWebhook removes the bot's webhook configuration entirely.
+	DeleteBotWebhook(context.Context, *DeleteBotWebhookReq) (*DeleteBotWebhookResp, error)
+	mustEmbedUnimplementedBotServiceServer()
+}
+
+// UnimplementedBotServiceServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedBotServiceServer struct{}
+
+func (UnimplementedBotServiceServer) ValidateBotToken(context.Context, *ValidateBotTokenReq) (*ValidateBotTokenResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ValidateBotToken not implemented")
+}
+func (UnimplementedBotServiceServer) GetBotProfile(context.Context, *GetBotProfileReq) (*GetBotProfileResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetBotProfile not implemented")
+}
+func (UnimplementedBotServiceServer) ListBotConversations(context.Context, *ListBotConversationsReq) (*ListBotConversationsResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListBotConversations not implemented")
+}
+func (UnimplementedBotServiceServer) GetBotWebhook(context.Context, *GetBotWebhookReq) (*GetBotWebhookResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetBotWebhook not implemented")
+}
+func (UnimplementedBotServiceServer) SetBotWebhook(context.Context, *SetBotWebhookReq) (*SetBotWebhookResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetBotWebhook not implemented")
+}
+func (UnimplementedBotServiceServer) DeleteBotWebhook(context.Context, *DeleteBotWebhookReq) (*DeleteBotWebhookResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DeleteBotWebhook not implemented")
+}
+func (UnimplementedBotServiceServer) mustEmbedUnimplementedBotServiceServer() {}
+func (UnimplementedBotServiceServer) testEmbeddedByValue()                    {}
+
+// UnsafeBotServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to BotServiceServer will
+// result in compilation errors.
+type UnsafeBotServiceServer interface {
+	mustEmbedUnimplementedBotServiceServer()
+}
+
+func RegisterBotServiceServer(s grpc.ServiceRegistrar, srv BotServiceServer) {
+	// If the following call pancis, it indicates UnimplementedBotServiceServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&BotService_ServiceDesc, srv)
+}
+
+func _BotService_ValidateBotToken_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ValidateBotTokenReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BotServiceServer).ValidateBotToken(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BotService_ValidateBotToken_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BotServiceServer).ValidateBotToken(ctx, req.(*ValidateBotTokenReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BotService_GetBotProfile_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetBotProfileReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BotServiceServer).GetBotProfile(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BotService_GetBotProfile_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BotServiceServer).GetBotProfile(ctx, req.(*GetBotProfileReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BotService_ListBotConversations_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListBotConversationsReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BotServiceServer).ListBotConversations(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BotService_ListBotConversations_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BotServiceServer).ListBotConversations(ctx, req.(*ListBotConversationsReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BotService_GetBotWebhook_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetBotWebhookReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BotServiceServer).GetBotWebhook(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BotService_GetBotWebhook_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BotServiceServer).GetBotWebhook(ctx, req.(*GetBotWebhookReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BotService_SetBotWebhook_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetBotWebhookReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BotServiceServer).SetBotWebhook(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BotService_SetBotWebhook_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BotServiceServer).SetBotWebhook(ctx, req.(*SetBotWebhookReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BotService_DeleteBotWebhook_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteBotWebhookReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BotServiceServer).DeleteBotWebhook(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BotService_DeleteBotWebhook_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BotServiceServer).DeleteBotWebhook(ctx, req.(*DeleteBotWebhookReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// BotService_ServiceDesc is the grpc.ServiceDesc for BotService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var BotService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "logic.BotService",
+	HandlerType: (*BotServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "ValidateBotToken",
+			Handler:    _BotService_ValidateBotToken_Handler,
+		},
+		{
+			MethodName: "GetBotProfile",
+			Handler:    _BotService_GetBotProfile_Handler,
+		},
+		{
+			MethodName: "ListBotConversations",
+			Handler:    _BotService_ListBotConversations_Handler,
+		},
+		{
+			MethodName: "GetBotWebhook",
+			Handler:    _BotService_GetBotWebhook_Handler,
+		},
+		{
+			MethodName: "SetBotWebhook",
+			Handler:    _BotService_SetBotWebhook_Handler,
+		},
+		{
+			MethodName: "DeleteBotWebhook",
+			Handler:    _BotService_DeleteBotWebhook_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

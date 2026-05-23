@@ -9,16 +9,29 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
+	"github.com/gofrs/flock"
 	client "github.com/hellopoisonx/aim/app/tui/internal/client"
 	_ "modernc.org/sqlite"
 )
+
+var (
+	dbLockMu  sync.Mutex
+	dbLocks   = map[string]*dbLockRef{}
+)
+
+type dbLockRef struct {
+	flock *flock.Flock
+	refs  int
+}
 
 // Store persists one TUI instance state in an embedded SQLite database.
 type Store struct {
 	db         *sql.DB
 	instanceID string
+	dbPath     string
 }
 
 // TokenRecord is the locally persisted auth state for one isolated TUI instance.
@@ -47,27 +60,73 @@ func openStore(ctx context.Context, path, instanceID string) (*Store, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return nil, fmt.Errorf("create data dir: %w", err)
 	}
+	if err := acquireDBLock(path); err != nil {
+		return nil, err
+	}
 
 	db, err := sql.Open("sqlite", path+"?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=foreign_keys(ON)")
 	if err != nil {
+		releaseDBLock(path)
 		return nil, fmt.Errorf("open sqlite: %w", err)
 	}
 	db.SetMaxOpenConns(1)
 	db.SetMaxIdleConns(1)
 
-	s := &Store{db: db, instanceID: instanceID}
+	s := &Store{db: db, instanceID: instanceID, dbPath: path}
 	if err := s.migrate(ctx); err != nil {
 		_ = db.Close()
+		releaseDBLock(path)
 		return nil, err
 	}
 	return s, nil
+}
+
+func acquireDBLock(path string) error {
+	dbLockMu.Lock()
+	defer dbLockMu.Unlock()
+
+	if ref, ok := dbLocks[path]; ok {
+		ref.refs++
+		return nil
+	}
+
+	fl := flock.New(path + ".lock")
+	locked, err := fl.TryLock()
+	if err != nil {
+		return fmt.Errorf("lock database %s: %w", path, err)
+	}
+	if !locked {
+		return fmt.Errorf("database %s is already used by another TUI process; use a different --instance/--db or close the other instance", path)
+	}
+	dbLocks[path] = &dbLockRef{flock: fl, refs: 1}
+	return nil
+}
+
+func releaseDBLock(path string) {
+	dbLockMu.Lock()
+	defer dbLockMu.Unlock()
+
+	ref, ok := dbLocks[path]
+	if !ok {
+		return
+	}
+	ref.refs--
+	if ref.refs > 0 {
+		return
+	}
+	_ = ref.flock.Unlock()
+	delete(dbLocks, path)
 }
 
 func (s *Store) Close() error {
 	if s == nil || s.db == nil {
 		return nil
 	}
-	return s.db.Close()
+	err := s.db.Close()
+	if s.dbPath != "" {
+		releaseDBLock(s.dbPath)
+	}
+	return err
 }
 
 func (s *Store) migrate(ctx context.Context) error {
@@ -216,6 +275,7 @@ func (s *Store) LoadConversations(ctx context.Context) ([]client.ConversationIte
 		if err := rows.Scan(&conv.ConversationID, &conv.ConversationType, &active, &conv.CreatedAt, &members, &conv.Name, &conv.Avatar, &conv.CreatorID); err != nil {
 			return nil, fmt.Errorf("scan conversation: %w", err)
 		}
+		conv.ConversationType = normalizeConversationType(conv.ConversationType)
 		conv.IsActive = active != 0
 		if err := json.Unmarshal([]byte(members), &conv.MemberIDs); err != nil {
 			return nil, fmt.Errorf("unmarshal members: %w", err)
@@ -236,14 +296,14 @@ func (s *Store) SaveMessages(ctx context.Context, messages []client.MessageItem)
 	defer func() { _ = tx.Rollback() }()
 
 	stmt, err := tx.PrepareContext(ctx, `INSERT OR REPLACE INTO messages(instance_id, conversation_id, message_id, sender_id, message_type, content, client_msg_id, created_at, is_system)
-		VALUES(?, ?, ?, ?, ?, ?, ?, ?, 0)`)
+		VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 	if err != nil {
 		return fmt.Errorf("prepare save messages: %w", err)
 	}
 	defer func() { _ = stmt.Close() }()
 
 	for _, msg := range messages {
-		if _, err := stmt.ExecContext(ctx, s.instanceID, msg.ConversationID, msg.ID, msg.SenderID, msg.MessageType, msg.Content, msg.ClientMsgID, msg.CreatedAt); err != nil {
+		if _, err := stmt.ExecContext(ctx, s.instanceID, msg.ConversationID, msg.ID, msg.SenderID, msg.MessageType, msg.Content, msg.ClientMsgID, msg.CreatedAt, boolInt(msg.IsSystem)); err != nil {
 			return fmt.Errorf("save message %d: %w", msg.ID, err)
 		}
 	}
@@ -254,7 +314,7 @@ func (s *Store) SaveMessages(ctx context.Context, messages []client.MessageItem)
 }
 
 func (s *Store) LoadMessages(ctx context.Context, conversationID int64, limit int) ([]client.MessageItem, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT message_id, conversation_id, sender_id, message_type, content, client_msg_id, created_at
+	rows, err := s.db.QueryContext(ctx, `SELECT message_id, conversation_id, sender_id, message_type, content, client_msg_id, created_at, is_system
 		FROM messages WHERE instance_id = ? AND conversation_id = ? ORDER BY created_at DESC, message_id DESC LIMIT ?`, s.instanceID, conversationID, limit)
 	if err != nil {
 		return nil, fmt.Errorf("load messages: %w", err)
@@ -264,9 +324,11 @@ func (s *Store) LoadMessages(ctx context.Context, conversationID int64, limit in
 	var reverse []client.MessageItem
 	for rows.Next() {
 		var msg client.MessageItem
-		if err := rows.Scan(&msg.ID, &msg.ConversationID, &msg.SenderID, &msg.MessageType, &msg.Content, &msg.ClientMsgID, &msg.CreatedAt); err != nil {
+		var isSystem int
+		if err := rows.Scan(&msg.ID, &msg.ConversationID, &msg.SenderID, &msg.MessageType, &msg.Content, &msg.ClientMsgID, &msg.CreatedAt, &isSystem); err != nil {
 			return nil, fmt.Errorf("scan message: %w", err)
 		}
+		msg.IsSystem = isSystem != 0
 		reverse = append(reverse, msg)
 	}
 	if err := rows.Err(); err != nil {

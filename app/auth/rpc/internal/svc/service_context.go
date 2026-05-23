@@ -11,6 +11,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
+	"github.com/segmentio/kafka-go"
 	"github.com/zeromicro/go-queue/kq"
 )
 
@@ -59,7 +60,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 
 	// Initialize Kafka publisher if configured
 	if c.IsKqPusherConfigured() {
-		svcCtx.UserEventPublisher = &kqPublisher{pusher: kq.NewPusher(c.KqPusherConf.Brokers, c.KqPusherConf.Topic)}
+		svcCtx.UserEventPublisher = &kqPublisher{pusher: kq.NewPusher(c.KqPusherConf.Brokers, c.KqPusherConf.Topic, kq.WithBalancer(&kafka.Murmur2Balancer{}))}
 	}
 
 	return svcCtx

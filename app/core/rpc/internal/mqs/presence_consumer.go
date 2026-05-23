@@ -88,10 +88,7 @@ func (c *PresenceConsumer) Consume(ctx context.Context, key string, value string
 				TargetUserId: friendID,
 			}
 
-			// For single-gateway setups we always hit the default client.
-			// TODO: router will select by nodeID in step 11.
-			_, err := c.svcCtx.GatewayClient.PushPresence(ctx, req)
-			if err != nil {
+			if _, err := pushPresenceToNode(ctx, c.svcCtx.GatewayClient, nodeID, req); err != nil {
 				logx.WithContext(ctx).Errorf("PushPresence to node %s for friend %d failed: %v", nodeID, friendID, err)
 				continue
 			}

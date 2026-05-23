@@ -43,11 +43,22 @@ func (l *GetUserConversationsLogic) GetUserConversations(in *pb.GetUserConversat
 
 	pbConversations := make([]*pb.ConversationResponse, 0, len(conversations))
 	for _, conv := range conversations {
+		members, err := convSvc.GetConversationMembers(l.ctx, conv.ID)
+		if err != nil {
+			return nil, service.ConversationToGRPCError(err)
+		}
+
+		memberIDs := make([]int64, len(members))
+		for i, m := range members {
+			memberIDs[i] = m.UserID
+		}
+
 		pbConversations = append(pbConversations, &pb.ConversationResponse{
 			Id:               conv.ID,
 			ConversationType: conv.ConversationType,
 			IsActive:         conv.IsActive,
 			CreatedAt:        service.UnixFromPGTimestamptz(conv.CreatedAt),
+			MemberIds:        memberIDs,
 			Name:             conv.Name,
 			Avatar:           conv.Avatar,
 			CreatorId:        conv.CreatorID,

@@ -72,3 +72,15 @@ func (s *ConversationServiceServer) GetConversationMembersDetail(ctx context.Con
 	l := conversationservicelogic.NewGetConversationMembersDetailLogic(ctx, s.svcCtx)
 	return l.GetConversationMembersDetail(in)
 }
+
+// UpdateReadReceipt upserts the caller's last-read cursor for a conversation.
+func (s *ConversationServiceServer) UpdateReadReceipt(ctx context.Context, in *pb.UpdateReadReceiptReq) (*pb.UpdateReadReceiptResp, error) {
+	l := conversationservicelogic.NewUpdateReadReceiptLogic(ctx, s.svcCtx)
+	return l.UpdateReadReceipt(in)
+}
+
+// ListConversationReadStates returns the per-member last-read cursors for a conversation.
+func (s *ConversationServiceServer) ListConversationReadStates(ctx context.Context, in *pb.ListConversationReadStatesReq) (*pb.ListConversationReadStatesResp, error) {
+	l := conversationservicelogic.NewListConversationReadStatesLogic(ctx, s.svcCtx)
+	return l.ListConversationReadStates(in)
+}

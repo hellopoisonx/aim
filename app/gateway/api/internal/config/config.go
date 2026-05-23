@@ -46,6 +46,8 @@ type Config struct {
 		PresenceTopic string `json:",default=aim.presence.events"` //nolint:staticcheck // go-zero conf uses json tag options for defaults.
 		// TypingTopic is the Kafka topic for typing events.
 		TypingTopic string `json:",default=aim.typing.events"` //nolint:staticcheck // go-zero conf uses json tag options for defaults.
+		// ReadReceiptTopic is the Kafka topic for read receipt events.
+		ReadReceiptTopic string `json:",default=aim.read_receipt.events"` //nolint:staticcheck // go-zero conf uses json tag options for defaults.
 	}
 	// GatewayNodeID identifies this gateway instance for the directory service.
 	// Populated from env AIM_GATEWAY_NODE_ID; startup fails if empty.

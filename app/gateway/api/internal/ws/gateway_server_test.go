@@ -220,6 +220,7 @@ func TestGatewayServerPushMessage(t *testing.T) {
 		SenderId:         111,
 		SentAt:           time.Now().UnixMilli(),
 		ClientMsgId:      "client-msg-123",
+		Mentions:         []string{"42"},
 		TargetUserId:     userID,
 	})
 	require.NoError(t, err)
@@ -238,6 +239,7 @@ func TestGatewayServerPushMessage(t *testing.T) {
 	require.Equal(t, int64(999), pushMsg.GetMessageId())
 	require.Equal(t, "hello from push", pushMsg.GetContent())
 	require.Equal(t, "client-msg-123", pushMsg.GetClientMsgId())
+	require.Equal(t, []string{"42"}, pushMsg.GetMentions())
 }
 
 func TestGatewayServerPushPresence(t *testing.T) {

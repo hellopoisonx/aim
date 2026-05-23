@@ -6,9 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/hellopoisonx/aim/app/logic/rpc/model"
+	sharedconversation "github.com/hellopoisonx/aim/app/shared/conversation"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 	"github.com/hellopoisonx/aim/app/shared/tools"
 	"github.com/hellopoisonx/aim/app/shared/tracing"
@@ -50,6 +52,16 @@ type ConversationQuerier interface {
 	DismissGroup(ctx context.Context, conversationID, operatorID int64) error
 	UpdateGroupInfo(ctx context.Context, conversationID, operatorID int64, operatorName string, name, avatar *string) (model.Conversation, error)
 	GetConversationMembersDetail(ctx context.Context, conversationID int64) ([]MemberDetail, error)
+	UpdateReadReceipt(ctx context.Context, conversationID, userID, lastReadMessageID int64) (ReadState, error)
+	ListConversationReadStates(ctx context.Context, conversationID int64) ([]ReadState, error)
+}
+
+// ReadState represents a member's last-read cursor in a conversation.
+type ReadState struct {
+	ConversationID    int64
+	UserID            int64
+	LastReadMessageID int64
+	UpdatedAt         int64 // unix milliseconds
 }
 
 type MemberDetail struct {
@@ -78,6 +90,8 @@ type ConversationStore interface {
 	IsConversationMember(ctx context.Context, arg model.IsConversationMemberParams) (bool, error)
 	GetConversationMembersDetail(ctx context.Context, conversationID int64) ([]model.GetConversationMembersDetailRow, error)
 	InsertMessage(ctx context.Context, arg model.InsertMessageParams) error
+	UpsertConversationReadState(ctx context.Context, arg model.UpsertConversationReadStateParams) (model.ConversationReadState, error)
+	ListConversationReadStates(ctx context.Context, conversationID int64) ([]model.ConversationReadState, error)
 }
 
 type systemMessageContent struct {
@@ -156,24 +170,53 @@ func (s *ConversationService) buildSystemMessage(event string, operatorID int64,
 }
 
 func (s ConversationService) CreateConversation(ctx context.Context, conversationType string, creatorID int64, memberIDs []int64, name string, avatar string) (model.Conversation, error) {
+	if creatorID <= 0 {
+		return model.Conversation{}, errorx.NewCodeError(errorx.CodeBadInput, "creator_id is required and must be positive")
+	}
+
 	if conversationType != "direct" && conversationType != "group" {
 		return model.Conversation{}, errorx.NewCodeError(errorx.CodeBadInput, "conversation_type must be 'direct' or 'group'")
+	}
+
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return model.Conversation{}, errorx.NewCodeError(errorx.CodeBadInput, "name is required")
+	}
+
+	avatar = strings.TrimSpace(avatar)
+	if avatar == "" {
+		avatar = sharedconversation.DefaultAvatar
 	}
 
 	if len(memberIDs) == 0 {
 		return model.Conversation{}, errorx.NewCodeError(errorx.CodeBadInput, "member_ids must not be empty")
 	}
 
+	if conversationType == "direct" && len(memberIDs) != 1 {
+		return model.Conversation{}, errorx.NewCodeError(errorx.CodeBadInput, "direct conversation member_ids must contain exactly one peer user id")
+	}
+
+	deduped := make([]int64, 0, len(memberIDs)+1)
+	seen := make(map[int64]struct{}, len(memberIDs)+1)
 	found := false
 	for _, id := range memberIDs {
+		if id <= 0 {
+			return model.Conversation{}, errorx.NewCodeError(errorx.CodeBadInput, "member_ids must contain positive user ids")
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		deduped = append(deduped, id)
 		if id == creatorID {
 			found = true
-			break
 		}
 	}
 	if !found {
-		memberIDs = append(memberIDs, creatorID)
+		deduped = append(deduped, creatorID)
+		seen[creatorID] = struct{}{}
 	}
+	memberIDs = deduped
 
 	if conversationType == "direct" && len(memberIDs) != 2 {
 		return model.Conversation{}, errorx.NewCodeError(errorx.CodeBadInput, "direct conversation must have exactly 2 members")
@@ -661,6 +704,26 @@ func (s ConversationService) UpdateGroupInfo(ctx context.Context, conversationID
 		return model.Conversation{}, ErrNotGroupConversation
 	}
 
+	if name != nil {
+		trimmed := strings.TrimSpace(*name)
+		if trimmed == "" {
+			name = nil
+		} else {
+			name = &trimmed
+		}
+	}
+	if avatar != nil {
+		trimmed := strings.TrimSpace(*avatar)
+		if trimmed == "" {
+			avatar = nil
+		} else {
+			avatar = &trimmed
+		}
+	}
+	if name == nil && avatar == nil {
+		return conv, nil
+	}
+
 	var targetUserIDs []int64
 	var messageID int64
 	eventType := "group_renamed"
@@ -743,6 +806,84 @@ func (s ConversationService) GetConversationMembersDetail(ctx context.Context, c
 	}
 
 	return details, nil
+}
+
+// UpdateReadReceipt upserts the caller's last-read cursor for a conversation.
+//
+// Validates that:
+//   - conversation_id > 0, user_id > 0, last_read_message_id > 0
+//   - the conversation exists
+//   - the user is a member of the conversation
+//
+// The underlying SQL uses GREATEST(...) so the cursor only advances
+// monotonically; a stale or out-of-order receipt is treated as a no-op
+// while still returning the latest stored state.
+func (s ConversationService) UpdateReadReceipt(ctx context.Context, conversationID, userID, lastReadMessageID int64) (ReadState, error) {
+	if conversationID <= 0 {
+		return ReadState{}, errorx.NewCodeError(errorx.CodeBadInput, "conversation_id is required and must be positive")
+	}
+	if userID <= 0 {
+		return ReadState{}, errorx.NewCodeError(errorx.CodeBadInput, "user_id is required and must be positive")
+	}
+	if lastReadMessageID <= 0 {
+		return ReadState{}, errorx.NewCodeError(errorx.CodeBadInput, "last_read_message_id is required and must be positive")
+	}
+
+	if _, err := s.GetConversationByID(ctx, conversationID); err != nil {
+		return ReadState{}, err
+	}
+
+	isMember, err := s.IsMember(ctx, conversationID, userID)
+	if err != nil {
+		return ReadState{}, err
+	}
+	if !isMember {
+		return ReadState{}, ErrNotMember
+	}
+
+	row, err := s.store.UpsertConversationReadState(ctx, model.UpsertConversationReadStateParams{
+		ConversationID:    conversationID,
+		UserID:            userID,
+		LastReadMessageID: lastReadMessageID,
+	})
+	if err != nil {
+		return ReadState{}, err
+	}
+
+	return ReadState{
+		ConversationID:    row.ConversationID,
+		UserID:            row.UserID,
+		LastReadMessageID: row.LastReadMessageID,
+		UpdatedAt:         unixFromPGTimestamptz(row.UpdatedAt),
+	}, nil
+}
+
+// ListConversationReadStates returns the per-member last-read cursors for a conversation.
+func (s ConversationService) ListConversationReadStates(ctx context.Context, conversationID int64) ([]ReadState, error) {
+	if conversationID <= 0 {
+		return nil, errorx.NewCodeError(errorx.CodeBadInput, "conversation_id is required and must be positive")
+	}
+
+	if _, err := s.GetConversationByID(ctx, conversationID); err != nil {
+		return nil, err
+	}
+
+	rows, err := s.store.ListConversationReadStates(ctx, conversationID)
+	if err != nil {
+		return nil, err
+	}
+
+	states := make([]ReadState, len(rows))
+	for i, r := range rows {
+		states[i] = ReadState{
+			ConversationID:    r.ConversationID,
+			UserID:            r.UserID,
+			LastReadMessageID: r.LastReadMessageID,
+			UpdatedAt:         unixFromPGTimestamptz(r.UpdatedAt),
+		}
+	}
+
+	return states, nil
 }
 
 func ConversationToGRPCError(err error) error {

@@ -52,20 +52,37 @@ func (l *GetConversationHistoryLogic) GetConversationHistory(in *pb.GetConversat
 		return nil, service.ConversationToGRPCError(err)
 	}
 
+	senderInfoCache := make(map[int64]*pb.SenderInfo)
 	pbMessages := make([]*pb.MessageItem, 0, len(messages))
 	for _, msg := range messages {
+		senderInfo, ok := senderInfoCache[msg.SenderID]
+		if !ok {
+			var err error
+			senderInfo, err = senderInfoForUser(l.ctx, l.svcCtx, msg.SenderID)
+			if err != nil {
+				return nil, err
+			}
+			senderInfoCache[msg.SenderID] = senderInfo
+		}
+
+		clientMsgID := ""
+		if msg.ClientMsgID != nil {
+			clientMsgID = *msg.ClientMsgID
+		}
+
 		pbMessages = append(pbMessages, &pb.MessageItem{
 			Id:             msg.ID,
 			ConversationId: msg.ConversationID,
 			SenderId:       msg.SenderID,
+			SenderInfo:     senderInfo,
 			MessageType:    msg.MessageType,
 			Content:        string(msg.Content),
-			CreatedAt:       service.UnixFromPGTimestamptz(msg.CreatedAt),
+			ClientMsgId:    clientMsgID,
+			CreatedAt:      service.UnixFromPGTimestamptz(msg.CreatedAt),
+			Mentions:       service.ParseMentionsJSON(msg.Mentions),
 		})
 	}
 
-	// Determine if there are more pages.
-	// If we got the full limit of messages, there might be more.
 	hasMore := int32(len(messages)) == limit
 	var nextCursorCreatedAt int64
 	var nextCursorID int64
@@ -76,10 +93,25 @@ func (l *GetConversationHistoryLogic) GetConversationHistory(in *pb.GetConversat
 		nextCursorID = lastMsg.ID
 	}
 
+	readStates, err := convSvc.ListConversationReadStates(l.ctx, in.GetConversationId())
+	if err != nil {
+		return nil, service.ConversationToGRPCError(err)
+	}
+
+	pbReadStates := make([]*pb.ReadStateItem, len(readStates))
+	for i, st := range readStates {
+		pbReadStates[i] = &pb.ReadStateItem{
+			UserId:            st.UserID,
+			LastReadMessageId: st.LastReadMessageID,
+			UpdatedAt:         st.UpdatedAt,
+		}
+	}
+
 	return &pb.GetConversationHistoryResp{
-		Messages:          pbMessages,
+		Messages:            pbMessages,
 		NextCursorCreatedAt: nextCursorCreatedAt,
-		NextCursorId:       nextCursorID,
-		HasMore:           hasMore,
+		NextCursorId:        nextCursorID,
+		HasMore:             hasMore,
+		ReadStates:          pbReadStates,
 	}, nil
 }

@@ -18,5 +18,12 @@ func Consumers(ctx context.Context, svcCtx *svc.ServiceContext) []service.Servic
 		services = append(services, kq.MustNewQueue(svcCtx.Config.UserCreatedConsumerConf, NewUserCreatedConsumer(ctx, svcCtx)))
 	}
 
+	// Add bot-webhook consumer only if configured. It uses the same
+	// `aim-message-transfer` topic as the archive consumer but a separate
+	// consumer group so its offset is independent.
+	if svcCtx.Config.IsBotWebhookConsumerConfigured() {
+		services = append(services, kq.MustNewQueue(svcCtx.Config.BotWebhookConsumerConf, NewBotWebhookConsumer(ctx, svcCtx)))
+	}
+
 	return services
 }

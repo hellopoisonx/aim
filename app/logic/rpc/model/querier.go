@@ -12,13 +12,20 @@ type Querier interface {
 	AddConversationMemberWithRole(ctx context.Context, arg AddConversationMemberWithRoleParams) (int64, error)
 	AddConversationMembers(ctx context.Context, arg AddConversationMembersParams) (int64, error)
 	CountMessagesByConversation(ctx context.Context, conversationID int64) (int64, error)
+	CreateBotToken(ctx context.Context, arg CreateBotTokenParams) (BotToken, error)
 	CreateConversation(ctx context.Context, arg CreateConversationParams) (CreateConversationRow, error)
 	CreateUserInfo(ctx context.Context, arg CreateUserInfoParams) (UserInfo, error)
 	DeactivateConversation(ctx context.Context, id int64) error
+	DeleteBotWebhook(ctx context.Context, botUserID int64) (int64, error)
+	// Returns the token entry plus the owner's user_type / status / nickname so
+	// the BotAuth middleware can validate the bot identity in a single query.
+	GetBotTokenByHash(ctx context.Context, tokenHash string) (GetBotTokenByHashRow, error)
+	GetBotWebhook(ctx context.Context, botUserID int64) (BotWebhook, error)
 	GetConversation(ctx context.Context, id int64) (GetConversationRow, error)
 	GetConversationCreator(ctx context.Context, id int64) (int64, error)
 	GetConversationMembers(ctx context.Context, conversationID int64) ([]GetConversationMembersRow, error)
 	GetConversationMembersDetail(ctx context.Context, conversationID int64) ([]GetConversationMembersDetailRow, error)
+	GetConversationReadState(ctx context.Context, arg GetConversationReadStateParams) (ConversationReadState, error)
 	GetConversationsByUserID(ctx context.Context, userID int64) ([]GetConversationsByUserIDRow, error)
 	GetDirectConversationByMembers(ctx context.Context, arg GetDirectConversationByMembersParams) (GetDirectConversationByMembersRow, error)
 	GetFriendship(ctx context.Context, arg GetFriendshipParams) (GetFriendshipRow, error)
@@ -28,18 +35,28 @@ type Querier interface {
 	GetUserInfoByEmail(ctx context.Context, email string) (UserInfo, error)
 	GetUserInfoByID(ctx context.Context, id int64) (UserInfo, error)
 	GetUserInfoByNickname(ctx context.Context, nickname string) (UserInfo, error)
+	GetUserType(ctx context.Context, id int64) (string, error)
 	InsertMessage(ctx context.Context, arg InsertMessageParams) error
 	IsConversationMember(ctx context.Context, arg IsConversationMemberParams) (bool, error)
 	IsMemberMuted(ctx context.Context, arg IsMemberMutedParams) (IsMemberMutedRow, error)
+	// Returns enabled webhooks for bots that are members of the given conversation.
+	// Used by the BotWebhookConsumer to fan out message.created events.
+	ListActiveBotWebhooksForConversation(ctx context.Context, conversationID int64) ([]BotWebhook, error)
+	ListBotTokensByBot(ctx context.Context, botUserID int64) ([]BotToken, error)
+	ListConversationReadStates(ctx context.Context, conversationID int64) ([]ConversationReadState, error)
 	ListFriends(ctx context.Context, userID int64) ([]Friendship, error)
 	ListMessagesByConversation(ctx context.Context, arg ListMessagesByConversationParams) ([]Message, error)
 	ListMessagesByConversationInitial(ctx context.Context, arg ListMessagesByConversationInitialParams) ([]Message, error)
 	ListPendingFriendApplications(ctx context.Context, friendID int64) ([]Friendship, error)
 	RemoveConversationMembers(ctx context.Context, arg RemoveConversationMembersParams) (int64, error)
+	RevokeBotToken(ctx context.Context, arg RevokeBotTokenParams) (int64, error)
 	SearchUserInfoByNickname(ctx context.Context, arg SearchUserInfoByNicknameParams) ([]UserInfo, error)
 	UpdateConversation(ctx context.Context, arg UpdateConversationParams) error
 	UpdateUserInfoProfile(ctx context.Context, arg UpdateUserInfoProfileParams) (UserInfo, error)
 	UpdateUserInfoStatus(ctx context.Context, arg UpdateUserInfoStatusParams) (UserInfo, error)
+	UpdateUserInfoType(ctx context.Context, arg UpdateUserInfoTypeParams) (int64, error)
+	UpsertBotWebhook(ctx context.Context, arg UpsertBotWebhookParams) (BotWebhook, error)
+	UpsertConversationReadState(ctx context.Context, arg UpsertConversationReadStateParams) (ConversationReadState, error)
 	UpsertFriendship(ctx context.Context, arg UpsertFriendshipParams) (Friendship, error)
 }
 

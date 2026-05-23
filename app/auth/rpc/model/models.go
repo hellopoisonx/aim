@@ -15,4 +15,5 @@ type UserCredential struct {
 	Status       int16              `json:"status"`
 	CreatedAt    pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+	Name         string             `json:"name"`
 }

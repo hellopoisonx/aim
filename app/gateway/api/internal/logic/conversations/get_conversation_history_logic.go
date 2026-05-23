@@ -53,8 +53,8 @@ func (l *GetConversationHistoryLogic) GetConversationHistory(req *types.GetConve
 	rpcResp, err := l.svcCtx.LogicConversationClient.GetConversationHistory(l.ctx, &conversationservice.GetConversationHistoryReq{
 		ConversationId:  req.Id,
 		CursorCreatedAt: req.CursorCreatedAt,
-		CursorId:       req.CursorId,
-		Limit:          limit,
+		CursorId:        req.CursorId,
+		Limit:           limit,
 	})
 	if err != nil {
 		return nil, l.sanitizeLogicRPCError("get conversation history", err)
@@ -62,22 +62,41 @@ func (l *GetConversationHistoryLogic) GetConversationHistory(req *types.GetConve
 
 	messages := make([]types.MessageItem, 0, len(rpcResp.GetMessages()))
 	for _, msg := range rpcResp.GetMessages() {
+		senderInfo := msg.GetSenderInfo()
 		messages = append(messages, types.MessageItem{
 			Id:             msg.GetId(),
 			ConversationId: msg.GetConversationId(),
 			SenderId:       msg.GetSenderId(),
-			MessageType:    msg.GetMessageType(),
-			Content:        msg.GetContent(),
-			ClientMsgId:   msg.GetClientMsgId(),
-			CreatedAt:      msg.GetCreatedAt(),
+			SenderInfo: types.SenderInfo{
+				Name:  senderInfo.GetName(),
+				Email: senderInfo.GetEmail(),
+			},
+			MessageType: msg.GetMessageType(),
+			Content:     msg.GetContent(),
+			ClientMsgId: msg.GetClientMsgId(),
+			CreatedAt:   msg.GetCreatedAt(),
+			Mentions:    msg.GetMentions(),
 		})
+	}
+
+	var readStates []types.ReadStateItem
+	if rpcStates := rpcResp.GetReadStates(); len(rpcStates) > 0 {
+		readStates = make([]types.ReadStateItem, 0, len(rpcStates))
+		for _, st := range rpcStates {
+			readStates = append(readStates, types.ReadStateItem{
+				UserId:            st.GetUserId(),
+				LastReadMessageId: st.GetLastReadMessageId(),
+				UpdatedAt:         st.GetUpdatedAt(),
+			})
+		}
 	}
 
 	return &types.GetConversationHistoryResponse{
 		Messages:            messages,
 		NextCursorCreatedAt: rpcResp.GetNextCursorCreatedAt(),
-		NextCursorId:       rpcResp.GetNextCursorId(),
-		HasMore:            rpcResp.GetHasMore(),
+		NextCursorId:        rpcResp.GetNextCursorId(),
+		HasMore:             rpcResp.GetHasMore(),
+		ReadStates:          readStates,
 	}, nil
 }
 

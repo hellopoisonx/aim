@@ -28,7 +28,7 @@ const (
 )
 
 type UserStore interface {
-	CreateUser(ctx context.Context, email, passwordHash string) (UserCredential, error)
+	CreateUser(ctx context.Context, email, passwordHash, name string) (UserCredential, error)
 	GetUserByEmail(ctx context.Context, email string) (UserCredential, error)
 }
 
@@ -46,6 +46,7 @@ type UserCredential struct {
 	ID           int64
 	Email        string
 	PasswordHash string
+	Name         string
 	Status       int16
 }
 
@@ -71,18 +72,18 @@ func NewSQLUserStoreWithIDGenerator(queries *model.Queries, ids *tools.Snowflake
 	return &SQLUserStore{queries: queries, ids: ids}
 }
 
-func (s *SQLUserStore) CreateUser(ctx context.Context, email, passwordHash string) (UserCredential, error) {
+func (s *SQLUserStore) CreateUser(ctx context.Context, email, passwordHash, name string) (UserCredential, error) {
 	id, err := s.ids.NextID()
 	if err != nil {
 		return UserCredential{}, err
 	}
 
-	user, err := s.queries.CreateUser(ctx, model.CreateUserParams{ID: id, Email: email, PasswordHash: passwordHash})
+	user, err := s.queries.CreateUser(ctx, model.CreateUserParams{ID: id, Email: email, PasswordHash: passwordHash, Name: name})
 	if err != nil {
 		return UserCredential{}, err
 	}
 
-	return fromModel(user), nil
+	return fromCreateUserRow(user), nil
 }
 
 func (s *SQLUserStore) GetUserByEmail(ctx context.Context, email string) (UserCredential, error) {
@@ -91,11 +92,15 @@ func (s *SQLUserStore) GetUserByEmail(ctx context.Context, email string) (UserCr
 		return UserCredential{}, err
 	}
 
-	return fromModel(user), nil
+	return fromGetUserByEmailRow(user), nil
 }
 
-func fromModel(user model.UserCredential) UserCredential {
-	return UserCredential{ID: user.ID, Email: user.Email, PasswordHash: user.PasswordHash, Status: user.Status}
+func fromCreateUserRow(user model.CreateUserRow) UserCredential {
+	return UserCredential{ID: user.ID, Email: user.Email, PasswordHash: user.PasswordHash, Name: user.Name, Status: user.Status}
+}
+
+func fromGetUserByEmailRow(user model.GetUserByEmailRow) UserCredential {
+	return UserCredential{ID: user.ID, Email: user.Email, PasswordHash: user.PasswordHash, Name: user.Name, Status: user.Status}
 }
 
 type RedisSessionStore struct {

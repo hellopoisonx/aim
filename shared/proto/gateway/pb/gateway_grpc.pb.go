@@ -23,6 +23,8 @@ const (
 	GatewayService_PushPresence_FullMethodName          = "/gateway.GatewayService/PushPresence"
 	GatewayService_PushTyping_FullMethodName            = "/gateway.GatewayService/PushTyping"
 	GatewayService_PushFriendApplication_FullMethodName = "/gateway.GatewayService/PushFriendApplication"
+	GatewayService_PushReadReceipt_FullMethodName       = "/gateway.GatewayService/PushReadReceipt"
+	GatewayService_PushNotification_FullMethodName      = "/gateway.GatewayService/PushNotification"
 	GatewayService_KickUser_FullMethodName              = "/gateway.GatewayService/KickUser"
 	GatewayService_DrainNotify_FullMethodName           = "/gateway.GatewayService/DrainNotify"
 )
@@ -51,6 +53,18 @@ type GatewayServiceClient interface {
 	PushTyping(ctx context.Context, in *PushTypingReq, opts ...grpc.CallOption) (*PushTypingResp, error)
 	// PushFriendApplication pushes a friend application to connected clients.
 	PushFriendApplication(ctx context.Context, in *PushFriendApplicationReq, opts ...grpc.CallOption) (*PushFriendApplicationResp, error)
+	// PushReadReceipt — 推送已读回执更新
+	//
+	// 使用场景：
+	//   - 由 aim-core ReadReceiptConsumer 调用，投递到会话内其他成员所在的网关节点
+	//   - 网关按 target_user_id 把 FRAME_TYPE_PUSH_READ_RECEIPT 投给该用户的所有连接
+	PushReadReceipt(ctx context.Context, in *PushReadReceiptReq, opts ...grpc.CallOption) (*PushReadReceiptResp, error)
+	// PushNotification — 推送系统通知
+	//
+	// 使用场景：
+	//   - 服务端业务（公告、维护提醒、强制更新）通过 gateway 推送 FRAME_TYPE_PUSH_NOTIFICATION 给目标用户
+	//   - target_user_id == 0 表示广播给本节点所有在线连接
+	PushNotification(ctx context.Context, in *PushNotificationReq, opts ...grpc.CallOption) (*PushNotificationResp, error)
 	// KickUser — 踢出用户连接
 	//
 	// 使用场景：
@@ -113,6 +127,26 @@ func (c *gatewayServiceClient) PushFriendApplication(ctx context.Context, in *Pu
 	return out, nil
 }
 
+func (c *gatewayServiceClient) PushReadReceipt(ctx context.Context, in *PushReadReceiptReq, opts ...grpc.CallOption) (*PushReadReceiptResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PushReadReceiptResp)
+	err := c.cc.Invoke(ctx, GatewayService_PushReadReceipt_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *gatewayServiceClient) PushNotification(ctx context.Context, in *PushNotificationReq, opts ...grpc.CallOption) (*PushNotificationResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PushNotificationResp)
+	err := c.cc.Invoke(ctx, GatewayService_PushNotification_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *gatewayServiceClient) KickUser(ctx context.Context, in *KickUserReq, opts ...grpc.CallOption) (*KickUserResp, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(KickUserResp)
@@ -157,6 +191,18 @@ type GatewayServiceServer interface {
 	PushTyping(context.Context, *PushTypingReq) (*PushTypingResp, error)
 	// PushFriendApplication pushes a friend application to connected clients.
 	PushFriendApplication(context.Context, *PushFriendApplicationReq) (*PushFriendApplicationResp, error)
+	// PushReadReceipt — 推送已读回执更新
+	//
+	// 使用场景：
+	//   - 由 aim-core ReadReceiptConsumer 调用，投递到会话内其他成员所在的网关节点
+	//   - 网关按 target_user_id 把 FRAME_TYPE_PUSH_READ_RECEIPT 投给该用户的所有连接
+	PushReadReceipt(context.Context, *PushReadReceiptReq) (*PushReadReceiptResp, error)
+	// PushNotification — 推送系统通知
+	//
+	// 使用场景：
+	//   - 服务端业务（公告、维护提醒、强制更新）通过 gateway 推送 FRAME_TYPE_PUSH_NOTIFICATION 给目标用户
+	//   - target_user_id == 0 表示广播给本节点所有在线连接
+	PushNotification(context.Context, *PushNotificationReq) (*PushNotificationResp, error)
 	// KickUser — 踢出用户连接
 	//
 	// 使用场景：
@@ -190,6 +236,12 @@ func (UnimplementedGatewayServiceServer) PushTyping(context.Context, *PushTyping
 }
 func (UnimplementedGatewayServiceServer) PushFriendApplication(context.Context, *PushFriendApplicationReq) (*PushFriendApplicationResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PushFriendApplication not implemented")
+}
+func (UnimplementedGatewayServiceServer) PushReadReceipt(context.Context, *PushReadReceiptReq) (*PushReadReceiptResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method PushReadReceipt not implemented")
+}
+func (UnimplementedGatewayServiceServer) PushNotification(context.Context, *PushNotificationReq) (*PushNotificationResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method PushNotification not implemented")
 }
 func (UnimplementedGatewayServiceServer) KickUser(context.Context, *KickUserReq) (*KickUserResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method KickUser not implemented")
@@ -290,6 +342,42 @@ func _GatewayService_PushFriendApplication_Handler(srv interface{}, ctx context.
 	return interceptor(ctx, in, info, handler)
 }
 
+func _GatewayService_PushReadReceipt_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PushReadReceiptReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GatewayServiceServer).PushReadReceipt(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GatewayService_PushReadReceipt_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GatewayServiceServer).PushReadReceipt(ctx, req.(*PushReadReceiptReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _GatewayService_PushNotification_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PushNotificationReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GatewayServiceServer).PushNotification(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GatewayService_PushNotification_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GatewayServiceServer).PushNotification(ctx, req.(*PushNotificationReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _GatewayService_KickUser_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(KickUserReq)
 	if err := dec(in); err != nil {
@@ -348,6 +436,14 @@ var GatewayService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "PushFriendApplication",
 			Handler:    _GatewayService_PushFriendApplication_Handler,
+		},
+		{
+			MethodName: "PushReadReceipt",
+			Handler:    _GatewayService_PushReadReceipt_Handler,
+		},
+		{
+			MethodName: "PushNotification",
+			Handler:    _GatewayService_PushNotification_Handler,
 		},
 		{
 			MethodName: "KickUser",

@@ -64,7 +64,12 @@ func (l *TransferLogic) Transfer(in *pb.TransferReq) (*pb.TransferResp, error) {
 		}, nil
 	}
 
-	// 3. Permission check: ask logic service if sender can send to conversation
+	// 3. Sliding-window rate limit before any expensive downstream call.
+	if err := l.checkQuota(in); err != nil {
+		return nil, err
+	}
+
+	// 4. Permission check: ask logic service if sender can send to conversation
 	if err := l.checkPermission(in); err != nil {
 		return nil, err
 	}
@@ -129,6 +134,26 @@ func (l *TransferLogic) validate(in *pb.TransferReq) error {
 	return nil
 }
 
+// checkQuota enforces the per-sender sliding-window limit. Returns a rate-limit
+// CodeError when the quota is exceeded; transient Redis failures are logged and
+// fail-open so messaging stays available even if Redis is briefly unreachable.
+func (l *TransferLogic) checkQuota(in *pb.TransferReq) error {
+	if l.svcCtx.TransferQuota == nil {
+		return nil
+	}
+
+	allowed, _, err := l.svcCtx.TransferQuota.CheckQuota(l.ctx, in.SenderId)
+	if err != nil {
+		l.Errorf("transfer quota check failed for sender %d: %v", in.SenderId, err)
+		return nil
+	}
+
+	if !allowed {
+		return errorx.NewCodeError(errorx.CodeRateLimit, "rate limit")
+	}
+	return nil
+}
+
 // checkPermission calls the logic service's CheckMessagePermission RPC.
 // If no permission client is configured, it allows the transfer by default.
 func (l *TransferLogic) checkPermission(in *pb.TransferReq) error {
@@ -137,10 +162,16 @@ func (l *TransferLogic) checkPermission(in *pb.TransferReq) error {
 		return nil
 	}
 
+	mentions, err := parseMentionIDs(in.Mentions)
+	if err != nil {
+		return err
+	}
+
 	resp, err := l.svcCtx.LogicPermissionClient.CheckMessagePermission(l.ctx, &logicpb.CheckMessagePermissionReq{
 		SenderId:       in.SenderId,
 		ConversationId: in.ConversationId,
 		MessageType:    in.MessageType,
+		Mentions:       mentions,
 	})
 	if err != nil {
 		if ce := errorx.FromGRPCError(err); ce != nil {
@@ -165,6 +196,25 @@ func (l *TransferLogic) checkPermission(in *pb.TransferReq) error {
 	}
 
 	return nil
+}
+
+// parseMentionIDs converts the wire-format string mentions into int64 user IDs
+// for the logic permission RPC. Empty input is allowed; any non-positive or
+// non-numeric entry is rejected with a bad_input error.
+func parseMentionIDs(raw []string) ([]int64, error) {
+	if len(raw) == 0 {
+		return nil, nil
+	}
+
+	ids := make([]int64, 0, len(raw))
+	for _, m := range raw {
+		id, err := strconv.ParseInt(m, 10, 64)
+		if err != nil || id <= 0 {
+			return nil, errorx.NewCodeErrorf(errorx.CodeBadInput, "invalid mention id: %q", m)
+		}
+		ids = append(ids, id)
+	}
+	return ids, nil
 }
 
 // buildTransferEvent serializes the transfer event as JSON for Kafka.

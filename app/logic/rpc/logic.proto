@@ -124,6 +124,11 @@ service ConversationService {
   rpc DismissGroup(DismissGroupReq) returns (DismissGroupResp);
   rpc UpdateGroupInfo(UpdateGroupInfoReq) returns (UpdateGroupInfoResp);
   rpc GetConversationMembersDetail(GetConversationMembersDetailReq) returns (GetConversationMembersDetailResp);
+  // UpdateReadReceipt upserts the caller's last-read cursor for a conversation.
+  // Validates membership and ensures last_read_message_id only advances monotonically.
+  rpc UpdateReadReceipt(UpdateReadReceiptReq) returns (UpdateReadReceiptResp);
+  // ListConversationReadStates returns the per-member last-read cursors for a conversation.
+  rpc ListConversationReadStates(ListConversationReadStatesReq) returns (ListConversationReadStatesResp);
 }
 
 message CreateConversationReq {
@@ -156,6 +161,8 @@ message GetConversationMembersReq {
 message GetConversationMembersResp {
   int64 conversation_id = 1;
   repeated int64 member_ids = 2;
+  // conversation_type — direct/group, mirrors conversations.conversation_type column.
+  string conversation_type = 3;
 }
 
 message GetUserConversationsReq {
@@ -238,6 +245,11 @@ message GetConversationHistoryReq {
   int32 limit = 4; // max messages per page, default 50, max 100
 }
 
+message SenderInfo {
+  string name = 1;
+  string email = 2;
+}
+
 message MessageItem {
   int64 id = 1;
   int64 conversation_id = 2;
@@ -246,6 +258,14 @@ message MessageItem {
   string content = 5; // JSON-encoded content
   string client_msg_id = 6; // optional, may be empty
   int64 created_at = 7; // unix timestamp in milliseconds
+  SenderInfo sender_info = 8;
+  repeated string mentions = 9; // decimal user id strings, e.g. "42"
+}
+
+message ReadStateItem {
+  int64 user_id = 1;
+  int64 last_read_message_id = 2;
+  int64 updated_at = 3; // unix milliseconds
 }
 
 message GetConversationHistoryResp {
@@ -253,6 +273,25 @@ message GetConversationHistoryResp {
   int64 next_cursor_created_at = 2; // 0 if no more pages
   int64 next_cursor_id = 3; // 0 if no more pages
   bool has_more = 4;
+  repeated ReadStateItem read_states = 5;
+}
+
+message UpdateReadReceiptReq {
+  int64 conversation_id = 1;
+  int64 user_id = 2;
+  int64 last_read_message_id = 3;
+}
+
+message UpdateReadReceiptResp {
+  ReadStateItem read_state = 1;
+}
+
+message ListConversationReadStatesReq {
+  int64 conversation_id = 1;
+}
+
+message ListConversationReadStatesResp {
+  repeated ReadStateItem read_states = 1;
 }
 
 // FriendshipService messages
@@ -323,4 +362,115 @@ message ListFriendsReq {
 
 message ListFriendsResp {
   repeated FriendshipResponse friends = 1;
+}
+
+// BotService manages OpenAPI bots: token validation, profile lookup,
+// conversation listing for the authenticated bot, and webhook configuration.
+// gateway calls these RPCs after the BotAuth middleware has resolved a
+// `Authorization: Bot <token>` header into a bot identity.
+service BotService {
+  // ValidateBotToken resolves a plaintext token into a bot identity.
+  // Returns NotFound when the token hash does not match an active row.
+  // Used by the gateway BotAuth middleware on every Bot OpenAPI request.
+  rpc ValidateBotToken(ValidateBotTokenReq) returns (ValidateBotTokenResp);
+  // GetBotProfile returns the bot's user_info snapshot for `/api/bot/v1/me`.
+  rpc GetBotProfile(GetBotProfileReq) returns (GetBotProfileResp);
+  // ListBotConversations returns every conversation the bot is a member of.
+  rpc ListBotConversations(ListBotConversationsReq) returns (ListBotConversationsResp);
+  // GetBotWebhook returns the bot's webhook configuration without the
+  // plaintext signing secret (only secret_hash is stored server-side).
+  rpc GetBotWebhook(GetBotWebhookReq) returns (GetBotWebhookResp);
+  // SetBotWebhook upserts the bot's webhook configuration. The plaintext
+  // `secret` is hashed before persistence; the same plaintext value is
+  // returned to the caller so they can store it client-side once.
+  rpc SetBotWebhook(SetBotWebhookReq) returns (SetBotWebhookResp);
+  // DeleteBotWebhook removes the bot's webhook configuration entirely.
+  rpc DeleteBotWebhook(DeleteBotWebhookReq) returns (DeleteBotWebhookResp);
+}
+
+message BotIdentity {
+  // bot_user_id is the bot's user_info.id (and conversation_members.user_id).
+  int64 bot_user_id = 1;
+  // token_id is the bot_tokens.id for audit logging.
+  int64 token_id = 2;
+  // scopes granted to this token (e.g. "messages:send", "messages:receive").
+  repeated string scopes = 3;
+  // nickname snapshot, used for sender_info display when the bot sends.
+  string nickname = 4;
+  // avatar snapshot.
+  string avatar = 5;
+  // user_status mirrors user_info.status; non-1 means the bot is disabled.
+  int32 user_status = 6;
+}
+
+message ValidateBotTokenReq {
+  // plaintext_token is the raw value sent in the Authorization header.
+  string plaintext_token = 1;
+}
+
+message ValidateBotTokenResp {
+  BotIdentity identity = 1;
+}
+
+message GetBotProfileReq {
+  int64 bot_user_id = 1;
+}
+
+message GetBotProfileResp {
+  UserInfoResponse profile = 1;
+}
+
+message ListBotConversationsReq {
+  int64 bot_user_id = 1;
+}
+
+message BotConversationItem {
+  int64 conversation_id = 1;
+  string conversation_type = 2;
+  string name = 3;
+  string avatar = 4;
+  int64 created_at = 5;
+}
+
+message ListBotConversationsResp {
+  repeated BotConversationItem conversations = 1;
+}
+
+message BotWebhookConfig {
+  int64 bot_user_id = 1;
+  string url = 2;
+  repeated string events = 3;
+  bool enabled = 4;
+  int64 updated_at = 5; // unix milliseconds
+}
+
+message GetBotWebhookReq {
+  int64 bot_user_id = 1;
+}
+
+message GetBotWebhookResp {
+  BotWebhookConfig webhook = 1;
+}
+
+message SetBotWebhookReq {
+  int64 bot_user_id = 1;
+  string url = 2;
+  // plaintext signing secret. Empty means: keep the existing secret on
+  // upsert (do not change). Generation/rotation is the caller's job; the
+  // gateway logic generates a fresh secret when empty before calling this.
+  string secret = 3;
+  repeated string events = 4;
+  bool enabled = 5;
+}
+
+message SetBotWebhookResp {
+  BotWebhookConfig webhook = 1;
+}
+
+message DeleteBotWebhookReq {
+  int64 bot_user_id = 1;
+}
+
+message DeleteBotWebhookResp {
+  bool deleted = 1;
 }

@@ -16,6 +16,7 @@ import (
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/config"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/middleware"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/ws"
+	"github.com/hellopoisonx/aim/app/logic/rpc/client/botservice"
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/conversationservice"
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/friendshipservice"
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/userservice"
@@ -23,6 +24,7 @@ import (
 	"github.com/hellopoisonx/aim/app/shared/tracing"
 
 	"github.com/redis/go-redis/v9"
+	"github.com/segmentio/kafka-go"
 	"github.com/zeromicro/go-queue/kq"
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/rest"
@@ -39,6 +41,11 @@ type TypingPublisher interface {
 	PublishTyping(ctx context.Context, fromUserID, conversationID int64) error
 }
 
+// ReadReceiptPublisher is the interface for publishing read receipt events to Kafka.
+type ReadReceiptPublisher interface {
+	PublishReadReceipt(ctx context.Context, fromUserID, conversationID, lastReadMessageID, updatedAt int64) error
+}
+
 // noopPublisher is a no-op implementation for when no real publisher is configured.
 type noopPublisher struct{}
 
@@ -49,6 +56,11 @@ func (noopPublisher) PublishPresence(ctx context.Context, userID int64, status s
 
 func (noopPublisher) PublishTyping(ctx context.Context, fromUserID, conversationID int64) error {
 	logx.WithContext(ctx).Debugf("typing publish (noop): from=%d conv=%d", fromUserID, conversationID)
+	return nil
+}
+
+func (noopPublisher) PublishReadReceipt(ctx context.Context, fromUserID, conversationID, lastReadMessageID, updatedAt int64) error {
+	logx.WithContext(ctx).Debugf("read receipt publish (noop): from=%d conv=%d last_msg=%d", fromUserID, conversationID, lastReadMessageID)
 	return nil
 }
 
@@ -116,6 +128,37 @@ func (p *kafkaTypingPublisher) PublishTyping(ctx context.Context, fromUserID, co
 	return p.pusher.PushWithKey(ctx, key, string(data))
 }
 
+// readReceiptEvent is the Kafka message for read receipt notification.
+type readReceiptEvent struct {
+	tracing.TraceContextFields
+	FromUserID        int64 `json:"from_user_id"`
+	ConversationID    int64 `json:"conversation_id"`
+	LastReadMessageID int64 `json:"last_read_message_id"`
+	UpdatedAt         int64 `json:"updated_at"`
+}
+
+// kafkaReadReceiptPublisher implements ReadReceiptPublisher via Kafka.
+type kafkaReadReceiptPublisher struct {
+	pusher *kq.Pusher
+}
+
+func (p *kafkaReadReceiptPublisher) PublishReadReceipt(ctx context.Context, fromUserID, conversationID, lastReadMessageID, updatedAt int64) error {
+	event := readReceiptEvent{
+		TraceContextFields: tracing.InjectTraceContext(ctx),
+		FromUserID:         fromUserID,
+		ConversationID:     conversationID,
+		LastReadMessageID:  lastReadMessageID,
+		UpdatedAt:          updatedAt,
+	}
+	data, err := json.Marshal(event)
+	if err != nil {
+		return err
+	}
+	// Key by conversation_id so per-conversation ordering is preserved across partitions.
+	key := strconv.FormatInt(conversationID, 10)
+	return p.pusher.PushWithKey(ctx, key, string(data))
+}
+
 type ServiceContext struct {
 	Config                  config.Config
 	AuthClient              authservice.AuthService
@@ -123,14 +166,18 @@ type ServiceContext struct {
 	LogicUserClient         userservice.UserService
 	LogicConversationClient conversationservice.ConversationService
 	LogicFriendshipClient   friendshipservice.FriendshipService
+	LogicBotClient          botservice.BotService
 	Auth                    rest.Middleware
+	BotAuth                 rest.Middleware
 	namingClient            aimnacos.NamingClient
 	coreNamingClient        aimnacos.NamingClient
 	logicNamingClient       aimnacos.NamingClient
 	RedisClient             *redis.Client
 	PresencePub             PresencePublisher
 	TypingPub               TypingPublisher
+	ReadReceiptPub          ReadReceiptPublisher
 	WsManager               *ws.Manager
+	reaperCancel            context.CancelFunc // cancels the presence reaper goroutine
 }
 
 func NewServiceContext(c config.Config) *ServiceContext {
@@ -196,6 +243,8 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	// Use presence-aware manager when Redis and node ID are available.
 	wsManager := ws.NewManagerWithPresence(redisClient, c.GatewayNodeID, c.Redis.PresenceTTL)
 
+	logicBotClient := botservice.NewBotService(logicClient)
+
 	return &ServiceContext{
 		Config:                  c,
 		AuthClient:              authservice.NewAuthService(client),
@@ -203,23 +252,39 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		LogicUserClient:         userservice.NewUserService(logicClient),
 		LogicConversationClient: conversationservice.NewConversationService(logicClient),
 		LogicFriendshipClient:   friendshipservice.NewFriendshipService(logicClient),
+		LogicBotClient:          logicBotClient,
 		Auth:                    middleware.NewAuthMiddleware(c.Auth.AccessSecret).Handle,
+		BotAuth:                 middleware.NewBotAuthMiddleware(logicBotClient).Handle,
 		namingClient:            namingClient,
 		coreNamingClient:        coreNamingClient,
 		logicNamingClient:       logicNamingClient,
 		RedisClient:             redisClient,
 		PresencePub:             newPresencePub(c, redisClient),
 		TypingPub:               newTypingPub(c, redisClient),
+		ReadReceiptPub:          newReadReceiptPub(c, redisClient),
 		WsManager:               wsManager,
 	}
+}
+
+// StartPresenceReaper launches the presence reaper goroutine.
+// It scans for stale connections and expired reconnect grace deadlines.
+// The returned stop function cancels the reaper.
+func (s *ServiceContext) StartPresenceReaper() context.CancelFunc {
+	reaperCtx, cancel := context.WithCancel(context.Background())
+	reaper := ws.NewPresenceReaper(s.WsManager, func(ctx context.Context, userID int64, status string) error {
+		return s.PresencePub.PublishPresence(ctx, userID, status)
+	})
+	s.reaperCancel = cancel
+	go reaper.Run(reaperCtx)
+	return cancel
 }
 
 // newPresencePub creates a PresencePublisher (Kafka if brokers are configured, otherwise noop).
 func newPresencePub(c config.Config, redisClient *redis.Client) PresencePublisher {
 	if len(c.Kafka.Brokers) > 0 && c.Kafka.PresenceTopic != "" && redisClient != nil {
-		logx.Infof("presence publisher: Kafka topic=%s", c.Kafka.PresenceTopic)
+		logx.Infof("presence publisher: Kafka topic=%s (balancer: murmur2)", c.Kafka.PresenceTopic)
 		return &kafkaPresencePublisher{
-			pusher:  kq.NewPusher(c.Kafka.Brokers, c.Kafka.PresenceTopic),
+			pusher:  kq.NewPusher(c.Kafka.Brokers, c.Kafka.PresenceTopic, kq.WithBalancer(&kafka.Murmur2Balancer{})),
 			nodeID:  c.GatewayNodeID,
 		}
 	}
@@ -229,8 +294,17 @@ func newPresencePub(c config.Config, redisClient *redis.Client) PresencePublishe
 // newTypingPub creates a TypingPublisher (Kafka if brokers are configured, otherwise noop).
 func newTypingPub(c config.Config, redisClient *redis.Client) TypingPublisher {
 	if len(c.Kafka.Brokers) > 0 && c.Kafka.TypingTopic != "" && redisClient != nil {
-		logx.Infof("typing publisher: Kafka topic=%s", c.Kafka.TypingTopic)
-		return &kafkaTypingPublisher{pusher: kq.NewPusher(c.Kafka.Brokers, c.Kafka.TypingTopic)}
+		logx.Infof("typing publisher: Kafka topic=%s (balancer: murmur2)", c.Kafka.TypingTopic)
+		return &kafkaTypingPublisher{pusher: kq.NewPusher(c.Kafka.Brokers, c.Kafka.TypingTopic, kq.WithBalancer(&kafka.Murmur2Balancer{}))}
+	}
+	return &noopPublisher{}
+}
+
+// newReadReceiptPub creates a ReadReceiptPublisher (Kafka if brokers are configured, otherwise noop).
+func newReadReceiptPub(c config.Config, redisClient *redis.Client) ReadReceiptPublisher {
+	if len(c.Kafka.Brokers) > 0 && c.Kafka.ReadReceiptTopic != "" && redisClient != nil {
+		logx.Infof("read receipt publisher: Kafka topic=%s (balancer: murmur2)", c.Kafka.ReadReceiptTopic)
+		return &kafkaReadReceiptPublisher{pusher: kq.NewPusher(c.Kafka.Brokers, c.Kafka.ReadReceiptTopic, kq.WithBalancer(&kafka.Murmur2Balancer{}))}
 	}
 	return &noopPublisher{}
 }
@@ -238,6 +312,9 @@ func newTypingPub(c config.Config, redisClient *redis.Client) TypingPublisher {
 // Close releases the underlying Nacos naming clients and Redis client.
 // It should be called after the gRPC client connections are closed (i.e., after server.Stop).
 func (s *ServiceContext) Close() {
+	if s.reaperCancel != nil {
+		s.reaperCancel()
+	}
 	if s.namingClient != nil {
 		s.namingClient.CloseClient()
 	}
@@ -259,14 +336,16 @@ func (s *ServiceContext) Close() {
 
 func NewServiceContextWithAuth(c config.Config, authClient authservice.AuthService) *ServiceContext {
 	return &ServiceContext{
-		Config:      c,
-		AuthClient:  authClient,
-		Auth:        middleware.NewAuthMiddleware(c.Auth.AccessSecret).Handle,
-		CoreClient:  nil,
-		RedisClient: nil,
-		PresencePub: nil,
-		TypingPub:   nil,
-		WsManager:   ws.NewManager(),
+		Config:         c,
+		AuthClient:     authClient,
+		Auth:           middleware.NewAuthMiddleware(c.Auth.AccessSecret).Handle,
+		BotAuth:        middleware.NewBotAuthMiddleware(nil).Handle,
+		CoreClient:     nil,
+		RedisClient:    nil,
+		PresencePub:    nil,
+		TypingPub:      nil,
+		ReadReceiptPub: nil,
+		WsManager:      ws.NewManager(),
 	}
 }
 
@@ -275,9 +354,11 @@ func NewServiceContextWithLogic(c config.Config, logicUserClient userservice.Use
 		Config:          c,
 		LogicUserClient: logicUserClient,
 		Auth:            middleware.NewAuthMiddleware(c.Auth.AccessSecret).Handle,
+		BotAuth:         middleware.NewBotAuthMiddleware(nil).Handle,
 		RedisClient:     nil,
 		PresencePub:     nil,
 		TypingPub:       nil,
+		ReadReceiptPub:  nil,
 		WsManager:       ws.NewManager(),
 	}
 }
@@ -285,13 +366,15 @@ func NewServiceContextWithLogic(c config.Config, logicUserClient userservice.Use
 // NewServiceContextWithCore creates a ServiceContext with injected auth and core clients for testing.
 func NewServiceContextWithCore(c config.Config, authClient authservice.AuthService, coreClient pb.TransferServiceClient) *ServiceContext {
 	return &ServiceContext{
-		Config:      c,
-		AuthClient:  authClient,
-		CoreClient:  coreClient,
-		Auth:        middleware.NewAuthMiddleware(c.Auth.AccessSecret).Handle,
-		RedisClient: nil,
-		PresencePub: nil,
-		TypingPub:   nil,
-		WsManager:   ws.NewManager(),
+		Config:         c,
+		AuthClient:     authClient,
+		CoreClient:     coreClient,
+		Auth:           middleware.NewAuthMiddleware(c.Auth.AccessSecret).Handle,
+		BotAuth:        middleware.NewBotAuthMiddleware(nil).Handle,
+		RedisClient:    nil,
+		PresencePub:    nil,
+		TypingPub:      nil,
+		ReadReceiptPub: nil,
+		WsManager:      ws.NewManager(),
 	}
 }

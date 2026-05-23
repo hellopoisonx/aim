@@ -11,6 +11,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
+	"github.com/segmentio/kafka-go"
 	"github.com/zeromicro/go-queue/kq"
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -20,6 +21,7 @@ type ServiceContext struct {
 	PermissionChecker       service.PermissionChecker
 	UserInfoService         service.UserInfoQuerier
 	ConversationService     service.ConversationQuerier
+	BotService              *service.BotService
 	DB                      model.DBTX
 	Pool                    *pgxpool.Pool
 	ConversationEventPusher *kq.Pusher
@@ -62,11 +64,12 @@ func NewServiceContext(c config.Config) *ServiceContext {
 			}
 			svcCtx.PermissionChecker = service.NewDatabasePermissionCheckerWithLimit(queries, limit)
 			svcCtx.UserInfoService = service.NewUserInfoService(queries)
+			svcCtx.BotService = service.NewBotService(queries)
 
 			var conversationEventPusher *kq.Pusher
 			if len(c.ConversationEventProducerConf.Brokers) > 0 && c.ConversationEventProducerConf.Topic != "" {
-				conversationEventPusher = kq.NewPusher(c.ConversationEventProducerConf.Brokers, c.ConversationEventProducerConf.Topic)
-				logx.Infof("conversation event producer initialized: topic=%s", c.ConversationEventProducerConf.Topic)
+				conversationEventPusher = kq.NewPusher(c.ConversationEventProducerConf.Brokers, c.ConversationEventProducerConf.Topic, kq.WithBalancer(&kafka.Murmur2Balancer{}))
+				logx.Infof("conversation event producer initialized: topic=%s (balancer: murmur2)", c.ConversationEventProducerConf.Topic)
 			}
 
 			svcCtx.ConversationService = service.NewConversationService(queries, snowflake, pool, conversationEventPusher)

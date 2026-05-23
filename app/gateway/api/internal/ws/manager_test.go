@@ -4,6 +4,7 @@ import (
 	"context"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/ws"
 	"github.com/stretchr/testify/assert"
@@ -207,4 +208,260 @@ func TestManagerCloseAll(t *testing.T) {
 
 	mgr.CloseAll()
 	assert.Equal(t, 0, mgr.Count())
+}
+
+// ─── Reconnect Grace Tests ────────────────────────────────────────────────────
+
+func TestMarkTokenExpiredCreatesGrace(t *testing.T) {
+	t.Parallel()
+
+	mgr := ws.NewManagerWithPresence(nil, "node-1", 60)
+	mgr.SetReconnectGrace(30 * time.Second)
+
+	identity := ws.Identity{UserID: 1, DeviceID: "device-1"}
+	_, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	_, err := mgr.Register(context.Background(), identity, nil, cancel)
+	require.NoError(t, err)
+
+	// Mark as token expired
+	mgr.MarkTokenExpired(identity)
+
+	// Unregister should not publish offline but register grace
+	result, err := mgr.Unregister(context.Background(), identity)
+	require.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.False(t, result.Switched, "should not switch to offline (grace active)")
+
+	// Grace should be pending
+	assert.True(t, mgr.HasPendingGrace(identity), "grace should be pending")
+}
+
+func TestCancelPendingOfflineOnReregister(t *testing.T) {
+	t.Parallel()
+
+	mgr := ws.NewManagerWithPresence(nil, "node-1", 60)
+	mgr.SetReconnectGrace(30 * time.Second)
+
+	identity := ws.Identity{UserID: 1, DeviceID: "device-1"}
+	_, cancel1 := context.WithCancel(context.Background())
+	defer cancel1()
+
+	_, err := mgr.Register(context.Background(), identity, nil, cancel1)
+	require.NoError(t, err)
+
+	// Simulate token expired → unregister
+	mgr.MarkTokenExpired(identity)
+	_, err = mgr.Unregister(context.Background(), identity)
+	require.NoError(t, err)
+	assert.True(t, mgr.HasPendingGrace(identity))
+
+	// Re-register same user/device — should cancel pending offline
+	_, cancel2 := context.WithCancel(context.Background())
+	defer cancel2()
+	_, err = mgr.Register(context.Background(), identity, nil, cancel2)
+	require.NoError(t, err)
+
+	assert.False(t, mgr.HasPendingGrace(identity), "grace should be cancelled after re-register")
+}
+
+func TestNormalUnregisterStillPublishesOffline(t *testing.T) {
+	t.Parallel()
+
+	mgr := ws.NewManagerWithPresence(nil, "node-1", 60)
+	mgr.SetReconnectGrace(30 * time.Second)
+
+	identity := ws.Identity{UserID: 1, DeviceID: "device-1"}
+	_, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	_, err := mgr.Register(context.Background(), identity, nil, cancel)
+	require.NoError(t, err)
+
+	// Normal unregister (no token expired mark)
+	result, err := mgr.Unregister(context.Background(), identity)
+	require.NoError(t, err)
+	// With nil redis, the PresenceResult just returns empty, but the connection
+	// is removed and no grace is registered
+	assert.False(t, mgr.HasPendingGrace(identity), "no grace for normal disconnect")
+	assert.Equal(t, 0, mgr.Count())
+	require.NotNil(t, result)
+}
+
+// ─── Stale Connection Tests ──────────────────────────────────────────────────
+
+func TestScanStaleConnections(t *testing.T) {
+	t.Parallel()
+
+	mgr := ws.NewManagerWithPresence(nil, "node-1", 60)
+	mgr.SetHeartbeatTimeout(10 * time.Second)
+
+	identity := ws.Identity{UserID: 1, DeviceID: "device-1"}
+	_, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	_, err := mgr.Register(context.Background(), identity, nil, cancel)
+	require.NoError(t, err)
+
+	// Immediately after register, LastSeen is now — connection is not stale
+	stale := mgr.ScanStaleConnections(time.Now().UnixMilli())
+	assert.Empty(t, stale)
+
+	// Move time forward past heartbeat timeout
+	future := time.Now().Add(20 * time.Second).UnixMilli()
+	stale = mgr.ScanStaleConnections(future)
+	assert.Len(t, stale, 1)
+	assert.Equal(t, identity, stale[0])
+}
+
+func TestRecordHeartbeatPreventsStale(t *testing.T) {
+	t.Parallel()
+
+	mgr := ws.NewManagerWithPresence(nil, "node-1", 60)
+	mgr.SetHeartbeatTimeout(10 * time.Second)
+
+	identity := ws.Identity{UserID: 1, DeviceID: "device-1"}
+	_, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	_, err := mgr.Register(context.Background(), identity, nil, cancel)
+	require.NoError(t, err)
+
+	// Record heartbeat now — updates LastSeen
+	mgr.RecordHeartbeat(context.Background(), identity)
+
+	// Immediately after heartbeat, connection should not be stale
+	stale := mgr.ScanStaleConnections(time.Now().UnixMilli())
+	assert.Empty(t, stale)
+
+	// After heartbeat but before timeout — still not stale
+	stale = mgr.ScanStaleConnections(time.Now().Add(5 * time.Second).UnixMilli())
+	assert.Empty(t, stale)
+}
+
+func TestScanStaleConnectionsNoTimeout(t *testing.T) {
+	t.Parallel()
+
+	// Manager with zero heartbeat timeout → scanning is disabled
+	mgr := ws.NewManager()
+	mgr.SetHeartbeatTimeout(0)
+
+	identity := ws.Identity{UserID: 1, DeviceID: "device-1"}
+	_, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	_, err := mgr.Register(context.Background(), identity, nil, cancel)
+	require.NoError(t, err)
+
+	stale := mgr.ScanStaleConnections(time.Now().Add(1 * time.Hour).UnixMilli())
+	assert.Nil(t, stale, "nil returned when heartbeat timeout is disabled")
+}
+
+// ─── Grace Expiry Tests ─────────────────────────────────────────────────────
+
+func TestScanExpiredGraces(t *testing.T) {
+	t.Parallel()
+
+	mgr := ws.NewManagerWithPresence(nil, "node-1", 60)
+	mgr.SetReconnectGrace(100 * time.Millisecond)
+
+	identity := ws.Identity{UserID: 1, DeviceID: "device-1"}
+	_, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	_, err := mgr.Register(context.Background(), identity, nil, cancel)
+	require.NoError(t, err)
+
+	mgr.MarkTokenExpired(identity)
+	_, err = mgr.Unregister(context.Background(), identity)
+	require.NoError(t, err)
+
+	// Grace not expired yet
+	expired := mgr.ScanExpiredGraces(time.Now())
+	assert.Empty(t, expired)
+
+	// Wait for grace to expire
+	time.Sleep(150 * time.Millisecond)
+	expired = mgr.ScanExpiredGraces(time.Now())
+	assert.Len(t, expired, 1)
+	assert.Equal(t, identity, expired[0])
+
+	// Remove expired grace
+	mgr.RemoveExpiredGrace(identity)
+	assert.False(t, mgr.HasPendingGrace(identity))
+}
+
+func TestForceOfflineForExpiredGrace(t *testing.T) {
+	t.Parallel()
+
+	mgr := ws.NewManagerWithPresence(nil, "node-1", 60)
+	mgr.SetReconnectGrace(30 * time.Second)
+
+	identity := ws.Identity{UserID: 1, DeviceID: "device-1"}
+
+	// With nil redis, ForceOffline returns empty result
+	result, err := mgr.ForceOfflineForExpiredGrace(context.Background(), identity)
+	require.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.False(t, result.Switched)
+}
+
+// ─── Multi-device Tests ──────────────────────────────────────────────────────
+
+func TestMultiDeviceOnlineOffline(t *testing.T) {
+	t.Parallel()
+
+	mgr := ws.NewManagerWithPresence(nil, "node-1", 60)
+	mgr.SetReconnectGrace(30 * time.Second)
+
+	identity1 := ws.Identity{UserID: 1, DeviceID: "device-1"}
+	identity2 := ws.Identity{UserID: 1, DeviceID: "device-2"}
+	_, cancel1 := context.WithCancel(context.Background())
+	_, cancel2 := context.WithCancel(context.Background())
+
+	_, err := mgr.Register(context.Background(), identity1, nil, cancel1)
+	require.NoError(t, err)
+	_, err = mgr.Register(context.Background(), identity2, nil, cancel2)
+	require.NoError(t, err)
+
+	assert.Equal(t, 2, mgr.CountByUser(1))
+
+	// Unregister one device — user should NOT go offline (still 1 device)
+	result, err := mgr.Unregister(context.Background(), identity1)
+	require.NoError(t, err)
+	assert.NotNil(t, result)
+	// With nil redis the presence result just returns empty
+	assert.Equal(t, 1, mgr.CountByUser(1))
+
+	// Unregister last device
+	result, err = mgr.Unregister(context.Background(), identity2)
+	require.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.Equal(t, 0, mgr.CountByUser(1))
+}
+
+func TestMultiDeviceTokenExpiredDoesNotOffline(t *testing.T) {
+	t.Parallel()
+
+	mgr := ws.NewManagerWithPresence(nil, "node-1", 60)
+	mgr.SetReconnectGrace(30 * time.Second)
+
+	identity1 := ws.Identity{UserID: 1, DeviceID: "device-1"}
+	identity2 := ws.Identity{UserID: 1, DeviceID: "device-2"}
+	_, cancel1 := context.WithCancel(context.Background())
+	_, cancel2 := context.WithCancel(context.Background())
+
+	_, err := mgr.Register(context.Background(), identity1, nil, cancel1)
+	require.NoError(t, err)
+	_, err = mgr.Register(context.Background(), identity2, nil, cancel2)
+	require.NoError(t, err)
+
+	// Device 1 token expires
+	mgr.MarkTokenExpired(identity1)
+	result, err := mgr.Unregister(context.Background(), identity1)
+	require.NoError(t, err)
+	// Should not switch to offline (grace + other device still connected)
+	assert.False(t, result.Switched, "should not switch to offline: another device is connected")
+	assert.Equal(t, 1, mgr.CountByUser(1)) // device-2 still connected
 }

@@ -8,6 +8,27 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type BotToken struct {
+	ID        int64              `json:"id"`
+	BotUserID int64              `json:"bot_user_id"`
+	TokenHash string             `json:"token_hash"`
+	Name      string             `json:"name"`
+	Scopes    []string           `json:"scopes"`
+	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
+	RevokedAt pgtype.Timestamptz `json:"revoked_at"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
+type BotWebhook struct {
+	BotUserID  int64              `json:"bot_user_id"`
+	Url        string             `json:"url"`
+	SecretHash string             `json:"secret_hash"`
+	Events     []string           `json:"events"`
+	Enabled    bool               `json:"enabled"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
+}
+
 type Conversation struct {
 	ID               int64              `json:"id"`
 	ConversationType string             `json:"conversation_type"`
@@ -25,6 +46,13 @@ type ConversationMember struct {
 	MutedUntil     pgtype.Timestamptz `json:"muted_until"`
 	JoinedAt       pgtype.Timestamptz `json:"joined_at"`
 	Role           string             `json:"role"`
+}
+
+type ConversationReadState struct {
+	ConversationID    int64              `json:"conversation_id"`
+	UserID            int64              `json:"user_id"`
+	LastReadMessageID int64              `json:"last_read_message_id"`
+	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
 }
 
 type Friendship struct {
@@ -54,4 +82,5 @@ type UserInfo struct {
 	Avatar    string             `json:"avatar"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+	UserType  string             `json:"user_type"`
 }

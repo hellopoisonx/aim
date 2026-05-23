@@ -71,6 +71,7 @@ func TestDecodeAllServerPayloadTypes(t *testing.T) {
 		{name: "push presence", frameType: FrameTypePushPresence, payload: &pb.PushPresencePayload{UserId: 2}},
 		{name: "push notification", frameType: FrameTypePushNotification, payload: &pb.PushNotificationPayload{Title: "notice"}},
 		{name: "push typing", frameType: FrameTypePushTyping, payload: &pb.PushTypingPayload{UserId: 3}},
+		{name: "push read receipt", frameType: FrameTypePushReadReceipt, payload: &pb.PushReadReceiptPayload{ConversationId: 1, UserId: 2}},
 		{name: "reconnect", frameType: FrameTypeReconnect, payload: &pb.ReconnectPayload{ReconnectDelayMs: 5000}},
 		{name: "server ack", frameType: FrameTypeServerAck, payload: &pb.ServerAckPayload{AckSeq: 4}},
 		{name: "token expired", frameType: FrameTypeTokenExpired, payload: &pb.TokenExpiredPayload{Reason: "access_token_expired"}},

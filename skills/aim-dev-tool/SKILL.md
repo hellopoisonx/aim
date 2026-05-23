@@ -48,6 +48,7 @@ dev-tool/benchmark.py
 | `login` | 批量登录 | `python benchmark.py login --users 100` |
 | `friend-chain` | 好友链（注册→登录→加好友→接受） | `python benchmark.py friend-chain --users 50` |
 | `ws-message` | WS 消息并发发送 | `python benchmark.py ws-message --users 20 --messages-per-user 100` |
+| `presence` | 好友在线状态查询压测 | `python benchmark.py presence --users 50 --rps 100` |
 | `mixed` | REST + WS 混合负载 | `python benchmark.py mixed --users 100 --duration 30 --rps 200` |
 
 ### 通用参数
@@ -248,6 +249,7 @@ python generate_fixtures.py --count 5000   # 自定义数量
 
 ## 最近变更
 
+- 2026-05-23: 交互模式改用 `prompt_toolkit.patch_stdout` 包裹输入循环，后台 WS 推送/接收打印会显示在 prompt 上方并保留当前输入；新增 `presence-friends` REST 命令、`ws-read-receipt`/`ws-ack` WS 命令；`run-all` 覆盖好友在线状态接口；`benchmark.py` 新增 `presence` 场景，`mixed` REST 负载补充 presence 查询。
 - 2026-05-22: 新增 `group-create` CLI 命令和交互命令，调用 `POST /api/conversations/group` 专用创建群聊端点。`RESTClient` 新增 `create_group()` 方法（支持 `name`/`avatar` 可选参数）。详见 `references/commands.md`。
 - 2026-05-22: 新增群管理 REST 命令：`conv-members`（获取成员详情）、`conv-add-members`（添加成员）、`conv-remove-member`（移除成员）、`conv-leave`（退出群聊）、`conv-dismiss`（解散群聊）、`conv-update`（更新群信息）；`conv-create` 新增 `--name` 参数；`RESTClient` 新增 `_delete`/`_put` HTTP 方法和 6 个群管理方法；重新生成 `ws_pb2.py`/`gateway_pb2.py`（新增 `is_system` 字段）。
 - 2026-05-22: `WSClient` 新增 `rest_client` 参数和 `_try_refresh_token()` 方法：`reconnect()` 重连前自动检测 Token 过期并通过 REST API 刷新。benchmark 数据流扩展：`user_creds`/`conv_pairs` 元组增加 `refresh_token`/`expires_at`/`device_id`，`WsMessageScenario` 和 `MixedScenario` 为每个 `WSClient` 注入对应的 `RESTClient`。压测配置 `dev-tool/etc/auth.yaml` 的 `AccessTTL` 从 `5m` 增大到 `30m`。详见 `aim-ws-token-management` skill。

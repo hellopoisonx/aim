@@ -25,7 +25,7 @@ func NewGetConversationMembersLogic(ctx context.Context, svcCtx *svc.ServiceCont
 	}
 }
 
-// GetConversationMembers retrieves the member IDs for a conversation.
+// GetConversationMembers retrieves the member IDs and conversation type for a conversation.
 func (l *GetConversationMembersLogic) GetConversationMembers(in *pb.GetConversationMembersReq) (*pb.GetConversationMembersResp, error) {
 	if in.GetConversationId() <= 0 {
 		return nil, errorx.NewCodeError(errorx.CodeBadInput, "conversation_id is required")
@@ -34,6 +34,11 @@ func (l *GetConversationMembersLogic) GetConversationMembers(in *pb.GetConversat
 	convSvc := l.svcCtx.ConversationService
 	if convSvc == nil {
 		return nil, errorx.NewCodeError(errorx.CodeInternal, "conversation service is not configured")
+	}
+
+	conv, err := convSvc.GetConversationByID(l.ctx, in.GetConversationId())
+	if err != nil {
+		return nil, service.ConversationToGRPCError(err)
 	}
 
 	members, err := convSvc.GetConversationMembers(l.ctx, in.GetConversationId())
@@ -47,7 +52,8 @@ func (l *GetConversationMembersLogic) GetConversationMembers(in *pb.GetConversat
 	}
 
 	return &pb.GetConversationMembersResp{
-		ConversationId: in.GetConversationId(),
-		MemberIds:      memberIDs,
+		ConversationId:   in.GetConversationId(),
+		MemberIds:        memberIDs,
+		ConversationType: conv.ConversationType,
 	}, nil
 }

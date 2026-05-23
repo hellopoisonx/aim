@@ -30,10 +30,14 @@ type (
 	GetUserConversationsResp         = pb.GetUserConversationsResp
 	LeaveGroupReq                    = pb.LeaveGroupReq
 	LeaveGroupResp                   = pb.LeaveGroupResp
+	ListConversationReadStatesReq    = pb.ListConversationReadStatesReq
+	ListConversationReadStatesResp   = pb.ListConversationReadStatesResp
 	RemoveGroupMembersReq            = pb.RemoveGroupMembersReq
 	RemoveGroupMembersResp           = pb.RemoveGroupMembersResp
 	UpdateGroupInfoReq               = pb.UpdateGroupInfoReq
 	UpdateGroupInfoResp              = pb.UpdateGroupInfoResp
+	UpdateReadReceiptReq             = pb.UpdateReadReceiptReq
+	UpdateReadReceiptResp            = pb.UpdateReadReceiptResp
 
 	ConversationService interface {
 		CreateConversation(ctx context.Context, in *CreateConversationReq, opts ...grpc.CallOption) (*CreateConversationResp, error)
@@ -46,6 +50,10 @@ type (
 		DismissGroup(ctx context.Context, in *DismissGroupReq, opts ...grpc.CallOption) (*DismissGroupResp, error)
 		UpdateGroupInfo(ctx context.Context, in *UpdateGroupInfoReq, opts ...grpc.CallOption) (*UpdateGroupInfoResp, error)
 		GetConversationMembersDetail(ctx context.Context, in *GetConversationMembersDetailReq, opts ...grpc.CallOption) (*GetConversationMembersDetailResp, error)
+		// UpdateReadReceipt upserts the caller's last-read cursor for a conversation.
+		UpdateReadReceipt(ctx context.Context, in *UpdateReadReceiptReq, opts ...grpc.CallOption) (*UpdateReadReceiptResp, error)
+		// ListConversationReadStates returns the per-member last-read cursors for a conversation.
+		ListConversationReadStates(ctx context.Context, in *ListConversationReadStatesReq, opts ...grpc.CallOption) (*ListConversationReadStatesResp, error)
 	}
 
 	defaultConversationService struct {
@@ -107,4 +115,16 @@ func (m *defaultConversationService) UpdateGroupInfo(ctx context.Context, in *Up
 func (m *defaultConversationService) GetConversationMembersDetail(ctx context.Context, in *GetConversationMembersDetailReq, opts ...grpc.CallOption) (*GetConversationMembersDetailResp, error) {
 	client := pb.NewConversationServiceClient(m.cli.Conn())
 	return client.GetConversationMembersDetail(ctx, in, opts...)
+}
+
+// UpdateReadReceipt upserts the caller's last-read cursor for a conversation.
+func (m *defaultConversationService) UpdateReadReceipt(ctx context.Context, in *UpdateReadReceiptReq, opts ...grpc.CallOption) (*UpdateReadReceiptResp, error) {
+	client := pb.NewConversationServiceClient(m.cli.Conn())
+	return client.UpdateReadReceipt(ctx, in, opts...)
+}
+
+// ListConversationReadStates returns the per-member last-read cursors for a conversation.
+func (m *defaultConversationService) ListConversationReadStates(ctx context.Context, in *ListConversationReadStatesReq, opts ...grpc.CallOption) (*ListConversationReadStatesResp, error) {
+	client := pb.NewConversationServiceClient(m.cli.Conn())
+	return client.ListConversationReadStates(ctx, in, opts...)
 }

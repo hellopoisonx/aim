@@ -51,21 +51,24 @@ func TestSQLUserStore(t *testing.T) {
 		int64(11),
 		"ada@example.com",
 		"hash",
+		"Ada",
 		int16(StatusNormal),
 		pgtype.Timestamptz{},
 		pgtype.Timestamptz{},
 	}}}
 	store := NewSQLUserStore(model.New(db))
 
-	created, err := store.CreateUser(context.Background(), "ada@example.com", "hash")
+	created, err := store.CreateUser(context.Background(), "ada@example.com", "hash", "Ada")
 	require.NoError(t, err)
-	require.Len(t, db.args, 3)
+	require.Len(t, db.args, 4)
 	require.IsType(t, int64(0), db.args[0])
 	require.Positive(t, db.args[0].(int64))
 	require.Equal(t, "ada@example.com", db.args[1])
 	require.Equal(t, "hash", db.args[2])
+	require.Equal(t, "Ada", db.args[3])
 	require.Equal(t, int64(11), created.ID)
 	require.Equal(t, "ada@example.com", created.Email)
+	require.Equal(t, "Ada", created.Name)
 
 	found, err := store.GetUserByEmail(context.Background(), "ada@example.com")
 	require.NoError(t, err)
@@ -75,7 +78,7 @@ func TestSQLUserStore(t *testing.T) {
 func TestSQLUserStorePropagatesQueryErrors(t *testing.T) {
 	store := NewSQLUserStore(model.New(&stubDB{row: stubRow{err: errQuery}}))
 
-	_, err := store.CreateUser(context.Background(), "ada@example.com", "hash")
+	_, err := store.CreateUser(context.Background(), "ada@example.com", "hash", "Ada")
 	require.ErrorIs(t, err, errQuery)
 
 	_, err = store.GetUserByEmail(context.Background(), "ada@example.com")

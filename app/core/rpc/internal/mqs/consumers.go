@@ -26,6 +26,12 @@ func Consumers(ctx context.Context, svcCtx *svc.ServiceContext) []service.Servic
 		logx.Infof("typing consumer registered: topic=%s", svcCtx.Config.TypingConsumerConf.Topic)
 	}
 
+	// Read receipt consumer (optional).
+	if len(svcCtx.Config.ReadReceiptConsumerConf.Brokers) > 0 && svcCtx.Config.ReadReceiptConsumerConf.Topic != "" {
+		svcs = append(svcs, kq.MustNewQueue(svcCtx.Config.ReadReceiptConsumerConf, NewReadReceiptConsumer(ctx, svcCtx)))
+		logx.Infof("read receipt consumer registered: topic=%s", svcCtx.Config.ReadReceiptConsumerConf.Topic)
+	}
+
 	// Conversation event consumer (optional).
 	if len(svcCtx.Config.ConversationEventConsumerConf.Brokers) > 0 && svcCtx.Config.ConversationEventConsumerConf.Topic != "" {
 		svcs = append(svcs, kq.MustNewQueue(svcCtx.Config.ConversationEventConsumerConf, NewConversationEventConsumer(ctx, svcCtx)))

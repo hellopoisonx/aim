@@ -21,10 +21,11 @@ func TestGatewayAuthProxyLogic(t *testing.T) {
 	svcCtx := svc.NewServiceContextWithAuth(config.Config{}, client)
 	ctx := context.Background()
 
-	registered, err := NewRegisterLogic(ctx, svcCtx).Register(&types.RegisterRequest{Email: "ada@example.com", Password: "password123", DeviceId: "desktop-1"})
+	registered, err := NewRegisterLogic(ctx, svcCtx).Register(&types.RegisterRequest{Email: "ada@example.com", Password: "password123", Username: "Ada", DeviceId: "desktop-1"})
 	require.NoError(t, err)
 	require.Equal(t, int64(7), registered.UserId)
-	require.Equal(t, "ada@example.com", client.register.Email)
+	require.Equal(t, "ada@example.com", client.registerEmail)
+	require.Equal(t, "Ada", client.registerUsername)
 
 	loggedIn, err := NewLoginLogic(ctx, svcCtx).Login(&types.LoginRequest{Email: "ada@example.com", Password: "password123", DeviceId: "desktop-1"})
 	require.NoError(t, err)
@@ -43,7 +44,7 @@ func TestGatewayAuthProxyLogicSanitizesPlainError(t *testing.T) {
 	svcCtx := svc.NewServiceContextWithAuth(config.Config{}, &failingAuthClient{err: errors.New("postgres password leaked")})
 	ctx := context.Background()
 
-	_, err := NewRegisterLogic(ctx, svcCtx).Register(&types.RegisterRequest{Email: "ada@example.com", Password: "password123", DeviceId: "desktop-1"})
+	_, err := NewRegisterLogic(ctx, svcCtx).Register(&types.RegisterRequest{Email: "ada@example.com", Password: "password123", Username: "Ada", DeviceId: "desktop-1"})
 	requireInternalError(t, err)
 
 	_, err = NewLoginLogic(ctx, svcCtx).Login(&types.LoginRequest{Email: "ada@example.com", Password: "password123", DeviceId: "desktop-1"})
@@ -87,7 +88,7 @@ func TestGatewayAuthProxyPreservesGrpcConflict(t *testing.T) {
 	svcCtx := svc.NewServiceContextWithAuth(config.Config{}, client)
 	ctx := context.Background()
 
-	_, err := NewRegisterLogic(ctx, svcCtx).Register(&types.RegisterRequest{Email: "ada@example.com", Password: "password123", DeviceId: "desktop-1"})
+	_, err := NewRegisterLogic(ctx, svcCtx).Register(&types.RegisterRequest{Email: "ada@example.com", Password: "password123", Username: "Ada", DeviceId: "desktop-1"})
 	requireCodeError(t, err, 40900, "email already registered")
 }
 
@@ -110,11 +111,14 @@ func requireCodeError(t *testing.T, err error, wantCode int, wantMsg string) {
 }
 
 type proxyAuthClient struct {
-	register authservice.RegisterReq
+	registerEmail    string
+	registerUsername string
 }
 
 func (c *proxyAuthClient) Register(_ context.Context, req *authservice.RegisterReq, _ ...grpc.CallOption) (*authservice.RegisterResp, error) {
-	c.register.Email = req.Email
+	c.registerEmail = req.GetEmail()
+	c.registerUsername = req.GetUsername()
+
 	return &authservice.RegisterResp{UserId: 7}, nil
 }
 

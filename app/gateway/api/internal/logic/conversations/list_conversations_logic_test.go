@@ -63,7 +63,7 @@ func TestListConversations(t *testing.T) {
 		wantErr   *errorx.CodeError
 	}{
 		{
-			name: "unauthorized - no identity in context",
+			name:      "unauthorized - no identity in context",
 			mockSetup: func(*mockListConversationsService) {},
 			wantResp:  nil,
 			wantErr:   errorx.NewCodeError(errorx.CodeAuth, "unauthorized"),
@@ -234,4 +234,10 @@ func (m *mockListConversationsService) UpdateGroupInfo(ctx context.Context, in *
 }
 func (m *mockListConversationsService) GetConversationMembersDetail(ctx context.Context, in *pb.GetConversationMembersDetailReq, opts ...grpc.CallOption) (*pb.GetConversationMembersDetailResp, error) {
 	return nil, errors.New("GetConversationMembersDetail not implemented")
+}
+func (m *mockListConversationsService) UpdateReadReceipt(ctx context.Context, in *pb.UpdateReadReceiptReq, opts ...grpc.CallOption) (*pb.UpdateReadReceiptResp, error) {
+	return nil, errors.New("UpdateReadReceipt not implemented")
+}
+func (m *mockListConversationsService) ListConversationReadStates(ctx context.Context, in *pb.ListConversationReadStatesReq, opts ...grpc.CallOption) (*pb.ListConversationReadStatesResp, error) {
+	return nil, errors.New("ListConversationReadStates not implemented")
 }

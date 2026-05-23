@@ -2,6 +2,7 @@ package conversations
 
 import (
 	"context"
+	"strings"
 
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
@@ -36,12 +37,26 @@ func (l *UpdateGroupInfoLogic) UpdateGroupInfo(req *types.UpdateGroupInfoRequest
 		return nil, errorx.NewCodeError(errorx.CodeInternal, "internal error")
 	}
 
+	var name, avatar *string
+	if req.Name != nil {
+		trimmed := strings.TrimSpace(*req.Name)
+		if trimmed != "" {
+			name = &trimmed
+		}
+	}
+	if req.Avatar != nil {
+		trimmed := strings.TrimSpace(*req.Avatar)
+		if trimmed != "" {
+			avatar = &trimmed
+		}
+	}
+
 	rpcResp, err := l.svcCtx.LogicConversationClient.UpdateGroupInfo(l.ctx, &conversationservice.UpdateGroupInfoReq{
 		ConversationId: req.Id,
 		OperatorId:     identity.UserID,
 		OperatorName:   "",
-		Name:           req.Name,
-		Avatar:         req.Avatar,
+		Name:           name,
+		Avatar:         avatar,
 	})
 	if err != nil {
 		return nil, sanitizeLogicRPCError(l, "update group info", err)

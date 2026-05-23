@@ -9,7 +9,7 @@ info (
 type RegisterRequest {
 	Email    string `json:"email" validate:"required,email"`
 	Password string `json:"password" validate:"required,min=8"`
-	Username string `json:"username,optional"`
+	Username string `json:"username" validate:"required"`
 	Avatar   string `json:"avatar,optional"`
 	DeviceId string `json:"device_id" validate:"required"`
 }
@@ -112,21 +112,23 @@ type GetUserByNameResponse {
 }
 
 type UserListItem {
-	Id     string `json:"id"`
-	Email  string `json:"email"`
-	Avatar string `json:"avatar"`
+	Id       string `json:"id"`
+	Nickname string `json:"nickname"`
+	Email    string `json:"email"`
+	Avatar   string `json:"avatar"`
 }
 
 type CreateGroupRequest {
 	MemberIds []int64 `json:"member_ids" validate:"required,min=1"`
-	Name      string  `json:"name,optional"`
+	Name      string  `json:"name" validate:"required"`
 	Avatar    string  `json:"avatar,optional"`
 }
 
 type CreateConversationRequest {
 	ConversationType string  `json:"conversation_type" validate:"required,oneof=direct group"`
 	MemberIds        []int64 `json:"member_ids" validate:"required,min=1"`
-	Name             string  `json:"name,optional"`
+	Name             string  `json:"name" validate:"required"`
+	Avatar           string  `json:"avatar,optional"`
 }
 
 type CreateConversationResponse {
@@ -147,21 +149,35 @@ type GetConversationHistoryRequest {
 	Limit           int32 `form:"limit,default=50,optional"`
 }
 
+type SenderInfo {
+	Name  string `json:"name"`
+	Email string `json:"email"`
+}
+
 type MessageItem {
-	Id             int64  `json:"id"`
-	ConversationId int64  `json:"conversation_id"`
-	SenderId       int64  `json:"sender_id"`
-	MessageType    string `json:"message_type"`
-	Content        string `json:"content"`
-	ClientMsgId    string `json:"client_msg_id"`
-	CreatedAt      int64  `json:"created_at"`
+	Id             int64      `json:"id"`
+	ConversationId int64      `json:"conversation_id"`
+	SenderId       int64      `json:"sender_id"`
+	SenderInfo     SenderInfo `json:"sender_info"`
+	MessageType    string     `json:"message_type"`
+	Content        string     `json:"content"`
+	ClientMsgId    string     `json:"client_msg_id"`
+	CreatedAt      int64      `json:"created_at"`
+	Mentions       []string   `json:"mentions,optional"`
+}
+
+type ReadStateItem {
+	UserId            int64 `json:"user_id"`
+	LastReadMessageId int64 `json:"last_read_message_id"`
+	UpdatedAt         int64 `json:"updated_at"`
 }
 
 type GetConversationHistoryResponse {
-	Messages            []MessageItem `json:"messages"`
-	NextCursorCreatedAt int64         `json:"next_cursor_created_at"`
-	NextCursorId        int64         `json:"next_cursor_id"`
-	HasMore             bool          `json:"has_more"`
+	Messages            []MessageItem   `json:"messages"`
+	NextCursorCreatedAt int64           `json:"next_cursor_created_at"`
+	NextCursorId        int64           `json:"next_cursor_id"`
+	HasMore             bool            `json:"has_more"`
+	ReadStates          []ReadStateItem `json:"read_states"`
 }
 
 type ConversationItem {
@@ -348,5 +364,112 @@ type GetFriendsPresenceResponse {
 service gateway-api {
 	@handler GetFriendsPresence
 	get /friends returns (GetFriendsPresenceResponse)
+}
+
+// ===== Bot OpenAPI =====
+//
+// All routes below are authenticated via BotAuth, which expects a header of
+// the form `Authorization: Bot <token>`. The token format is documented in
+// app/shared/bottoken. BotAuth resolves the token to a bot_user_id via
+// logic.BotService.ValidateBotToken and rejects:
+//   - missing/malformed tokens (CodeBotTokenInvalid → HTTP 401)
+//   - revoked or expired tokens (CodeBotTokenRevoked → HTTP 401)
+//   - tokens belonging to disabled bots (CodeBotDisabled → HTTP 401)
+type BotMe {
+	BotUserId int64    `json:"bot_user_id"`
+	Nickname  string   `json:"nickname"`
+	Avatar    string   `json:"avatar"`
+	Status    int32    `json:"status"`
+	Scopes    []string `json:"scopes"`
+}
+
+type BotMeResponse {
+	Bot BotMe `json:"bot"`
+}
+
+type BotConversationItem {
+	ConversationId   int64  `json:"conversation_id"`
+	ConversationType string `json:"conversation_type"`
+	Name             string `json:"name"`
+	Avatar           string `json:"avatar"`
+	CreatedAt        int64  `json:"created_at"`
+}
+
+type BotListConversationsResponse {
+	Conversations []BotConversationItem `json:"conversations"`
+}
+
+type BotSendMessageRequest {
+	ConversationId int64    `json:"conversation_id" validate:"required"`
+	MessageType    string   `json:"message_type" validate:"required,max=32"`
+	Content        string   `json:"content" validate:"required"`
+	ClientMsgId    string   `json:"client_msg_id" validate:"required"`
+	Mentions       []string `json:"mentions,optional"`
+}
+
+type BotSendMessageResponse {
+	MessageId   int64  `json:"message_id"`
+	ClientMsgId string `json:"client_msg_id"`
+	AcceptedAt  int64  `json:"accepted_at"`
+}
+
+type BotWebhookConfig {
+	Url       string   `json:"url"`
+	Events    []string `json:"events"`
+	Enabled   bool     `json:"enabled"`
+	UpdatedAt int64    `json:"updated_at"`
+}
+
+type BotGetWebhookResponse {
+	Configured bool             `json:"configured"`
+	Webhook    BotWebhookConfig `json:"webhook"`
+}
+
+type BotSetWebhookRequest {
+	Url     string   `json:"url" validate:"required,url"`
+	Events  []string `json:"events,optional"`
+	Enabled *bool    `json:"enabled,optional"`
+	// Secret is the HMAC-SHA256 signing secret. Leave blank to keep the
+	// existing secret on update; required when creating a new webhook.
+	Secret string `json:"secret,optional"`
+	// RotateSecret, when true, generates a fresh secret and returns its
+	// plaintext exactly once in the response. Mutually exclusive with Secret.
+	RotateSecret bool `json:"rotate_secret,optional"`
+}
+
+type BotSetWebhookResponse {
+	Webhook BotWebhookConfig `json:"webhook"`
+	// PlaintextSecret is populated only when a secret was created or rotated
+	// in this request. The server never persists or returns it again.
+	PlaintextSecret string `json:"plaintext_secret,omitempty"`
+}
+
+type BotDeleteWebhookResponse {
+	Deleted bool `json:"deleted"`
+}
+
+@server (
+	middleware: BotAuth
+	prefix:     /api/bot/v1
+	group:      bot
+)
+service gateway-api {
+	@handler BotGetMe
+	get /me returns (BotMeResponse)
+
+	@handler BotListConversations
+	get /conversations returns (BotListConversationsResponse)
+
+	@handler BotSendMessage
+	post /messages (BotSendMessageRequest) returns (BotSendMessageResponse)
+
+	@handler BotGetWebhook
+	get /webhook returns (BotGetWebhookResponse)
+
+	@handler BotSetWebhook
+	put /webhook (BotSetWebhookRequest) returns (BotSetWebhookResponse)
+
+	@handler BotDeleteWebhook
+	delete /webhook returns (BotDeleteWebhookResponse)
 }
 

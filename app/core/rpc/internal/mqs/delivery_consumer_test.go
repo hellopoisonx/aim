@@ -58,6 +58,14 @@ func (f *fakeGatewayClient) PushTyping(ctx context.Context, req *gwpb.PushTyping
 	return &gwpb.PushTypingResp{Success: true}, nil
 }
 
+func (f *fakeGatewayClient) PushReadReceipt(ctx context.Context, req *gwpb.PushReadReceiptReq) (*gwpb.PushReadReceiptResp, error) {
+	return &gwpb.PushReadReceiptResp{Success: true}, nil
+}
+
+func (f *fakeGatewayClient) PushNotification(ctx context.Context, req *gwpb.PushNotificationReq) (*gwpb.PushNotificationResp, error) {
+	return &gwpb.PushNotificationResp{Success: true}, nil
+}
+
 func newFakeGatewayClient() *fakeGatewayClient {
 	return &fakeGatewayClient{pushResp: &gwpb.PushMessageResp{Success: true}}
 }
@@ -111,6 +119,14 @@ func (f *fakeConversationClient) UpdateGroupInfo(context.Context, *logicpb.Updat
 
 func (f *fakeConversationClient) GetConversationMembersDetail(context.Context, *logicpb.GetConversationMembersDetailReq, ...grpc.CallOption) (*logicpb.GetConversationMembersDetailResp, error) {
 	return nil, errors.New("GetConversationMembersDetail not implemented")
+}
+
+func (f *fakeConversationClient) UpdateReadReceipt(context.Context, *logicpb.UpdateReadReceiptReq, ...grpc.CallOption) (*logicpb.UpdateReadReceiptResp, error) {
+	return nil, errors.New("UpdateReadReceipt not implemented")
+}
+
+func (f *fakeConversationClient) ListConversationReadStates(context.Context, *logicpb.ListConversationReadStatesReq, ...grpc.CallOption) (*logicpb.ListConversationReadStatesResp, error) {
+	return nil, errors.New("ListConversationReadStates not implemented")
 }
 
 var _ logicpb.ConversationServiceClient = (*fakeConversationClient)(nil)
@@ -374,9 +390,8 @@ func TestDeliveryConsumer_Consume_FanoutToConversationMembers(t *testing.T) {
 
 	err = consumer.Consume(context.Background(), "200", string(value))
 	require.NoError(t, err)
-	require.Len(t, fakeGw.pushes, 2)
-	require.Equal(t, int64(100), fakeGw.pushes[0].req.TargetUserId)
-	require.Equal(t, int64(200), fakeGw.pushes[1].req.TargetUserId)
+	require.Len(t, fakeGw.pushes, 1)
+	require.Equal(t, int64(200), fakeGw.pushes[0].req.TargetUserId)
 }
 
 func TestDeliveryConsumer_Consume_MemberLookupFailure(t *testing.T) {

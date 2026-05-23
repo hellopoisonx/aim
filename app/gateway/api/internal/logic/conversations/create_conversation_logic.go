@@ -2,6 +2,7 @@ package conversations
 
 import (
 	"context"
+	"strings"
 
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
@@ -36,7 +37,23 @@ func (l *CreateConversationLogic) CreateConversation(req *types.CreateConversati
 		return nil, errorx.NewCodeError(errorx.CodeBadInput, "conversation_type must be 'direct' or 'group'")
 	}
 
-	if len(req.MemberIds) == 0 {
+	name := strings.TrimSpace(req.Name)
+	if name == "" {
+		return nil, errorx.NewCodeError(errorx.CodeBadInput, "name is required")
+	}
+
+	memberIDs := req.MemberIds
+	if req.ConversationType == "direct" {
+		if len(memberIDs) != 1 {
+			return nil, errorx.NewCodeError(errorx.CodeBadInput, "direct conversation member_ids must contain exactly one peer user id")
+		}
+		if memberIDs[0] <= 0 {
+			return nil, errorx.NewCodeError(errorx.CodeBadInput, "member_ids must contain positive user ids")
+		}
+		if memberIDs[0] == identity.UserID {
+			return nil, errorx.NewCodeError(errorx.CodeBadInput, "direct conversation peer must not be creator")
+		}
+	} else if len(memberIDs) == 0 {
 		return nil, errorx.NewCodeError(errorx.CodeBadInput, "member_ids must not be empty")
 	}
 
@@ -47,8 +64,9 @@ func (l *CreateConversationLogic) CreateConversation(req *types.CreateConversati
 	rpcResp, err := l.svcCtx.LogicConversationClient.CreateConversation(l.ctx, &conversationservice.CreateConversationReq{
 		ConversationType: req.ConversationType,
 		CreatorId:        identity.UserID,
-		MemberIds:        req.MemberIds,
-		Name:             req.Name,
+		MemberIds:        memberIDs,
+		Name:             name,
+		Avatar:           req.Avatar,
 	})
 	if err != nil {
 		return nil, sanitizeLogicRPCError(l, "create conversation", err)
@@ -59,9 +77,9 @@ func (l *CreateConversationLogic) CreateConversation(req *types.CreateConversati
 		return nil, errorx.NewCodeError(errorx.CodeInternal, "internal error")
 	}
 
-	memberIDs := conv.GetMemberIds()
-	if memberIDs == nil {
-		memberIDs = []int64{}
+	respMemberIDs := conv.GetMemberIds()
+	if respMemberIDs == nil {
+		respMemberIDs = []int64{}
 	}
 
 	return &types.CreateConversationResponse{
@@ -69,7 +87,7 @@ func (l *CreateConversationLogic) CreateConversation(req *types.CreateConversati
 		ConversationType: conv.GetConversationType(),
 		IsActive:         conv.GetIsActive(),
 		CreatedAt:        conv.GetCreatedAt(),
-		MemberIds:        memberIDs,
+		MemberIds:        respMemberIDs,
 		Name:             conv.GetName(),
 		Avatar:           conv.GetAvatar(),
 		CreatorId:        conv.GetCreatorId(),

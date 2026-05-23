@@ -47,6 +47,25 @@ func TestStoreTokenIsolationByInstance(t *testing.T) {
 	}
 }
 
+func TestStoreDBLockReacquireAfterClose(t *testing.T) {
+	ctx := context.Background()
+	dbPath := filepath.Join(t.TempDir(), "aim-tui.db")
+
+	first, err := openStore(ctx, dbPath, "instance-a")
+	if err != nil {
+		t.Fatalf("open first store: %v", err)
+	}
+	if err := first.Close(); err != nil {
+		t.Fatalf("close first store: %v", err)
+	}
+
+	second, err := openStore(ctx, dbPath, "instance-b")
+	if err != nil {
+		t.Fatalf("open second store after close: %v", err)
+	}
+	defer func() { _ = second.Close() }()
+}
+
 func TestStoreConversationMessagePresenceRoundTrip(t *testing.T) {
 	ctx := context.Background()
 	store, err := openStore(ctx, filepath.Join(t.TempDir(), "aim-tui.db"), "instance")

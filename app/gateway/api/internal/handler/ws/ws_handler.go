@@ -15,6 +15,7 @@ import (
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/ws"
 	wsauth "github.com/hellopoisonx/aim/app/gateway/api/internal/ws/auth"
+	logicpb "github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 	pb "github.com/hellopoisonx/aim/shared/proto/ws/pb"
 	"github.com/zeromicro/go-zero/core/logx"
@@ -180,10 +181,53 @@ func (h *WsHandler) handleFrame(ctx context.Context, conn *websocket.Conn, data 
 		return h.handleSendMessage(ctx, conn, frame)
 	case pb.FrameType_FRAME_TYPE_TYPING:
 		return h.handleTyping(ctx, conn, frame)
+	case pb.FrameType_FRAME_TYPE_READ_RECEIPT:
+		return h.handleReadReceipt(ctx, conn, frame)
+	case pb.FrameType_FRAME_TYPE_ACK:
+		return h.handleClientAck(ctx, frame)
 	default:
 		// Unknown frame type - just ACK without action
 		return nil
 	}
+}
+
+// handleClientAck records the client's acknowledgement of a server-emitted seq.
+// The proto says ClientAck.ack_seq matches the server seq, so the gateway only
+// needs to advance LastAckedSeq for the connection. No SERVER_ACK is returned.
+func (h *WsHandler) handleClientAck(ctx context.Context, frame *pb.WsFrame) error {
+	tracer := otel.Tracer("github.com/hellopoisonx/aim/app/gateway/api")
+	ctx, span := tracer.Start(ctx, "ws.handle_client_ack")
+	defer span.End()
+
+	payload, err := ws.DecodePayload(frame)
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return err
+	}
+
+	ackPayload, ok := payload.(*pb.ClientAckPayload)
+	if !ok {
+		return errors.New("invalid client ack payload")
+	}
+
+	identity, ok := ws.IdentityFromContext(ctx)
+	if !ok {
+		// Without an identity we cannot attribute the ack; ignore silently because
+		// auth middleware should have rejected the connection earlier.
+		return nil
+	}
+
+	span.SetAttributes(
+		attribute.Int64("ws.user_id", identity.UserID),
+		attribute.Int64("ws.ack_seq", ackPayload.GetAckSeq()),
+	)
+
+	if !h.manager.RecordClientAck(identity, ackPayload.GetAckSeq()) {
+		logx.WithContext(ctx).Debugf("client ack dropped: no active connection for user_id=%d", identity.UserID)
+	}
+
+	return nil
 }
 
 // handleTyping publishes a typing notice to Kafka for fan-out by core.
@@ -224,6 +268,87 @@ func (h *WsHandler) handleTyping(ctx context.Context, conn *websocket.Conn, fram
 	return nil
 }
 
+// handleReadReceipt upserts the caller's last-read cursor via logic and publishes
+// a fan-out event so other conversation members can be notified.
+//
+// A SERVER_ACK is sent reflecting the upsert result. The fan-out push is
+// best-effort and does not block the ack.
+func (h *WsHandler) handleReadReceipt(ctx context.Context, conn *websocket.Conn, frame *pb.WsFrame) error {
+	tracer := otel.Tracer("github.com/hellopoisonx/aim/app/gateway/api")
+	ctx, span := tracer.Start(ctx, "ws.handle_read_receipt")
+	defer span.End()
+
+	payload, err := ws.DecodePayload(frame)
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return err
+	}
+
+	receiptPayload, ok := payload.(*pb.ReadReceiptPayload)
+	if !ok {
+		return errors.New("invalid read receipt payload")
+	}
+
+	identity, ok := ws.IdentityFromContext(ctx)
+	if !ok {
+		codeErr := errorx.NewCodeError(errorx.CodeAuth, "no identity in context")
+		span.RecordError(codeErr)
+		span.SetStatus(codes.Error, codeErr.Message)
+		return h.writeErrorAck(ctx, conn, frame.GetSeq(), "", pb.AckStatus_ACK_STATUS_REJECTED, codeErr.Code, codeErr.Message)
+	}
+
+	span.SetAttributes(
+		attribute.Int64("ws.user_id", identity.UserID),
+		attribute.Int64("ws.conversation_id", receiptPayload.GetConversationId()),
+		attribute.Int64("ws.last_msg_id", receiptPayload.GetLastMsgId()),
+	)
+
+	if h.srv.LogicConversationClient == nil {
+		return h.writeErrorAck(ctx, conn, frame.GetSeq(), "", pb.AckStatus_ACK_STATUS_RETRYABLE, errorx.CodeInternal, "logic unavailable")
+	}
+
+	upsertCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+
+	resp, err := h.srv.LogicConversationClient.UpdateReadReceipt(upsertCtx, &logicpb.UpdateReadReceiptReq{
+		ConversationId:    receiptPayload.GetConversationId(),
+		UserId:            identity.UserID,
+		LastReadMessageId: receiptPayload.GetLastMsgId(),
+	})
+	if err != nil {
+		codeErr := errorx.FromGRPCError(err)
+		if codeErr == nil {
+			return h.writeErrorAck(ctx, conn, frame.GetSeq(), "", pb.AckStatus_ACK_STATUS_RETRYABLE, errorx.CodeInternal, "internal error")
+		}
+
+		status := pb.AckStatus_ACK_STATUS_RETRYABLE
+		switch codeErr.Code {
+		case errorx.CodeBadInput, errorx.CodeAuth, errorx.CodeForbidden, errorx.CodeNotFound, errorx.CodeConflict, errorx.CodeRateLimit:
+			status = pb.AckStatus_ACK_STATUS_REJECTED
+		}
+
+		return h.writeErrorAck(ctx, conn, frame.GetSeq(), "", status, codeErr.Code, codeErr.Message)
+	}
+
+	// Best-effort fan-out: publish the read receipt event for downstream consumers.
+	if h.srv.ReadReceiptPub != nil {
+		if err := h.srv.ReadReceiptPub.PublishReadReceipt(ctx, identity.UserID,
+			receiptPayload.GetConversationId(),
+			resp.GetReadState().GetLastReadMessageId(),
+			resp.GetReadState().GetUpdatedAt()); err != nil {
+			logx.WithContext(ctx).Errorf("failed to publish read receipt event: %v", err)
+		}
+	}
+
+	ackFrame, err := ws.NewServerAck(frame.GetSeq(), "", h.nextSeq())
+	if err != nil {
+		return err
+	}
+
+	return h.writeFrame(ctx, conn, ackFrame)
+}
+
 // handleHeartbeat responds with SERVER_ACK to a client heartbeat.
 // It also updates presence state in Redis and publishes presence events.
 func (h *WsHandler) handleHeartbeat(ctx context.Context, conn *websocket.Conn, frame *pb.WsFrame) error {
@@ -238,8 +363,8 @@ func (h *WsHandler) handleHeartbeat(ctx context.Context, conn *websocket.Conn, f
 			attribute.Int64("ws.user_id", identity.UserID),
 			attribute.String("ws.device_id", identity.DeviceID),
 		)
-		// Renew TTL on the presence and gateway Sets (heartbeat keeps user alive).
-		h.manager.RenewPresenceTTL(ctx, identity.UserID)
+		// Record heartbeat: update LastSeen and renew presence TTL.
+		h.manager.RecordHeartbeat(ctx, identity)
 	}
 
 	ackFrame, err := ws.NewServerAck(frame.GetSeq(), "", h.nextSeq())
@@ -460,6 +585,9 @@ func (h *WsHandler) nextSeq() int64 {
 
 // sendTokenExpired builds and sends a TOKEN_EXPIRED frame, then closes the connection.
 func (h *WsHandler) sendTokenExpired(ctx context.Context, conn *websocket.Conn, identity ws.Identity, expiredAt int64) {
+	// Mark the connection as token-expired so Unregister registers a reconnect grace
+	// instead of immediately publishing offline.
+	h.manager.MarkTokenExpired(identity)
 	payload := &pb.TokenExpiredPayload{
 		ExpiredAt: expiredAt * 1000, // convert to milliseconds
 		Reason:    "access_token_expired",

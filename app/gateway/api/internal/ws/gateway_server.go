@@ -49,6 +49,13 @@ func (s *GatewayServer) PushMessage(ctx context.Context, req *pb.PushMessageReq)
 		ConversationType: req.ConversationType,
 		ClientMsgId:      req.ClientMsgId,
 		IsSystem:         req.GetIsSystem(),
+		Mentions:         req.GetMentions(),
+	}
+	if req.GetSenderInfo() != nil {
+		payload.SenderInfo = &wspb.SenderInfo{
+			Name:  req.GetSenderInfo().GetName(),
+			Email: req.GetSenderInfo().GetEmail(),
+		}
 	}
 
 	// Look up all connections for the target user.
@@ -146,7 +153,35 @@ func (s *GatewayServer) PushPresence(ctx context.Context, req *pb.PushPresenceRe
 	return &pb.PushPresenceResp{Success: true}, nil
 }
 
+// PushReadReceipt delivers a read receipt update to all connections of the target user on this gateway node.
+func (s *GatewayServer) PushReadReceipt(ctx context.Context, req *pb.PushReadReceiptReq) (*pb.PushReadReceiptResp, error) {
+	if req.TargetUserId == 0 {
+		return nil, status.Errorf(codes.InvalidArgument, "target_user_id is required")
+	}
 
+	payload := &wspb.PushReadReceiptPayload{
+		ConversationId:    req.ConversationId,
+		UserId:            req.FromUserId,
+		LastReadMessageId: req.LastReadMessageId,
+		UpdatedAt:         req.UpdatedAt,
+	}
+
+	var pushErr error
+
+	s.manager.ForEachUser(req.TargetUserId, func(conn *Connection) {
+		if err := conn.WriteFrame(ctx, wspb.FrameType_FRAME_TYPE_PUSH_READ_RECEIPT, payload); err != nil {
+			logx.WithContext(ctx).Errorf("PushReadReceipt: failed to write to user_id=%d device_id=%s: %v",
+				conn.Identity.UserID, conn.Identity.DeviceID, err)
+			pushErr = err
+		}
+	})
+
+	if pushErr != nil {
+		return &pb.PushReadReceiptResp{Success: false}, nil
+	}
+
+	return &pb.PushReadReceiptResp{Success: true}, nil
+}
 
 // PushFriendApplication delivers a friend application to all connections of the target user on this gateway node.
 func (s *GatewayServer) PushFriendApplication(ctx context.Context, req *pb.PushFriendApplicationReq) (*pb.PushFriendApplicationResp, error) {
@@ -181,6 +216,48 @@ func (s *GatewayServer) PushFriendApplication(ctx context.Context, req *pb.PushF
 	}
 
 	return &pb.PushFriendApplicationResp{Success: true}, nil
+}
+
+// PushNotification delivers a system notification to the target user. When
+// target_user_id == 0 it is broadcast to every connection on this node.
+func (s *GatewayServer) PushNotification(ctx context.Context, req *pb.PushNotificationReq) (*pb.PushNotificationResp, error) {
+	payload := &wspb.PushNotificationPayload{
+		NotificationType: req.NotificationType,
+		Title:            req.Title,
+		Body:             req.Body,
+		RelatedId:        req.RelatedId,
+	}
+
+	var connections []*Connection
+	if req.TargetUserId == 0 {
+		connections = s.manager.All()
+	} else {
+		connections = s.manager.GetByUserID(req.TargetUserId)
+	}
+
+	if len(connections) == 0 {
+		logx.WithContext(ctx).Debugf("PushNotification: no local connections for user_id=%d", req.TargetUserId)
+		return &pb.PushNotificationResp{Success: true}, nil
+	}
+
+	var (
+		affected int32
+		pushErr  error
+	)
+	for _, conn := range connections {
+		if err := conn.WriteFrame(ctx, wspb.FrameType_FRAME_TYPE_PUSH_NOTIFICATION, payload); err != nil {
+			logx.WithContext(ctx).Errorf("PushNotification: failed to write to user_id=%d device_id=%s: %v",
+				conn.Identity.UserID, conn.Identity.DeviceID, err)
+			pushErr = err
+			continue
+		}
+		affected++
+	}
+
+	if pushErr != nil {
+		return &pb.PushNotificationResp{Success: false, AffectedCount: affected}, nil
+	}
+	return &pb.PushNotificationResp{Success: true, AffectedCount: affected}, nil
 }
 
 // KickUser closes connections for a user, optionally filtered by device.

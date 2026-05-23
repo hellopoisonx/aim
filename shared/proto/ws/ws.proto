@@ -27,6 +27,7 @@ enum FrameType {
   FRAME_TYPE_SERVER_ACK = 106;          // 服务端确认
   FRAME_TYPE_TOKEN_EXPIRED = 107;       // Token 已过期
   FRAME_TYPE_PUSH_FRIEND_APPLICATION = 108; // 推送好友申请
+  FRAME_TYPE_PUSH_READ_RECEIPT = 109;       // 推送已读回执更新
 }
 
 // ============================================================
@@ -100,6 +101,11 @@ message ClientAckPayload {
 // 网关 → 客户端 消息体
 // ============================================================
 
+message SenderInfo {
+  string name = 1;
+  string email = 2;
+}
+
 // PushMessagePayload — 推送聊天消息
 message PushMessagePayload {
   int64 message_id = 1;
@@ -111,6 +117,8 @@ message PushMessagePayload {
   string conversation_type = 7;
   string client_msg_id = 8;
   bool is_system = 9;
+  SenderInfo sender_info = 10;
+  repeated string mentions = 11; // decimal user id strings
 }
 
 // PushPresencePayload — 推送在线状态变更
@@ -141,6 +149,14 @@ message PushFriendApplicationPayload {
 message PushTypingPayload {
   int64 user_id = 1;
   int64 conversation_id = 2;
+}
+
+// PushReadReceiptPayload — 推送已读回执更新（会话内某成员推进了已读游标）
+message PushReadReceiptPayload {
+  int64 conversation_id = 1;
+  int64 user_id = 2;             // 推进游标的成员
+  int64 last_read_message_id = 3;
+  int64 updated_at = 4;          // unix milliseconds
 }
 
 // ReconnectPayload — 网关要求客户端重连（drain 窗口）

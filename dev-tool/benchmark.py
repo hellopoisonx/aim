@@ -8,6 +8,7 @@ Usage:
   python benchmark.py register --users 100
   python benchmark.py login --users 100
   python benchmark.py friend-chain --users 50
+  python benchmark.py presence --users 50
   python benchmark.py ws-message --users 20 --messages-per-user 100
   python benchmark.py mixed --users 50 --duration 30
 
@@ -830,6 +831,124 @@ class FriendChainScenario:
                     pass
 
 
+
+# ===============================================================================
+# Scenario: Presence
+# ===============================================================================
+
+class PresenceScenario:
+    """Benchmark GET /api/presence/friends after building friend pairs."""
+
+    def __init__(self, users: int, rps: float = 0, ramp_up: float = 0):
+        self.users = users
+        self.metrics = MetricsCollector()
+        self.rate_limiter = RateLimiter(rps, ramp_up)
+        self._password = "bench123456"
+
+    def run(self):
+        pairs = self.users // 2
+        if pairs < 1:
+            print("  x Need at least 2 users for presence benchmark")
+            return self.metrics.snapshot()
+
+        print(f"\n  Scenario: Presence -- {pairs} pairs ({self.users} users)"
+              + (f", RPS={self.rate_limiter._target_rps}" if self.rate_limiter._target_rps > 0 else ""))
+        print("  [1/4] Registering users...")
+
+        user_creds: List[tuple] = []
+        cred_lock = threading.Lock()
+
+        def reg_and_login():
+            email = _random_email("benchpr")
+            client = RESTClient()
+            client.register(email, self._password, f"PR_{email[:6]}")
+            client.login(email, self._password)
+            with cred_lock:
+                user_creds.append((client.token.user_id, client.token.access_token))
+
+        gen = LoadGenerator(MetricsCollector(), RateLimiter(), workers=min(self.users, 20), verbose=False)
+        gen.run(reg_and_login, total_target=self.users)
+        if len(user_creds) < 2:
+            print("  x Not enough users registered")
+            return self.metrics.snapshot()
+
+        print("  ... Waiting for Kafka user sync (5s)...")
+        time.sleep(5)
+
+        pair_count = len(user_creds) // 2
+        idx = 0
+        idx_lock = threading.Lock()
+
+        print("  [2/4] Creating friend pairs...")
+        def create_friend_pair():
+            nonlocal idx
+            with idx_lock:
+                if idx >= pair_count:
+                    return
+                i = idx
+                idx += 1
+            a_id, a_token = user_creds[i * 2]
+            b_id, b_token = user_creds[i * 2 + 1]
+            client_a = RESTClient(token=TokenManager.load())
+            client_a.token.access_token = a_token
+            client_a.token.user_id = a_id
+            client_a.add_friend(b_id)
+            client_b = RESTClient(token=TokenManager.load())
+            client_b.token.access_token = b_token
+            client_b.token.user_id = b_id
+            client_b.accept_friend(a_id)
+
+        gen2 = LoadGenerator(MetricsCollector(), RateLimiter(), workers=min(pair_count, 20), verbose=False)
+        gen2.run(create_friend_pair, total_target=pair_count)
+
+        print("  [3/4] Connecting one WS client per pair for online presence...")
+        ws_clients = []
+        for i in range(pair_count):
+            b_id, b_token = user_creds[i * 2 + 1]
+            token_mgr = TokenManager.load()
+            token_mgr.access_token = b_token
+            token_mgr.user_id = b_id
+            ws = WSClient(token=token_mgr)
+            ws.connect()
+            if ws.is_connected():
+                ws_clients.append(ws)
+
+        print("  [4/4] Querying friends presence...")
+        self.metrics.reset()
+        idx = 0
+
+        def query_presence():
+            nonlocal idx
+            wait = self.rate_limiter.acquire()
+            if wait > 0:
+                time.sleep(wait)
+            with idx_lock:
+                i = idx % pair_count
+                idx += 1
+            a_id, a_token = user_creds[i * 2]
+            client = RESTClient(token=TokenManager.load())
+            client.token.access_token = a_token
+            client.token.user_id = a_id
+            client.get_friends_presence()
+
+        gen3 = LoadGenerator(self.metrics, self.rate_limiter, workers=min(pair_count, 20), duration=0)
+        gen3.run(query_presence, total_target=pair_count)
+
+        for ws in ws_clients:
+            ws.disconnect()
+        self._cleanup_state()
+        return self.metrics.snapshot()
+
+    @staticmethod
+    def _cleanup_state():
+        base = os.path.dirname(__file__)
+        for name in os.listdir(base):
+            if name.startswith(".aim_state_") and name.endswith(".json"):
+                try:
+                    os.remove(os.path.join(base, name))
+                except OSError:
+                    pass
+
 # ===============================================================================
 # Scenario: WebSocket Message
 # ===============================================================================
@@ -1267,18 +1386,20 @@ class MixedScenario:
                 with counter_lock:
                     rest_counter += 1
                     idx = rest_counter % len(conv_pairs)
-                conv_id, a_id, a_token, b_id, b_token = conv_pairs[idx]
+                conv_id, a_id, a_token, a_refresh, a_expires, a_device,                     b_id, b_token, b_refresh, b_expires, b_device = conv_pairs[idx]
                 client = RESTClient(token=TokenManager.load())
                 client.token.access_token = a_token
                 client.token.user_id = a_id
                 # Alternate between different REST calls
-                op = rest_counter % 3
+                op = rest_counter % 4
                 if op == 0:
                     client.list_friends()
                 elif op == 1:
                     client.list_conversations()
-                else:
+                elif op == 2:
                     client.get_history(conv_id, limit=5)
+                else:
+                    client.get_friends_presence()
 
         gen3 = LoadGenerator(self.metrics, rate_limiter,
                              workers=min(len(ws_clients) + 5, 30),
@@ -1405,6 +1526,14 @@ def cmd_friend_chain(args):
         _save_report(snap, args.output, "friend-chain")
 
 
+def cmd_presence(args):
+    _apply_quiet(getattr(args, "quiet", False))
+    scenario = PresenceScenario(args.users, args.rps, args.ramp_up)
+    snap = scenario.run()
+    if args.output:
+        _save_report(snap, args.output, "presence")
+
+
 def cmd_ws_message(args):
     msgs = getattr(args, "messages_per_user", 100)
     quiet = getattr(args, "quiet", False)
@@ -1449,6 +1578,7 @@ Examples:
   python benchmark.py register --users 1000 --gateway http://127.0.0.1:18888
   python benchmark.py login --users 100
   python benchmark.py friend-chain --users 50
+  python benchmark.py presence --users 50
   python benchmark.py ws-message --users 20 --messages-per-user 100
   python benchmark.py ws-message --users 50 --messages-per-user 500 --rps 1000
   python benchmark.py ws-message --users 50 --messages-per-user 500 --no-fixtures
@@ -1474,6 +1604,10 @@ Benchmark Environment:
     p = sub.add_parser("friend-chain", help="Friend chain benchmark (register -> login -> add -> accept)")
     _add_common_args(p)
 
+    # presence
+    p = sub.add_parser("presence", help="Friends presence benchmark")
+    _add_common_args(p)
+
     # ws-message
     p = sub.add_parser("ws-message", help="WebSocket message benchmark")
     _add_common_args(p)
@@ -1496,6 +1630,7 @@ Benchmark Environment:
         "register": cmd_register,
         "login": cmd_login,
         "friend-chain": cmd_friend_chain,
+        "presence": cmd_presence,
         "ws-message": cmd_ws_message,
         "mixed": cmd_mixed,
     }

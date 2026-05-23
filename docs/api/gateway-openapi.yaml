@@ -1,0 +1,1106 @@
+basePath: /
+consumes:
+- application/json
+info:
+  title: aim gateway api
+  version: "1.0"
+paths:
+  /api/auth/login:
+    post:
+      consumes:
+      - application/json
+      operationId: authLogin
+      parameters:
+      - in: body
+        name: body
+        required: true
+        schema:
+          properties:
+            device_id:
+              type: string
+            email:
+              type: string
+            password:
+              type: string
+          required:
+          - email
+          - password
+          - device_id
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: ""
+          schema:
+            properties:
+              access_token:
+                type: string
+              expires_at:
+                type: integer
+              refresh_token:
+                type: string
+              user_id:
+                type: integer
+            type: object
+      schemes:
+      - https
+      summary: Login
+  /api/auth/logout:
+    post:
+      operationId: authLogout
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: ""
+          schema:
+            properties:
+              success:
+                type: boolean
+            type: object
+      schemes:
+      - https
+      summary: Logout
+  /api/auth/refresh:
+    post:
+      consumes:
+      - application/json
+      operationId: authRefresh
+      parameters:
+      - in: body
+        name: body
+        required: true
+        schema:
+          properties:
+            refresh_token:
+              type: string
+          required:
+          - refresh_token
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: ""
+          schema:
+            properties:
+              access_token:
+                type: string
+              expires_at:
+                type: integer
+              refresh_token:
+                type: string
+            type: object
+      schemes:
+      - https
+      summary: Refresh
+  /api/auth/register:
+    post:
+      consumes:
+      - application/json
+      operationId: authRegister
+      parameters:
+      - in: body
+        name: body
+        required: true
+        schema:
+          properties:
+            avatar:
+              type: string
+            device_id:
+              type: string
+            email:
+              type: string
+            password:
+              type: string
+            username:
+              type: string
+          required:
+          - email
+          - password
+          - device_id
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: ""
+          schema:
+            properties:
+              user_id:
+                type: integer
+            type: object
+      schemes:
+      - https
+      summary: Register
+  /api/bot/v1/conversations:
+    get:
+      operationId: botBotListConversations
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: ""
+          schema:
+            properties:
+              conversations:
+                items:
+                  properties:
+                    avatar:
+                      type: string
+                    conversation_id:
+                      type: integer
+                    conversation_type:
+                      type: string
+                    created_at:
+                      type: integer
+                    name:
+                      type: string
+                  required:
+                  - conversation_id
+                  - conversation_type
+                  - name
+                  - avatar
+                  - created_at
+                  type: object
+                type: array
+            type: object
+      schemes:
+      - https
+      summary: BotListConversations
+  /api/bot/v1/me:
+    get:
+      operationId: botBotGetMe
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: ""
+          schema:
+            properties:
+              bot:
+                properties:
+                  avatar:
+                    type: string
+                  bot_user_id:
+                    type: integer
+                  nickname:
+                    type: string
+                  scopes:
+                    items:
+                      type: string
+                    type: array
+                  status:
+                    type: integer
+                required:
+                - bot_user_id
+                - nickname
+                - avatar
+                - status
+                - scopes
+                type: object
+            type: object
+      schemes:
+      - https
+      summary: BotGetMe
+  /api/bot/v1/messages:
+    post:
+      consumes:
+      - application/json
+      operationId: botBotSendMessage
+      parameters:
+      - in: body
+        name: body
+        required: true
+        schema:
+          properties:
+            client_msg_id:
+              type: string
+            content:
+              type: string
+            conversation_id:
+              type: integer
+            mentions:
+              items:
+                type: string
+              type: array
+            message_type:
+              type: string
+          required:
+          - conversation_id
+          - message_type
+          - content
+          - client_msg_id
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: ""
+          schema:
+            properties:
+              accepted_at:
+                type: integer
+              client_msg_id:
+                type: string
+              message_id:
+                type: integer
+            type: object
+      schemes:
+      - https
+      summary: BotSendMessage
+  /api/bot/v1/webhook:
+    delete:
+      operationId: botBotDeleteWebhook
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: ""
+          schema:
+            properties:
+              deleted:
+                type: boolean
+            type: object
+      schemes:
+      - https
+      summary: BotDeleteWebhook
+    get:
+      operationId: botBotGetWebhook
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: ""
+          schema:
+            properties:
+              configured:
+                type: boolean
+              webhook:
+                properties:
+                  enabled:
+                    type: boolean
+                  events:
+                    items:
+                      type: string
+                    type: array
+                  updated_at:
+                    type: integer
+                  url:
+                    type: string
+                required:
+                - url
+                - events
+                - enabled
+                - updated_at
+                type: object
+            type: object
+      schemes:
+      - https
+      summary: BotGetWebhook
+    put:
+      consumes:
+      - application/json
+      operationId: botBotSetWebhook
+      parameters:
+      - in: body
+        name: body
+        required: true
+        schema:
+          properties:
+            enabled:
+              type: boolean
+            events:
+              items:
+                type: string
+              type: array
+            rotate_secret:
+              type: boolean
+            secret:
+              type: string
+            url:
+              type: string
+          required:
+          - url
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: ""
+          schema:
+            properties:
+              plaintext_secret:
+                type: string
+              webhook:
+                properties:
+                  enabled:
+                    type: boolean
+                  events:
+                    items:
+                      type: string
+                    type: array
+                  updated_at:
+                    type: integer
+                  url:
+                    type: string
+                required:
+                - url
+                - events
+                - enabled
+                - updated_at
+                type: object
+            type: object
+      schemes:
+      - https
+      summary: BotSetWebhook
+  /api/conversations:
+    get:
+      operationId: conversationsListConversations
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: ""
+          schema:
+            properties:
+              conversations:
+                items:
+                  properties:
+                    avatar:
+                      type: string
+                    conversation_id:
+                      type: integer
+                    conversation_type:
+                      type: string
+                    created_at:
+                      type: integer
+                    creator_id:
+                      type: integer
+                    is_active:
+                      type: boolean
+                    member_ids:
+                      items:
+                        type: integer
+                      type: array
+                    name:
+                      type: string
+                  required:
+                  - conversation_id
+                  - conversation_type
+                  - is_active
+                  - created_at
+                  - member_ids
+                  - name
+                  - avatar
+                  - creator_id
+                  type: object
+                type: array
+            type: object
+      schemes:
+      - https
+      summary: ListConversations
+    post:
+      consumes:
+      - application/json
+      operationId: conversationsCreateConversation
+      parameters:
+      - in: body
+        name: body
+        required: true
+        schema:
+          properties:
+            avatar:
+              type: string
+            conversation_type:
+              type: string
+            member_ids:
+              items:
+                type: integer
+              type: array
+            name:
+              type: string
+          required:
+          - conversation_type
+          - member_ids
+          - name
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: ""
+          schema:
+            properties:
+              avatar:
+                type: string
+              conversation_id:
+                type: integer
+              conversation_type:
+                type: string
+              created_at:
+                type: integer
+              creator_id:
+                type: integer
+              is_active:
+                type: boolean
+              member_ids:
+                items:
+                  type: integer
+                type: array
+              name:
+                type: string
+            type: object
+      schemes:
+      - https
+      summary: CreateConversation
+  /api/conversations/{id}:
+    delete:
+      consumes:
+      - application/x-www-form-urlencoded
+      operationId: conversationsDismissGroup
+      parameters:
+      - in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: ""
+          schema: {}
+      schemes:
+      - https
+      summary: DismissGroup
+    put:
+      consumes:
+      - application/json
+      operationId: conversationsUpdateGroupInfo
+      parameters:
+      - in: path
+        name: id
+        required: true
+        type: integer
+      - in: body
+        name: body
+        required: true
+        schema:
+          properties:
+            avatar:
+              type: string
+            name:
+              type: string
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: ""
+          schema:
+            properties:
+              avatar:
+                type: string
+              conversation_id:
+                type: integer
+              conversation_type:
+                type: string
+              created_at:
+                type: integer
+              creator_id:
+                type: integer
+              is_active:
+                type: boolean
+              name:
+                type: string
+            type: object
+      schemes:
+      - https
+      summary: UpdateGroupInfo
+  /api/conversations/{id}/leave:
+    post:
+      consumes:
+      - application/x-www-form-urlencoded
+      operationId: conversationsLeaveGroup
+      parameters:
+      - in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: ""
+          schema: {}
+      schemes:
+      - https
+      summary: LeaveGroup
+  /api/conversations/{id}/members:
+    get:
+      operationId: conversationsGetConversationMembers
+      parameters:
+      - in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: ""
+          schema:
+            properties:
+              members:
+                items:
+                  properties:
+                    avatar:
+                      type: string
+                    email:
+                      type: string
+                    joined_at:
+                      type: integer
+                    role:
+                      type: string
+                    user_id:
+                      type: integer
+                  required:
+                  - user_id
+                  - email
+                  - avatar
+                  - role
+                  - joined_at
+                  type: object
+                type: array
+            type: object
+      schemes:
+      - https
+      summary: GetConversationMembers
+    post:
+      consumes:
+      - application/json
+      operationId: conversationsAddGroupMembers
+      parameters:
+      - in: path
+        name: id
+        required: true
+        type: integer
+      - in: body
+        name: body
+        required: true
+        schema:
+          properties:
+            member_ids:
+              items:
+                type: integer
+              type: array
+          required:
+          - member_ids
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: ""
+          schema:
+            properties:
+              avatar:
+                type: string
+              conversation_id:
+                type: integer
+              conversation_type:
+                type: string
+              created_at:
+                type: integer
+              creator_id:
+                type: integer
+              is_active:
+                type: boolean
+              member_ids:
+                items:
+                  type: integer
+                type: array
+              name:
+                type: string
+            type: object
+      schemes:
+      - https
+      summary: AddGroupMembers
+  /api/conversations/{id}/members/{uid}:
+    delete:
+      consumes:
+      - application/x-www-form-urlencoded
+      operationId: conversationsRemoveGroupMember
+      parameters:
+      - in: path
+        name: id
+        required: true
+        type: integer
+      - in: path
+        name: uid
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: ""
+          schema: {}
+      schemes:
+      - https
+      summary: RemoveGroupMember
+  /api/conversations/group:
+    post:
+      consumes:
+      - application/json
+      operationId: conversationsCreateGroup
+      parameters:
+      - in: body
+        name: body
+        required: true
+        schema:
+          properties:
+            avatar:
+              type: string
+            member_ids:
+              items:
+                type: integer
+              type: array
+            name:
+              type: string
+          required:
+          - member_ids
+          - name
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: ""
+          schema:
+            properties:
+              avatar:
+                type: string
+              conversation_id:
+                type: integer
+              conversation_type:
+                type: string
+              created_at:
+                type: integer
+              creator_id:
+                type: integer
+              is_active:
+                type: boolean
+              member_ids:
+                items:
+                  type: integer
+                type: array
+              name:
+                type: string
+            type: object
+      schemes:
+      - https
+      summary: CreateGroup
+  /api/conversations/history/{id}:
+    get:
+      operationId: conversationsGetConversationHistory
+      parameters:
+      - in: path
+        name: id
+        required: true
+        type: integer
+      - allowEmptyValue: true
+        in: query
+        name: cursor_created_at
+        type: integer
+      - allowEmptyValue: true
+        in: query
+        name: cursor_id
+        type: integer
+      - allowEmptyValue: true
+        default: 50
+        example: 50
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: ""
+          schema:
+            properties:
+              has_more:
+                type: boolean
+              messages:
+                items:
+                  properties:
+                    client_msg_id:
+                      type: string
+                    content:
+                      type: string
+                    conversation_id:
+                      type: integer
+                    created_at:
+                      type: integer
+                    id:
+                      type: integer
+                    message_type:
+                      type: string
+                    sender_id:
+                      type: integer
+                    sender_info:
+                      properties:
+                        email:
+                          type: string
+                        name:
+                          type: string
+                      required:
+                      - name
+                      - email
+                      type: object
+                  required:
+                  - id
+                  - conversation_id
+                  - sender_id
+                  - sender_info
+                  - message_type
+                  - content
+                  - client_msg_id
+                  - created_at
+                  type: object
+                type: array
+              next_cursor_created_at:
+                type: integer
+              next_cursor_id:
+                type: integer
+              read_states:
+                items:
+                  properties:
+                    last_read_message_id:
+                      type: integer
+                    updated_at:
+                      type: integer
+                    user_id:
+                      type: integer
+                  required:
+                  - user_id
+                  - last_read_message_id
+                  - updated_at
+                  type: object
+                type: array
+            type: object
+      schemes:
+      - https
+      summary: GetConversationHistory
+  /api/friends/accept/{id}:
+    post:
+      consumes:
+      - application/x-www-form-urlencoded
+      operationId: friendsAcceptFriend
+      parameters:
+      - in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: ""
+          schema:
+            properties:
+              friendship:
+                properties:
+                  created_at:
+                    type: integer
+                  friend_id:
+                    type: integer
+                  status:
+                    type: string
+                  updated_at:
+                    type: integer
+                  user_id:
+                    type: integer
+                required:
+                - user_id
+                - friend_id
+                - status
+                - created_at
+                - updated_at
+                type: object
+            type: object
+      schemes:
+      - https
+      summary: AcceptFriend
+  /api/friends/applications:
+    get:
+      operationId: friendsListFriendApplications
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: ""
+          schema:
+            properties:
+              applications:
+                items:
+                  properties:
+                    created_at:
+                      type: integer
+                    friend_id:
+                      type: integer
+                    status:
+                      type: string
+                    updated_at:
+                      type: integer
+                    user_id:
+                      type: integer
+                  required:
+                  - user_id
+                  - friend_id
+                  - status
+                  - created_at
+                  - updated_at
+                  type: object
+                type: array
+            type: object
+      schemes:
+      - https
+      summary: ListFriendApplications
+  /api/friends/me:
+    get:
+      operationId: friendsListFriends
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: ""
+          schema:
+            properties:
+              friends:
+                items:
+                  properties:
+                    created_at:
+                      type: integer
+                    friend_id:
+                      type: integer
+                    status:
+                      type: string
+                    updated_at:
+                      type: integer
+                    user_id:
+                      type: integer
+                  required:
+                  - user_id
+                  - friend_id
+                  - status
+                  - created_at
+                  - updated_at
+                  type: object
+                type: array
+            type: object
+      schemes:
+      - https
+      summary: ListFriends
+  /api/friends/reject/{id}:
+    post:
+      consumes:
+      - application/x-www-form-urlencoded
+      operationId: friendsRejectFriend
+      parameters:
+      - in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: ""
+          schema:
+            properties:
+              friendship:
+                properties:
+                  created_at:
+                    type: integer
+                  friend_id:
+                    type: integer
+                  status:
+                    type: string
+                  updated_at:
+                    type: integer
+                  user_id:
+                    type: integer
+                required:
+                - user_id
+                - friend_id
+                - status
+                - created_at
+                - updated_at
+                type: object
+            type: object
+      schemes:
+      - https
+      summary: RejectFriend
+  /api/presence/friends:
+    get:
+      operationId: presenceGetFriendsPresence
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: ""
+          schema:
+            properties:
+              presences:
+                items:
+                  properties:
+                    status:
+                      type: string
+                    updated_at:
+                      type: integer
+                    user_id:
+                      type: integer
+                  required:
+                  - user_id
+                  - status
+                  - updated_at
+                  type: object
+                type: array
+            type: object
+      schemes:
+      - https
+      summary: GetFriendsPresence
+  /api/users/by-id/{id}:
+    get:
+      operationId: usersGetUserById
+      parameters:
+      - in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: ""
+          schema:
+            properties:
+              user:
+                properties:
+                  avatar:
+                    type: string
+                  created_at:
+                    type: integer
+                  email:
+                    type: string
+                  id:
+                    type: integer
+                  nickname:
+                    type: string
+                  status:
+                    type: integer
+                  updated_at:
+                    type: integer
+                required:
+                - id
+                - email
+                - status
+                - nickname
+                - avatar
+                - created_at
+                - updated_at
+                type: object
+            type: object
+      schemes:
+      - https
+      summary: GetUserById
+  /api/users/by-name/{name}:
+    get:
+      operationId: usersGetUserByName
+      parameters:
+      - in: path
+        name: name
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: ""
+          schema:
+            properties:
+              users:
+                items:
+                  properties:
+                    avatar:
+                      type: string
+                    email:
+                      type: string
+                    id:
+                      type: string
+                    nickname:
+                      type: string
+                  required:
+                  - id
+                  - nickname
+                  - email
+                  - avatar
+                  type: object
+                type: array
+            type: object
+      schemes:
+      - https
+      summary: GetUserByName
+  /api/users/friends/{id}:
+    post:
+      consumes:
+      - application/x-www-form-urlencoded
+      operationId: usersAddFriend
+      parameters:
+      - in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: ""
+          schema:
+            properties:
+              friendship:
+                properties:
+                  created_at:
+                    type: integer
+                  friend_id:
+                    type: integer
+                  status:
+                    type: string
+                  updated_at:
+                    type: integer
+                  user_id:
+                    type: integer
+                required:
+                - user_id
+                - friend_id
+                - status
+                - created_at
+                - updated_at
+                type: object
+            type: object
+      schemes:
+      - https
+      summary: AddFriend
+produces:
+- application/json
+schemes:
+- https
+swagger: "2.0"
+x-date: "2026-05-23 18:42:25"
+x-description: This is a goctl generated swagger file.
+x-github: https://github.com/zeromicro/go-zero
+x-go-zero-doc: https://go-zero.dev/
+x-goctl-version: 1.10.1

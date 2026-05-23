@@ -5,6 +5,7 @@ package conversations
 
 import (
 	"context"
+	"strings"
 
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
@@ -39,6 +40,11 @@ func (l *CreateGroupLogic) CreateGroup(req *types.CreateGroupRequest) (resp *typ
 		return nil, errorx.NewCodeError(errorx.CodeBadInput, "member_ids must not be empty")
 	}
 
+	name := strings.TrimSpace(req.Name)
+	if name == "" {
+		return nil, errorx.NewCodeError(errorx.CodeBadInput, "name is required")
+	}
+
 	if l.svcCtx.LogicConversationClient == nil {
 		return nil, errorx.NewCodeError(errorx.CodeInternal, "internal error")
 	}
@@ -47,7 +53,7 @@ func (l *CreateGroupLogic) CreateGroup(req *types.CreateGroupRequest) (resp *typ
 		ConversationType: "group",
 		CreatorId:        identity.UserID,
 		MemberIds:        req.MemberIds,
-		Name:             req.Name,
+		Name:             name,
 		Avatar:           req.Avatar,
 	})
 	if err != nil {
