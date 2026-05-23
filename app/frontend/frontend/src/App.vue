@@ -24,7 +24,8 @@ import {
   SessionState,
 } from '../wailsjs/go/main/App'
 import { EventsOn } from '../wailsjs/runtime/runtime'
-import type { client, main, vueapi } from '../wailsjs/go/models'
+import type { client, main } from '../wailsjs/go/models'
+import type { vueapi } from './components/types'
 import type { ChatMessage, Conversation, SearchUserItem } from './components/types'
 import LoginView from './views/LoginView.vue'
 import RegisterView from './views/RegisterView.vue'
@@ -43,7 +44,7 @@ type ConnectionState = 'connecting' | 'connected' | 'disconnected'
 const authView = ref<AuthView>('login')
 const authLoading = ref(false)
 const deviceId = ref('')
-const currentUserId = ref<string>('')
+const currentUserId = ref('')
 const currentUserLabel = ref('')
 const connectionState = ref<ConnectionState>('disconnected')
 
@@ -71,7 +72,6 @@ const groupSettingsVisible = ref(false)
 
 // ─── Presence / Typing / Heartbeat ────────────────────────────────────────────
 const onlineUserIds = ref<Set<string>>(new Set())
-// `typingInfo` is now a Map keyed by conversationId to support multiple simultaneous typing indicators.
 const typingInfo = ref<Map<string, { userId: string; timer: ReturnType<typeof setTimeout> }>>(new Map())
 const lastReadSeq = ref(0)
 let heartbeatTimer: ReturnType<typeof setInterval> | null = null
@@ -96,7 +96,6 @@ const activeMessages = computed<ChatMessage[]>(() => {
   return messagesMap.value.get(activeConversationId.value) ?? []
 })
 
-/** The user ID currently typing in the active conversation, or null */
 const typingUserId = computed<string | null>(() => {
   if (activeConversationId.value === null) return null
   const entry = typingInfo.value.get(activeConversationId.value)
@@ -138,7 +137,7 @@ async function buildConversationFromItem(item: vueapi.ConversationItem): Promise
   const serverName = item.name?.trim() ?? ''
   let title = serverName
   let avatar = item.avatar ?? ''
-  const otherIds = (item.member_ids ?? []).filter((id: string) => id !== currentUserId.value)
+  const otherIds = (item.member_ids ?? []).filter((id) => id !== currentUserId.value)
   const otherId = otherIds.length > 0 ? otherIds[0] : ''
 
   if (convType === 'direct') {
@@ -199,7 +198,7 @@ async function loadConversationHistory(conversationId: string) {
 
   historyLoading.value = true
   try {
-    const resp = await GetConversationHistory(conversationId, '', 0, 50)
+    const resp = await GetConversationHistory(conversationId, '0', '0', 50)
     if (!resp?.messages?.length) {
       historyLoadedSet.value.add(conversationId)
       return
@@ -380,12 +379,12 @@ onMounted(async () => {
       switch (frameType) {
         // ── PUSH_MESSAGE (101) ──────────────────────────────────────────
         case WS_FRAME.PUSH_MESSAGE: {
-          const conversationId = payload?.conversation_id as string | undefined
-          const senderId = (payload?.sender_id as string) ?? ''
+          const conversationId = String(payload?.conversation_id ?? '')
+          const senderId = String(payload?.sender_id ?? '')
           const rawContent = (payload?.content as string) ?? ''
           const msgType = (payload?.message_type as string) ?? 'text'
           const isSystem = isSystemMessageType(msgType, payload?.is_system as boolean | undefined)
-          const msgId = (payload?.message_id as string) ?? String(Date.now())
+          const msgId = String(payload?.message_id ?? Date.now())
           const sentAt = payload?.sent_at as number | undefined
           const clientMsgId = payload?.client_msg_id as string | undefined
 
@@ -449,7 +448,7 @@ onMounted(async () => {
             loadConversationHistory(conversationId)
           } else if (activeConversationId.value === conversationId) {
             unreadCount = 0
-            SendReadReceipt(conversationId, msgId).catch(() => {})
+            SendReadReceipt(conversationId, msgId).catch(() => { })
           } else {
             unreadCount++
           }
@@ -466,16 +465,16 @@ onMounted(async () => {
 
           // Send ACK
           if (seq != null) {
-            SendAck(seq).catch(() => {})
+            SendAck(seq).catch(() => { })
           }
           break
         }
 
         // ── PUSH_PRESENCE (102) ────────────────────────────────────────
         case WS_FRAME.PUSH_PRESENCE: {
-          const userId = payload?.user_id as string | undefined
+          const userId = String(payload?.user_id ?? '')
           const status = (payload?.status as string) ?? ''
-          if (userId == null) break
+          if (userId === '') break
 
           // Only accept strict online/offline states (aggregated by server).
           if (status === 'online') {
@@ -514,8 +513,8 @@ onMounted(async () => {
 
         // ── PUSH_TYPING (104) ──────────────────────────────────────────
         case WS_FRAME.PUSH_TYPING: {
-          const conversationId = payload?.conversation_id as string | undefined
-          const userId = payload?.user_id as string | undefined
+          const conversationId = String(payload?.conversation_id ?? '')
+          const userId = String(payload?.user_id ?? '')
           if (!conversationId || !userId) break
 
           // Clear any previous timer for this conversation.
@@ -539,7 +538,7 @@ onMounted(async () => {
         case WS_FRAME.PUSH_FRIEND_APPLICATION: {
           const status = (payload?.status as string) ?? ''
           const userEmail = (payload?.user_id != null)
-            ? (await resolveSenderInfo(payload.user_id as string)).name
+            ? (await resolveSenderInfo(String(payload.user_id))).name
             : '有人'
 
           if (status === 'pending') {
@@ -577,7 +576,7 @@ onMounted(async () => {
 
           // Send client ack for the server ack
           if (ackSeq != null) {
-            SendAck(ackSeq).catch(() => {})
+            SendAck(ackSeq).catch(() => { })
           }
           break
         }
@@ -637,7 +636,6 @@ onUnmounted(() => {
 async function refreshPresenceSnapshot() {
   if (currentUserId.value === '') return
   try {
-    // Dynamic import; GetFriendsPresence is exposed via wails bindings (step 15).
     const { GetFriendsPresence } = await import('../wailsjs/go/main/App')
     const resp = await GetFriendsPresence()
     if (!resp?.presences?.length) return
@@ -648,13 +646,11 @@ async function refreshPresenceSnapshot() {
       }
     }
     onlineUserIds.value = next
-    // Also refresh conversation isOnline flags.
     for (const conv of conversations.value) {
       const otherIds = (conv.memberIds ?? []).filter((id) => id !== currentUserId.value)
       conv.isOnline = otherIds.some((id) => next.has(id))
     }
   } catch {
-    // Best-effort; presence will be updated via PUSH_PRESENCE events.
   }
 }
 
@@ -664,7 +660,7 @@ function startHeartbeat() {
   if (heartbeatTimer) return
   heartbeatTimer = setInterval(() => {
     if (connectionState.value === 'connected') {
-      SendHeartbeat(lastReadSeq.value).catch(() => {})
+      SendHeartbeat(lastReadSeq.value).catch(() => { })
     }
   }, 20_000)
 }
@@ -714,7 +710,7 @@ async function handleLogin(payload: { email: string; password: string; device_id
     const resp = await Login({ email: payload.email, password: payload.password, device_id: payload.device_id })
     if (resp) {
       const state = await SessionState()
-      currentUserId.value = state.user_id ?? ''
+      currentUserId.value = String(state.user_id ?? '')
       currentUserLabel.value = payload.email.split('@')[0]
       intentionalDisconnect.value = false
       reconnectAttempt = 0
@@ -817,8 +813,8 @@ async function handleLoadMoreHistory(conversationId: string) {
   try {
     const resp = await GetConversationHistory(
       conversationId,
+      String(cursor.cursorCreatedAt),
       cursor.cursorId,
-      cursor.cursorCreatedAt,
       50,
     )
     if (!resp?.messages?.length) {
@@ -855,7 +851,7 @@ function handleSelectConversation(id: string) {
   const msgs = messagesMap.value.get(id)
   if (msgs && msgs.length > 0) {
     const lastMsg = msgs[msgs.length - 1]
-    SendReadReceipt(id, lastMsg.id).catch(() => {})
+    SendReadReceipt(id, lastMsg.id).catch(() => { })
   }
 }
 
@@ -870,7 +866,7 @@ async function handleSendMessage(content: string) {
   const clientMsgId = Date.now().toString() + '-' + Math.random().toString(36).slice(2, 8)
 
   const optimisticMsg: ChatMessage = {
-    id: String(Date.now()),
+    id: Date.now().toString(),
     conversationId,
     senderId: currentUserId.value,
     senderName: currentUserLabel.value,
@@ -914,7 +910,7 @@ async function handleSendMessage(content: string) {
 function handleTyping() {
   if (activeConversationId.value === null) return
   if (!isConnected.value) return
-  SendTyping(activeConversationId.value).catch(() => {})
+  SendTyping(activeConversationId.value).catch(() => { })
 }
 
 // ─── Search / start direct conversation ───────────────────────────────────────
@@ -988,9 +984,6 @@ async function handleAddFriend(userId: string) {
   if (addFriendLoading.value) return
   addFriendLoading.value = true
   addingFriendUserId.value = userId
-  // #region agent log
-  fetch('http://127.0.0.1:7448/ingest/f55c4ddd-4668-4f70-bd8a-b6b233ad8684',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'0bb7cd'},body:JSON.stringify({sessionId:'0bb7cd',hypothesisId:'A',location:'App.vue:handleAddFriend',message:'add friend user id',data:{userId,jsNumber:Number(userId)},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
   try {
     await AddFriend(userId)
     ElMessage.success('好友申请已发送')
@@ -1087,83 +1080,38 @@ function displayUserName(user: SearchUserItem): string {
   <!-- Auth pages -->
   <div v-if="!isAuthenticated" class="auth-page">
     <Transition name="auth-fade" mode="out-in">
-      <LoginView
-        v-if="authView === 'login'"
-        :loading="authLoading"
-        :device-id="deviceId"
-        @login="handleLogin"
-        @switch-register="authView = 'register'"
-      />
-      <RegisterView
-        v-else
-        :loading="authLoading"
-        :device-id="deviceId"
-        @register="handleRegister"
-        @switch-login="authView = 'login'"
-      />
+      <LoginView v-if="authView === 'login'" :loading="authLoading" :device-id="deviceId" @login="handleLogin"
+        @switch-register="authView = 'register'" />
+      <RegisterView v-else :loading="authLoading" :device-id="deviceId" @register="handleRegister"
+        @switch-login="authView = 'login'" />
     </Transition>
   </div>
 
   <!-- Chat workspace -->
   <div v-else class="app-shell">
     <div class="chat-sidebar">
-      <ConversationList
-        v-if="!friendsViewVisible"
-        :conversations="conversations"
-        :active-conversation-id="activeConversationId"
-        :current-user-label="currentUserLabel"
-        :current-user-id="currentUserId"
-        :connected="isConnected"
-        :pending-friend-count="pendingFriendAppCount"
-        :search-keyword="searchKeyword"
-        :search-results="searchResults"
-        :search-loading="searchLoading"
-        :create-loading="createLoading"
-        :creating-user-id="creatingUserId"
-        :add-friend-loading="addFriendLoading"
-        :adding-friend-user-id="addingFriendUserId"
-        :search-error="searchError"
-        @select="handleSelectConversation"
-        @logout="handleLogout"
-        @open-friends="handleOpenFriends"
-        @search-user="handleSearchUsers"
-        @start-direct="handleStartDirect"
-        @add-friend="handleAddFriend"
-      />
-      <FriendsView
-        v-else
-        :current-user-id="currentUserId"
-        :online-user-ids="onlineUserIds"
-        :initial-tab="friendsInitialTab"
-        @start-conversation="handleFriendsStartConversation"
-        @start-group="handleFriendsStartGroup"
-        @applications-updated="handleApplicationsUpdated"
-        @back="friendsViewVisible = false"
-      />
+      <ConversationList v-if="!friendsViewVisible" :conversations="conversations"
+        :active-conversation-id="activeConversationId" :current-user-label="currentUserLabel"
+        :current-user-id="currentUserId" :connected="isConnected" :pending-friend-count="pendingFriendAppCount"
+        :search-keyword="searchKeyword" :search-results="searchResults" :search-loading="searchLoading"
+        :create-loading="createLoading" :creating-user-id="creatingUserId" :add-friend-loading="addFriendLoading"
+        :adding-friend-user-id="addingFriendUserId" :search-error="searchError" @select="handleSelectConversation"
+        @logout="handleLogout" @open-friends="handleOpenFriends" @search-user="handleSearchUsers"
+        @start-direct="handleStartDirect" @add-friend="handleAddFriend" />
+      <FriendsView v-else :current-user-id="currentUserId" :online-user-ids="onlineUserIds"
+        :initial-tab="friendsInitialTab" @start-conversation="handleFriendsStartConversation"
+        @start-group="handleFriendsStartGroup" @applications-updated="handleApplicationsUpdated"
+        @back="friendsViewVisible = false" />
     </div>
     <div class="chat-main">
-      <MessageArea
-        :conversation="activeConversation"
-        :messages="activeMessages"
-        :typing-user-id="typingUserId"
-        @load-more="handleLoadMoreHistory"
-        @open-settings="groupSettingsVisible = true"
-      />
-      <GroupSettingsPanel
-        v-model:visible="groupSettingsVisible"
-        :conversation="activeConversation"
-        :current-user-id="currentUserId"
-        @updated="handleGroupUpdated"
-        @left="handleGroupLeft"
-        @dismissed="handleGroupDismissed"
-      />
+      <MessageArea :conversation="activeConversation" :messages="activeMessages" :typing-user-id="typingUserId"
+        @load-more="handleLoadMoreHistory" @open-settings="groupSettingsVisible = true" />
+      <GroupSettingsPanel v-model:visible="groupSettingsVisible" :conversation="activeConversation"
+        :current-user-id="currentUserId" @updated="handleGroupUpdated" @left="handleGroupLeft"
+        @dismissed="handleGroupDismissed" />
       <div class="input-area">
-        <MessageInput
-          :disabled="!isConnected || activeConversationId === null"
-          placeholder="输入消息…"
-          @send="handleSendMessage"
-          @typing="handleTyping"
-        />
+        <MessageInput :disabled="!isConnected || activeConversationId === null" placeholder="输入消息…"
+          @send="handleSendMessage" @typing="handleTyping" />
       </div>
     </div>
   </div>
@@ -1174,6 +1122,7 @@ function displayUserName(user: SearchUserItem): string {
 .auth-fade-leave-active {
   transition: opacity 0.2s ease;
 }
+
 .auth-fade-enter-from,
 .auth-fade-leave-to {
   opacity: 0;

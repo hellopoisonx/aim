@@ -70,7 +70,7 @@ async function loadAll() {
 
     // Map FriendshipItem to FriendItem, resolving user info
     const friendItems: FriendItem[] = await Promise.all(
-      (friendsResp?.friends ?? []).map(async (item: { user_id: string; friend_id: string; status: string; created_at: number; updated_at: number }) => {
+      (friendsResp?.friends ?? []).map(async (item) => {
         const otherId = item.user_id === props.currentUserId ? item.friend_id : item.user_id
         let email = ''
         let avatar = ''
@@ -97,8 +97,8 @@ async function loadAll() {
     // Map FriendshipItem to FriendRequest, resolving user emails
     const appItems: FriendRequest[] = await Promise.all(
       (appsResp?.applications ?? [])
-        .filter((item: { status: string }) => item.status === 'pending')
-        .map(async (item: { user_id: string; friend_id: string; status: string; created_at: number; updated_at: number }) => {
+        .filter((item) => item.status === 'pending')
+        .map(async (item) => {
           let userEmail = ''
           try {
             const userResp = await GetUserById(item.user_id)

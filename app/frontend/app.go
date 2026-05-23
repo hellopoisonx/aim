@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -9,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/hellopoisonx/aim/app/frontend/client"
 	"github.com/hellopoisonx/aim/app/frontend/device"
+	"github.com/hellopoisonx/aim/app/frontend/vueapi"
 	"github.com/hellopoisonx/aim/app/frontend/wsclient"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 	"github.com/hellopoisonx/aim/shared/proto/ws/pb"
@@ -65,7 +67,7 @@ type SessionState struct {
 	GatewayHTTP  string `json:"gateway_http"`
 	GatewayWS    string `json:"gateway_ws"`
 	DeviceID     string `json:"device_id"`
-	UserID       int64  `json:"user_id"`
+	UserID       string `json:"user_id"`
 	AccessToken  bool   `json:"access_token"`
 	RefreshToken bool   `json:"refresh_token"`
 	ExpiresAt    int64  `json:"expires_at"`
@@ -85,28 +87,28 @@ type ProtocolCatalog struct {
 }
 
 type CreateConversationRequest struct {
-	ConversationType string  `json:"conversation_type" validate:"required,oneof=direct group"`
-	MemberIDs        []int64 `json:"member_ids" validate:"required,min=1"`
-	Name             string  `json:"name,optional"`
+	ConversationType string   `json:"conversation_type" validate:"required,oneof=direct group"`
+	MemberIDs        []string `json:"member_ids" validate:"required,min=1"`
+	Name             string   `json:"name,omitempty"`
 }
 
 type CreateGroupRequest struct {
-	MemberIDs []int64 `json:"member_ids" validate:"required,min=1"`
-	Name      string  `json:"name,optional"`
-	Avatar    string  `json:"avatar,optional"`
+	MemberIDs []string `json:"member_ids" validate:"required,min=1"`
+	Name      string   `json:"name,omitempty"`
+	Avatar    string   `json:"avatar,omitempty"`
 }
 
 type AddGroupMembersRequest struct {
-	MemberIDs []int64 `json:"member_ids" validate:"required,min=1"`
+	MemberIDs []string `json:"member_ids" validate:"required,min=1"`
 }
 
 type UpdateGroupInfoRequest struct {
-	Name   *string `json:"name,optional"`
-	Avatar *string `json:"avatar,optional"`
+	Name   *string `json:"name,omitempty"`
+	Avatar *string `json:"avatar,omitempty"`
 }
 
 type SendMessageRequest struct {
-	ConversationID int64    `json:"conversation_id"`
+	ConversationID string   `json:"conversation_id"`
 	MessageType    string   `json:"message_type"`
 	Content        string   `json:"content"`
 	ClientMsgID    string   `json:"client_msg_id"`
@@ -133,7 +135,7 @@ func (a *App) DeviceID() (string, error) {
 	return a.ensureDeviceID()
 }
 
-func (a *App) Register(req client.RegisterRequest) (*client.RegisterResponse, error) {
+func (a *App) Register(req client.RegisterRequest) (*vueapi.RegisterResponse, error) {
 	if req.DeviceId == "" {
 		deviceID, err := a.ensureDeviceID()
 		if err != nil {
@@ -143,10 +145,15 @@ func (a *App) Register(req client.RegisterRequest) (*client.RegisterResponse, er
 		req.DeviceId = deviceID
 	}
 
-	return a.restClient().Register(a.callContext(), &req)
+	resp, err := a.restClient().Register(a.callContext(), &req)
+	if err != nil {
+		return nil, err
+	}
+
+	return vueapi.RegisterFromClient(resp), nil
 }
 
-func (a *App) Login(req client.LoginRequest) (*client.LoginResponse, error) {
+func (a *App) Login(req client.LoginRequest) (*vueapi.LoginResponse, error) {
 	if req.DeviceId == "" {
 		deviceID, err := a.ensureDeviceID()
 		if err != nil {
@@ -166,10 +173,10 @@ func (a *App) Login(req client.LoginRequest) (*client.LoginResponse, error) {
 	a.userID = resp.UserId
 	a.mu.Unlock()
 
-	return resp, nil
+	return vueapi.LoginFromClient(resp), nil
 }
 
-func (a *App) Refresh(req client.RefreshRequest) (*client.RefreshResponse, error) {
+func (a *App) Refresh(req client.RefreshRequest) (*vueapi.RefreshResponse, error) {
 	if req.RefreshToken == "" {
 		a.mu.RLock()
 		req.RefreshToken = a.refreshToken
@@ -183,11 +190,15 @@ func (a *App) Refresh(req client.RefreshRequest) (*client.RefreshResponse, error
 
 	a.setTokens(resp.AccessToken, resp.RefreshToken, resp.ExpiresAt)
 
-	return resp, nil
+	return vueapi.RefreshFromClient(resp), nil
 }
 
+func (a *App) AddFriend(id string) (*vueapi.AddFriendResponse, error) {
+	friendID, err := parseID(id)
+	if err != nil {
+		return nil, err
+	}
 
-func (a *App) AddFriend(id int64) (*client.AddFriendResponse, error) {
 	a.mu.RLock()
 	accessToken := a.accessToken
 	a.mu.RUnlock()
@@ -196,10 +207,20 @@ func (a *App) AddFriend(id int64) (*client.AddFriendResponse, error) {
 		return nil, errorx.NewCodeError(errorx.CodeAuth, "missing access token")
 	}
 
-	return a.restClient().AddFriend(a.callContext(), id, accessToken)
+	resp, err := a.restClient().AddFriend(a.callContext(), friendID, accessToken)
+	if err != nil {
+		return nil, err
+	}
+
+	return vueapi.AddFriendFromClient(resp), nil
 }
 
-func (a *App) AcceptFriend(id int64) (*client.AcceptFriendResponse, error) {
+func (a *App) AcceptFriend(id string) (*vueapi.AcceptFriendResponse, error) {
+	friendID, err := parseID(id)
+	if err != nil {
+		return nil, err
+	}
+
 	a.mu.RLock()
 	accessToken := a.accessToken
 	a.mu.RUnlock()
@@ -208,10 +229,20 @@ func (a *App) AcceptFriend(id int64) (*client.AcceptFriendResponse, error) {
 		return nil, errorx.NewCodeError(errorx.CodeAuth, "missing access token")
 	}
 
-	return a.restClient().AcceptFriend(a.callContext(), id, accessToken)
+	resp, err := a.restClient().AcceptFriend(a.callContext(), friendID, accessToken)
+	if err != nil {
+		return nil, err
+	}
+
+	return vueapi.AcceptFriendFromClient(resp), nil
 }
 
-func (a *App) RejectFriend(id int64) (*client.RejectFriendResponse, error) {
+func (a *App) RejectFriend(id string) (*vueapi.RejectFriendResponse, error) {
+	friendID, err := parseID(id)
+	if err != nil {
+		return nil, err
+	}
+
 	a.mu.RLock()
 	accessToken := a.accessToken
 	a.mu.RUnlock()
@@ -220,10 +251,15 @@ func (a *App) RejectFriend(id int64) (*client.RejectFriendResponse, error) {
 		return nil, errorx.NewCodeError(errorx.CodeAuth, "missing access token")
 	}
 
-	return a.restClient().RejectFriend(a.callContext(), id, accessToken)
+	resp, err := a.restClient().RejectFriend(a.callContext(), friendID, accessToken)
+	if err != nil {
+		return nil, err
+	}
+
+	return vueapi.RejectFriendFromClient(resp), nil
 }
 
-func (a *App) ListFriends() (*client.ListFriendsResponse, error) {
+func (a *App) ListFriends() (*vueapi.ListFriendsResponse, error) {
 	a.mu.RLock()
 	accessToken := a.accessToken
 	a.mu.RUnlock()
@@ -232,11 +268,15 @@ func (a *App) ListFriends() (*client.ListFriendsResponse, error) {
 		return nil, errorx.NewCodeError(errorx.CodeAuth, "missing access token")
 	}
 
-	return a.restClient().ListFriends(a.callContext(), accessToken)
+	resp, err := a.restClient().ListFriends(a.callContext(), accessToken)
+	if err != nil {
+		return nil, err
+	}
+
+	return vueapi.ListFriendsFromClient(resp), nil
 }
 
-// GetFriendsPresence calls GET /api/presence/friends.
-func (a *App) GetFriendsPresence() (*client.GetFriendsPresenceResponse, error) {
+func (a *App) GetFriendsPresence() (*vueapi.GetFriendsPresenceResponse, error) {
 	a.mu.RLock()
 	accessToken := a.accessToken
 	a.mu.RUnlock()
@@ -245,10 +285,15 @@ func (a *App) GetFriendsPresence() (*client.GetFriendsPresenceResponse, error) {
 		return nil, errorx.NewCodeError(errorx.CodeAuth, "missing access token")
 	}
 
-	return a.restClient().GetFriendsPresence(a.callContext(), accessToken)
+	resp, err := a.restClient().GetFriendsPresence(a.callContext(), accessToken)
+	if err != nil {
+		return nil, err
+	}
+
+	return vueapi.FriendsPresenceFromClient(resp), nil
 }
 
-func (a *App) ListFriendApplications() (*client.ListFriendApplicationsResponse, error) {
+func (a *App) ListFriendApplications() (*vueapi.ListFriendApplicationsResponse, error) {
 	a.mu.RLock()
 	accessToken := a.accessToken
 	a.mu.RUnlock()
@@ -257,10 +302,15 @@ func (a *App) ListFriendApplications() (*client.ListFriendApplicationsResponse, 
 		return nil, errorx.NewCodeError(errorx.CodeAuth, "missing access token")
 	}
 
-	return a.restClient().ListFriendApplications(a.callContext(), accessToken)
+	resp, err := a.restClient().ListFriendApplications(a.callContext(), accessToken)
+	if err != nil {
+		return nil, err
+	}
+
+	return vueapi.ListFriendApplicationsFromClient(resp), nil
 }
 
-func (a *App) Logout() (*client.LogoutResponse, error) {
+func (a *App) Logout() (*vueapi.LogoutResponse, error) {
 	a.mu.RLock()
 	accessToken := a.accessToken
 	a.mu.RUnlock()
@@ -280,10 +330,10 @@ func (a *App) Logout() (*client.LogoutResponse, error) {
 	a.mu.Unlock()
 	_ = a.DisconnectWS()
 
-	return resp, nil
+	return vueapi.LogoutFromClient(resp), nil
 }
 
-func (a *App) SearchUsersByName(name string) ([]client.UserListItem, error) {
+func (a *App) SearchUsersByName(name string) ([]vueapi.UserListItem, error) {
 	a.mu.RLock()
 	accessToken := a.accessToken
 	a.mu.RUnlock()
@@ -297,10 +347,10 @@ func (a *App) SearchUsersByName(name string) ([]client.UserListItem, error) {
 		return nil, err
 	}
 
-	return resp.Users, nil
+	return vueapi.UserListItemsFromClient(resp.Users), nil
 }
 
-func (a *App) CreateConversation(req CreateConversationRequest) (*client.CreateConversationResponse, error) {
+func (a *App) CreateConversation(req CreateConversationRequest) (*vueapi.CreateConversationResponse, error) {
 	a.mu.RLock()
 	accessToken := a.accessToken
 	a.mu.RUnlock()
@@ -318,20 +368,30 @@ func (a *App) CreateConversation(req CreateConversationRequest) (*client.CreateC
 		return nil, errorx.NewCodeError(errorx.CodeBadInput, "conversation_type must be direct or group")
 	}
 
-	if len(req.MemberIDs) == 0 {
+	memberIDs, err := parseIDs(req.MemberIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(memberIDs) == 0 {
 		return nil, errorx.NewCodeError(errorx.CodeBadInput, "member_ids must contain at least one user")
 	}
 
 	payload := &client.CreateConversationRequest{
 		ConversationType: convType,
-		MemberIDs:        req.MemberIDs,
+		MemberIDs:        memberIDs,
 		Name:             strings.TrimSpace(req.Name),
 	}
 
-	return a.restClient().CreateConversation(a.callContext(), payload, accessToken)
+	resp, err := a.restClient().CreateConversation(a.callContext(), payload, accessToken)
+	if err != nil {
+		return nil, err
+	}
+
+	return vueapi.CreateConversationFromClient(resp), nil
 }
 
-func (a *App) CreateGroup(req CreateGroupRequest) (*client.CreateConversationResponse, error) {
+func (a *App) CreateGroup(req CreateGroupRequest) (*vueapi.CreateConversationResponse, error) {
 	a.mu.RLock()
 	accessToken := a.accessToken
 	a.mu.RUnlock()
@@ -340,20 +400,35 @@ func (a *App) CreateGroup(req CreateGroupRequest) (*client.CreateConversationRes
 		return nil, errorx.NewCodeError(errorx.CodeAuth, "missing access token")
 	}
 
-	if len(req.MemberIDs) == 0 {
+	memberIDs, err := parseIDs(req.MemberIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(memberIDs) == 0 {
 		return nil, errorx.NewCodeError(errorx.CodeBadInput, "member_ids must contain at least one user")
 	}
 
 	payload := &client.CreateGroupRequest{
-		MemberIDs: req.MemberIDs,
+		MemberIDs: memberIDs,
 		Name:      strings.TrimSpace(req.Name),
 		Avatar:    strings.TrimSpace(req.Avatar),
 	}
 
-	return a.restClient().CreateGroup(a.callContext(), payload, accessToken)
+	resp, err := a.restClient().CreateGroup(a.callContext(), payload, accessToken)
+	if err != nil {
+		return nil, err
+	}
+
+	return vueapi.CreateConversationFromClient(resp), nil
 }
 
-func (a *App) GetConversationMembers(conversationID int64) (*client.GetConversationMembersResponse, error) {
+func (a *App) GetConversationMembers(conversationID string) (*vueapi.GetConversationMembersResponse, error) {
+	id, err := parseID(conversationID)
+	if err != nil {
+		return nil, err
+	}
+
 	a.mu.RLock()
 	accessToken := a.accessToken
 	a.mu.RUnlock()
@@ -362,14 +437,25 @@ func (a *App) GetConversationMembers(conversationID int64) (*client.GetConversat
 		return nil, errorx.NewCodeError(errorx.CodeAuth, "missing access token")
 	}
 
-	if conversationID <= 0 {
-		return nil, errorx.NewCodeError(errorx.CodeBadInput, "conversation id is required")
+	resp, err := a.restClient().GetConversationMembers(a.callContext(), id, accessToken)
+	if err != nil {
+		return nil, err
 	}
 
-	return a.restClient().GetConversationMembers(a.callContext(), conversationID, accessToken)
+	return vueapi.MembersFromClient(resp), nil
 }
 
-func (a *App) AddGroupMembers(conversationID int64, req AddGroupMembersRequest) (*client.CreateConversationResponse, error) {
+func (a *App) AddGroupMembers(conversationID string, req AddGroupMembersRequest) (*vueapi.CreateConversationResponse, error) {
+	id, err := parseID(conversationID)
+	if err != nil {
+		return nil, err
+	}
+
+	memberIDs, err := parseIDs(req.MemberIDs)
+	if err != nil {
+		return nil, err
+	}
+
 	a.mu.RLock()
 	accessToken := a.accessToken
 	a.mu.RUnlock()
@@ -378,20 +464,31 @@ func (a *App) AddGroupMembers(conversationID int64, req AddGroupMembersRequest) 
 		return nil, errorx.NewCodeError(errorx.CodeAuth, "missing access token")
 	}
 
-	if conversationID <= 0 {
-		return nil, errorx.NewCodeError(errorx.CodeBadInput, "conversation id is required")
-	}
-
-	if len(req.MemberIDs) == 0 {
+	if len(memberIDs) == 0 {
 		return nil, errorx.NewCodeError(errorx.CodeBadInput, "member_ids must contain at least one user")
 	}
 
-	return a.restClient().AddGroupMembers(a.callContext(), conversationID, &client.AddGroupMembersRequest{
-		MemberIDs: req.MemberIDs,
+	resp, err := a.restClient().AddGroupMembers(a.callContext(), id, &client.AddGroupMembersRequest{
+		MemberIDs: memberIDs,
 	}, accessToken)
+	if err != nil {
+		return nil, err
+	}
+
+	return vueapi.CreateConversationFromClient(resp), nil
 }
 
-func (a *App) RemoveGroupMember(conversationID, userID int64) error {
+func (a *App) RemoveGroupMember(conversationID, userID string) error {
+	id, err := parseID(conversationID)
+	if err != nil {
+		return err
+	}
+
+	uid, err := parseID(userID)
+	if err != nil {
+		return err
+	}
+
 	a.mu.RLock()
 	accessToken := a.accessToken
 	a.mu.RUnlock()
@@ -400,14 +497,15 @@ func (a *App) RemoveGroupMember(conversationID, userID int64) error {
 		return errorx.NewCodeError(errorx.CodeAuth, "missing access token")
 	}
 
-	if conversationID <= 0 || userID <= 0 {
-		return errorx.NewCodeError(errorx.CodeBadInput, "conversation id and user id are required")
-	}
-
-	return a.restClient().RemoveGroupMember(a.callContext(), conversationID, userID, accessToken)
+	return a.restClient().RemoveGroupMember(a.callContext(), id, uid, accessToken)
 }
 
-func (a *App) LeaveGroup(conversationID int64) error {
+func (a *App) LeaveGroup(conversationID string) error {
+	id, err := parseID(conversationID)
+	if err != nil {
+		return err
+	}
+
 	a.mu.RLock()
 	accessToken := a.accessToken
 	a.mu.RUnlock()
@@ -416,14 +514,15 @@ func (a *App) LeaveGroup(conversationID int64) error {
 		return errorx.NewCodeError(errorx.CodeAuth, "missing access token")
 	}
 
-	if conversationID <= 0 {
-		return errorx.NewCodeError(errorx.CodeBadInput, "conversation id is required")
-	}
-
-	return a.restClient().LeaveGroup(a.callContext(), conversationID, accessToken)
+	return a.restClient().LeaveGroup(a.callContext(), id, accessToken)
 }
 
-func (a *App) DismissGroup(conversationID int64) error {
+func (a *App) DismissGroup(conversationID string) error {
+	id, err := parseID(conversationID)
+	if err != nil {
+		return err
+	}
+
 	a.mu.RLock()
 	accessToken := a.accessToken
 	a.mu.RUnlock()
@@ -432,44 +531,51 @@ func (a *App) DismissGroup(conversationID int64) error {
 		return errorx.NewCodeError(errorx.CodeAuth, "missing access token")
 	}
 
-	if conversationID <= 0 {
-		return errorx.NewCodeError(errorx.CodeBadInput, "conversation id is required")
-	}
-
-	return a.restClient().DismissGroup(a.callContext(), conversationID, accessToken)
+	return a.restClient().DismissGroup(a.callContext(), id, accessToken)
 }
 
-func (a *App) UpdateGroupInfo(conversationID int64, req UpdateGroupInfoRequest) (*client.UpdateGroupInfoResponse, error) {
+func (a *App) UpdateGroupInfo(conversationID string, req UpdateGroupInfoRequest) (*vueapi.UpdateGroupInfoResponse, error) {
+	id, err := parseID(conversationID)
+	if err != nil {
+		return nil, err
+	}
+
 	a.mu.RLock()
 	accessToken := a.accessToken
 	a.mu.RUnlock()
 
 	if accessToken == "" {
 		return nil, errorx.NewCodeError(errorx.CodeAuth, "missing access token")
-	}
-
-	if conversationID <= 0 {
-		return nil, errorx.NewCodeError(errorx.CodeBadInput, "conversation id is required")
 	}
 
 	if req.Name == nil && req.Avatar == nil {
 		return nil, errorx.NewCodeError(errorx.CodeBadInput, "name or avatar is required")
 	}
 
-	return a.restClient().UpdateGroupInfo(a.callContext(), conversationID, &client.UpdateGroupInfoRequest{
+	resp, err := a.restClient().UpdateGroupInfo(a.callContext(), id, &client.UpdateGroupInfoRequest{
 		Name:   req.Name,
 		Avatar: req.Avatar,
 	}, accessToken)
+	if err != nil {
+		return nil, err
+	}
+
+	return vueapi.UpdateGroupInfoFromClient(resp), nil
 }
 
-func (a *App) CreateDirectConversation(memberID int64) (*client.CreateConversationResponse, error) {
+func (a *App) CreateDirectConversation(memberID string) (*vueapi.CreateConversationResponse, error) {
 	return a.CreateConversation(CreateConversationRequest{
 		ConversationType: "direct",
-		MemberIDs:        []int64{memberID},
+		MemberIDs:        []string{memberID},
 	})
 }
 
-func (a *App) GetUserById(id int64) (*client.GetUserByIdResponse, error) {
+func (a *App) GetUserById(id string) (*vueapi.GetUserByIdResponse, error) {
+	userID, err := parseID(id)
+	if err != nil {
+		return nil, err
+	}
+
 	a.mu.RLock()
 	accessToken := a.accessToken
 	a.mu.RUnlock()
@@ -478,10 +584,15 @@ func (a *App) GetUserById(id int64) (*client.GetUserByIdResponse, error) {
 		return nil, errorx.NewCodeError(errorx.CodeAuth, "missing access token")
 	}
 
-	return a.restClient().GetUserById(a.callContext(), id, accessToken)
+	resp, err := a.restClient().GetUserById(a.callContext(), userID, accessToken)
+	if err != nil {
+		return nil, err
+	}
+
+	return vueapi.GetUserByIdFromClient(resp), nil
 }
 
-func (a *App) ListConversations() (*client.ListConversationsResponse, error) {
+func (a *App) ListConversations() (*vueapi.ListConversationsResponse, error) {
 	a.mu.RLock()
 	accessToken := a.accessToken
 	a.mu.RUnlock()
@@ -490,10 +601,30 @@ func (a *App) ListConversations() (*client.ListConversationsResponse, error) {
 		return nil, errorx.NewCodeError(errorx.CodeAuth, "missing access token")
 	}
 
-	return a.restClient().ListConversations(a.callContext(), accessToken)
+	resp, err := a.restClient().ListConversations(a.callContext(), accessToken)
+	if err != nil {
+		return nil, err
+	}
+
+	return vueapi.ListConversationsFromClient(resp), nil
 }
 
-func (a *App) GetConversationHistory(conversationID, cursorCreatedAt, cursorID int64, limit int32) (*client.GetConversationHistoryResponse, error) {
+func (a *App) GetConversationHistory(conversationID, cursorCreatedAt, cursorID string, limit int32) (*vueapi.GetConversationHistoryResponse, error) {
+	id, err := parseID(conversationID)
+	if err != nil {
+		return nil, err
+	}
+
+	createdAt, err := parseOptionalID(cursorCreatedAt)
+	if err != nil {
+		return nil, err
+	}
+
+	messageID, err := parseOptionalID(cursorID)
+	if err != nil {
+		return nil, err
+	}
+
 	a.mu.RLock()
 	accessToken := a.accessToken
 	a.mu.RUnlock()
@@ -502,7 +633,12 @@ func (a *App) GetConversationHistory(conversationID, cursorCreatedAt, cursorID i
 		return nil, errorx.NewCodeError(errorx.CodeAuth, "missing access token")
 	}
 
-	return a.restClient().GetConversationHistory(a.callContext(), conversationID, cursorCreatedAt, cursorID, limit, accessToken)
+	resp, err := a.restClient().GetConversationHistory(a.callContext(), id, createdAt, messageID, limit, accessToken)
+	if err != nil {
+		return nil, err
+	}
+
+	return vueapi.HistoryFromClient(resp), nil
 }
 
 func (a *App) ConnectWS() error {
@@ -564,6 +700,11 @@ func (a *App) DisconnectWS() error {
 }
 
 func (a *App) SendMessage(req SendMessageRequest) error {
+	conversationID, err := parseID(req.ConversationID)
+	if err != nil {
+		return err
+	}
+
 	if req.ClientMsgID == "" {
 		req.ClientMsgID = uuid.NewString()
 	}
@@ -572,19 +713,34 @@ func (a *App) SendMessage(req SendMessageRequest) error {
 		req.MessageType = "text"
 	}
 
-	return a.wsClient().SendMessage(a.callContext(), req.ConversationID, req.MessageType, req.Content, req.ClientMsgID, req.Mentions)
+	return a.wsClient().SendMessage(a.callContext(), conversationID, req.MessageType, req.Content, req.ClientMsgID, req.Mentions)
 }
 
 func (a *App) SendHeartbeat(lastSeq int64) error {
 	return a.wsClient().SendHeartbeat(a.callContext(), lastSeq)
 }
 
-func (a *App) SendTyping(conversationID int64) error {
-	return a.wsClient().SendTyping(a.callContext(), conversationID)
+func (a *App) SendTyping(conversationID string) error {
+	id, err := parseID(conversationID)
+	if err != nil {
+		return err
+	}
+
+	return a.wsClient().SendTyping(a.callContext(), id)
 }
 
-func (a *App) SendReadReceipt(conversationID int64, lastMsgID int64) error {
-	return a.wsClient().SendReadReceipt(a.callContext(), conversationID, lastMsgID)
+func (a *App) SendReadReceipt(conversationID string, lastMsgID string) error {
+	id, err := parseID(conversationID)
+	if err != nil {
+		return err
+	}
+
+	messageID, err := parseID(lastMsgID)
+	if err != nil {
+		return err
+	}
+
+	return a.wsClient().SendReadReceipt(a.callContext(), id, messageID)
 }
 
 func (a *App) SendAck(ackSeq int64) error {
@@ -724,7 +880,7 @@ func (a *App) sessionStateLocked() SessionState {
 		GatewayHTTP:  a.gatewayHTTP,
 		GatewayWS:    a.gatewayWS,
 		DeviceID:     a.deviceID,
-		UserID:       a.userID,
+		UserID:       vueapi.FormatID(a.userID),
 		AccessToken:  a.accessToken != "",
 		RefreshToken: a.refreshToken != "",
 		ExpiresAt:    a.expiresAt,
@@ -738,6 +894,37 @@ func (a *App) emit(event string, data any) {
 	}
 
 	runtime.EventsEmit(a.ctx, event, data)
+}
+
+func parseID(value string) (int64, error) {
+	id, err := strconv.ParseInt(strings.TrimSpace(value), 10, 64)
+	if err != nil || id <= 0 {
+		return 0, errorx.NewCodeError(errorx.CodeBadInput, "id must be a positive integer")
+	}
+	return id, nil
+}
+
+func parseOptionalID(value string) (int64, error) {
+	value = strings.TrimSpace(value)
+	if value == "" || value == "0" {
+		return 0, nil
+	}
+	return parseID(value)
+}
+
+func parseIDs(values []string) ([]int64, error) {
+	if values == nil {
+		return nil, nil
+	}
+	result := make([]int64, 0, len(values))
+	for _, value := range values {
+		id, err := parseID(value)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, id)
+	}
+	return result, nil
 }
 
 type nilWSClient struct{}

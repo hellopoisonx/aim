@@ -56,6 +56,42 @@ type Envelope struct {
 
 DTO 定义见 `client.go`，注释标注 `// mirrors gateway.api xxx`。
 
+## JSON Struct Tag 约定
+
+### 背景
+
+go-zero 的配置结构体使用 `json:",optional"` 标志字段可选，但**该选项是 go-zero 配置解析器专有的**，不是标准 `encoding/json` 行为。
+
+Wails 客户端 DTO 通过标准 `encoding/json` 序列化/反序列化，`json:",optional"` 在此没有效果——标准库忽略不识别的 tag 选项，相当于没有指定 omit 行为。
+
+### 规则
+
+| 场景 | 使用 | 示例 |
+|---|---|---|
+| **配置结构体**（go-zero `Config`） | `json:",optional"` | `Name string `json:"name,optional"`` |
+| **客户端 DTO**（`app/frontend` 下所有 `.go` 文件） | `json:",omitempty"` | `Name string `json:"name,omitempty"`` |
+| **必须字段** | 不加任何选项 | `ConversationID string `json:"conversation_id"`` |
+
+### 验证命令
+
+```bash
+# 确认前端 Go 代码中没有残留的 json:",optional"
+rg 'json:"[^"]*optional' app/frontend -g '*.go'
+# 期望结果：无输出（空）
+```
+
+### 已迁移字段（2026-05-23）
+
+`app/frontend/app.go` 中以下可选字段已从 `optional` 改为 `omitempty`：
+
+| 结构体 | 字段 |
+|---|---|
+| `CreateConversationRequest` | `Name` |
+| `CreateGroupRequest` | `Name`, `Avatar` |
+| `UpdateGroupInfoRequest` | `Name`, `Avatar` |
+
+`app/frontend/client/client.go` 中对应字段也已同步迁移。
+
 ## 新增 REST 端点的步骤
 
 1. 在 `client.go` 中定义请求/响应 DTO（如果不存在），使用 `json` tag

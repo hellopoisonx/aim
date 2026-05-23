@@ -19,13 +19,12 @@ import {
   RemoveGroupMember,
   UpdateGroupInfo,
 } from '../../wailsjs/go/main/App'
-import type { client } from '../../wailsjs/go/models'
 import type { Conversation, FriendItem, GroupMemberItem } from './types'
 
 interface Props {
   visible: boolean
   conversation: Conversation | null
-  currentUserId: number
+  currentUserId: string
 }
 
 const props = defineProps<Props>()
@@ -33,8 +32,8 @@ const props = defineProps<Props>()
 const emit = defineEmits<{
   'update:visible': [value: boolean]
   updated: [conversation: Conversation]
-  left: [conversationId: number]
-  dismissed: [conversationId: number]
+  left: [conversationId: string]
+  dismissed: [conversationId: string]
 }>()
 
 const members = ref<GroupMemberItem[]>([])
@@ -44,7 +43,7 @@ const actionLoading = ref(false)
 
 const editName = ref('')
 const friends = ref<FriendItem[]>([])
-const selectedFriendIds = ref<number[]>([])
+const selectedFriendIds = ref<string[]>([])
 const showAddMembers = ref(false)
 
 const isGroup = computed(() => props.conversation?.conversationType === 'group')
@@ -62,7 +61,7 @@ function formatEmail(email: string): string {
   return idx > 0 ? email.slice(0, idx) : email
 }
 
-function mapMember(item: client.MemberDetailItem): GroupMemberItem {
+function mapMember(item: { user_id: string; email: string; avatar: string; role: string; joined_at: number }): GroupMemberItem {
   return {
     userId: item.user_id,
     email: item.email,
@@ -162,7 +161,7 @@ async function handleAddMembers() {
   }
 }
 
-async function handleRemoveMember(userId: number) {
+async function handleRemoveMember(userId: string) {
   if (!props.conversation) return
   actionLoading.value = true
   try {

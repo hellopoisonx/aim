@@ -126,9 +126,9 @@ func TestSendWithoutWebSocketReturnsCodeErrorForAllFrameMethods(t *testing.T) {
 		name string
 		err  error
 	}{
-		{name: "message", err: app.SendMessage(SendMessageRequest{ConversationID: 1, Content: "hello"})},
-		{name: "typing", err: app.SendTyping(1)},
-		{name: "read receipt", err: app.SendReadReceipt(1, 2)},
+		{name: "message", err: app.SendMessage(SendMessageRequest{ConversationID: "1", Content: "hello"})},
+		{name: "typing", err: app.SendTyping("1")},
+		{name: "read receipt", err: app.SendReadReceipt("1", "2")},
 		{name: "ack", err: app.SendAck(1)},
 	}
 
@@ -190,8 +190,8 @@ func TestAppAuthFlow(t *testing.T) {
 		t.Fatalf("Register returned error: %v", err)
 	}
 
-	if registered.UserId != 7 {
-		t.Fatalf("registered user id = %d", registered.UserId)
+	if registered.UserId != "7" {
+		t.Fatalf("registered user id = %s", registered.UserId)
 	}
 
 	login, err := app.Login(client.LoginRequest{Email: "a@example.com", Password: "password123", DeviceId: "device-1"})
@@ -204,7 +204,7 @@ func TestAppAuthFlow(t *testing.T) {
 	}
 
 	state := app.SessionState()
-	if state.UserID != 7 || !state.AccessToken || !state.RefreshToken {
+	if state.UserID != "7" || !state.AccessToken || !state.RefreshToken {
 		t.Fatalf("session state after login = %+v", state)
 	}
 
@@ -227,7 +227,7 @@ func TestAppAuthFlow(t *testing.T) {
 	}
 
 	state = app.SessionState()
-	if state.UserID != 0 || state.AccessToken || state.RefreshToken {
+	if state.UserID != "0" || state.AccessToken || state.RefreshToken {
 		t.Fatalf("session state after logout = %+v", state)
 	}
 }
@@ -279,7 +279,7 @@ func TestAppWebSocketFlow(t *testing.T) {
 		}
 	}()
 
-	if err := app.SendMessage(SendMessageRequest{ConversationID: 1, Content: "hello"}); err != nil {
+	if err := app.SendMessage(SendMessageRequest{ConversationID: "1", Content: "hello"}); err != nil {
 		t.Fatalf("SendMessage returned error: %v", err)
 	}
 
@@ -287,11 +287,11 @@ func TestAppWebSocketFlow(t *testing.T) {
 		t.Fatalf("SendHeartbeat returned error: %v", err)
 	}
 
-	if err := app.SendTyping(1); err != nil {
+	if err := app.SendTyping("1"); err != nil {
 		t.Fatalf("SendTyping returned error: %v", err)
 	}
 
-	if err := app.SendReadReceipt(1, 9); err != nil {
+	if err := app.SendReadReceipt("1", "9"); err != nil {
 		t.Fatalf("SendReadReceipt returned error: %v", err)
 	}
 
@@ -360,7 +360,7 @@ func TestSearchUsersByNameWithoutToken(t *testing.T) {
 func TestCreateDirectConversationWithoutToken(t *testing.T) {
 	t.Parallel()
 
-	_, err := NewApp().CreateDirectConversation(42)
+	_, err := NewApp().CreateDirectConversation("42")
 	if err == nil {
 		t.Fatal("CreateDirectConversation returned nil error")
 	}
@@ -450,12 +450,12 @@ func TestAppCreateDirectConversation(t *testing.T) {
 	app.accessToken = "access-create"
 	app.Configure(AppConfig{GatewayHTTP: server.URL, GatewayWS: "ws://example.test/ws"})
 
-	resp, err := app.CreateDirectConversation(42)
+	resp, err := app.CreateDirectConversation("42")
 	if err != nil {
 		t.Fatalf("CreateDirectConversation returned error: %v", err)
 	}
 
-	if resp.ConversationID != 12345 || resp.ConversationType != "direct" || !resp.IsActive {
+	if resp.ConversationID != "12345" || resp.ConversationType != "direct" || !resp.IsActive {
 		t.Fatalf("response = %+v", resp)
 	}
 
@@ -505,14 +505,14 @@ func TestAppCreateGroupConversation(t *testing.T) {
 	app.Configure(AppConfig{GatewayHTTP: server.URL, GatewayWS: "ws://example.test/ws"})
 
 	resp, err := app.CreateGroup(CreateGroupRequest{
-		MemberIDs: []int64{10, 20, 30},
+		MemberIDs: []string{"10", "20", "30"},
 		Name:      "测试群",
 	})
 	if err != nil {
 		t.Fatalf("CreateGroup returned error: %v", err)
 	}
 
-	if resp.ConversationID != 99999 || resp.ConversationType != "group" || !resp.IsActive || resp.Name != "测试群" {
+	if resp.ConversationID != "99999" || resp.ConversationType != "group" || !resp.IsActive || resp.Name != "测试群" {
 		t.Fatalf("response = %+v", resp)
 	}
 
@@ -528,7 +528,7 @@ func TestAppCreateConversationValidation(t *testing.T) {
 
 	_, err := app.CreateConversation(CreateConversationRequest{
 		ConversationType: "",
-		MemberIDs:        []int64{1},
+		MemberIDs:        []string{"1"},
 	})
 	if err == nil {
 		t.Fatal("expected error for empty conversation_type")
@@ -536,7 +536,7 @@ func TestAppCreateConversationValidation(t *testing.T) {
 
 	_, err = app.CreateConversation(CreateConversationRequest{
 		ConversationType: "invalid",
-		MemberIDs:        []int64{1},
+		MemberIDs:        []string{"1"},
 	})
 	if err == nil {
 		t.Fatal("expected error for invalid conversation_type")
@@ -544,7 +544,7 @@ func TestAppCreateConversationValidation(t *testing.T) {
 
 	_, err = app.CreateConversation(CreateConversationRequest{
 		ConversationType: "group",
-		MemberIDs:        []int64{},
+		MemberIDs:        []string{},
 	})
 	if err == nil {
 		t.Fatal("expected error for empty member_ids")
@@ -582,7 +582,7 @@ func TestAppSearchUsersByNameEnvelopeError(t *testing.T) {
 func TestGetUserByIdWithoutToken(t *testing.T) {
 	t.Parallel()
 
-	_, err := NewApp().GetUserById(1001)
+	_, err := NewApp().GetUserById("1001")
 	if err == nil {
 		t.Fatal("GetUserById returned nil error")
 	}
@@ -601,7 +601,7 @@ func TestGetUserByIdWithoutToken(t *testing.T) {
 func TestGetConversationHistoryWithoutToken(t *testing.T) {
 	t.Parallel()
 
-	_, err := NewApp().GetConversationHistory(12345, 0, 0, 0)
+	_, err := NewApp().GetConversationHistory("12345", "0", "0", 0)
 	if err == nil {
 		t.Fatal("GetConversationHistory returned nil error")
 	}
@@ -647,12 +647,12 @@ func TestAppGetUserById(t *testing.T) {
 	app.accessToken = "access-get-user"
 	app.Configure(AppConfig{GatewayHTTP: server.URL, GatewayWS: "ws://example.test/ws"})
 
-	resp, err := app.GetUserById(1001)
+	resp, err := app.GetUserById("1001")
 	if err != nil {
 		t.Fatalf("GetUserById returned error: %v", err)
 	}
 
-	if resp.User.ID != 1001 || resp.User.Email != "alice@example.com" || resp.User.Status != 1 {
+	if resp.User.ID != "1001" || resp.User.Email != "alice@example.com" || resp.User.Status != 1 {
 		t.Fatalf("response = %+v", resp)
 	}
 }
@@ -669,7 +669,7 @@ func TestAppGetUserByIdEnvelopeError(t *testing.T) {
 	app.accessToken = "bad-token"
 	app.Configure(AppConfig{GatewayHTTP: server.URL, GatewayWS: "ws://example.test/ws"})
 
-	_, err := app.GetUserById(1001)
+	_, err := app.GetUserById("1001")
 	if err == nil {
 		t.Fatal("GetUserById returned nil error")
 	}
@@ -712,16 +712,16 @@ func TestAppGetConversationHistory(t *testing.T) {
 	app.accessToken = "access-history"
 	app.Configure(AppConfig{GatewayHTTP: server.URL, GatewayWS: "ws://example.test/ws"})
 
-	resp, err := app.GetConversationHistory(12345, 0, 0, 0)
+	resp, err := app.GetConversationHistory("12345", "0", "0", 0)
 	if err != nil {
 		t.Fatalf("GetConversationHistory returned error: %v", err)
 	}
 
-	if len(resp.Messages) != 1 || resp.Messages[0].ID != 98765 {
+	if len(resp.Messages) != 1 || resp.Messages[0].ID != "98765" {
 		t.Fatalf("response = %+v", resp)
 	}
 
-	if resp.NextCursorCreatedAt != 1715678890000 || resp.NextCursorID != 98764 || !resp.HasMore {
+	if resp.NextCursorCreatedAt != 1715678890000 || resp.NextCursorID != "98764" || !resp.HasMore {
 		t.Fatalf("cursor fields = %+v", resp)
 	}
 }
@@ -761,7 +761,7 @@ func TestAppGetConversationHistoryWithCursors(t *testing.T) {
 	app.accessToken = "access-history-cursors"
 	app.Configure(AppConfig{GatewayHTTP: server.URL, GatewayWS: "ws://example.test/ws"})
 
-	_, err := app.GetConversationHistory(12345, 1715678900000, 98765, 50)
+	_, err := app.GetConversationHistory("12345", "1715678900000", "98765", 50)
 	if err != nil {
 		t.Fatalf("GetConversationHistory returned error: %v", err)
 	}
@@ -779,7 +779,7 @@ func TestAppGetConversationHistoryEnvelopeError(t *testing.T) {
 	app.accessToken = "bad-token"
 	app.Configure(AppConfig{GatewayHTTP: server.URL, GatewayWS: "ws://example.test/ws"})
 
-	_, err := app.GetConversationHistory(12345, 0, 0, 0)
+	_, err := app.GetConversationHistory("12345", "0", "0", 0)
 	if err == nil {
 		t.Fatal("GetConversationHistory returned nil error")
 	}
