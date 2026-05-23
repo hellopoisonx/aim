@@ -257,6 +257,11 @@ func (m *model) cmdSearch(ctx context.Context, args []string) string {
 	if err != nil {
 		return errLine(err)
 	}
+	m.state.mu.Lock()
+	m.state.friendSearchResultQuery = args[1]
+	m.state.friendSearchResults = resp.Users
+	m.state.selectedFriend = 0
+	m.state.mu.Unlock()
 	rows := []string{fmt.Sprintf("OK %d user(s)", len(resp.Users))}
 	for _, u := range resp.Users {
 		rows = append(rows, fmt.Sprintf("- id=%s email=%s avatar=%s", u.ID, u.Email, u.Avatar))

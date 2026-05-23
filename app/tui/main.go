@@ -65,12 +65,14 @@ type conversationView struct {
 }
 
 type appState struct {
-	mu             sync.RWMutex
-	conversations  []conversationView
-	selected       int
-	friends        []client.FriendshipItem
-	selectedFriend int
-	presence       map[int64]string
+	mu                      sync.RWMutex
+	conversations           []conversationView
+	selected                int
+	friends                 []client.FriendshipItem
+	selectedFriend          int
+	friendSearchResults     []client.UserListItem
+	friendSearchResultQuery string
+	presence                map[int64]string
 }
 
 type model struct {
@@ -89,6 +91,9 @@ type model struct {
 	profiles map[string]*profile
 
 	state *appState
+
+	windowWidth  int
+	windowHeight int
 
 	activeMenu    menuKind
 	focus         focusKind
@@ -133,8 +138,8 @@ var styles = struct {
 	error:       lipgloss.NewStyle().Foreground(lipgloss.Color("9")),
 	ok:          lipgloss.NewStyle().Foreground(lipgloss.Color("10")),
 	help:        lipgloss.NewStyle().Foreground(lipgloss.Color("8")),
-	left:        lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).Padding(0, 1).Width(34).Height(22),
-	right:       lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).Padding(0, 1).Width(82).Height(22),
+	left:        lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).Padding(0, 1),
+	right:       lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).Padding(0, 1),
 	selected:    lipgloss.NewStyle().Foreground(lipgloss.Color("15")).Background(lipgloss.Color("4")),
 	offlineDot:  lipgloss.NewStyle().Foreground(lipgloss.Color("9")),
 	onlineDot:   lipgloss.NewStyle().Foreground(lipgloss.Color("10")),
@@ -236,18 +241,20 @@ func newModel(parent context.Context, cfg appConfig, store *Store) (model, error
 	}
 
 	m := model{
-		ctx:        ctx,
-		cancel:     cancel,
-		rest:       client.NewRESTClient(cfg.Gateway),
-		store:      store,
-		gateway:    cfg.Gateway,
-		wsURL:      cfg.WSURL,
-		instanceID: cfg.InstanceID,
-		dbPath:     cfg.DBPath,
-		events:     make(chan string, 128),
-		active:     "default",
-		profiles:   map[string]*profile{"default": p},
-		state:      &appState{conversations: views, presence: presence},
+		ctx:          ctx,
+		cancel:       cancel,
+		rest:         client.NewRESTClient(cfg.Gateway),
+		store:        store,
+		gateway:      cfg.Gateway,
+		wsURL:        cfg.WSURL,
+		instanceID:   cfg.InstanceID,
+		dbPath:       cfg.DBPath,
+		events:       make(chan string, 128),
+		active:       "default",
+		profiles:     map[string]*profile{"default": p},
+		state:        &appState{conversations: views, presence: presence},
+		windowWidth:  120,
+		windowHeight: 40,
 		logs: []string{
 			"AIM TUI ready. --email/--password 自动登录；↑/↓ 选择会话；send <text> 发送；Ctrl+C 退出。",
 			"REST=" + cfg.Gateway + " WS=" + cfg.WSURL + " instance=" + cfg.InstanceID + " db=" + cfg.DBPath,
@@ -295,6 +302,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "friends":
 			return m, tea.Batch(tickEvery("friends", friendsRefresh), m.async(func(ctx context.Context) string { return m.cmdFriendList(ctx) }))
 		}
+	case tea.WindowSizeMsg:
+		m.windowWidth = msg.Width
+		m.windowHeight = msg.Height
+		return m, nil
 	case eventMsg:
 		m.addLog(msg.line)
 		return m, waitEvent(m.events)
@@ -354,19 +365,28 @@ func (m model) View() string {
 	}
 
 	header := styles.title.Render("AIM TUI") + " " + styles.status.Render(fmt.Sprintf("[%s] %s %s", m.instanceID, user, wsState))
-	layout := lipgloss.JoinHorizontal(lipgloss.Top, styles.left.Render(m.renderMenu()), m.renderPage())
+	menuWidth, bodyWidth, bodyHeight := m.layoutMetrics()
+	layout := m.renderPage(menuWidth, bodyWidth, bodyHeight)
 	footer := styles.help.Render("方向键移动焦点｜Enter 提交/切换｜消息页输入直接发送｜好友页搜索后 Enter 搜索｜Ctrl+C 退出")
 	return header + "\n" + layout + "\n" + footer
 }
 
-func (m model) renderPage() string {
+func (m model) renderPage(menuWidth, bodyWidth, bodyHeight int) string {
 	if m.activeMenu == menuFriends {
-		return styles.right.Render(m.renderFriendsPage())
+		return lipgloss.JoinHorizontal(lipgloss.Top,
+			styles.left.Width(menuWidth).Height(bodyHeight).Render(m.renderMenu(menuWidth, bodyHeight)),
+			styles.right.Width(bodyWidth).Height(bodyHeight).Render(m.renderFriendsPage(bodyWidth, bodyHeight)),
+		)
 	}
-	return lipgloss.JoinHorizontal(lipgloss.Top, styles.left.Render(m.renderConversationList()), styles.right.Render(m.renderConversationWindow()))
+	leftWidth := clampInt(bodyWidth/3, 26, 44)
+	rightWidth := max(30, bodyWidth-leftWidth-1)
+	return lipgloss.JoinHorizontal(lipgloss.Top,
+		styles.left.Width(leftWidth).Height(bodyHeight).Render(m.renderConversationList(leftWidth, bodyHeight)),
+		styles.right.Width(rightWidth).Height(bodyHeight).Render(m.renderConversationWindow(rightWidth, bodyHeight)),
+	)
 }
 
-func (m model) renderMenu() string {
+func (m model) renderMenu(menuWidth, bodyHeight int) string {
 	items := []struct {
 		kind  menuKind
 		label string
@@ -386,10 +406,10 @@ func (m model) renderMenu() string {
 		rows = append(rows, line)
 	}
 	rows = append(rows, "", styles.muted.Render("←/→ 切换区域\n↑/↓ 选择菜单"))
-	return strings.Join(rows, "\n")
+	return fitLines(rows, bodyHeight)
 }
 
-func (m model) renderConversationList() string {
+func (m model) renderConversationList(width, bodyHeight int) string {
 	m.state.mu.RLock()
 	defer m.state.mu.RUnlock()
 
@@ -403,7 +423,9 @@ func (m model) renderConversationList() string {
 		title = styles.title.Render(title)
 	}
 	rows := []string{title}
-	for i, conv := range m.state.conversations {
+	visible := windowSlice(len(m.state.conversations), max(1, bodyHeight-2), m.state.selected)
+	for i := visible.start; i < visible.end; i++ {
+		conv := m.state.conversations[i]
 		dot := m.conversationPresenceDot(conv.Item)
 		name := conv.Item.Name
 		if name == "" {
@@ -411,23 +433,23 @@ func (m model) renderConversationList() string {
 		}
 		last := ""
 		if len(conv.Messages) > 0 {
-			last = truncate(conv.Messages[len(conv.Messages)-1].Content, 22)
+			last = truncate(conv.Messages[len(conv.Messages)-1].Content, max(8, width-10))
 		}
-		line := fmt.Sprintf("%s %s\n  #%d %s", dot, truncate(name, 24), conv.Item.ConversationID, styles.muted.Render(last))
+		line := fmt.Sprintf("%s %s\n  #%d %s", dot, truncate(name, max(8, width-10)), conv.Item.ConversationID, styles.muted.Render(last))
 		if i == m.state.selected {
 			line = styles.selected.Render(line)
 		}
 		rows = append(rows, line)
 	}
-	return strings.Join(rows, "\n")
+	return fitLines(rows, bodyHeight)
 }
 
-func (m model) renderConversationWindow() string {
+func (m model) renderConversationWindow(width, bodyHeight int) string {
 	m.state.mu.RLock()
 	defer m.state.mu.RUnlock()
 
 	if len(m.state.conversations) == 0 || m.state.selected >= len(m.state.conversations) {
-		return strings.Join(m.recentLogs(), "\n")
+		return fitLines(m.recentLogs(), bodyHeight)
 	}
 	conv := m.state.conversations[m.state.selected]
 	name := conv.Item.Name
@@ -436,19 +458,18 @@ func (m model) renderConversationWindow() string {
 	}
 	title := styles.title.Render(name) + styles.muted.Render(fmt.Sprintf("  members=%v", conv.Item.MemberIDs))
 	rows := []string{title}
+	messageBudget := bodyHeight - 4
 	if len(conv.Messages) == 0 {
 		rows = append(rows, styles.muted.Render("暂无本地消息缓存；输入 history 拉取历史。"))
 	} else {
-		start := 0
-		if len(conv.Messages) > 16 {
-			start = len(conv.Messages) - 16
-		}
-		for i, msg := range conv.Messages[start:] {
-			if i > 0 {
-				rows = append(rows, styles.muted.Render("────────────────────────────────────────────────────────────────────────"))
+		msgRows := make([]string, 0, len(conv.Messages)*2)
+		for _, msg := range conv.Messages {
+			if len(msgRows) > 0 {
+				msgRows = append(msgRows, styles.muted.Render("────────"))
 			}
-			rows = append(rows, m.renderMessage(msg))
+			msgRows = append(msgRows, strings.Split(m.renderMessage(msg), "\n")...)
 		}
+		rows = append(rows, trimLines(msgRows, max(1, messageBudget))...)
 	}
 	inputTitle := "输入框"
 	if m.focus == focusMessageInput {
@@ -457,13 +478,13 @@ func (m model) renderConversationWindow() string {
 		inputTitle = styles.title.Render(inputTitle)
 	}
 	rows = append(rows, styles.muted.Render("────────────────────────────────────────────────────────────────────────"))
-	rows = append(rows, inputTitle+" "+styles.prompt.Render("> ")+m.messageInput)
+	rows = append(rows, inputTitle+" "+styles.prompt.Render("> ")+truncate(m.messageInput, max(0, width-8)))
 	logs := m.recentLogs()
 	if len(logs) > 0 {
 		rows = append(rows, styles.muted.Render("── logs ──"))
-		rows = append(rows, logs...)
+		rows = append(rows, trimLines(logs, max(0, bodyHeight-len(rows)-1))...)
 	}
-	return strings.Join(rows, "\n")
+	return fitLines(rows, bodyHeight)
 }
 
 func (m *model) moveFocus(delta int) {
@@ -510,7 +531,7 @@ func (m *model) moveSelection(delta int) {
 	case focusConversationList:
 		m.state.selected = clampIndex(m.state.selected+delta, len(m.state.conversations))
 	case focusFriendList:
-		m.state.selectedFriend = clampIndex(m.state.selectedFriend+delta, len(m.filteredFriendsLocked()))
+		m.state.selectedFriend = clampIndex(m.state.selectedFriend+delta, m.friendListLengthLocked())
 	}
 }
 
@@ -530,7 +551,7 @@ func (m *model) activateFocusedInput() tea.Cmd {
 			return m.runCommand("friend-list")
 		}
 		m.addLog("> search " + text)
-		return m.runCommand("search " + text)
+		return m.async(func(ctx context.Context) string { return m.cmdSearch(ctx, []string{"search", text}) })
 	case focusMenu:
 		if m.activeMenu == menuFriends {
 			m.focus = focusFriendSearch
@@ -578,7 +599,7 @@ func (m model) renderMessage(msg client.MessageItem) string {
 	return body
 }
 
-func (m model) renderFriendsPage() string {
+func (m model) renderFriendsPage(width, bodyHeight int) string {
 	m.state.mu.RLock()
 	defer m.state.mu.RUnlock()
 
@@ -594,11 +615,26 @@ func (m model) renderFriendsPage() string {
 	} else {
 		listTitle = styles.title.Render(listTitle)
 	}
-	rows := []string{searchTitle + " " + styles.prompt.Render("> ") + m.friendSearch, "", listTitle}
+	rows := []string{searchTitle + " " + styles.prompt.Render("> ") + truncate(m.friendSearch, max(0, width-8)), "", listTitle}
+	if query := strings.TrimSpace(m.friendSearch); query != "" && query == m.state.friendSearchResultQuery {
+		if len(m.state.friendSearchResults) == 0 {
+			rows = append(rows, styles.muted.Render("暂无搜索结果；可继续修改关键词后回车。"))
+			return fitLines(rows, bodyHeight)
+		}
+		selected := clampIndex(m.state.selectedFriend, len(m.state.friendSearchResults))
+		for i, u := range m.state.friendSearchResults {
+			line := fmt.Sprintf("user=%s email=%s avatar=%s", u.ID, u.Email, u.Avatar)
+			if i == selected {
+				line = styles.selected.Render(line)
+			}
+			rows = append(rows, line)
+		}
+		return fitLines(rows, bodyHeight)
+	}
 	friends := m.filteredFriendsLocked()
 	if len(friends) == 0 {
 		rows = append(rows, styles.muted.Render("暂无好友；输入关键词搜索用户，或使用 friend-list 拉取。"))
-		return strings.Join(rows, "\n")
+		return fitLines(rows, bodyHeight)
 	}
 	selected := clampIndex(m.state.selectedFriend, len(friends))
 	for i, f := range friends {
@@ -616,12 +652,12 @@ func (m model) renderFriendsPage() string {
 		}
 		rows = append(rows, line)
 	}
-	return strings.Join(rows, "\n")
+	return fitLines(rows, bodyHeight)
 }
 
 func (m model) filteredFriendsLocked() []client.FriendshipItem {
 	q := strings.TrimSpace(m.friendSearch)
-	if q == "" {
+	if q == "" || q == m.state.friendSearchResultQuery {
 		return m.state.friends
 	}
 	out := make([]client.FriendshipItem, 0, len(m.state.friends))
@@ -710,6 +746,13 @@ func (m *model) currentProfile() *profile {
 	return p
 }
 
+func (m model) friendListLengthLocked() int {
+	if q := strings.TrimSpace(m.friendSearch); q != "" && q == m.state.friendSearchResultQuery {
+		return len(m.state.friendSearchResults)
+	}
+	return len(m.filteredFriendsLocked())
+}
+
 func (m *model) shutdown() {
 	for _, p := range m.profiles {
 		if p.WS != nil {
@@ -728,4 +771,75 @@ func truncate(s string, n int) string {
 		return string(r[:n])
 	}
 	return string(r[:n-1]) + "…"
+}
+
+func fitLines(lines []string, maxLines int) string {
+	return strings.Join(trimLines(lines, maxLines), "\n")
+}
+
+func trimLines(lines []string, maxLines int) []string {
+	if maxLines <= 0 || len(lines) == 0 {
+		return nil
+	}
+	if len(lines) <= maxLines {
+		return lines
+	}
+	return lines[len(lines)-maxLines:]
+}
+
+func windowSlice(length, maxVisible, anchor int) struct{ start, end int } {
+	if length <= 0 || maxVisible <= 0 {
+		return struct{ start, end int }{}
+	}
+	if maxVisible >= length {
+		return struct{ start, end int }{start: 0, end: length}
+	}
+	if anchor < 0 {
+		anchor = 0
+	}
+	if anchor >= length {
+		anchor = length - 1
+	}
+	start := anchor - maxVisible/2
+	if start < 0 {
+		start = 0
+	}
+	end := start + maxVisible
+	if end > length {
+		end = length
+		start = end - maxVisible
+	}
+	return struct{ start, end int }{start: start, end: end}
+}
+
+func clampInt(v, minV, maxV int) int {
+	if v < minV {
+		return minV
+	}
+	if v > maxV {
+		return maxV
+	}
+	return v
+}
+
+func (m model) layoutMetrics() (menuWidth, bodyWidth, bodyHeight int) {
+	width := m.windowWidth
+	height := m.windowHeight
+	if width <= 0 {
+		width = 120
+	}
+	if height <= 0 {
+		height = 40
+	}
+	menuWidth = clampInt(width/5, 18, 28)
+	bodyWidth = max(40, width-menuWidth-1)
+	bodyHeight = max(12, height-2)
+	return menuWidth, bodyWidth, bodyHeight
+}
+
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }
