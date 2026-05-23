@@ -17,6 +17,7 @@ type Querier interface {
 	CreateUserInfo(ctx context.Context, arg CreateUserInfoParams) (UserInfo, error)
 	DeactivateConversation(ctx context.Context, id int64) error
 	DeleteBotWebhook(ctx context.Context, botUserID int64) (int64, error)
+	GetBotActionByName(ctx context.Context, action string) (BotAction, error)
 	// Returns the token entry plus the owner's user_type / status / nickname so
 	// the BotAuth middleware can validate the bot identity in a single query.
 	GetBotTokenByHash(ctx context.Context, tokenHash string) (GetBotTokenByHashRow, error)
@@ -28,6 +29,7 @@ type Querier interface {
 	GetConversationReadState(ctx context.Context, arg GetConversationReadStateParams) (ConversationReadState, error)
 	GetConversationsByUserID(ctx context.Context, userID int64) ([]GetConversationsByUserIDRow, error)
 	GetDirectConversationByMembers(ctx context.Context, arg GetDirectConversationByMembersParams) (GetDirectConversationByMembersRow, error)
+	GetEnabledActionByWebhookEvent(ctx context.Context, event string) (string, error)
 	GetFriendship(ctx context.Context, arg GetFriendshipParams) (GetFriendshipRow, error)
 	GetFriendshipBidirectional(ctx context.Context, arg GetFriendshipBidirectionalParams) ([]GetFriendshipBidirectionalRow, error)
 	GetFriendshipByPair(ctx context.Context, arg GetFriendshipByPairParams) (Friendship, error)
@@ -36,6 +38,7 @@ type Querier interface {
 	GetUserInfoByID(ctx context.Context, id int64) (UserInfo, error)
 	GetUserInfoByNickname(ctx context.Context, nickname string) (UserInfo, error)
 	GetUserType(ctx context.Context, id int64) (string, error)
+	GrantBotTokenAction(ctx context.Context, arg GrantBotTokenActionParams) error
 	InsertMessage(ctx context.Context, arg InsertMessageParams) error
 	IsConversationMember(ctx context.Context, arg IsConversationMemberParams) (bool, error)
 	IsMemberMuted(ctx context.Context, arg IsMemberMutedParams) (IsMemberMutedRow, error)
@@ -44,6 +47,7 @@ type Querier interface {
 	ListActiveBotWebhooksForConversation(ctx context.Context, conversationID int64) ([]BotWebhook, error)
 	ListBotTokensByBot(ctx context.Context, botUserID int64) ([]BotToken, error)
 	ListConversationReadStates(ctx context.Context, conversationID int64) ([]ConversationReadState, error)
+	ListEnabledActionsByToken(ctx context.Context, tokenID int64) ([]string, error)
 	ListFriends(ctx context.Context, userID int64) ([]Friendship, error)
 	ListMessagesByConversation(ctx context.Context, arg ListMessagesByConversationParams) ([]Message, error)
 	ListMessagesByConversationInitial(ctx context.Context, arg ListMessagesByConversationInitialParams) ([]Message, error)

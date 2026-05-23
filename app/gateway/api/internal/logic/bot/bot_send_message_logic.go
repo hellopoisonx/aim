@@ -8,6 +8,7 @@ import (
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/botctx"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
+	"github.com/hellopoisonx/aim/app/shared/botperm"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 
 	"github.com/zeromicro/go-zero/core/logx"
@@ -18,8 +19,8 @@ import (
 // (sender_id, device_id) key tuple in TransferLogic.
 const botDeviceID = "bot-api"
 
-// botSendScope is the token scope required to publish a message.
-const botSendScope = "messages:send"
+// botSendAction is the token action required to publish a message.
+const botSendAction = botperm.ActionMessageSend
 
 type BotSendMessageLogic struct {
 	logx.Logger
@@ -41,8 +42,8 @@ func (l *BotSendMessageLogic) BotSendMessage(req *types.BotSendMessageRequest) (
 		return nil, errorx.NewCodeError(errorx.CodeBotTokenInvalid, "missing bot identity")
 	}
 
-	if !identity.HasScope(botSendScope) {
-		return nil, errorx.NewCodeError(errorx.CodeBotScopeDenied, "token missing required scope: "+botSendScope)
+	if err := identity.RequireAction(botSendAction); err != nil {
+		return nil, err
 	}
 
 	if req.ConversationId <= 0 {

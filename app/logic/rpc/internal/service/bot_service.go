@@ -6,8 +6,11 @@ import (
 	"time"
 
 	"github.com/hellopoisonx/aim/app/logic/rpc/model"
+	"github.com/hellopoisonx/aim/app/shared/botperm"
 	"github.com/hellopoisonx/aim/app/shared/bottoken"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
+
+	"github.com/zeromicro/go-zero/core/logx"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -47,6 +50,8 @@ type BotConversationItem struct {
 // Defined as an interface so logic-level tests can mock it.
 type BotQuerier interface {
 	GetBotTokenByHash(ctx context.Context, tokenHash string) (model.GetBotTokenByHashRow, error)
+	ListEnabledActionsByToken(ctx context.Context, tokenID int64) ([]string, error)
+	GetEnabledActionByWebhookEvent(ctx context.Context, event string) (string, error)
 	GetUserInfoByID(ctx context.Context, id int64) (model.UserInfo, error)
 	GetConversationsByUserID(ctx context.Context, userID int64) ([]model.GetConversationsByUserIDRow, error)
 	GetBotWebhook(ctx context.Context, botUserID int64) (model.BotWebhook, error)
@@ -103,10 +108,26 @@ func (s *BotService) ValidateBotToken(ctx context.Context, plaintext string) (Bo
 		return BotIdentity{}, errorx.NewCodeError(errorx.CodeBotDisabled, "bot is disabled")
 	}
 
+	actions, err := s.queries.ListEnabledActionsByToken(ctx, row.ID)
+	if err != nil {
+		return BotIdentity{}, err
+	}
+
+	validActions := make([]string, 0, len(actions))
+	for _, action := range actions {
+		action = botperm.NormalizeGrant(action)
+		if !botperm.IsValidAction(action) {
+			logx.WithContext(ctx).Errorf("ignoring invalid bot action from database: token_id=%d action=%q", row.ID, action)
+			continue
+		}
+
+		validActions = append(validActions, action)
+	}
+
 	return BotIdentity{
 		BotUserID:  row.BotUserID,
 		TokenID:    row.ID,
-		Scopes:     append([]string{}, row.Scopes...),
+		Scopes:     validActions,
 		Nickname:   row.Nickname,
 		Avatar:     row.Avatar,
 		UserStatus: row.UserStatus,
@@ -175,6 +196,40 @@ func (s *BotService) GetBotWebhook(ctx context.Context, botUserID int64) (BotWeb
 	}, true, nil
 }
 
+// ResolveWebhookEventActions maps webhook events to the enabled actions
+// required to subscribe to them. Unknown or disabled mappings return
+// CodeBotWebhookInvalid.
+func (s *BotService) ResolveWebhookEventActions(ctx context.Context, events []string) (map[string]string, error) {
+	if len(events) == 0 {
+		events = []string{botperm.WebhookEventMessageCreated}
+	}
+
+	out := make(map[string]string, len(events))
+	for _, event := range events {
+		if event == "" {
+			return nil, errorx.NewCodeError(errorx.CodeBotWebhookInvalid, "webhook event is required")
+		}
+
+		action, err := s.queries.GetEnabledActionByWebhookEvent(ctx, event)
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return nil, errorx.NewCodeError(errorx.CodeBotWebhookInvalid, "unsupported webhook event: "+event)
+			}
+
+			return nil, err
+		}
+
+		if !botperm.IsValidAction(action) {
+			logx.WithContext(ctx).Errorf("invalid webhook event action from database: event=%q action=%q", event, action)
+			return nil, errorx.NewCodeError(errorx.CodeBotWebhookInvalid, "invalid webhook event action")
+		}
+
+		out[event] = action
+	}
+
+	return out, nil
+}
+
 // SetBotWebhook upserts the configuration. The plaintext secret is hashed
 // before persistence; pass empty `secret` only when the row already exists
 // and the caller wants to keep the previous secret. If the row does not
@@ -184,8 +239,12 @@ func (s *BotService) SetBotWebhook(ctx context.Context, botUserID int64, url str
 		return BotWebhookConfig{}, errorx.NewCodeError(errorx.CodeBotWebhookInvalid, "webhook url is required")
 	}
 
+	if _, err := s.ResolveWebhookEventActions(ctx, events); err != nil {
+		return BotWebhookConfig{}, err
+	}
+
 	if len(events) == 0 {
-		events = []string{"message.created"}
+		events = []string{botperm.WebhookEventMessageCreated}
 	}
 
 	var secretHash string

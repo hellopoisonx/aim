@@ -16,14 +16,17 @@ import (
 )
 
 type fakeBotQuerier struct {
-	tokenRow   model.GetBotTokenByHashRow
-	tokenErr   error
-	users      map[int64]model.UserInfo
-	convs      map[int64][]model.GetConversationsByUserIDRow
-	webhook    *model.BotWebhook
-	upsertErr  error
-	deleteRows int64
-	deleteErr  error
+	tokenRow       model.GetBotTokenByHashRow
+	tokenErr       error
+	users          map[int64]model.UserInfo
+	convs          map[int64][]model.GetConversationsByUserIDRow
+	webhook        *model.BotWebhook
+	upsertErr      error
+	deleteRows     int64
+	deleteErr      error
+	tokenActions   []string
+	eventAction    string
+	eventActionErr error
 }
 
 func (f *fakeBotQuerier) GetBotTokenByHash(ctx context.Context, _ string) (model.GetBotTokenByHashRow, error) {
@@ -31,6 +34,14 @@ func (f *fakeBotQuerier) GetBotTokenByHash(ctx context.Context, _ string) (model
 		return model.GetBotTokenByHashRow{}, f.tokenErr
 	}
 	return f.tokenRow, nil
+}
+
+func (f *fakeBotQuerier) ListEnabledActionsByToken(_ context.Context, _ int64) ([]string, error) {
+	return f.tokenActions, nil
+}
+
+func (f *fakeBotQuerier) GetEnabledActionByWebhookEvent(_ context.Context, _ string) (string, error) {
+	return f.eventAction, f.eventActionErr
 }
 
 func (f *fakeBotQuerier) GetUserInfoByID(_ context.Context, id int64) (model.UserInfo, error) {
@@ -84,24 +95,26 @@ func TestBotService_ValidateBotToken_Success(t *testing.T) {
 			ID:         42,
 			BotUserID:  1001,
 			TokenHash:  bottoken.Hash(tok),
-			Scopes:     []string{"messages:send"},
 			UserType:   UserTypeBot,
 			UserStatus: 1,
 			Nickname:   "alice-bot",
 			Avatar:     "https://example/a.png",
 		},
+		tokenActions: []string{"bot.message.send"},
 	}
 
 	identity, err := NewBotService(q).ValidateBotToken(context.Background(), tok)
 	require.NoError(t, err)
 	require.Equal(t, int64(1001), identity.BotUserID)
 	require.Equal(t, int64(42), identity.TokenID)
-	require.Equal(t, []string{"messages:send"}, identity.Scopes)
+	// Scopes now come from bot_token_permissions + bot_actions, not bot_tokens.scopes.
+	require.Equal(t, []string{"bot.message.send"}, identity.Scopes)
 }
 
 func TestBotService_ValidateBotToken_InvalidPlaintext(t *testing.T) {
 	_, err := NewBotService(&fakeBotQuerier{}).ValidateBotToken(context.Background(), "garbage")
 	require.Error(t, err)
+
 	var ce *errorx.CodeError
 	require.ErrorAs(t, err, &ce)
 	require.Equal(t, errorx.CodeBotTokenInvalid, ce.Code)
@@ -113,6 +126,7 @@ func TestBotService_ValidateBotToken_NotFound(t *testing.T) {
 
 	_, err = NewBotService(&fakeBotQuerier{tokenErr: pgx.ErrNoRows}).ValidateBotToken(context.Background(), tok)
 	require.Error(t, err)
+
 	var ce *errorx.CodeError
 	require.ErrorAs(t, err, &ce)
 	require.Equal(t, errorx.CodeBotTokenInvalid, ce.Code)
@@ -134,6 +148,7 @@ func TestBotService_ValidateBotToken_Revoked(t *testing.T) {
 	}
 	_, err = NewBotService(q).ValidateBotToken(context.Background(), tok)
 	require.Error(t, err)
+
 	var ce *errorx.CodeError
 	require.ErrorAs(t, err, &ce)
 	require.Equal(t, errorx.CodeBotTokenRevoked, ce.Code)
@@ -155,6 +170,7 @@ func TestBotService_ValidateBotToken_Expired(t *testing.T) {
 	}
 	_, err = NewBotService(q).ValidateBotToken(context.Background(), tok)
 	require.Error(t, err)
+
 	var ce *errorx.CodeError
 	require.ErrorAs(t, err, &ce)
 	require.Equal(t, errorx.CodeBotTokenRevoked, ce.Code)
@@ -175,6 +191,7 @@ func TestBotService_ValidateBotToken_NotABot(t *testing.T) {
 	}
 	_, err = NewBotService(q).ValidateBotToken(context.Background(), tok)
 	require.Error(t, err)
+
 	var ce *errorx.CodeError
 	require.ErrorAs(t, err, &ce)
 	require.Equal(t, errorx.CodeBotDisabled, ce.Code)
@@ -195,6 +212,7 @@ func TestBotService_ValidateBotToken_Disabled(t *testing.T) {
 	}
 	_, err = NewBotService(q).ValidateBotToken(context.Background(), tok)
 	require.Error(t, err)
+
 	var ce *errorx.CodeError
 	require.ErrorAs(t, err, &ce)
 	require.Equal(t, errorx.CodeBotDisabled, ce.Code)
@@ -214,10 +232,28 @@ func TestBotService_GetBotProfile(t *testing.T) {
 	require.ErrorIs(t, err, ErrUserNotFound)
 }
 
+func TestBotService_ResolveWebhookEventActions(t *testing.T) {
+	q := &fakeBotQuerier{eventAction: "bot.webhook.subscribe.message_created"}
+	m, err := NewBotService(q).ResolveWebhookEventActions(context.Background(), []string{"message.created"})
+	require.NoError(t, err)
+	require.Equal(t, "bot.webhook.subscribe.message_created", m["message.created"])
+}
+
+func TestBotService_ResolveWebhookEventActions_Unknown(t *testing.T) {
+	q := &fakeBotQuerier{eventActionErr: pgx.ErrNoRows}
+	_, err := NewBotService(q).ResolveWebhookEventActions(context.Background(), []string{"unknown.event"})
+	require.Error(t, err)
+
+	var ce *errorx.CodeError
+	require.ErrorAs(t, err, &ce)
+	require.Equal(t, errorx.CodeBotWebhookInvalid, ce.Code)
+}
+
 func TestBotService_SetBotWebhook_RequiresSecretWhenCreating(t *testing.T) {
-	q := &fakeBotQuerier{}
+	q := &fakeBotQuerier{eventAction: "bot.webhook.subscribe.message_created"}
 	_, err := NewBotService(q).SetBotWebhook(context.Background(), 1001, "https://x.test", "", []string{"message.created"}, true)
 	require.Error(t, err)
+
 	var ce *errorx.CodeError
 	require.ErrorAs(t, err, &ce)
 	require.Equal(t, errorx.CodeBotWebhookInvalid, ce.Code)
@@ -225,6 +261,7 @@ func TestBotService_SetBotWebhook_RequiresSecretWhenCreating(t *testing.T) {
 
 func TestBotService_SetBotWebhook_KeepsExistingSecret(t *testing.T) {
 	q := &fakeBotQuerier{
+		eventAction: "bot.webhook.subscribe.message_created",
 		webhook: &model.BotWebhook{
 			BotUserID:  1001,
 			Url:        "https://old.test",
@@ -240,7 +277,7 @@ func TestBotService_SetBotWebhook_KeepsExistingSecret(t *testing.T) {
 }
 
 func TestBotService_SetBotWebhook_HashesSecret(t *testing.T) {
-	q := &fakeBotQuerier{}
+	q := &fakeBotQuerier{eventAction: "bot.webhook.subscribe.message_created"}
 	plain := "rotateme"
 	cfg, err := NewBotService(q).SetBotWebhook(context.Background(), 1001, "https://x.test", plain, []string{"message.created"}, true)
 	require.NoError(t, err)

@@ -3,10 +3,9 @@ package bot
 import (
 	"context"
 
-	"github.com/hellopoisonx/aim/app/gateway/api/internal/botctx"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
-	"github.com/hellopoisonx/aim/app/shared/errorx"
+	"github.com/hellopoisonx/aim/app/shared/botperm"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -26,9 +25,9 @@ func NewBotGetMeLogic(ctx context.Context, svcCtx *svc.ServiceContext) *BotGetMe
 }
 
 func (l *BotGetMeLogic) BotGetMe() (*types.BotMeResponse, error) {
-	identity, ok := botctx.FromContext(l.ctx)
-	if !ok {
-		return nil, errorx.NewCodeError(errorx.CodeBotTokenInvalid, "missing bot identity")
+	identity, err := requireBotAction(l.ctx, botperm.ActionSelfRead)
+	if err != nil {
+		return nil, err
 	}
 
 	return &types.BotMeResponse{

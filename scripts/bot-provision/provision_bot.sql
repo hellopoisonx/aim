@@ -13,7 +13,7 @@
 --   bot_nickname         text        — nickname displayed in group rosters
 --   token_id             int8        — Snowflake id for the bot_tokens row
 --   token_name           text        — operator-friendly label
---   token_scopes_csv     text        — e.g. "messages:send"
+--   token_scopes_csv     text        — comma-separated action grants, e.g. "bot.message.send"
 --   token_hash           text        — sha256 hex of the plaintext token
 --   placeholder_password text        — non-bcrypt placeholder, login disabled
 --   conversation_ids_csv text        — comma-separated, may be empty
@@ -62,15 +62,50 @@ ON CONFLICT (id) DO UPDATE SET
     nickname = EXCLUDED.nickname,
     updated_at = NOW();
 
--- Token row (logic stage only) ------------------------------------------------
+-- Token row + action grants (logic stage only) --------------------------------
+DO $$
+DECLARE
+    s text := :'stage';
+    missing_actions text;
+BEGIN
+    IF s = 'logic' THEN
+        WITH requested AS (
+            SELECT DISTINCT trim(v) AS action
+            FROM regexp_split_to_table(:'token_scopes_csv', ',') AS v
+            WHERE trim(v) <> ''
+        )
+        SELECT string_agg(r.action, ', ' ORDER BY r.action)
+        INTO missing_actions
+        FROM requested r
+        LEFT JOIN bot_actions ba ON ba.action = r.action AND ba.enabled = TRUE
+        WHERE ba.id IS NULL;
+
+        IF missing_actions IS NOT NULL THEN
+            RAISE EXCEPTION 'unknown or disabled bot action(s): %', missing_actions;
+        END IF;
+    END IF;
+END$$;
+
 INSERT INTO bot_tokens (id, bot_user_id, token_hash, name, scopes)
 SELECT :token_id,
        :bot_user_id,
        :'token_hash',
        :'token_name',
-       string_to_array(:'token_scopes_csv', ',')
+       ARRAY[]::TEXT[]
 WHERE :'stage' = 'logic'
 ON CONFLICT (token_hash) DO NOTHING;
+
+WITH requested AS (
+    SELECT DISTINCT trim(v) AS action
+    FROM regexp_split_to_table(:'token_scopes_csv', ',') AS v
+    WHERE trim(v) <> ''
+)
+INSERT INTO bot_token_permissions (token_id, action_id)
+SELECT :token_id, ba.id
+FROM requested r
+JOIN bot_actions ba ON ba.action = r.action AND ba.enabled = TRUE
+WHERE :'stage' = 'logic'
+ON CONFLICT DO NOTHING;
 
 -- Membership (logic stage only) ----------------------------------------------
 WITH ids AS (

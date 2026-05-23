@@ -2,7 +2,11 @@
 // injects into request context after a successful Bot OpenAPI token check.
 package botctx
 
-import "context"
+import (
+	"context"
+
+	"github.com/hellopoisonx/aim/app/shared/botperm"
+)
 
 // BotIdentity is a snapshot of the authenticated bot resolved from
 // `Authorization: Bot <token>`. It is the Bot OpenAPI counterpart to
@@ -16,16 +20,21 @@ type BotIdentity struct {
 	UserStatus int32
 }
 
-// HasScope returns true when the token grants the requested scope or a
-// wildcard ("*").
-func (b BotIdentity) HasScope(scope string) bool {
-	for _, s := range b.Scopes {
-		if s == scope || s == "*" {
-			return true
-		}
-	}
+// HasAction returns true when the token grants the requested action directly
+// or through a supported wildcard grant.
+func (b BotIdentity) HasAction(action string) bool {
+	return botperm.HasAction(b.Scopes, action)
+}
 
-	return false
+// RequireAction returns CodeBotScopeDenied when the token does not grant action.
+func (b BotIdentity) RequireAction(action string) error {
+	return botperm.RequireAction(b.Scopes, action)
+}
+
+// HasScope is kept for compile compatibility with older code. New Bot OpenAPI
+// logic must use HasAction/RequireAction.
+func (b BotIdentity) HasScope(scope string) bool {
+	return b.HasAction(scope)
 }
 
 type ctxKey struct{}

@@ -168,6 +168,7 @@ paths:
             type: object
       schemes:
       - https
+      description: 'Requires Bot action: bot.conversation.list'
       summary: BotListConversations
   /api/bot/v1/me:
     get:
@@ -203,6 +204,7 @@ paths:
             type: object
       schemes:
       - https
+      description: 'Requires Bot action: bot.self.read'
       summary: BotGetMe
   /api/bot/v1/messages:
     post:
@@ -249,6 +251,7 @@ paths:
             type: object
       schemes:
       - https
+      description: 'Requires Bot action: bot.message.send'
       summary: BotSendMessage
   /api/bot/v1/webhook:
     delete:
@@ -265,6 +268,7 @@ paths:
             type: object
       schemes:
       - https
+      description: 'Requires Bot action: bot.webhook.delete'
       summary: BotDeleteWebhook
     get:
       operationId: botBotGetWebhook
@@ -298,6 +302,7 @@ paths:
             type: object
       schemes:
       - https
+      description: 'Requires Bot action: bot.webhook.read'
       summary: BotGetWebhook
     put:
       consumes:
@@ -354,6 +359,7 @@ paths:
             type: object
       schemes:
       - https
+      description: 'Requires Bot actions: bot.webhook.write plus one subscribe action per event (message.created -> bot.webhook.subscribe.message_created)'
       summary: BotSetWebhook
   /api/conversations:
     get:

@@ -1,6 +1,6 @@
 -- 007_bot_tokens: API tokens used by external Bot services to call AIM OpenAPI.
 -- The plaintext token is shown to operators only at provisioning time; only its
--- SHA-256 hash is persisted. scopes is a text array (e.g. {"messages:send"}).
+-- SHA-256 hash is persisted. scopes is a legacy text array kept for schema compatibility; action permissions live in bot_token_permissions from migration 009.
 CREATE TABLE IF NOT EXISTS bot_tokens (
     id BIGINT PRIMARY KEY,
     bot_user_id BIGINT NOT NULL,

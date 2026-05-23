@@ -9,10 +9,10 @@ description: aim 的 Bot OpenAPI 域。覆盖第三方 Bot 接入、token 鉴权
 当需求涉及以下任一项时使用本 Skill：
 
 - 第三方 Bot 通过 `Authorization: Bot <token>` 调 `/api/bot/v1/*` REST 接口
-- Bot Token 的生成、撤销、scope 校验
+- Bot Token 的生成、撤销、action 权限校验
 - Bot Webhook（`message.created`）的订阅、HMAC 签名、重试与防回调循环
 - 运维侧批量 provision Bot 身份（`auth + logic` 双写、入群、签发 token）
-- 涉及 `user_info.user_type='bot'`、`bot_tokens`、`bot_webhooks` 三张表
+- 涉及 `user_info.user_type='bot'`、`bot_tokens`、`bot_actions`、`bot_token_permissions`、`bot_event_actions`、`bot_webhooks` 等表
 
 ## 设计原则（V0）
 
@@ -40,7 +40,10 @@ description: aim 的 Bot OpenAPI 域。覆盖第三方 Bot 接入、token 鉴权
 | 表 | 关键字段 | 说明 |
 |----|----------|------|
 | `user_info.user_type` | `human` / `bot` / `system`，默认 `human` | 区分身份类型；migration 006 |
-| `bot_tokens` | `id`, `bot_user_id`, `token_hash`, `scopes`, `expires_at`, `revoked_at` | migration 007；scope 是 text[] |
+| `bot_tokens` | `id`, `bot_user_id`, `token_hash`, `expires_at`, `revoked_at` | migration 007；`scopes` 字段保留但不再作为鉴权来源 |
+| `bot_actions` | `id`, `action`, `enabled` | migration 009；运行时可调整的 action 字典 |
+| `bot_token_permissions` | `token_id`, `action_id` | migration 009；token 授权的 action_id 列表 |
+| `bot_event_actions` | `event`, `action_id`, `enabled` | migration 009；webhook event → 订阅 action 映射 |
 | `bot_webhooks` | `bot_user_id` PK, `url`, `secret_hash`, `events`, `enabled` | migration 008；一个 bot 一个 webhook |
 
 ## 接入流程
@@ -50,7 +53,7 @@ description: aim 的 Bot OpenAPI 域。覆盖第三方 Bot 接入、token 鉴权
    并签发首个 token。
 2. 运维把 plaintext token 通过安全渠道交给 Bot 开发者。
 3. Bot 服务用 `Authorization: Bot <token>` 调 `/api/bot/v1/messages` 发消息；
-   通过 `PUT /api/bot/v1/webhook` 注册回调地址。
+   通过 `PUT /api/bot/v1/webhook` 注册回调地址。每个接口都要求对应 action：`bot.self.read`、`bot.conversation.list`、`bot.message.send`、`bot.webhook.*`；订阅 `message.created` 还要求 `bot.webhook.subscribe.message_created`。
 4. 第三方 HTTP 服务在 `X-AIM-Signature` 校验通过后处理 `message.created` 事件。
 
 ## 错误码
@@ -60,7 +63,7 @@ description: aim 的 Bot OpenAPI 域。覆盖第三方 Bot 接入、token 鉴权
 | 40110 | Bot token 缺失/格式错误/未知（`CodeBotTokenInvalid`） |
 | 40111 | Bot token 已撤销 / 已过期（`CodeBotTokenRevoked`） |
 | 40112 | Bot 用户被禁用（`CodeBotDisabled`） |
-| 40310 | Token scope 不足（`CodeBotScopeDenied`） |
+| 40310 | Token action 不足（`CodeBotScopeDenied`） |
 | 40010 | Webhook 配置非法（`CodeBotWebhookInvalid`） |
 
 详见 `app/shared/errorx/errorx.go`。
@@ -75,7 +78,7 @@ description: aim 的 Bot OpenAPI 域。覆盖第三方 Bot 接入、token 鉴权
 ## 反模式
 
 - 不要在 gateway 直接读 `bot_tokens` 表 —— 一律通过 logic 的 `BotService`，
-  方便后续把校验逻辑（包括 scope、群成员、群内权限）集中到 logic 层。
+  方便后续把校验逻辑（包括 action、群成员、群内权限）集中到 logic 层。
 - 不要为 Bot 增设独立的消息热路径 —— 复用 `core.Transfer`，配额、限流、
   幂等性沿用现有机制；只是 `device_id` 固定为 `bot-api` 以便区分。
 - 不要在 webhook 投递路径里阻塞归档 consumer —— 这两个消费者已经是不同的
@@ -88,6 +91,7 @@ description: aim 的 Bot OpenAPI 域。覆盖第三方 Bot 接入、token 鉴权
 
 ## 最近变更
 
+- 2026-05-23: 新增基于 action 的 Bot 权限系统。新增 migration 009（`bot_actions`、`bot_token_permissions`、`bot_event_actions`），`ValidateBotToken` 从 action 关联表加载权限，Gateway Bot API 全量校验 action，webhook event 通过 `bot_event_actions` 映射订阅 action。
 - 2026-05-23: V0 落地。新增 migrations 006-008、`BotService` RPC、`BotAuth`
   middleware、`/api/bot/v1/*` REST、`BotWebhookConsumer`（HMAC 签名 + 指数退避）、
   运维 provision 脚本、dev-tool `bot-*` 子命令、Swagger 与开发者指南。

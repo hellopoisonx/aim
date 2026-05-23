@@ -8,6 +8,24 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type BotAction struct {
+	ID          int64              `json:"id"`
+	Action      string             `json:"action"`
+	Description string             `json:"description"`
+	Enabled     bool               `json:"enabled"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+}
+
+type BotEventAction struct {
+	Event       string             `json:"event"`
+	ActionID    int64              `json:"action_id"`
+	Description string             `json:"description"`
+	Enabled     bool               `json:"enabled"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+}
+
 type BotToken struct {
 	ID        int64              `json:"id"`
 	BotUserID int64              `json:"bot_user_id"`
@@ -16,6 +34,12 @@ type BotToken struct {
 	Scopes    []string           `json:"scopes"`
 	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
 	RevokedAt pgtype.Timestamptz `json:"revoked_at"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
+type BotTokenPermission struct {
+	TokenID   int64              `json:"token_id"`
+	ActionID  int64              `json:"action_id"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 

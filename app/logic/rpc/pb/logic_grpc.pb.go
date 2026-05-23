@@ -2,7 +2,7 @@
 // versions:
 // - protoc-gen-go-grpc v1.5.1
 // - protoc             v3.19.4
-// source: app/logic/rpc/logic.proto
+// source: logic.proto
 
 package pb
 
@@ -121,7 +121,7 @@ var PermissionService_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "app/logic/rpc/logic.proto",
+	Metadata: "logic.proto",
 }
 
 const (
@@ -465,7 +465,7 @@ var UserService_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "app/logic/rpc/logic.proto",
+	Metadata: "logic.proto",
 }
 
 const (
@@ -991,7 +991,7 @@ var ConversationService_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "app/logic/rpc/logic.proto",
+	Metadata: "logic.proto",
 }
 
 const (
@@ -1263,16 +1263,17 @@ var FriendshipService_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "app/logic/rpc/logic.proto",
+	Metadata: "logic.proto",
 }
 
 const (
-	BotService_ValidateBotToken_FullMethodName     = "/logic.BotService/ValidateBotToken"
-	BotService_GetBotProfile_FullMethodName        = "/logic.BotService/GetBotProfile"
-	BotService_ListBotConversations_FullMethodName = "/logic.BotService/ListBotConversations"
-	BotService_GetBotWebhook_FullMethodName        = "/logic.BotService/GetBotWebhook"
-	BotService_SetBotWebhook_FullMethodName        = "/logic.BotService/SetBotWebhook"
-	BotService_DeleteBotWebhook_FullMethodName     = "/logic.BotService/DeleteBotWebhook"
+	BotService_ValidateBotToken_FullMethodName              = "/logic.BotService/ValidateBotToken"
+	BotService_GetBotProfile_FullMethodName                 = "/logic.BotService/GetBotProfile"
+	BotService_ListBotConversations_FullMethodName          = "/logic.BotService/ListBotConversations"
+	BotService_GetBotWebhook_FullMethodName                 = "/logic.BotService/GetBotWebhook"
+	BotService_SetBotWebhook_FullMethodName                 = "/logic.BotService/SetBotWebhook"
+	BotService_DeleteBotWebhook_FullMethodName              = "/logic.BotService/DeleteBotWebhook"
+	BotService_ResolveBotWebhookEventActions_FullMethodName = "/logic.BotService/ResolveBotWebhookEventActions"
 )
 
 // BotServiceClient is the client API for BotService service.
@@ -1301,6 +1302,9 @@ type BotServiceClient interface {
 	SetBotWebhook(ctx context.Context, in *SetBotWebhookReq, opts ...grpc.CallOption) (*SetBotWebhookResp, error)
 	// DeleteBotWebhook removes the bot's webhook configuration entirely.
 	DeleteBotWebhook(ctx context.Context, in *DeleteBotWebhookReq, opts ...grpc.CallOption) (*DeleteBotWebhookResp, error)
+	// ResolveBotWebhookEventActions maps webhook event names (e.g. message.created)
+	// to the enabled actions required to subscribe to them.
+	ResolveBotWebhookEventActions(ctx context.Context, in *ResolveBotWebhookEventActionsReq, opts ...grpc.CallOption) (*ResolveBotWebhookEventActionsResp, error)
 }
 
 type botServiceClient struct {
@@ -1371,6 +1375,16 @@ func (c *botServiceClient) DeleteBotWebhook(ctx context.Context, in *DeleteBotWe
 	return out, nil
 }
 
+func (c *botServiceClient) ResolveBotWebhookEventActions(ctx context.Context, in *ResolveBotWebhookEventActionsReq, opts ...grpc.CallOption) (*ResolveBotWebhookEventActionsResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ResolveBotWebhookEventActionsResp)
+	err := c.cc.Invoke(ctx, BotService_ResolveBotWebhookEventActions_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // BotServiceServer is the server API for BotService service.
 // All implementations must embed UnimplementedBotServiceServer
 // for forward compatibility.
@@ -1397,6 +1411,9 @@ type BotServiceServer interface {
 	SetBotWebhook(context.Context, *SetBotWebhookReq) (*SetBotWebhookResp, error)
 	// DeleteBotWebhook removes the bot's webhook configuration entirely.
 	DeleteBotWebhook(context.Context, *DeleteBotWebhookReq) (*DeleteBotWebhookResp, error)
+	// ResolveBotWebhookEventActions maps webhook event names (e.g. message.created)
+	// to the enabled actions required to subscribe to them.
+	ResolveBotWebhookEventActions(context.Context, *ResolveBotWebhookEventActionsReq) (*ResolveBotWebhookEventActionsResp, error)
 	mustEmbedUnimplementedBotServiceServer()
 }
 
@@ -1424,6 +1441,9 @@ func (UnimplementedBotServiceServer) SetBotWebhook(context.Context, *SetBotWebho
 }
 func (UnimplementedBotServiceServer) DeleteBotWebhook(context.Context, *DeleteBotWebhookReq) (*DeleteBotWebhookResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DeleteBotWebhook not implemented")
+}
+func (UnimplementedBotServiceServer) ResolveBotWebhookEventActions(context.Context, *ResolveBotWebhookEventActionsReq) (*ResolveBotWebhookEventActionsResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ResolveBotWebhookEventActions not implemented")
 }
 func (UnimplementedBotServiceServer) mustEmbedUnimplementedBotServiceServer() {}
 func (UnimplementedBotServiceServer) testEmbeddedByValue()                    {}
@@ -1554,6 +1574,24 @@ func _BotService_DeleteBotWebhook_Handler(srv interface{}, ctx context.Context, 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _BotService_ResolveBotWebhookEventActions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ResolveBotWebhookEventActionsReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BotServiceServer).ResolveBotWebhookEventActions(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BotService_ResolveBotWebhookEventActions_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BotServiceServer).ResolveBotWebhookEventActions(ctx, req.(*ResolveBotWebhookEventActionsReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // BotService_ServiceDesc is the grpc.ServiceDesc for BotService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1585,7 +1623,11 @@ var BotService_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "DeleteBotWebhook",
 			Handler:    _BotService_DeleteBotWebhook_Handler,
 		},
+		{
+			MethodName: "ResolveBotWebhookEventActions",
+			Handler:    _BotService_ResolveBotWebhookEventActions_Handler,
+		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "app/logic/rpc/logic.proto",
+	Metadata: "logic.proto",
 }

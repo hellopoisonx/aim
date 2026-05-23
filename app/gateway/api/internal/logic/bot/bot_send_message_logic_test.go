@@ -50,7 +50,7 @@ func ctxWithBot(scopes ...string) context.Context {
 
 func TestBotSendMessage_RequiresScope(t *testing.T) {
 	core := &fakeCoreClient{}
-	l := NewBotSendMessageLogic(ctxWithBot("messages:receive"), &svc.ServiceContext{CoreClient: core})
+	l := NewBotSendMessageLogic(ctxWithBot("bot.conversation.list"), &svc.ServiceContext{CoreClient: core})
 
 	_, err := l.BotSendMessage(&types.BotSendMessageRequest{
 		ConversationId: 7,
@@ -68,7 +68,7 @@ func TestBotSendMessage_RequiresScope(t *testing.T) {
 
 func TestBotSendMessage_ForwardsToCore(t *testing.T) {
 	core := &fakeCoreClient{}
-	l := NewBotSendMessageLogic(ctxWithBot("messages:send"), &svc.ServiceContext{CoreClient: core})
+	l := NewBotSendMessageLogic(ctxWithBot("bot.message.send"), &svc.ServiceContext{CoreClient: core})
 
 	resp, err := l.BotSendMessage(&types.BotSendMessageRequest{
 		ConversationId: 7,
@@ -92,7 +92,7 @@ func TestBotSendMessage_ForwardsToCore(t *testing.T) {
 
 func TestBotSendMessage_ValidatesRequest(t *testing.T) {
 	core := &fakeCoreClient{}
-	l := NewBotSendMessageLogic(ctxWithBot("messages:send"), &svc.ServiceContext{CoreClient: core})
+	l := NewBotSendMessageLogic(ctxWithBot("bot.message.send"), &svc.ServiceContext{CoreClient: core})
 
 	_, err := l.BotSendMessage(&types.BotSendMessageRequest{ConversationId: 0, MessageType: "text", ClientMsgId: "x"})
 	require.Error(t, err)
@@ -102,7 +102,7 @@ func TestBotSendMessage_ValidatesRequest(t *testing.T) {
 func TestBotSendMessage_PropagatesCoreError(t *testing.T) {
 	rateLimit := errorx.NewCodeError(errorx.CodeRateLimit, "rate limit")
 	core := &fakeCoreClient{err: rateLimit}
-	l := NewBotSendMessageLogic(ctxWithBot("messages:send"), &svc.ServiceContext{CoreClient: core})
+	l := NewBotSendMessageLogic(ctxWithBot("bot.message.send"), &svc.ServiceContext{CoreClient: core})
 
 	_, err := l.BotSendMessage(&types.BotSendMessageRequest{
 		ConversationId: 7,
@@ -118,7 +118,7 @@ func TestBotSendMessage_PropagatesCoreError(t *testing.T) {
 }
 
 func TestBotSendMessage_NoCoreClient(t *testing.T) {
-	l := NewBotSendMessageLogic(ctxWithBot("messages:send"), &svc.ServiceContext{})
+	l := NewBotSendMessageLogic(ctxWithBot("bot.message.send"), &svc.ServiceContext{})
 
 	_, err := l.BotSendMessage(&types.BotSendMessageRequest{
 		ConversationId: 7,

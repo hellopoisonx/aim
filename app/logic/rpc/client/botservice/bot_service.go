@@ -14,18 +14,20 @@ import (
 )
 
 type (
-	DeleteBotWebhookReq      = pb.DeleteBotWebhookReq
-	DeleteBotWebhookResp     = pb.DeleteBotWebhookResp
-	GetBotProfileReq         = pb.GetBotProfileReq
-	GetBotProfileResp        = pb.GetBotProfileResp
-	GetBotWebhookReq         = pb.GetBotWebhookReq
-	GetBotWebhookResp        = pb.GetBotWebhookResp
-	ListBotConversationsReq  = pb.ListBotConversationsReq
-	ListBotConversationsResp = pb.ListBotConversationsResp
-	SetBotWebhookReq         = pb.SetBotWebhookReq
-	SetBotWebhookResp        = pb.SetBotWebhookResp
-	ValidateBotTokenReq      = pb.ValidateBotTokenReq
-	ValidateBotTokenResp     = pb.ValidateBotTokenResp
+	DeleteBotWebhookReq               = pb.DeleteBotWebhookReq
+	DeleteBotWebhookResp              = pb.DeleteBotWebhookResp
+	GetBotProfileReq                  = pb.GetBotProfileReq
+	GetBotProfileResp                 = pb.GetBotProfileResp
+	GetBotWebhookReq                  = pb.GetBotWebhookReq
+	GetBotWebhookResp                 = pb.GetBotWebhookResp
+	ListBotConversationsReq           = pb.ListBotConversationsReq
+	ListBotConversationsResp          = pb.ListBotConversationsResp
+	ResolveBotWebhookEventActionsReq  = pb.ResolveBotWebhookEventActionsReq
+	ResolveBotWebhookEventActionsResp = pb.ResolveBotWebhookEventActionsResp
+	SetBotWebhookReq                  = pb.SetBotWebhookReq
+	SetBotWebhookResp                 = pb.SetBotWebhookResp
+	ValidateBotTokenReq               = pb.ValidateBotTokenReq
+	ValidateBotTokenResp              = pb.ValidateBotTokenResp
 
 	BotService interface {
 		// ValidateBotToken resolves a plaintext token into a bot identity.
@@ -40,6 +42,8 @@ type (
 		SetBotWebhook(ctx context.Context, in *SetBotWebhookReq, opts ...grpc.CallOption) (*SetBotWebhookResp, error)
 		// DeleteBotWebhook removes the bot's webhook configuration entirely.
 		DeleteBotWebhook(ctx context.Context, in *DeleteBotWebhookReq, opts ...grpc.CallOption) (*DeleteBotWebhookResp, error)
+		// ResolveBotWebhookEventActions maps webhook event names (e.g. message.created)
+		ResolveBotWebhookEventActions(ctx context.Context, in *ResolveBotWebhookEventActionsReq, opts ...grpc.CallOption) (*ResolveBotWebhookEventActionsResp, error)
 	}
 
 	defaultBotService struct {
@@ -87,4 +91,10 @@ func (m *defaultBotService) SetBotWebhook(ctx context.Context, in *SetBotWebhook
 func (m *defaultBotService) DeleteBotWebhook(ctx context.Context, in *DeleteBotWebhookReq, opts ...grpc.CallOption) (*DeleteBotWebhookResp, error) {
 	client := pb.NewBotServiceClient(m.cli.Conn())
 	return client.DeleteBotWebhook(ctx, in, opts...)
+}
+
+// ResolveBotWebhookEventActions maps webhook event names (e.g. message.created)
+func (m *defaultBotService) ResolveBotWebhookEventActions(ctx context.Context, in *ResolveBotWebhookEventActionsReq, opts ...grpc.CallOption) (*ResolveBotWebhookEventActionsResp, error) {
+	client := pb.NewBotServiceClient(m.cli.Conn())
+	return client.ResolveBotWebhookEventActions(ctx, in, opts...)
 }

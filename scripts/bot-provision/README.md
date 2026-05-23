@@ -1,14 +1,9 @@
 # Bot OpenAPI 运维 Provision
 
 V0 阶段没有用户侧的 Bot 管理 REST 接口，Bot 身份由运维人员手工创建。
-本目录提供两套等效工具：
+本目录提供 `provision_bot.sh`：纯 SQL + `openssl`，一键写入 `aim_auth` / `aim_logic`、签发 token，适用于生产、CI 和最小依赖环境。
 
-| 工具 | 用途 | 适用场景 |
-|------|------|----------|
-| `provision_bot.sh` | 纯 SQL + `openssl`，一键写入 `aim_auth` / `aim_logic`、签发 token | 生产、CI、最小依赖 |
-| `dev-tool/aim_test.py bot provision` | Python 子命令，复用 dev-tool 的 token 工具 | 本地开发、联调 |
-
-> 两套脚本调用相同的底层 SQL 模板 [`provision_bot.sql`](provision_bot.sql)，行为完全一致。
+> [`provision_bot.sql`](provision_bot.sql) 是底层 SQL 模板。当前 `dev-tool/aim_test.py` 只提供 Bot OpenAPI 调试命令，不提供 provision 子命令；本地联调也请使用本目录的 shell 脚本。
 
 ## 必要信息
 
@@ -21,16 +16,14 @@ V0 阶段没有用户侧的 Bot 管理 REST 接口，Bot 身份由运维人员�
 - `BOT_NICKNAME`：群成员列表里展示的昵称。
 - `CONVERSATION_IDS`：要预装这个 bot 的群会话 ID 列表（可空）。
 - `TOKEN_NAME`：token 备注名，便于日后撤销。
-- `TOKEN_SCOPES`：以逗号分隔的 scope 列表，V0 通常只需要 `messages:send`。
+- `TOKEN_SCOPES`：以逗号分隔的 action grant 列表；旧 scope 名称（如 `messages:send`）不再支持。默认建议 `bot.message.send,bot.conversation.list,bot.self.read`。Webhook 管理还需要 `bot.webhook.read,bot.webhook.write,bot.webhook.delete,bot.webhook.subscribe.message_created`。
 
 PostgreSQL 连接：
 - `aim_auth` 与 `aim_logic` 默认共用同一个 PostgreSQL 实例，两个 DB。
 - docker-compose 里的连接串：`postgresql://user:password@localhost:5432/aim_auth`、
   `postgresql://user:password@localhost:5432/aim_logic`。
 
-## 操作步骤（任选其一）
-
-### 方案 A：直接跑 shell 脚本
+## 操作步骤
 
 ```bash
 cd scripts/bot-provision
@@ -41,7 +34,7 @@ chmod +x provision_bot.sh
   --bot-nickname broadcast-bot \
   --conversation-ids "1,2,3" \
   --token-name "default" \
-  --token-scopes "messages:send" \
+  --token-scopes "bot.message.send,bot.conversation.list,bot.self.read" \
   --auth-dsn "postgresql://user:password@localhost:5432/aim_auth" \
   --logic-dsn "postgresql://user:password@localhost:5432/aim_logic"
 ```
@@ -54,21 +47,6 @@ bot_user_id : 9000000001
 nickname    : broadcast-bot
 plaintext   : aim_bot_9d4a... (store this NOW; it is unrecoverable)
 ```
-
-### 方案 B：dev-tool（适合本地联调）
-
-```bash
-cd dev-tool
-python aim_test.py bot provision \
-  --bot-user-id 9000000001 \
-  --bot-email broadcast@bots.aim \
-  --bot-nickname broadcast-bot \
-  --conversation-ids 1,2,3 \
-  --token-scopes messages:send
-```
-
-dev-tool 默认连接 `127.0.0.1:5432` 的 docker 实例，可以通过环境变量
-`AIM_AUTH_DSN`、`AIM_LOGIC_DSN` 覆盖。
 
 ## 撤销 / 禁用
 

@@ -205,6 +205,22 @@ func (f *fakeQuerier) GetBotTokenByHash(ctx context.Context, tokenHash string) (
 	return model.GetBotTokenByHashRow{}, pgx.ErrNoRows
 }
 
+func (f *fakeQuerier) ListEnabledActionsByToken(ctx context.Context, tokenID int64) ([]string, error) {
+	return nil, nil
+}
+
+func (f *fakeQuerier) GetBotActionByName(ctx context.Context, action string) (model.BotAction, error) {
+	return model.BotAction{}, pgx.ErrNoRows
+}
+
+func (f *fakeQuerier) GrantBotTokenAction(ctx context.Context, arg model.GrantBotTokenActionParams) error {
+	return nil
+}
+
+func (f *fakeQuerier) GetEnabledActionByWebhookEvent(ctx context.Context, event string) (string, error) {
+	return "", pgx.ErrNoRows
+}
+
 func (f *fakeQuerier) ListBotTokensByBot(ctx context.Context, botUserID int64) ([]model.BotToken, error) {
 	return nil, nil
 }
@@ -433,7 +449,6 @@ func TestDatabasePermissionChecker_DirectNotFriendUsesTemporaryConversation(t *t
 	assert.Equal(t, CodeOK, decision.Code)
 	assert.Contains(t, decision.Reason, "temporary conversation")
 }
-
 
 func TestDatabasePermissionChecker_DirectTemporaryConversationLimitReached(t *testing.T) {
 	fq := &fakeQuerier{

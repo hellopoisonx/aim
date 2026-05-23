@@ -49,6 +49,26 @@ func (q *Queries) CreateBotToken(ctx context.Context, arg CreateBotTokenParams) 
 	return i, err
 }
 
+const getBotActionByName = `-- name: GetBotActionByName :one
+SELECT id, action, description, enabled, created_at, updated_at
+FROM bot_actions
+WHERE action = $1
+`
+
+func (q *Queries) GetBotActionByName(ctx context.Context, action string) (BotAction, error) {
+	row := q.db.QueryRow(ctx, getBotActionByName, action)
+	var i BotAction
+	err := row.Scan(
+		&i.ID,
+		&i.Action,
+		&i.Description,
+		&i.Enabled,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getBotTokenByHash = `-- name: GetBotTokenByHash :one
 SELECT bt.id,
        bt.bot_user_id,
@@ -104,6 +124,38 @@ func (q *Queries) GetBotTokenByHash(ctx context.Context, tokenHash string) (GetB
 	return i, err
 }
 
+const getEnabledActionByWebhookEvent = `-- name: GetEnabledActionByWebhookEvent :one
+SELECT ba.action
+FROM bot_event_actions bea
+JOIN bot_actions ba ON ba.id = bea.action_id
+WHERE bea.event = $1
+  AND bea.enabled = TRUE
+  AND ba.enabled = TRUE
+`
+
+func (q *Queries) GetEnabledActionByWebhookEvent(ctx context.Context, event string) (string, error) {
+	row := q.db.QueryRow(ctx, getEnabledActionByWebhookEvent, event)
+	var action string
+	err := row.Scan(&action)
+	return action, err
+}
+
+const grantBotTokenAction = `-- name: GrantBotTokenAction :exec
+INSERT INTO bot_token_permissions (token_id, action_id)
+VALUES ($1, $2)
+ON CONFLICT DO NOTHING
+`
+
+type GrantBotTokenActionParams struct {
+	TokenID  int64 `json:"token_id"`
+	ActionID int64 `json:"action_id"`
+}
+
+func (q *Queries) GrantBotTokenAction(ctx context.Context, arg GrantBotTokenActionParams) error {
+	_, err := q.db.Exec(ctx, grantBotTokenAction, arg.TokenID, arg.ActionID)
+	return err
+}
+
 const listBotTokensByBot = `-- name: ListBotTokensByBot :many
 SELECT id, bot_user_id, token_hash, name, scopes, expires_at, revoked_at, created_at
 FROM bot_tokens
@@ -133,6 +185,34 @@ func (q *Queries) ListBotTokensByBot(ctx context.Context, botUserID int64) ([]Bo
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listEnabledActionsByToken = `-- name: ListEnabledActionsByToken :many
+SELECT ba.action
+FROM bot_token_permissions btp
+JOIN bot_actions ba ON ba.id = btp.action_id
+WHERE btp.token_id = $1 AND ba.enabled = TRUE
+ORDER BY ba.action
+`
+
+func (q *Queries) ListEnabledActionsByToken(ctx context.Context, tokenID int64) ([]string, error) {
+	rows, err := q.db.Query(ctx, listEnabledActionsByToken, tokenID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var action string
+		if err := rows.Scan(&action); err != nil {
+			return nil, err
+		}
+		items = append(items, action)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

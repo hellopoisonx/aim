@@ -34,8 +34,22 @@ Authorization: Bot aim_bot_<64位hex>
 - 方案名 `Bot` 与 `Bearer` 区分；后者用于人类用户的 JWT。
 - Token 在配置时由 AIM 运维生成，**仅展示一次**，AIM 服务端只保存
   哈希。丢失只能由运维撤销重发。
-- Token 携带 scope（如 `messages:send`）。当前 V0 调用 `/messages` 端点
-  时校验 `messages:send`。
+- Token 携带 action grant（响应字段暂仍名为 `scopes`，语义已升级为 actions）。旧 scope 名称（如 `messages:send`）不再授权。
+- Action 由服务端 `bot_actions` 字典管理，可运行时启停；webhook event 通过 `bot_event_actions` 映射到订阅 action。
+
+首批 action：
+
+| Action | 用途 |
+|---|---|
+| `bot.self.read` | 调用 `GET /api/bot/v1/me` |
+| `bot.conversation.list` | 调用 `GET /api/bot/v1/conversations` |
+| `bot.message.send` | 调用 `POST /api/bot/v1/messages` |
+| `bot.webhook.read` | 调用 `GET /api/bot/v1/webhook` |
+| `bot.webhook.write` | 新建/更新 webhook 基础配置 |
+| `bot.webhook.delete` | 删除 webhook |
+| `bot.webhook.subscribe.message_created` | 订阅 `message.created` webhook event |
+
+支持通配 grant：`*`、`bot.*`、`bot.message.*`、`bot.webhook.subscribe.*`。
 
 错误码（biz code → HTTP）：
 
@@ -44,7 +58,7 @@ Authorization: Bot aim_bot_<64位hex>
 | 40110 | 401 | token 缺失/格式错误/未知 |
 | 40111 | 401 | token 已撤销或过期 |
 | 40112 | 401 | bot 已被禁用 |
-| 40310 | 403 | token 缺少所需 scope |
+| 40310 | 403 | token 缺少所需 action |
 | 40010 | 400 | 请求体校验失败（如 webhook url 非法） |
 | 42900 | 429 | 触发限流 |
 
@@ -73,7 +87,7 @@ curl -H "Authorization: Bot $TOKEN" \
       "nickname": "broadcast-bot",
       "avatar": "https://implement.me",
       "status": 1,
-      "scopes": ["messages:send"]
+      "scopes": ["bot.message.send", "bot.self.read"]
     }
   }
 }

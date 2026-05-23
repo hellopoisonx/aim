@@ -45,15 +45,16 @@ sequenceDiagram
   participant Bot as Bot 服务
   participant GW as gateway BotAuth
   participant LG as logic BotService
-  participant DB as user_info / bot_tokens
+  participant DB as user_info / bot_tokens / bot_actions
 
   Bot->>GW: GET /api/bot/v1/me<br/>Authorization: Bot aim_bot_xxx
   GW->>GW: extractBotToken (scheme + format)
   GW->>LG: ValidateBotToken(plaintext)
   LG->>DB: GetBotTokenByHash(sha256(plaintext))
   DB-->>LG: bot_tokens row + JOIN user_info(user_type, status)
+  LG->>DB: ListEnabledActionsByToken(token_id)
   LG->>LG: check revoked / expires / user_type=bot / status=1
-  LG-->>GW: BotIdentity{bot_user_id, scopes, ...}
+  LG-->>GW: BotIdentity{bot_user_id, scopes(actions), ...}
   GW->>GW: WithBotIdentity(ctx)
   GW-->>Bot: 200 {bot:{...}}
 ```
@@ -72,7 +73,7 @@ sequenceDiagram
   participant BWC as logic BotWebhookConsumer
 
   Bot->>GW: POST /messages {conv_id, type, content, client_msg_id}
-  GW->>GW: BotIdentity.HasScope("messages:send")
+  GW->>GW: BotIdentity.RequireAction("bot.message.send")
   GW->>Core: Transfer{sender_id=bot_user_id, device_id="bot-api", ...}
   Core->>Core: idempotency (sender, device, client_msg_id)
   Core->>Core: quota window
@@ -105,6 +106,7 @@ sequenceDiagram
 | `app/logic/rpc/model/migrations/006_user_type.sql` | `user_info.user_type` |
 | `app/logic/rpc/model/migrations/007_bot_tokens.sql` | `bot_tokens` |
 | `app/logic/rpc/model/migrations/008_bot_webhooks.sql` | `bot_webhooks` |
+| `app/logic/rpc/model/migrations/009_bot_actions.sql` | `bot_actions` / `bot_token_permissions` / `bot_event_actions` |
 | `app/logic/rpc/model/queries/bot_token.sql` | sqlc Bot Token 查询 |
 | `app/logic/rpc/model/queries/bot_webhook.sql` | sqlc Bot Webhook 查询 |
 | `app/logic/rpc/logic.proto` | `BotService` RPC 定义 |

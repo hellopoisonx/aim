@@ -3,10 +3,10 @@ package bot
 import (
 	"context"
 
-	"github.com/hellopoisonx/aim/app/gateway/api/internal/botctx"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/botservice"
+	"github.com/hellopoisonx/aim/app/shared/botperm"
 	"github.com/hellopoisonx/aim/app/shared/bottoken"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 
@@ -28,9 +28,9 @@ func NewBotSetWebhookLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Bot
 }
 
 func (l *BotSetWebhookLogic) BotSetWebhook(req *types.BotSetWebhookRequest) (*types.BotSetWebhookResponse, error) {
-	identity, ok := botctx.FromContext(l.ctx)
-	if !ok {
-		return nil, errorx.NewCodeError(errorx.CodeBotTokenInvalid, "missing bot identity")
+	identity, err := requireBotAction(l.ctx, botperm.ActionWebhookWrite)
+	if err != nil {
+		return nil, err
 	}
 
 	if l.svcCtx.LogicBotClient == nil {
@@ -57,6 +57,10 @@ func (l *BotSetWebhookLogic) BotSetWebhook(req *types.BotSetWebhookRequest) (*ty
 	enabled := true
 	if req.Enabled != nil {
 		enabled = *req.Enabled
+	}
+
+	if err := requireWebhookEventActions(l.ctx, l.svcCtx, identity, req.Events); err != nil {
+		return nil, err
 	}
 
 	rpcResp, err := l.svcCtx.LogicBotClient.SetBotWebhook(l.ctx, &botservice.SetBotWebhookReq{

@@ -3,10 +3,10 @@ package bot
 import (
 	"context"
 
-	"github.com/hellopoisonx/aim/app/gateway/api/internal/botctx"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/botservice"
+	"github.com/hellopoisonx/aim/app/shared/botperm"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 
 	"github.com/zeromicro/go-zero/core/logx"
@@ -27,9 +27,9 @@ func NewBotListConversationsLogic(ctx context.Context, svcCtx *svc.ServiceContex
 }
 
 func (l *BotListConversationsLogic) BotListConversations() (*types.BotListConversationsResponse, error) {
-	identity, ok := botctx.FromContext(l.ctx)
-	if !ok {
-		return nil, errorx.NewCodeError(errorx.CodeBotTokenInvalid, "missing bot identity")
+	identity, err := requireBotAction(l.ctx, botperm.ActionConversationList)
+	if err != nil {
+		return nil, err
 	}
 
 	if l.svcCtx.LogicBotClient == nil {

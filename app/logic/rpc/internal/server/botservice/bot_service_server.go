@@ -58,3 +58,9 @@ func (s *BotServiceServer) DeleteBotWebhook(ctx context.Context, in *pb.DeleteBo
 	l := botservicelogic.NewDeleteBotWebhookLogic(ctx, s.svcCtx)
 	return l.DeleteBotWebhook(in)
 }
+
+// ResolveBotWebhookEventActions maps webhook event names (e.g. message.created)
+func (s *BotServiceServer) ResolveBotWebhookEventActions(ctx context.Context, in *pb.ResolveBotWebhookEventActionsReq) (*pb.ResolveBotWebhookEventActionsResp, error) {
+	l := botservicelogic.NewResolveBotWebhookEventActionsLogic(ctx, s.svcCtx)
+	return l.ResolveBotWebhookEventActions(in)
+}

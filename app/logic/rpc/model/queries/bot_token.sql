@@ -32,3 +32,28 @@ ORDER BY created_at DESC;
 UPDATE bot_tokens
 SET revoked_at = NOW()
 WHERE id = $1 AND bot_user_id = $2 AND revoked_at IS NULL;
+
+-- name: ListEnabledActionsByToken :many
+SELECT ba.action
+FROM bot_token_permissions btp
+JOIN bot_actions ba ON ba.id = btp.action_id
+WHERE btp.token_id = $1 AND ba.enabled = TRUE
+ORDER BY ba.action;
+
+-- name: GetBotActionByName :one
+SELECT id, action, description, enabled, created_at, updated_at
+FROM bot_actions
+WHERE action = $1;
+
+-- name: GrantBotTokenAction :exec
+INSERT INTO bot_token_permissions (token_id, action_id)
+VALUES ($1, $2)
+ON CONFLICT DO NOTHING;
+
+-- name: GetEnabledActionByWebhookEvent :one
+SELECT ba.action
+FROM bot_event_actions bea
+JOIN bot_actions ba ON ba.id = bea.action_id
+WHERE bea.event = $1
+  AND bea.enabled = TRUE
+  AND ba.enabled = TRUE;

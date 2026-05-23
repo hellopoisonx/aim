@@ -13,6 +13,7 @@ import (
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 )
@@ -41,6 +42,9 @@ func (f *fakeBotClient) SetBotWebhook(_ context.Context, _ *pb.SetBotWebhookReq,
 }
 func (f *fakeBotClient) DeleteBotWebhook(_ context.Context, _ *pb.DeleteBotWebhookReq, _ ...grpc.CallOption) (*pb.DeleteBotWebhookResp, error) {
 	return nil, nil
+}
+func (f *fakeBotClient) ResolveBotWebhookEventActions(_ context.Context, _ *pb.ResolveBotWebhookEventActionsReq, _ ...grpc.CallOption) (*pb.ResolveBotWebhookEventActionsResp, error) {
+	return &pb.ResolveBotWebhookEventActionsResp{}, nil
 }
 
 func TestExtractBotToken(t *testing.T) {
@@ -78,7 +82,7 @@ func TestBotAuthMiddleware_Success(t *testing.T) {
 			Identity: &pb.BotIdentity{
 				BotUserId: 1001,
 				TokenId:   42,
-				Scopes:    []string{"messages:send"},
+				Scopes:    []string{"bot.message.send"},
 				Nickname:  "alice",
 			},
 		},
@@ -88,10 +92,10 @@ func TestBotAuthMiddleware_Success(t *testing.T) {
 	handler := mw.Handle(func(_ http.ResponseWriter, r *http.Request) {
 		called = true
 		identity, ok := botctx.FromContext(r.Context())
-		require.True(t, ok)
-		require.Equal(t, int64(1001), identity.BotUserID)
-		require.True(t, identity.HasScope("messages:send"))
-		require.False(t, identity.HasScope("admin"))
+		assert.True(t, ok)
+		assert.Equal(t, int64(1001), identity.BotUserID)
+		assert.True(t, identity.HasAction("bot.message.send"))
+		assert.False(t, identity.HasScope("admin"))
 	})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/bot/v1/me", nil)
@@ -171,4 +175,3 @@ func TestBotAuthMiddleware_NilClientFailsClosed(t *testing.T) {
 
 	require.Equal(t, http.StatusInternalServerError, rr.Code)
 }
-

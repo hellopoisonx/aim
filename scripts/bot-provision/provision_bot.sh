@@ -22,7 +22,8 @@ Required:
 Optional:
   --conversation-ids <csv>     Comma-separated group IDs the bot should join
   --token-name <name>          Token label (default: "default")
-  --token-scopes <csv>         Comma-separated scopes (default: "messages:send")
+  --token-scopes <csv>         Comma-separated action grants
+                               (default: "bot.message.send,bot.conversation.list,bot.self.read")
   --token-id <int>             Snowflake id for the bot_tokens row
                                (default: $(($(date +%s%3N))))
   --plaintext <token>          Use this plaintext instead of generating one
@@ -45,7 +46,7 @@ bot_email=""
 bot_nickname=""
 conversation_ids=""
 token_name="default"
-token_scopes="messages:send"
+token_scopes="bot.message.send,bot.conversation.list,bot.self.read"
 token_id=""
 plaintext=""
 auth_dsn=""
@@ -79,6 +80,19 @@ require bot_email
 require bot_nickname
 require auth_dsn
 require logic_dsn
+
+IFS=',' read -ra _action_parts <<< "$token_scopes"
+for raw_action in "${_action_parts[@]}"; do
+  action="$(echo "$raw_action" | xargs)"
+  if [[ -z "$action" ]]; then
+    continue
+  fi
+  if [[ "$action" != "*" && ! "$action" =~ ^bot\.[a-z0-9_]+(\.[a-z0-9_]+)*(\.\*)?$ ]]; then
+    echo "invalid bot action grant: ${action}" >&2
+    echo "use action names like bot.message.send; old scopes such as messages:send are not supported" >&2
+    exit 1
+  fi
+done
 
 if [[ -z "$plaintext" ]]; then
   random_hex="$(openssl rand -hex 32)"
@@ -129,7 +143,7 @@ cat <<EOF
 bot_user_id : ${bot_user_id}
 nickname    : ${bot_nickname}
 token_id    : ${token_id}
-scopes      : ${token_scopes}
+actions     : ${token_scopes}
 groups      : ${conversation_ids:-<none>}
 plaintext   : ${plaintext}
 
