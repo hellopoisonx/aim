@@ -389,9 +389,11 @@ func TestRESTClientGetConversationHistoryWithCursors(t *testing.T) {
 		if r.URL.Query().Get("cursor_created_at") != "1715678900000" {
 			t.Fatalf("cursor_created_at = %s", r.URL.Query().Get("cursor_created_at"))
 		}
+
 		if r.URL.Query().Get("cursor_id") != "98765" {
 			t.Fatalf("cursor_id = %s", r.URL.Query().Get("cursor_id"))
 		}
+
 		if r.URL.Query().Get("limit") != "50" {
 			t.Fatalf("limit = %s", r.URL.Query().Get("limit"))
 		}

@@ -326,10 +326,20 @@ func (m *model) cmdFriendReject(ctx context.Context, args []string) string {
 }
 
 func (m *model) cmdFriendList(ctx context.Context) string {
-	resp, err := m.rest.ListFriends(ctx, m.currentProfile().AccessToken)
+	p := m.currentProfile()
+	if p.AccessToken == "" {
+		return "OK friend list skipped: not logged in"
+	}
+	resp, err := m.rest.ListFriends(ctx, p.AccessToken)
 	if err != nil {
 		return errLine(err)
 	}
+	m.state.mu.Lock()
+	m.state.friends = resp.Friends
+	if m.state.selectedFriend >= len(resp.Friends) {
+		m.state.selectedFriend = max(0, len(resp.Friends)-1)
+	}
+	m.state.mu.Unlock()
 	rows := []string{fmt.Sprintf("OK %d friend(s)", len(resp.Friends))}
 	for _, f := range resp.Friends {
 		rows = append(rows, friendshipLine("-", f))

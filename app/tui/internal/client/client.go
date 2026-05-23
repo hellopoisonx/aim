@@ -346,6 +346,7 @@ func (c *RESTClient) Logout(ctx context.Context, accessToken string) (*LogoutRes
 // SearchUsersByName calls GET /api/users/by-name/{name} with Bearer access token.
 func (c *RESTClient) SearchUsersByName(ctx context.Context, name string, accessToken string) (*SearchUsersResponse, error) {
 	var resp SearchUsersResponse
+
 	path := "/api/users/by-name/" + url.PathEscape(name)
 	if err := c.doRequest(ctx, http.MethodGet, path, nil, &resp, accessToken); err != nil {
 		return nil, err
@@ -377,6 +378,7 @@ func (c *RESTClient) CreateGroup(ctx context.Context, req *CreateGroupRequest, a
 // GetConversationMembers calls GET /api/conversations/{id}/members.
 func (c *RESTClient) GetConversationMembers(ctx context.Context, conversationID int64, accessToken string) (*GetConversationMembersResponse, error) {
 	var resp GetConversationMembersResponse
+
 	path := "/api/conversations/" + strconv.FormatInt(conversationID, 10) + "/members"
 	if err := c.doRequest(ctx, http.MethodGet, path, nil, &resp, accessToken); err != nil {
 		return nil, err
@@ -388,6 +390,7 @@ func (c *RESTClient) GetConversationMembers(ctx context.Context, conversationID 
 // AddGroupMembers calls POST /api/conversations/{id}/members.
 func (c *RESTClient) AddGroupMembers(ctx context.Context, conversationID int64, req *AddGroupMembersRequest, accessToken string) (*CreateConversationResponse, error) {
 	var resp CreateConversationResponse
+
 	path := "/api/conversations/" + strconv.FormatInt(conversationID, 10) + "/members"
 	if err := c.doRequest(ctx, http.MethodPost, path, req, &resp, accessToken); err != nil {
 		return nil, err
@@ -417,6 +420,7 @@ func (c *RESTClient) DismissGroup(ctx context.Context, conversationID int64, acc
 // UpdateGroupInfo calls PUT /api/conversations/{id}.
 func (c *RESTClient) UpdateGroupInfo(ctx context.Context, conversationID int64, req *UpdateGroupInfoRequest, accessToken string) (*UpdateGroupInfoResponse, error) {
 	var resp UpdateGroupInfoResponse
+
 	path := "/api/conversations/" + strconv.FormatInt(conversationID, 10)
 	if err := c.doRequest(ctx, http.MethodPut, path, req, &resp, accessToken); err != nil {
 		return nil, err
@@ -428,6 +432,7 @@ func (c *RESTClient) UpdateGroupInfo(ctx context.Context, conversationID int64, 
 // GetUserById calls GET /api/users/by-id/{id} with Bearer access token.
 func (c *RESTClient) GetUserById(ctx context.Context, id int64, accessToken string) (*GetUserByIdResponse, error) {
 	var resp GetUserByIdResponse
+
 	path := "/api/users/by-id/" + strconv.FormatInt(id, 10)
 	if err := c.doRequest(ctx, http.MethodGet, path, nil, &resp, accessToken); err != nil {
 		return nil, err
@@ -440,15 +445,18 @@ func (c *RESTClient) GetUserById(ctx context.Context, id int64, accessToken stri
 // cursorCreatedAt and cursorID are optional; pass 0 to skip. limit is optional; pass 0 to use server default.
 func (c *RESTClient) GetConversationHistory(ctx context.Context, conversationID, cursorCreatedAt, cursorID int64, limit int32, accessToken string) (*GetConversationHistoryResponse, error) {
 	var resp GetConversationHistoryResponse
+
 	path := "/api/conversations/history/" + strconv.FormatInt(conversationID, 10)
 
 	query := url.Values{}
 	if cursorCreatedAt > 0 {
 		query.Set("cursor_created_at", strconv.FormatInt(cursorCreatedAt, 10))
 	}
+
 	if cursorID > 0 {
 		query.Set("cursor_id", strconv.FormatInt(cursorID, 10))
 	}
+
 	if limit > 0 {
 		query.Set("limit", strconv.FormatInt(int64(limit), 10))
 	}
@@ -477,10 +485,12 @@ func (c *RESTClient) ListConversations(ctx context.Context, accessToken string) 
 // AddFriend calls POST /api/users/friends/{id} with Bearer access token.
 func (c *RESTClient) AddFriend(ctx context.Context, id int64, accessToken string) (*AddFriendResponse, error) {
 	var resp AddFriendResponse
+
 	path := "/api/users/friends/" + strconv.FormatInt(id, 10)
 	if err := c.doRequest(ctx, http.MethodPost, path, nil, &resp, accessToken); err != nil {
 		return nil, err
 	}
+
 	return &resp, nil
 }
 
@@ -505,6 +515,7 @@ func (c *RESTClient) ListFriendApplications(ctx context.Context, accessToken str
 	if err := c.doRequest(ctx, http.MethodGet, "/api/friends/applications", nil, &resp, accessToken); err != nil {
 		return nil, err
 	}
+
 	return &resp, nil
 }
 
