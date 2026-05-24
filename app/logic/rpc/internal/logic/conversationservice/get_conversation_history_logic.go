@@ -2,6 +2,7 @@ package conversationservicelogic
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/service"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
@@ -76,7 +77,7 @@ func (l *GetConversationHistoryLogic) GetConversationHistory(in *pb.GetConversat
 			SenderId:       msg.SenderID,
 			SenderInfo:     senderInfo,
 			MessageType:    msg.MessageType,
-			Content:        string(msg.Content),
+			Content:        messageContentFromJSONB(msg.Content),
 			ClientMsgId:    clientMsgID,
 			CreatedAt:      service.UnixFromPGTimestamptz(msg.CreatedAt),
 			Mentions:       service.ParseMentionsJSON(msg.Mentions),
@@ -84,7 +85,7 @@ func (l *GetConversationHistoryLogic) GetConversationHistory(in *pb.GetConversat
 		})
 	}
 
-	hasMore := int32(len(messages)) == limit
+	hasMore := len(messages) == int(limit)
 	var nextCursorCreatedAt int64
 	var nextCursorID int64
 
@@ -138,6 +139,21 @@ func (l *GetConversationHistoryLogic) GetConversationHistory(in *pb.GetConversat
 		HasMore:             hasMore,
 		ReadStates:          pbReadStates,
 	}, nil
+}
+
+func messageContentFromJSONB(raw []byte) string {
+	if len(raw) == 0 {
+		return ""
+	}
+
+	var content string
+	if err := json.Unmarshal(raw, &content); err == nil {
+		return content
+	}
+
+	// Non-string JSON payloads (for example system-message objects) are kept as
+	// their JSON representation so clients can render or parse them explicitly.
+	return string(raw)
 }
 
 func buildMessageReadDetails(

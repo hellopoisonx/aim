@@ -473,6 +473,8 @@ func TestGetConversationHistoryLogic(t *testing.T) {
 			assert.NotNil(t, resp)
 			assert.Len(t, resp.GetMessages(), tt.wantLen)
 			if tt.name == "initial page" && len(resp.GetMessages()) > 0 {
+				assert.Equal(t, "hello", resp.GetMessages()[0].GetContent())
+				assert.Equal(t, "world", resp.GetMessages()[1].GetContent())
 				assert.Equal(t, "client-1", resp.GetMessages()[0].GetClientMsgId())
 				assert.Equal(t, []string{"2"}, resp.GetMessages()[0].GetMentions())
 				// Verify per-message read details exist and exclude the sender.
@@ -482,6 +484,26 @@ func TestGetConversationHistoryLogic(t *testing.T) {
 					assert.NotEqual(t, int64(1), rd.GetUserId(), "sender should be excluded from read_details")
 				}
 			}
+		})
+	}
+}
+
+func TestMessageContentFromJSONB(t *testing.T) {
+	tests := []struct {
+		name string
+		raw  []byte
+		want string
+	}{
+		{name: "json string", raw: []byte(`"hello"`), want: "hello"},
+		{name: "json string with escaped quote", raw: []byte(`"say \"hi\""`), want: `say "hi"`},
+		{name: "json object", raw: []byte(`{"event":"member_joined"}`), want: `{"event":"member_joined"}`},
+		{name: "plain fallback", raw: []byte(`plain text`), want: `plain text`},
+		{name: "empty", raw: nil, want: ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, messageContentFromJSONB(tt.raw))
 		})
 	}
 }
