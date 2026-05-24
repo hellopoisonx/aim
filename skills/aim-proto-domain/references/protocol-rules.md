@@ -48,7 +48,7 @@ shared/proto/
 
 - 发送：`SendMessagePayload.mentions`（字段号 5）为十进制用户 ID 字符串列表；core `Transfer` 转 `int64` 后做权限校验并写入 `messages.mentions` JSONB。
 - 历史：`logic.MessageItem.mentions`（字段号 9）、`gateway.api MessageItem.mentions` 返回同格式字符串列表。
-- 推送：`PushMessagePayload.mentions`（字段号 11）、`gateway.PushMessageReq.mentions`（字段号 9）透传；TUI 用 `mentions` 渲染「提及」行，正文中的 `@昵称` 由客户端在发送时写入。
+- 推送：`PushMessagePayload.mentions`（字段号 11）、`gateway.PushMessageReq.mentions`（字段号 9）透传；Desktop 用 `mentions` 渲染「提及」行，正文中的 `@昵称` 由客户端在发送时写入。
 
 ### 群变更系统消息
 
@@ -98,6 +98,6 @@ protoc --go_out=. --go-grpc_out=. shared/proto/gateway/gateway.proto
 ## 修改检查
 
 ```bash
-go test ./app/gateway/api/internal/ws/... ./app/tui/... ./app/core/...
+go test ./app/gateway/api/internal/ws/... ./app/core/...
 go build ./...
 ```

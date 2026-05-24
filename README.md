@@ -13,7 +13,7 @@
 | `aim-core-domain`        | 消息投递域             |
 | `aim-gateway-domain`     | 网关/连接层            |
 | `aim-logic-domain`       | 业务上下文域            |
-| `aim-tui-domain`         | tui 客户端           |
+| `aim-desktop-domain`     | Wails 桌面客户端       |
 | `aim-shared-domain`      | 进程内共享包            |
 | `aim-proto-domain`       | Protobuf 协议       |
 | `aim-database-migration` | 数据库迁移             |
@@ -33,7 +33,7 @@
 | 链路追踪      | OpenTelemetry → Jaeger                   | gRPC + Kafka trace 传播     |
 | 数据模型      | sqlc                                     | 类型安全的 SQL 生成              |
 | 序列化       | Protobuf + gRPC                          | WS 帧协议 / 服务间通信            |
-| tui 客户端   | bubbletea                                | tui                       |
+| 桌面客户端     | Wails v2 + Vue 3 + Arco Design           | 桌面 IM 客户端              |
 | 容器化       | Docker Compose                           | 本地基础设施 + 服务编排             |
 
 ## 架构总览
@@ -91,6 +91,10 @@ JWT 签发/验证/刷新，基于 Redis SessionStore 的多设备登录管理。
 ### aim-logic — 业务上下文域 `aim-logic-domain`
 
 提供投递判断依据：用户/好友/群组管理、消息持久化（Kafka 消费 → PostgreSQL JSONB）、历史回溯（cursor-based）、Redis 滑动窗口限频。内容审核作为共享库接口供 core 同步调用。
+
+### app/desktop — 桌面客户端 `aim-desktop-domain`
+
+Wails v2 + Vue 3 + Arco Design 桌面客户端。通过 gateway REST/WS 通信，支持本地 SQLite 缓存、Token 自动刷新、同设备多账号与缓存隔离。
 
 ### aim-ai — AI 能力域（规划中）
 

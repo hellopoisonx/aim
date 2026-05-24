@@ -9,7 +9,7 @@
 
 ## 概览
 
-AIM 是多人在线即时通讯系统，内置可自部署 AI 助手。后端为 go-zero 微服务（gateway/auth/core/logic），客户端保留 TUI，基础设施包含 Kafka、Redis/Redis Stack、PostgreSQL/pgvector、Nacos、Jaeger。
+AIM 是多人在线即时通讯系统，内置可自部署 AI 助手。后端为 go-zero 微服务（gateway/auth/core/logic），客户端为 Wails 桌面端，基础设施包含 Kafka、Redis/Redis Stack、PostgreSQL/pgvector、Nacos、Jaeger。
 
 ## 工作流
 
@@ -26,7 +26,7 @@ aim/
 ├── app/gateway/api/     # 对外入口
 ├── app/logic/rpc/       # 业务上下文
 ├── app/shared/          # 共享库
-├── app/tui/          # TUI 客户端
+├── app/desktop/         # Wails 桌面客户端
 ├── shared/proto/        # Protobuf 协议
 ├── skills/             # 领域 Skill（.opencode/skills、.pi/skills 均为 junction）
 └── docker-compose.yaml  # 本地基础设施
@@ -43,7 +43,7 @@ aim/
 - aim-logic-domain: 业务上下文域
 - aim-shared-domain: 共享包域
 - aim-proto-domain: Protobuf 协议域
-- aim-tui-domain: TUI 客户端域
+- aim-desktop-domain: Wails 桌面客户端域
 - aim-bot-domain: Bot OpenAPI 域（第三方 Bot 接入、Token、Webhook）
 - aim-database-migration: 数据库迁移
 - aim-dev-tool: 开发测试工具
@@ -59,7 +59,7 @@ aim/
 - Request 类型必须带 `validate` tag；配置结构体用 `json:",default=value"` / `json:",optional"`。
 - core 可以通过 gRPC 调 logic；logic 绝不导入 core，也不负责消息投递。
 - Kafka 消息顺序靠 `conversation_id` 作为 key；跨 Kafka 链路通过 payload 中的 `traceparent`/`tracestate` 传播。
-- 客户端只和 gateway 通信；TUI 通过 REST/WS client 调用 gateway。
+- 客户端只和 gateway 通信；Desktop 通过 REST/WS client 调用 gateway。
 
 ## 反模式
 
