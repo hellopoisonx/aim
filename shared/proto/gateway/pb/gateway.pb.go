@@ -25,6 +25,7 @@ type SenderInfo struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	Email         string                 `protobuf:"bytes,2,opt,name=email,proto3" json:"email,omitempty"`
+	DisplayName   string                 `protobuf:"bytes,3,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -69,6 +70,13 @@ func (x *SenderInfo) GetName() string {
 func (x *SenderInfo) GetEmail() string {
 	if x != nil {
 		return x.Email
+	}
+	return ""
+}
+
+func (x *SenderInfo) GetDisplayName() string {
+	if x != nil {
+		return x.DisplayName
 	}
 	return ""
 }
@@ -1067,11 +1075,12 @@ var File_shared_proto_gateway_gateway_proto protoreflect.FileDescriptor
 
 const file_shared_proto_gateway_gateway_proto_rawDesc = "" +
 	"\n" +
-	"\"shared/proto/gateway/gateway.proto\x12\agateway\"6\n" +
+	"\"shared/proto/gateway/gateway.proto\x12\agateway\"Y\n" +
 	"\n" +
 	"SenderInfo\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x14\n" +
-	"\x05email\x18\x02 \x01(\tR\x05email\"\xb1\x03\n" +
+	"\x05email\x18\x02 \x01(\tR\x05email\x12!\n" +
+	"\fdisplay_name\x18\x03 \x01(\tR\vdisplayName\"\xb1\x03\n" +
 	"\x0ePushMessageReq\x12\x1d\n" +
 	"\n" +
 	"message_id\x18\x01 \x01(\x03R\tmessageId\x12'\n" +

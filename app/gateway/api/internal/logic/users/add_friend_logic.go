@@ -10,6 +10,7 @@ import (
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/ws"
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/friendshipservice"
+	"github.com/hellopoisonx/aim/app/logic/rpc/client/userservice"
 	gwpb "github.com/hellopoisonx/aim/shared/proto/gateway/pb"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 
@@ -63,6 +64,19 @@ func (l *AddFriendLogic) AddFriend(req *types.AddFriendRequest) (resp *types.Add
 		Status:    friendship.GetStatus(),
 		CreatedAt: friendship.GetCreatedAt(),
 		UpdatedAt: friendship.GetUpdatedAt(),
+	}
+
+	// Enrich peer name snapshot via user service.
+	peerID := item.FriendId
+	if peerID <= 0 {
+		peerID = item.UserId
+	}
+	if l.svcCtx.LogicUserClient != nil && peerID > 0 {
+		if u, err := l.svcCtx.LogicUserClient.GetUserInfo(l.ctx, &userservice.GetUserInfoReq{Id: peerID}); err == nil {
+			item.DisplayName = u.GetUser().GetNickname()
+			item.Email = u.GetUser().GetEmail()
+			item.Avatar = u.GetUser().GetAvatar()
+		}
 	}
 
 	if l.svcCtx.WsManager != nil && item.Status == "pending" {

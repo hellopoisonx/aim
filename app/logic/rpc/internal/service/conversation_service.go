@@ -65,11 +65,12 @@ type ReadState struct {
 }
 
 type MemberDetail struct {
-	UserID   int64
-	Email    string
-	Avatar   string
-	Role     string
-	JoinedAt int64
+	UserID      int64
+	Email       string
+	Avatar      string
+	DisplayName string
+	Role        string
+	JoinedAt    int64
 }
 
 type ConversationStore interface {
@@ -435,6 +436,9 @@ func (s ConversationService) AddGroupMembers(ctx context.Context, conversationID
 	if conv.ConversationType != "group" {
 		return model.Conversation{}, ErrNotGroupConversation
 	}
+	if operatorID != conv.CreatorID {
+		return model.Conversation{}, ErrNotOwner
+	}
 
 	var targetUserIDs []int64
 	var messageID int64
@@ -451,6 +455,9 @@ func (s ConversationService) AddGroupMembers(ctx context.Context, conversationID
 		}
 
 		for _, mid := range newMemberIDs {
+			if mid <= 0 {
+				return errorx.NewCodeError(errorx.CodeBadInput, "member_ids must contain positive user ids")
+			}
 			if _, ok := existingSet[mid]; ok {
 				continue
 			}
@@ -514,6 +521,9 @@ func (s ConversationService) RemoveGroupMembers(ctx context.Context, conversatio
 
 	if conv.ConversationType != "group" {
 		return ErrNotGroupConversation
+	}
+	if operatorID != conv.CreatorID {
+		return ErrNotOwner
 	}
 
 	var targetUserIDs []int64
@@ -579,6 +589,9 @@ func (s ConversationService) LeaveGroup(ctx context.Context, conversationID, use
 	if conv.ConversationType != "group" {
 		return ErrNotGroupConversation
 	}
+	if userID == conv.CreatorID {
+		return ErrNotOwner
+	}
 
 	var targetUserIDs []int64
 	var messageID int64
@@ -643,6 +656,9 @@ func (s ConversationService) DismissGroup(ctx context.Context, conversationID, o
 	if conv.ConversationType != "group" {
 		return ErrNotGroupConversation
 	}
+	if operatorID != conv.CreatorID {
+		return ErrNotOwner
+	}
 
 	var targetUserIDs []int64
 	var messageID int64
@@ -702,6 +718,9 @@ func (s ConversationService) UpdateGroupInfo(ctx context.Context, conversationID
 
 	if conv.ConversationType != "group" {
 		return model.Conversation{}, ErrNotGroupConversation
+	}
+	if operatorID != conv.CreatorID {
+		return model.Conversation{}, ErrNotOwner
 	}
 
 	if name != nil {
@@ -797,11 +816,12 @@ func (s ConversationService) GetConversationMembersDetail(ctx context.Context, c
 	details := make([]MemberDetail, len(rows))
 	for i, r := range rows {
 		details[i] = MemberDetail{
-			UserID:   r.UserID,
-			Email:    r.Email,
-			Avatar:   r.Avatar,
-			Role:     r.Role,
-			JoinedAt: unixFromPGTimestamptz(r.JoinedAt),
+			UserID:      r.UserID,
+			Email:       r.Email,
+			Avatar:      r.Avatar,
+			DisplayName: r.DisplayName,
+			Role:        r.Role,
+			JoinedAt:    unixFromPGTimestamptz(r.JoinedAt),
 		}
 	}
 

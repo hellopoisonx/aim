@@ -1,6 +1,8 @@
 package main
 
 import (
+	"context"
+	"path/filepath"
 	"testing"
 
 	client "github.com/hellopoisonx/aim/app/tui/internal/client"
@@ -56,27 +58,74 @@ func TestNormalizeConversationType(t *testing.T) {
 	}
 }
 
-func TestHandleServerAckRejectedRateLimit(t *testing.T) {
+func TestHandleServerAckPersistsReconciledMessageID(t *testing.T) {
+	ctx := context.Background()
+
+	store, err := openStore(ctx, filepath.Join(t.TempDir(), "aim-tui.db"), "instance")
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+
+	defer func() { _ = store.Close() }()
+
+	pending := client.MessageItem{ID: 99, ConversationID: 9, SenderID: 1, MessageType: "text", Content: "hello", ClientMsgID: "pending-1", CreatedAt: 1001}
+	if err := store.SaveMessages(ctx, []client.MessageItem{pending}); err != nil {
+		t.Fatalf("save pending: %v", err)
+	}
+
 	m := &model{
+		store:    store,
 		events:   make(chan string, 4),
 		profiles: map[string]*profile{"default": {Name: "default", UserID: 1}},
 		active:   "default",
 		state: &appState{
 			conversations: []conversationView{{
-				Item: client.ConversationItem{ConversationID: 9},
-				Messages: []client.MessageItem{{
-					ID: 99, ConversationID: 9, ClientMsgID: "pending-1", Content: "hello",
-				}},
+				Item:     client.ConversationItem{ConversationID: 9},
+				Messages: []client.MessageItem{pending},
 			}},
 		},
 	}
 
-	m.handleServerAck(&wspb.ServerAckPayload{
-		ClientMsgId: "pending-1",
-		Code:        42900,
-		Msg:         "rate limit",
-		Status:      wspb.AckStatus_ACK_STATUS_REJECTED,
-	})
+	m.handleServerAck("pending-1", wspb.AckStatus_ACK_STATUS_ACCEPTED, 0, "", 200)
+
+	got, err := store.LoadMessages(ctx, 9, 10)
+	if err != nil {
+		t.Fatalf("load messages: %v", err)
+	}
+
+	if len(got) != 1 || got[0].ID != 200 || got[0].ClientMsgID != "pending-1" {
+		t.Fatalf("unexpected persisted messages: %+v", got)
+	}
+}
+
+func TestHandleServerAckRejectedRateLimit(t *testing.T) {
+	ctx := context.Background()
+
+	store, err := openStore(ctx, filepath.Join(t.TempDir(), "aim-tui.db"), "instance")
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	defer func() { _ = store.Close() }()
+
+	pending := client.MessageItem{ID: 99, ConversationID: 9, SenderID: 1, MessageType: "text", Content: "hello", ClientMsgID: "pending-1", CreatedAt: 1001}
+	if err := store.SaveMessages(ctx, []client.MessageItem{pending}); err != nil {
+		t.Fatalf("save pending: %v", err)
+	}
+
+	m := &model{
+		store:    store,
+		events:   make(chan string, 4),
+		profiles: map[string]*profile{"default": {Name: "default", UserID: 1}},
+		active:   "default",
+		state: &appState{
+			conversations: []conversationView{{
+				Item:     client.ConversationItem{ConversationID: 9},
+				Messages: []client.MessageItem{pending},
+			}},
+		},
+	}
+
+	m.handleServerAck("pending-1", wspb.AckStatus_ACK_STATUS_REJECTED, 42900, "rate limit", 0)
 
 	select {
 	case line := <-m.events:
@@ -92,5 +141,14 @@ func TestHandleServerAckRejectedRateLimit(t *testing.T) {
 
 	if len(m.state.conversations[0].Messages) != 0 {
 		t.Fatalf("optimistic message not removed: %+v", m.state.conversations[0].Messages)
+	}
+
+	got, err := store.LoadMessages(ctx, 9, 10)
+	if err != nil {
+		t.Fatalf("load messages: %v", err)
+	}
+
+	if len(got) != 0 {
+		t.Fatalf("rate-limited message still persisted: %+v", got)
 	}
 }

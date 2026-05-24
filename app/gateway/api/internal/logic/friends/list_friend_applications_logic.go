@@ -46,13 +46,16 @@ func (l *ListFriendApplicationsLogic) ListFriendApplications() (*types.ListFrien
 
 	applications := make([]types.FriendshipItem, 0, len(rpcResp.GetApplications()))
 	for _, app := range rpcResp.GetApplications() {
-		applications = append(applications, types.FriendshipItem{
+		item := types.FriendshipItem{
 			UserId:    app.GetUserId(),
 			FriendId:  app.GetFriendId(),
 			Status:    app.GetStatus(),
 			CreatedAt: app.GetCreatedAt(),
 			UpdatedAt: app.GetUpdatedAt(),
-		})
+		}
+		// The requester is the user who sent the application (UserId side).
+		enrichPeerInfo(l.ctx, l.svcCtx, app.GetUserId(), &item)
+		applications = append(applications, item)
 	}
 
 	return &types.ListFriendApplicationsResponse{Applications: applications}, nil

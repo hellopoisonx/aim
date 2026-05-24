@@ -195,16 +195,27 @@ type SenderInfo struct {
 
 // MessageItem mirrors gateway.api MessageItem.
 type MessageItem struct {
-	ID             int64      `json:"id"`
-	ConversationID int64      `json:"conversation_id"`
-	SenderID       int64      `json:"sender_id"`
-	SenderInfo     SenderInfo `json:"sender_info"`
-	MessageType    string     `json:"message_type"`
-	Content        string     `json:"content"`
-	ClientMsgID    string     `json:"client_msg_id"`
-	CreatedAt      int64      `json:"created_at"`
-	IsSystem       bool       `json:"is_system,omitempty"`
-	Mentions       []string   `json:"mentions,omitempty"`
+	ID             int64                   `json:"id"`
+	ConversationID int64                   `json:"conversation_id"`
+	SenderID       int64                   `json:"sender_id"`
+	SenderInfo     SenderInfo              `json:"sender_info"`
+	MessageType    string                  `json:"message_type"`
+	Content        string                  `json:"content"`
+	ClientMsgID    string                  `json:"client_msg_id"`
+	CreatedAt      int64                   `json:"created_at"`
+	IsSystem       bool                    `json:"is_system,omitempty"`
+	Mentions       []string                `json:"mentions,omitempty"`
+	ReadDetails    []MessageReadDetailItem `json:"read_details"`
+}
+
+// MessageReadDetailItem mirrors gateway.api MessageReadDetailItem.
+type MessageReadDetailItem struct {
+	UserID            int64  `json:"user_id"`
+	IsRead            bool   `json:"is_read"`
+	LastReadMessageID int64  `json:"last_read_message_id"`
+	UpdatedAt         int64  `json:"updated_at"`
+	Email             string `json:"email"`
+	Avatar            string `json:"avatar"`
 }
 
 // ReadStateItem mirrors gateway.api ReadStateItem.

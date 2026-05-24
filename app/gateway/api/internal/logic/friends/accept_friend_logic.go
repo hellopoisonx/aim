@@ -66,14 +66,17 @@ func (l *AcceptFriendLogic) AcceptFriend(req *types.AcceptFriendRequest) (resp *
 		})
 	}
 
+	item := types.FriendshipItem{
+		UserId:    friendship.GetUserId(),
+		FriendId:  friendship.GetFriendId(),
+		Status:    friendship.GetStatus(),
+		CreatedAt: friendship.GetCreatedAt(),
+		UpdatedAt: friendship.GetUpdatedAt(),
+	}
+	enrichPeerInfo(l.ctx, l.svcCtx, req.Id, &item)
+
 	return &types.AcceptFriendResponse{
-		Friendship: types.FriendshipItem{
-			UserId:    friendship.GetUserId(),
-			FriendId:  friendship.GetFriendId(),
-			Status:    friendship.GetStatus(),
-			CreatedAt: friendship.GetCreatedAt(),
-			UpdatedAt: friendship.GetUpdatedAt(),
-		},
+		Friendship: item,
 	}, nil
 }
 

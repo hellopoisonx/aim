@@ -9,7 +9,6 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	client "github.com/hellopoisonx/aim/app/tui/internal/client"
-	wspb "github.com/hellopoisonx/aim/shared/proto/ws/pb"
 )
 
 const (
@@ -28,17 +27,6 @@ func (m *model) notifyUI(apply func(*model), log string) {
 	select {
 	case m.notifyCh <- msg:
 	default:
-	}
-}
-
-func (m *model) setConversationReadStates(convID int64, states []client.ReadStateItem) {
-	m.state.mu.Lock()
-	defer m.state.mu.Unlock()
-	for i := range m.state.conversations {
-		if m.state.conversations[i].Item.ConversationID == convID {
-			m.state.conversations[i].ReadStates = append([]client.ReadStateItem(nil), states...)
-			return
-		}
 	}
 }
 
@@ -156,6 +144,74 @@ func (m model) formatReadStatesLine(states []client.ReadStateItem) string {
 	return styles.muted.Render("已读: " + strings.Join(parts, "  "))
 }
 
+// maxReadDetailNames caps the number of member names shown per message.
+const maxReadDetailNames = 5
+
+// formatMessageReadDetail returns a one-line "✓ 已读: A, B 等 X 人" suffix
+// built from the per-message read_details returned by the API.
+// When details are empty, it falls back to the conversation-level ReadStates.
+func (m model) formatMessageReadDetail(msg client.MessageItem, conv conversationView) string {
+	if msg.ID <= 0 || msg.MessageType == systemMessageType || msg.IsSystem {
+		return ""
+	}
+
+	selfID := int64(0)
+	if p := m.currentProfile(); p != nil {
+		selfID = p.UserID
+	}
+	if selfID == 0 {
+		return ""
+	}
+
+	var names []string
+	total := 0
+
+	if len(msg.ReadDetails) > 0 {
+		// Prefer API read_details.
+		for _, rd := range msg.ReadDetails {
+			if rd.UserID == selfID {
+				continue
+			}
+			if rd.IsRead {
+				if len(names) < maxReadDetailNames {
+					names = append(names, m.userLabelLocked(rd.UserID))
+				}
+				total++
+			}
+		}
+	} else {
+		// Fallback: compute from conversation-level read states + member IDs.
+		readStates := conv.ReadStates
+		memberIDs := conv.Item.MemberIDs
+		for _, uid := range memberIDs {
+			if uid == selfID {
+				continue
+			}
+			for _, rs := range readStates {
+				if rs.UserID == uid && rs.LastReadMessageID >= msg.ID {
+					if len(names) < maxReadDetailNames {
+						names = append(names, m.userLabelLocked(uid))
+					}
+					total++
+					break
+				}
+			}
+		}
+	}
+
+	if total == 0 {
+		return ""
+	}
+
+	suffix := fmt.Sprintf("✓ 已读: %s", strings.Join(names, ", "))
+	if total > maxReadDetailNames || total > len(names) {
+		suffix += fmt.Sprintf(" 等 %d 人", total)
+	}
+	return "\n" + styles.muted.Render(suffix)
+}
+
+// messageReadSuffix retains the original counter-based format for backward
+// compatibility when API read_details are not available.
 func (m model) messageReadSuffix(msgID, selfID int64, states []client.ReadStateItem) string {
 	if msgID <= 0 || selfID == 0 {
 		return ""
@@ -275,14 +331,6 @@ func (m *model) typingNotifyCmd() tea.Cmd {
 		}
 		return ""
 	})
-}
-
-func (m *model) handlePushReadReceipt(p *wspb.PushReadReceiptPayload) {
-	m.updateReadState(p.ConversationId, p.UserId, p.LastReadMessageId, p.UpdatedAt)
-}
-
-func (m *model) handlePushTyping(p *wspb.PushTypingPayload) {
-	m.setTypingUser(p.ConversationId, p.UserId)
 }
 
 func (m *model) maybeMarkReadAfterMessage(convID int64) {

@@ -34,9 +34,10 @@ requests>=2.28
 当 proto 文件变更后需重新编译：
 
 ```bash
-cd shared/proto
-protoc --python_out=../../dev-tool ws/ws.proto
-protoc --python_out=../../dev-tool gateway/gateway.proto
+cd shared/proto/ws
+protoc --python_out=../../../dev-tool ws.proto
+cd ../gateway
+protoc --python_out=../../../dev-tool gateway.proto
 ```
 
 ## 环境变量
@@ -87,7 +88,7 @@ protoc --python_out=../../dev-tool gateway/gateway.proto
 | bench-redis | `16379` | Redis |
 | bench-kafka | `19092` | Kafka |
 | bench-nacos | `18848` | Nacos HTTP |
-| bench-jaeger | `16686` | Jaeger UI |
+| bench-jaeger | `26686` | Jaeger UI |
 
 压测环境配置文件：`dev-tool/etc/{auth,core,gateway-api,logic}.yaml`
 

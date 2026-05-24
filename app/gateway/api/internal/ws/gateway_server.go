@@ -53,8 +53,9 @@ func (s *GatewayServer) PushMessage(ctx context.Context, req *pb.PushMessageReq)
 	}
 	if req.GetSenderInfo() != nil {
 		payload.SenderInfo = &wspb.SenderInfo{
-			Name:  req.GetSenderInfo().GetName(),
-			Email: req.GetSenderInfo().GetEmail(),
+			Name:        req.GetSenderInfo().GetName(),
+			Email:       req.GetSenderInfo().GetEmail(),
+			DisplayName: req.GetSenderInfo().GetDisplayName(),
 		}
 	}
 

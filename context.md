@@ -1,194 +1,138 @@
-# Code Context
+# TUI 实现上下文总结
 
-## 文件索引
+## 1. TUI 架构与边界
 
-### 核心文件
-1. `app/gateway/api/gateway.api` — REST API 协议定义（22 个 endpoint）
-2. `app/gateway/api/internal/handler/routes.go` — goctl 生成的路由注册（不编辑）
-3. `app/gateway/api/internal/handler/ws/ws_handler.go` — WebSocket 帧分发处理
-4. `app/gateway/api/internal/ws/gateway_server.go` — gRPC GatewayService 实现（推送帧出口）
-5. `app/gateway/api/internal/ws/frame.go` — 帧编解码 + 所有 13 种帧类型的 DecodePayload 分支
-6. `shared/proto/ws/ws.proto` — WebSocket 帧协议定义
+### 模块结构
 
-### 测试/压测文件
-7. `dev-tool/aim_test.py` — REST + WS 测试套件（28 个子命令 + `run-all` 集成测试）
-8. `dev-tool/benchmark.py` — 压测工具（5 个场景：register/login/friend-chain/ws-message/mixed）
-9. `dev-tool/docker-compose.yaml` — 独立压测环境（端口 +10000 偏移）
-10. `dev-tool/run_ws_message_benchmark.ps1` — WS 消息压测快捷脚本
-
----
-
-## REST API 端点总览（22 个）
-
-| # | 方法 | 路径 | 中间件 | 测试覆盖 | 压测覆盖 |
-|---|------|------|--------|---------|---------|
-| 1 | POST | `/api/auth/register` | 无 | ✅ CLI + run-all | ✅ register 场景 |
-| 2 | POST | `/api/auth/login` | 无 | ✅ CLI + run-all | ✅ login 场景 |
-| 3 | POST | `/api/auth/refresh` | 无 | ✅ CLI + run-all | ❌ 未单独压测 |
-| 4 | POST | `/api/auth/logout` | 无 | ✅ CLI + run-all | ❌ |
-| 5 | GET | `/api/users/by-name/:name` | Auth | ✅ CLI + run-all | ❌ |
-| 6 | GET | `/api/users/by-id/:id` | Auth | ✅ CLI | ❌ |
-| 7 | POST | `/api/users/friends/:id` | Auth | ✅ CLI + run-all | ✅ friend-chain |
-| 8 | POST | `/api/conversations` | Auth | ✅ CLI + run-all | ✅ ws-message/mixed |
-| 9 | POST | `/api/conversations/group` | Auth | ✅ CLI | ❌ |
-| 10 | GET | `/api/conversations/history/:id` | Auth | ✅ CLI + run-all | ✅ mixed (get_history) |
-| 11 | GET | `/api/conversations` | Auth | ✅ CLI | ❌ |
-| 12 | GET | `/api/conversations/:id/members` | Auth | ✅ CLI | ❌ |
-| 13 | POST | `/api/conversations/:id/members` | Auth | ✅ CLI | ❌ |
-| 14 | DELETE | `/api/conversations/:id/members/:uid` | Auth | ✅ CLI | ❌ |
-| 15 | POST | `/api/conversations/:id/leave` | Auth | ✅ CLI | ❌ |
-| 16 | DELETE | `/api/conversations/:id` | Auth | ✅ CLI | ❌ |
-| 17 | PUT | `/api/conversations/:id` | Auth | ✅ CLI | ❌ |
-| 18 | GET | `/api/friends/applications` | Auth | ✅ CLI + run-all | ❌ |
-| 19 | GET | `/api/friends/me` | Auth | ✅ CLI + run-all | ❌ |
-| 20 | POST | `/api/friends/accept/:id` | Auth | ✅ CLI + run-all | ✅ friend-chain |
-| 21 | POST | `/api/friends/reject/:id` | Auth | ✅ CLI | ❌ |
-| 22 | GET | `/api/presence/friends` | Auth | ❌ 完全未覆盖 | ❌ |
-
----
-
-## WebSocket 帧协议覆盖
-
-### 客户端 → 网关（5 种发送帧）
-
-| 帧类型 | 协议定义 | 服务端处理 | aim_test.py 发送 | aim_test.py 接收解码 |
-|--------|---------|-----------|-----------------|-------------------|
-| FRAME_TYPE_SEND_MESSAGE (1) | ✅ | ✅ handleSendMessage → core.Transfer | ✅ send_message() | ✅ 解码 |
-| FRAME_TYPE_HEARTBEAT (2) | ✅ | ✅ handleHeartbeat → SERVER_ACK | ✅ send_heartbeat() | ✅ 解码 |
-| FRAME_TYPE_TYPING (3) | ✅ | ✅ handleTyping → Kafka | ✅ send_typing() | ✅ 解码 |
-| FRAME_TYPE_READ_RECEIPT (4) | ✅ | ❌ **无 case 分支**（frame.go 可解码，handler switch 未处理） | ✅ send_read_receipt() 定义 | ✅ 解码 |
-| FRAME_TYPE_ACK (5) | ✅ | ❌ **无 case 分支**（frame.go 可解码，handler switch 未处理） | ❌ **无发送方法** | ✅ 解码 |
-
-### 网关 → 客户端（8 种推送帧）
-
-| 帧类型 | 协议定义 | GatewayServer 实现 | aim_test.py 接收解码 |
-|--------|---------|-------------------|-------------------|
-| FRAME_TYPE_PUSH_MESSAGE (101) | ✅ | ✅ PushMessage | ✅ on_frame 回调（用于 e2e 延迟测量） |
-| FRAME_TYPE_PUSH_PRESENCE (102) | ✅ | ✅ PushPresence | ✅ 解码 |
-| FRAME_TYPE_PUSH_NOTIFICATION (103) | ✅ | ❌ **无推送方法** | ✅ 解码（无特定处理） |
-| FRAME_TYPE_PUSH_TYPING (104) | ✅ | ✅ PushTyping | ✅ 解码 |
-| FRAME_TYPE_RECONNECT (105) | ✅ | ✅ DrainNotify | ✅ 解码 |
-| FRAME_TYPE_SERVER_ACK (106) | ✅ | ✅ heartbeat + sendMessage 响应 | ✅ 解码 |
-| FRAME_TYPE_TOKEN_EXPIRED (107) | ✅ | ✅ sendTokenExpired | ✅ 解码 |
-| FRAME_TYPE_PUSH_FRIEND_APPLICATION (108) | ✅ | ✅ PushFriendApplication | ✅ 解码 |
-
----
-
-## 已覆盖 vs 缺口分析
-
-### ✅ 已覆盖良好的链路
-- **注册→登录→Token 生命周期**：CLI + `run-all` + benchmark（register/login 场景）全覆盖
-- **好友请求→接受→列表**：CLI + `run-all` + benchmark（friend-chain 场景）全覆盖
-- **创建对话→发送消息→接收推送**：CLI + `run-all` + benchmark（ws-message 场景）全覆盖（含 e2e 延迟测量）
-- **Token 过期→TOKEN_EXPIRED 推送**：ws_handler 实现完整
-- **心跳→SERVER_ACK**：实现 + 测试覆盖
-- **Typing→Kafka 发布**：实现 + CLI 覆盖
-
-### ⚠️ REST 未覆盖
-1. **`GET /api/presence/friends`** — RESTClient 无方法，CLI 无命令，run-all 未调用，benchmark 未压测
-
-### ⚠️ WS 帧实现缺口
-1. **FRAME_TYPE_READ_RECEIPT（4）** — ws_handler.go handleFrame switch 缺少 case（frame.go可解码→无分发→无效操作）；但客户端 send_read_receipt() 已定义
-2. **FRAME_TYPE_ACK（5，ClientAckPayload）** — 同上：可解码无分发；WSClient 无任何 ack 发送方法
-3. **FRAME_TYPE_PUSH_NOTIFICATION（103）** — GatewayServer 无推送方法；proto 定义、编解码路径完整但无触发来源
-
-### ⚠️ 集成测试缺口（run-all）
-`run-all` 只覆盖了最基本的好友→对话→WS 消息路径。以下完全未测试：
-- 群组创建/加人/踢人/离开/解散/更新信息
-- 查看对话成员详情
-- 拒绝好友请求
-- Presence endpoint
-- 翻页查询历史（cursor）
-- 断线重连 (RECONNECT 帧)
-- 已读回执流程
-
-### ⚠️ 压测缺口（benchmark.py）
-benchmark 已有 5 个场景，缺口包括：
-- 群组操作压测（create_group → add_members → history）
-- 已读回执 / typing 并发压测
-- 断线重连压测
-- Auth refresh/logout 压测
-- 窗口翻页历史查询压测
-- Presence 查询压测
-
----
-
-## 架构要点
-
-1. **Gateway 是唯一入口**：前端/客户端只连 gateway（REST + WS），gateway 通过 gRPC 调 core/auth/logic
-2. **WS 消息流**：ws_handler.handleSendMessage → corepb.TransferReq → core.Transfer (gRPC) → core 处理消息+Kafka→ logic 消费→ core PushMessage (gRPC) → gateway_server.PushMessage → 对端 WS 连接
-3. **Presence 流**：Manager.Register/Unregister/RecordHeartbeat ↔ Redis ↔ PresencePub (Kafka) ↔ 其他节点
-4. **好友申请推送**：logic 端处理后 → PushFriendApplication (gRPC) → gateway_server.PushFriendApplication
-5. **Read Receipt 尚未接入**：协议层面完整（proto + 编解码 + WSClient 发送方法），但 handler switch 无处理，logic/core 无消费逻辑
-
----
-
-## 执行建议（Worker 可操作）
-
-### 优先级 P0：堵住已知覆盖缺口
-
-**任务 1：补充 `/api/presence/friends` 测试覆盖**
-- 编辑 `dev-tool/aim_test.py`：RESTClient 增加 `get_friends_presence()` 方法，CLI 增加 `presence-friends` 命令，interactive 模式增加处理
-- 验证：`python aim_test.py presence-friends`
-
-**任务 2：补充 `run-all` 群组操作测试**
-- 编辑 `dev-tool/aim_test.py` cmd_run_all：注册第三用户 charlie，创建群组对话，加人，查看成员，更新群名，查看历史
-
-**任务 3：补充 benchmark 群组场景**
-- 编辑 `dev-tool/benchmark.py`：新增 `GroupScenario`（register → login → create_group → add_members → list_members → history → leave），注册到 CLI
-
-### 优先级 P1：WS 帧 handler 实现
-
-**任务 4：实现 FRAME_TYPE_READ_RECEIPT 服务端处理**
-- 文件：`app/gateway/api/internal/handler/ws/ws_handler.go`
-- handleFrame switch 增加 `case pb.FrameType_FRAME_TYPE_READ_RECEIPT` → handleReadReceipt
-- handleReadReceipt 发布到 Kafka（类似 handleTyping），topic 待确认
-
-**任务 5：实现 FRAME_TYPE_ACK（ClientAckPayload）服务端处理**
-- 文件：`app/gateway/api/internal/handler/ws/ws_handler.go`
-- handleFrame switch 增加 `case pb.FrameType_FRAME_TYPE_ACK`
-- 当前可简单地记录日志或更新 last_ack_seq
-
-### 优先级 P2：测试/压测增强
-
-**任务 6：aim_test.py 增加 ws-read-receipt CLI 命令**
-- 文件：`dev-tool/aim_test.py`
-- send_read_receipt 已定义，增加 CLI 子命令 + interactive 处理
-
-**任务 7：benchmark.py 增加消息类型多样性**
-- 在 WsMessageScenario 中交替发送 read_receipt 和 typing 帧（当前只发 SEND_MESSAGE）
-
-### 修复建议
-
-**建议 1**：`aim_test.py` send_read_receipt 的第二个参数是 `last_msg_id`（int），但 CLI 无对应命令；建议增加 `--last-msg-id` 参数。
-
-**建议 2**：ws_handler.go handleFrame 的 `default` 分支（第 163 行）对未知帧静默忽略，建议至少打印 debug 日志以便调试。
-
-**建议 3**：benchmark.py MixedScenario 中 REST 调用（第 1156-1170 行）混合了 list_friends / list_conversations / get_history，但缺少 presence 调用补充（P0 任务 1 完成后）。
-
----
-
-## Start Here
-
-**Worker 应先打开 `app/gateway/api/internal/handler/ws/ws_handler.go`**，查看 handleFrame switch（约第 150-165 行），这是 WS 帧处理的核心分发点，所有客户端帧类型在此路由。然后对照 `shared/proto/ws/ws.proto` 确认帧枚举值，最后编辑 `dev-tool/aim_test.py` 补齐测试。
-
-## 快速验证命令
-
-```bash
-# 1. 验证当前 REST 服务器启动
-cd app/gateway && go build ./...
-
-# 2. 开发环境启动
-cd dev-tool && docker compose -f docker-compose.yaml up -d
-
-# 3. 运行 run-all 集成测试
-cd dev-tool && python aim_test.py run-all
-
-# 4. 压测 WS 消息（3000 用户，各 100 条）
-cd dev-tool && python generate_fixtures.py --count 3000
-cd dev-tool && python benchmark.py ws-message --gateway http://127.0.0.1:18888 --users 3000 --messages-per-user 100 --quiet --output result.json
-
-# 5. 运行单一 API 测试
-cd dev-tool && python aim_test.py friend-list
-cd dev-tool && python aim_test.py conv-list
 ```
+app/tui/
+├── main.go              # Bubble Tea 主循环、布局、键盘事件、状态结构体
+├── commands.go          # 命令分发器（REST 调用 + WS 调用）
+├── store.go             # SQLite 本地持久化（token/会话/消息/presence）
+├── store_test.go        # 隔离性、并发测试
+├── ws_handlers.go       # WS 帧回调（pushMessageToItem、handleServerAck、scheduleWSReconnect）
+├── ws_handlers_test.go  # 推送帧解析测试
+├── ui_auth.go           # 登录/注册认证页面（phaseAuth）
+├── ui_overlay.go        # 创建群聊叠加层
+├── ui_mention.go        # @ 提及选择器
+├── ui_mention_test.go   # 提及测试
+├── ui_picker.go         # 用户选择/标签缓存帮助方法
+├── ui_receipt_typing.go # 已读回执 + 输入中状态渲染和处理
+├── ui_receipt_typing_test.go # 已读回执测试
+├── ui_picker_test.go    # 选择器测试
+├── internal/
+│   ├── client/
+│   │   ├── client.go    # REST 客户端（所有 API 调用封装）
+│   │   └── client_test.go
+│   └── wsclient/
+│       ├── wsclient.go  # WebSocket 客户端（Binary Protobuf 帧）
+│       └── wsclient_test.go
+└── .pi/agent/trust/lsp.json
+```
+
+### 边界
+
+- **TUI 只和 gateway 通信**：REST → `internal/client`，WS → `internal/wsclient`。
+- **不直接导入 auth/core/logic 的内部包**。
+- **本地状态是客户端缓存**，非服务端权威数据。
+
+## 2. 关键流程
+
+### 2.1 启动参数
+
+| 参数 | 环境变量 | 默认值 |
+| --- | --- | --- |
+| `--gateway` | `AIM_GATEWAY_HTTP` | `http://127.0.0.1:8888` |
+| `--ws` | `AIM_GATEWAY_WS` | `ws://127.0.0.1:8888/ws` |
+| `--email --password` | `AIM_TUI_EMAIL/PASSWORD` | 空（可同时提供自动登录） |
+| `--instance` | `AIM_TUI_INSTANCE` | 随机生成（默认隔离） |
+| `--db` | `AIM_TUI_DB` | `<UserCacheDir>/aim/tui/<instance_id>.db` |
+
+### 2.2 认证流程
+
+- 未登录 → `phaseAuth` 页面（Tab 切换 登录/注册，填写邮箱/密码/昵称）。
+- 注册成功后自动调用登录。
+- 登录成功后：`POST /api/auth/login` → 获取 `{access_token, refresh_token, expires_at, user_id}` → 写入 SQLite `tokens` 表 → 调用 `cmdWSConnect` → 调用 `cmdConversations` → 拉取历史。
+- 启动时已有本地 token → 直接进入 `phaseMain`，调用 `cmdBootstrapSession`，内含刷新 token、WS 连接、拉会话/好友/申请/presence。
+- 登出：`POST /api/auth/logout` → 服务端调用 `KickUser` 关闭 WS → TUI 清 token 回到 `phaseAuth`。
+
+### 2.3 WebSocket 连接
+
+- 升级协议：`GET /ws` 带 `Authorization: Bearer <access_token>`（**只支持 Header**，不支持 `?token=`）。
+- 帧协议：Protobuf Binary，通过 `shared/proto/ws/ws.proto` 定义。
+- 心跳：每 `~20s` 发送 `HEARTBEAT`（PresenceTTL 默认 45s）。
+- 写入串行化：`writeMu sync.Mutex` 避免并发写 `Conn.Write` 卡死。
+- 读循环：`readLoop` goroutine 持续读取，调用 `OnFrame` 回调。
+- 帧回调 → `handleFrame` → 通过 `notifyUI` 将状态更新发到 `notifyCh` → 由 Bubble Tea 主 goroutine 执行，避免并发访问 `model.state`。
+- 自动 ACK：`PUSH_MESSAGE`、`PUSH_READ_RECEIPT`、`PUSH_NOTIFICATION` 收到后自动发送 `CLIENT_ACK`。
+- 重连：收到 `RECONNECT` 时延迟 `reconnect_delay_ms` 后断开并重新连接；收到 `TOKEN_EXPIRED` 时立即刷新 token 并重连。
+
+### 2.4 本地 SQLite 存储
+
+- **同进程**：`SetMaxOpenConns(1)` 避免并发写冲突。
+- **跨进程**：`*.lock` 文件互斥（`flock.TryLock()`），第二个 TUI 启动失败提示换 `--instance`/`--db`。
+- 表：`tokens`（PK `instance_id`）、`conversations`（PK `instance_id, conversation_id`）、`messages`（PK `instance_id, conversation_id, message_id, client_msg_id`）、`presence`（PK `instance_id, user_id`）。
+- 乐观消息：发送时先保存 `client_msg_id` 到 SQLite → 收到 `SERVER_ACK ACCEPTED` 后用服务端 `message_id` 替换（`ReplacePendingMessage` → `DELETE` 旧 pending + `INSERT OR REPLACE`）。
+- 限流 42900 REJECTED：移除本地对应 `client_msg_id` 的乐观消息。
+
+### 2.5 多实例隔离
+
+- 每个 `--instance` 对应独立 `device_id`（前缀 `tui-<instance_id>-` + random）。
+- 所有 SQLite 表含 `instance_id` 分区键。
+- 两个 TUI 用相同 `--db` 启动会被文件锁拒绝。
+- 登录/注册时 `DeviceID` 必传，格式 `tui-<instance_id>-<short_uuid>`。
+
+## 3. 已知约定与最近变更
+
+### 协议约定
+
+| 项目 | 约定 |
+| --- | --- |
+| `conversation_type` | 全栈统一 `direct`/`group`；代码中 `normalizeConversationType` 将 `"single"` 转 `"direct"` |
+| `mentions` | 字符串形式（如 `"42"`），TUI `SendMessagePayload.mentions` 和 `PushMessagePayload.mentions` 均如此 |
+| 时间戳 | 全部 Unix 毫秒（`int64`） |
+| REST 信封 | `{"code":0,"msg":"ok","body":{}}` |
+| WS 帧 | Protobuf Binary，`WsFrame{type, seq, payload, timestamp}` |
+| 已读回执 | 切换会话/拉历史后自动发送 `READ_RECEIPT`；当前会话新消息自动已读 |
+| 输入中 | `TYPING` 帧发 debounce 约 2s；收到 `PUSH_TYPING` 显示约 4s 后消失 |
+| 好友页 | Enter 搜索/加好友/私聊；`r` 拒绝申请 |
+
+### 最近变更（2026-05-23）
+
+- 修复双 TUI 同环境卡死：跨进程 DB 文件锁、`events` 通道不再阻塞 WS、WS 状态更新统一走 `notifyUI` 主 goroutine；登录时生成唯一 `device_id`。
+- 已读/输入中全链路：历史 `read_states` 解析、`PUSH_READ_RECEIPT`/`PUSH_TYPING` 经 `notifyCh` 在主 goroutine 更新 UI。
+- `gateway-api-reference.md` 对齐：`PUSH_READ_RECEIPT` 解码、推送自动 `CLIENT_ACK`、42900 限流 REJECTED 提示并移除乐观消息、`RECONNECT` 延迟重连、`PUSH_NOTIFICATION` 展示、`single`→`direct` 归一化。
+- @ 提及全链路：输入 `@` 弹出成员选择，填充 `mentions`；对不可用昵称回退为用户 ID。
+- 注册→登录→WS→会话/好友/发消息全链路 UI；认证页、session bootstrap、好友申请与加好友/建会话、WS 心跳；消息页三栏布局。
+- 支持 `--email --password` 启动登录、后台 token 刷新、SQLite 保存 token/会话/消息/presence、多实例隔离。
+
+## 4. 实现风险与待修复点
+
+### 高优先级
+
+1. **Token 明文存储**：`store.go` 用 SQLite 明文存 `access_token`/`refresh_token`，生产桌面应接入系统 keychain/credential vault。
+2. **重连后未重新拉取 `read_states`**：`scheduleWSReconnectOnMain` 只做了 token 刷新 + WS 重连 + presence，**没有**重新拉取 `read_states`，可能导致已读状态丢失或显示错误。
+3. **`notifyCh` 缓冲满风险**：当前容量 128，极端推送风暴可能导致消息丢失（select default 分支静默丢弃）。
+4. **`events` 通道满静默丢弃**：`postEvent` 使用 select default，推送风暴时日志行被丢弃但无告警。
+
+### 中优先级
+
+5. **限流消息的本地乐观消息未从 SQLite 清除**：`handleServerAck` 的 REJECTED 分支调用了 `removeMessageByClientMsgID`（仅内存），**没有**调用 `store.ReplacePendingMessage` 或 `Delete` 来清理 SQLite 中的 pending 消息，可能导致重连后仍看到未发送的消息。
+6. **`conversationReadStates` 在重连后丢失**：`cmdConversations` 从 REST 刷新会话列表时，`prevReadStates` 只保存了旧 read_states，但 REST 接口返回的 `ListConversationsResponse` 不含 `read_states`；read_states 只来自历史接口。如果进程重启或重连后未拉历史，read_states 为空。
+7. **SQLite `messages` 表 `PRIMARY KEY` 包含 `client_msg_id`**：`INSERT OR REPLACE` 可能因 `client_msg_id` 不同产生重复行；`ReplacePendingMessage` 显式 `DELETE` 后 `INSERT`，但其他路径如 `SaveMessages` 没有做类似清理。
+8. **多 profile 之间的 WS 连接冲突**：`profiles` map 支持多 profile 但 UI 切换 profile 时不会自动断开旧 WS 连接，可能出现多个活跃 WS 连接。
+
+### 低优先级
+
+9. **`unixMillisTime` 分支逻辑**：检测 `v < 1_000_000_000_000` 判断秒/毫秒，但 Unix 时间戳 1970-09-09 前的合法秒值会被误判为毫秒；建议统一协议强制毫秒。
+10. **`history` 命令默认 limit=20**（代码中 `int32(20)`），但 gateway-api-reference 说默认 50，不一致。
+11. **好友页 focusChain 不含 focusFriendSearch 以外的中间态**：当 `len(friendApplications) == 0` 时直接从 `focusFriendSearch` 跳到 `focusFriendList`，但 `focusFriendSearch` 焦点状态在搜索结果出现时不会自动切换到 `focusFriendList`，用户需多按一次 `→`。
+12. **[2026-05-21 已知] `ui_receipt_typing.go` 的 `formatMessageReadDetail` 函数存在复制粘贴未更新字段名问题**：该函数已从 `messageReadSuffix` 重构而来，但检查发现 `ReadDetails` 字段解析时 `rd.UserID` 与 `rd.IsRead` 在由历史 API 返回的 `MessageReadDetailItem` 结构中引用，需核实后端是否实际返回 `read_details` 字段。
+
+## 5. 快速入口
+
+- **`main.go`**：Bubble Tea `model` 状态结构体、`Update`/`View`、`Init`、`parseConfig` — TUI 顶级调度逻辑。
+- **`commands.go`**：命令分发器、登录/消息/会话/WS 等异步操作实现。
+- **`ws_handlers.go`**：所有 WS 帧的回调处理方法。
+- **`store.go`**：SQLite 持久化层，含跨进程文件锁。
+- **`.pi/skills/aim-tui-domain/references/gateway-api-reference.md`**：Gateway 协议详细参考（必读）。

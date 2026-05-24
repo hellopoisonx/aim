@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -18,8 +19,8 @@ import (
 )
 
 var (
-	dbLockMu  sync.Mutex
-	dbLocks   = map[string]*dbLockRef{}
+	dbLockMu sync.Mutex
+	dbLocks  = map[string]*dbLockRef{}
 )
 
 type dbLockRef struct {
@@ -164,6 +165,10 @@ func (s *Store) migrate(ctx context.Context) error {
 			client_msg_id TEXT NOT NULL,
 			created_at INTEGER NOT NULL,
 			is_system INTEGER NOT NULL DEFAULT 0,
+			sender_name TEXT NOT NULL DEFAULT '',
+			sender_email TEXT NOT NULL DEFAULT '',
+			mentions TEXT NOT NULL DEFAULT '[]',
+			read_details TEXT NOT NULL DEFAULT '[]',
 			PRIMARY KEY(instance_id, conversation_id, message_id, client_msg_id)
 		);`,
 		`CREATE INDEX IF NOT EXISTS idx_messages_conv_created ON messages(instance_id, conversation_id, created_at, message_id);`,
@@ -178,6 +183,50 @@ func (s *Store) migrate(ctx context.Context) error {
 	for _, stmt := range stmts {
 		if _, err := s.db.ExecContext(ctx, stmt); err != nil {
 			return fmt.Errorf("migrate sqlite: %w", err)
+		}
+	}
+	if err := s.ensureMessageColumns(ctx); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *Store) ensureMessageColumns(ctx context.Context) error {
+	rows, err := s.db.QueryContext(ctx, `PRAGMA table_info(messages)`)
+	if err != nil {
+		return fmt.Errorf("inspect messages table: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	has := map[string]bool{}
+	for rows.Next() {
+		var cid int
+		var name, colType string
+		var notNull int
+		var defaultValue sql.NullString
+		var pk int
+		if err := rows.Scan(&cid, &name, &colType, &notNull, &defaultValue, &pk); err != nil {
+			return fmt.Errorf("scan messages table info: %w", err)
+		}
+		has[name] = true
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("iterate messages table info: %w", err)
+	}
+
+	adds := []string{
+		`sender_name TEXT NOT NULL DEFAULT ''`,
+		`sender_email TEXT NOT NULL DEFAULT ''`,
+		`mentions TEXT NOT NULL DEFAULT '[]'`,
+		`read_details TEXT NOT NULL DEFAULT '[]'`,
+	}
+	for _, col := range adds {
+		name := strings.Fields(col)[0]
+		if has[name] {
+			continue
+		}
+		if _, err := s.db.ExecContext(ctx, `ALTER TABLE messages ADD COLUMN `+col); err != nil {
+			return fmt.Errorf("add messages column %s: %w", name, err)
 		}
 	}
 	return nil
@@ -227,6 +276,10 @@ func (s *Store) SaveConversations(ctx context.Context, conversations []client.Co
 		return fmt.Errorf("begin save conversations: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
+
+	if _, err := tx.ExecContext(ctx, `DELETE FROM conversations WHERE instance_id = ?`, s.instanceID); err != nil {
+		return fmt.Errorf("clear conversations: %w", err)
+	}
 
 	stmt, err := tx.PrepareContext(ctx, `INSERT INTO conversations(instance_id, conversation_id, conversation_type, is_active, created_at, member_ids, name, avatar, creator_id, updated_at)
 		VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -295,15 +348,23 @@ func (s *Store) SaveMessages(ctx context.Context, messages []client.MessageItem)
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	stmt, err := tx.PrepareContext(ctx, `INSERT OR REPLACE INTO messages(instance_id, conversation_id, message_id, sender_id, message_type, content, client_msg_id, created_at, is_system)
-		VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+	stmt, err := tx.PrepareContext(ctx, `INSERT OR REPLACE INTO messages(instance_id, conversation_id, message_id, sender_id, message_type, content, client_msg_id, created_at, is_system, sender_name, sender_email, mentions, read_details)
+		VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 	if err != nil {
 		return fmt.Errorf("prepare save messages: %w", err)
 	}
 	defer func() { _ = stmt.Close() }()
 
 	for _, msg := range messages {
-		if _, err := stmt.ExecContext(ctx, s.instanceID, msg.ConversationID, msg.ID, msg.SenderID, msg.MessageType, msg.Content, msg.ClientMsgID, msg.CreatedAt, boolInt(msg.IsSystem)); err != nil {
+		mentions, err := json.Marshal(msg.Mentions)
+		if err != nil {
+			return fmt.Errorf("marshal mentions for message %d: %w", msg.ID, err)
+		}
+		readDetails, err := json.Marshal(msg.ReadDetails)
+		if err != nil {
+			return fmt.Errorf("marshal read details for message %d: %w", msg.ID, err)
+		}
+		if _, err := stmt.ExecContext(ctx, s.instanceID, msg.ConversationID, msg.ID, msg.SenderID, msg.MessageType, msg.Content, msg.ClientMsgID, msg.CreatedAt, boolInt(msg.IsSystem), msg.SenderInfo.Name, msg.SenderInfo.Email, string(mentions), string(readDetails)); err != nil {
 			return fmt.Errorf("save message %d: %w", msg.ID, err)
 		}
 	}
@@ -313,8 +374,57 @@ func (s *Store) SaveMessages(ctx context.Context, messages []client.MessageItem)
 	return nil
 }
 
+func (s *Store) ReplacePendingMessage(ctx context.Context, msg client.MessageItem) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin replace pending message: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	if msg.ClientMsgID != "" {
+		_, err = tx.ExecContext(ctx, `DELETE FROM messages
+			WHERE instance_id = ? AND conversation_id = ? AND client_msg_id = ? AND message_id <> ?`,
+			s.instanceID, msg.ConversationID, msg.ClientMsgID, msg.ID)
+		if err != nil {
+			return fmt.Errorf("delete pending message %s: %w", msg.ClientMsgID, err)
+		}
+	}
+
+	mentions, err := json.Marshal(msg.Mentions)
+	if err != nil {
+		return fmt.Errorf("marshal mentions for message %d: %w", msg.ID, err)
+	}
+	readDetails, err := json.Marshal(msg.ReadDetails)
+	if err != nil {
+		return fmt.Errorf("marshal read details for message %d: %w", msg.ID, err)
+	}
+
+	_, err = tx.ExecContext(ctx, `INSERT OR REPLACE INTO messages(instance_id, conversation_id, message_id, sender_id, message_type, content, client_msg_id, created_at, is_system, sender_name, sender_email, mentions, read_details)
+		VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		s.instanceID, msg.ConversationID, msg.ID, msg.SenderID, msg.MessageType, msg.Content, msg.ClientMsgID, msg.CreatedAt, boolInt(msg.IsSystem), msg.SenderInfo.Name, msg.SenderInfo.Email, string(mentions), string(readDetails))
+	if err != nil {
+		return fmt.Errorf("save confirmed message %d: %w", msg.ID, err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit replace pending message: %w", err)
+	}
+	return nil
+}
+
+func (s *Store) DeleteMessageByClientMsgID(ctx context.Context, clientMsgID string) error {
+	if clientMsgID == "" {
+		return nil
+	}
+	_, err := s.db.ExecContext(ctx, `DELETE FROM messages WHERE instance_id = ? AND client_msg_id = ?`, s.instanceID, clientMsgID)
+	if err != nil {
+		return fmt.Errorf("delete message %s: %w", clientMsgID, err)
+	}
+	return nil
+}
+
 func (s *Store) LoadMessages(ctx context.Context, conversationID int64, limit int) ([]client.MessageItem, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT message_id, conversation_id, sender_id, message_type, content, client_msg_id, created_at, is_system
+	rows, err := s.db.QueryContext(ctx, `SELECT message_id, conversation_id, sender_id, message_type, content, client_msg_id, created_at, is_system, sender_name, sender_email, mentions, read_details
 		FROM messages WHERE instance_id = ? AND conversation_id = ? ORDER BY created_at DESC, message_id DESC LIMIT ?`, s.instanceID, conversationID, limit)
 	if err != nil {
 		return nil, fmt.Errorf("load messages: %w", err)
@@ -325,10 +435,18 @@ func (s *Store) LoadMessages(ctx context.Context, conversationID int64, limit in
 	for rows.Next() {
 		var msg client.MessageItem
 		var isSystem int
-		if err := rows.Scan(&msg.ID, &msg.ConversationID, &msg.SenderID, &msg.MessageType, &msg.Content, &msg.ClientMsgID, &msg.CreatedAt, &isSystem); err != nil {
+		var senderName, senderEmail, mentionsJSON, readDetailsJSON string
+		if err := rows.Scan(&msg.ID, &msg.ConversationID, &msg.SenderID, &msg.MessageType, &msg.Content, &msg.ClientMsgID, &msg.CreatedAt, &isSystem, &senderName, &senderEmail, &mentionsJSON, &readDetailsJSON); err != nil {
 			return nil, fmt.Errorf("scan message: %w", err)
 		}
 		msg.IsSystem = isSystem != 0
+		msg.SenderInfo = client.SenderInfo{Name: senderName, Email: senderEmail}
+		if err := json.Unmarshal([]byte(mentionsJSON), &msg.Mentions); err != nil {
+			return nil, fmt.Errorf("unmarshal message mentions: %w", err)
+		}
+		if err := json.Unmarshal([]byte(readDetailsJSON), &msg.ReadDetails); err != nil {
+			return nil, fmt.Errorf("unmarshal message read details: %w", err)
+		}
 		reverse = append(reverse, msg)
 	}
 	if err := rows.Err(); err != nil {

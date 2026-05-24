@@ -13,7 +13,10 @@ import (
 	wspb "github.com/hellopoisonx/aim/shared/proto/ws/pb"
 )
 
-const directConversationType = "direct"
+const (
+	directConversationType = "direct"
+	systemMessageType      = "system"
+)
 
 func normalizeConversationType(t string) string {
 	if t == "single" {
@@ -68,17 +71,22 @@ func (m *model) maybeAckFrame(frame *wsclient.WsFrame) {
 	}
 }
 
-func (m *model) handleServerAck(p *wspb.ServerAckPayload) {
-	if p.Status == wspb.AckStatus_ACK_STATUS_ACCEPTED && p.MessageId > 0 {
-		m.reconcileMessageID(p.ClientMsgId, p.MessageId)
+func (m *model) handleServerAck(clientMsgID string, status wspb.AckStatus, code int32, ackMsg string, messageID int64) {
+	if status == wspb.AckStatus_ACK_STATUS_ACCEPTED && messageID > 0 {
+		m.reconcileMessageID(clientMsgID, messageID)
 		return
 	}
-	if p.Status != wspb.AckStatus_ACK_STATUS_REJECTED {
+	if status != wspb.AckStatus_ACK_STATUS_REJECTED {
 		return
 	}
-	m.removeMessageByClientMsgID(p.ClientMsgId)
-	msg := fmt.Sprintf("ERR 消息发送失败 code=%d %s", p.Code, p.Msg)
-	if p.Code == errorx.CodeRateLimit {
+	if m.store != nil {
+		if err := m.store.DeleteMessageByClientMsgID(context.Background(), clientMsgID); err != nil {
+			m.postEvent("ERR remove local message: " + err.Error())
+		}
+	}
+	m.removeMessageByClientMsgID(clientMsgID)
+	msg := fmt.Sprintf("ERR 消息发送失败 code=%d %s", code, ackMsg)
+	if code == errorx.CodeRateLimit {
 		msg = "ERR 发送过于频繁，请稍后再试（限流 42900，请勿重发同一条消息）"
 	}
 	m.postEvent(msg)
@@ -116,6 +124,9 @@ func (m *model) scheduleWSReconnectOnMain() {
 	if msg := m.cmdPresence(ctx); msg != "" && strings.HasPrefix(msg, "ERR ") {
 		m.postEvent(msg)
 	}
+	if msg := m.refreshSelectedHistory(ctx); msg != "" && strings.HasPrefix(msg, "ERR ") {
+		m.postEvent(msg)
+	}
 }
 
 func pushMessageToItem(p *wspb.PushMessagePayload) client.MessageItem {
@@ -123,7 +134,7 @@ func pushMessageToItem(p *wspb.PushMessagePayload) client.MessageItem {
 	if sentAt == 0 {
 		sentAt = time.Now().UnixMilli()
 	}
-	isSystem := p.IsSystem || (p.SenderId == 0 && p.MessageType == "system")
+	isSystem := p.IsSystem || (p.SenderId == 0 && p.MessageType == systemMessageType)
 	item := client.MessageItem{
 		ID:             p.MessageId,
 		ConversationID: p.ConversationId,

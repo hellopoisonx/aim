@@ -46,11 +46,12 @@ func (l *GetConversationMembersLogic) GetConversationMembers(req *types.GetConve
 	items := make([]types.MemberDetailItem, 0, len(members))
 	for _, m := range members {
 		items = append(items, types.MemberDetailItem{
-			UserId:   m.GetUserId(),
-			Email:    m.GetEmail(),
-			Avatar:   m.GetAvatar(),
-			Role:     m.GetRole(),
-			JoinedAt: m.GetJoinedAt(),
+			UserId:      m.GetUserId(),
+			Email:       m.GetEmail(),
+			Avatar:      m.GetAvatar(),
+			Role:        m.GetRole(),
+			JoinedAt:    m.GetJoinedAt(),
+			DisplayName: m.GetDisplayName(),
 		})
 	}
 

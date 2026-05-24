@@ -33,6 +33,7 @@ type AddGroupMembersResponse struct {
 	Name             string  `json:"name"`
 	Avatar           string  `json:"avatar"`
 	CreatorId        int64   `json:"creator_id"`
+	DisplayName      string  `json:"display_name,optional"`
 }
 
 type BotConversationItem struct {
@@ -111,6 +112,7 @@ type ConversationItem struct {
 	Name             string  `json:"name"`
 	Avatar           string  `json:"avatar"`
 	CreatorId        int64   `json:"creator_id"`
+	DisplayName      string  `json:"display_name,optional"`
 }
 
 type CreateConversationRequest struct {
@@ -129,6 +131,7 @@ type CreateConversationResponse struct {
 	Name             string  `json:"name"`
 	Avatar           string  `json:"avatar"`
 	CreatorId        int64   `json:"creator_id"`
+	DisplayName      string  `json:"display_name,optional"`
 }
 
 type CreateGroupRequest struct {
@@ -142,11 +145,14 @@ type DismissGroupRequest struct {
 }
 
 type FriendshipItem struct {
-	UserId    int64  `json:"user_id"`
-	FriendId  int64  `json:"friend_id"`
-	Status    string `json:"status"`
-	CreatedAt int64  `json:"created_at"`
-	UpdatedAt int64  `json:"updated_at"`
+	UserId      int64  `json:"user_id"`
+	FriendId    int64  `json:"friend_id"`
+	Status      string `json:"status"`
+	CreatedAt   int64  `json:"created_at"`
+	UpdatedAt   int64  `json:"updated_at"`
+	DisplayName string `json:"display_name,optional"`
+	Email       string `json:"email,optional"`
+	Avatar      string `json:"avatar,optional"`
 }
 
 type GetConversationHistoryRequest struct {
@@ -226,35 +232,52 @@ type LogoutResponse struct {
 }
 
 type MemberDetailItem struct {
-	UserId   int64  `json:"user_id"`
-	Email    string `json:"email"`
-	Avatar   string `json:"avatar"`
-	Role     string `json:"role"`
-	JoinedAt int64  `json:"joined_at"`
+	UserId      int64  `json:"user_id"`
+	Email       string `json:"email"`
+	Avatar      string `json:"avatar"`
+	Role        string `json:"role"`
+	JoinedAt    int64  `json:"joined_at"`
+	DisplayName string `json:"display_name,optional"`
 }
 
 type MessageItem struct {
-	Id             int64      `json:"id"`
-	ConversationId int64      `json:"conversation_id"`
-	SenderId       int64      `json:"sender_id"`
-	SenderInfo     SenderInfo `json:"sender_info"`
-	MessageType    string     `json:"message_type"`
-	Content        string     `json:"content"`
-	ClientMsgId    string     `json:"client_msg_id"`
-	CreatedAt      int64      `json:"created_at"`
-	Mentions       []string   `json:"mentions,optional"`
+	Id             int64                   `json:"id"`
+	ConversationId int64                   `json:"conversation_id"`
+	SenderId       int64                   `json:"sender_id"`
+	SenderInfo     SenderInfo              `json:"sender_info"`
+	MessageType    string                  `json:"message_type"`
+	Content        string                  `json:"content"`
+	ClientMsgId    string                  `json:"client_msg_id"`
+	CreatedAt      int64                   `json:"created_at"`
+	IsSystem       bool                    `json:"is_system,optional"`
+	Mentions       []string                `json:"mentions,optional"`
+	ReadDetails    []MessageReadDetailItem `json:"read_details"`
+}
+
+type MessageReadDetailItem struct {
+	UserId            int64  `json:"user_id"`
+	IsRead            bool   `json:"is_read"`
+	LastReadMessageId int64  `json:"last_read_message_id"`
+	UpdatedAt         int64  `json:"updated_at"`
+	Email             string `json:"email"`
+	Avatar            string `json:"avatar"`
+	DisplayName       string `json:"display_name,optional"`
 }
 
 type PresenceItem struct {
-	UserId    int64  `json:"user_id"`
-	Status    string `json:"status"`
-	UpdatedAt int64  `json:"updated_at"`
+	UserId      int64  `json:"user_id"`
+	Status      string `json:"status"`
+	UpdatedAt   int64  `json:"updated_at"`
+	DisplayName string `json:"display_name,optional"`
 }
 
 type ReadStateItem struct {
-	UserId            int64 `json:"user_id"`
-	LastReadMessageId int64 `json:"last_read_message_id"`
-	UpdatedAt         int64 `json:"updated_at"`
+	UserId            int64  `json:"user_id"`
+	LastReadMessageId int64  `json:"last_read_message_id"`
+	UpdatedAt         int64  `json:"updated_at"`
+	Email             string `json:"email,optional"`
+	Avatar            string `json:"avatar,optional"`
+	DisplayName       string `json:"display_name,optional"`
 }
 
 type RefreshRequest struct {
@@ -293,8 +316,9 @@ type RemoveGroupMemberRequest struct {
 }
 
 type SenderInfo struct {
-	Name  string `json:"name"`
-	Email string `json:"email"`
+	Name        string `json:"name"`
+	Email       string `json:"email"`
+	DisplayName string `json:"display_name,optional"`
 }
 
 type UpdateGroupInfoRequest struct {
@@ -314,18 +338,20 @@ type UpdateGroupInfoResponse struct {
 }
 
 type UserInfo struct {
-	Id        int64  `json:"id"`
-	Email     string `json:"email"`
-	Status    int32  `json:"status"`
-	Nickname  string `json:"nickname"`
-	Avatar    string `json:"avatar"`
-	CreatedAt int64  `json:"created_at"`
-	UpdatedAt int64  `json:"updated_at"`
+	Id          int64  `json:"id"`
+	Email       string `json:"email"`
+	Status      int32  `json:"status"`
+	Nickname    string `json:"nickname"`
+	Avatar      string `json:"avatar"`
+	DisplayName string `json:"display_name,optional"`
+	CreatedAt   int64  `json:"created_at"`
+	UpdatedAt   int64  `json:"updated_at"`
 }
 
 type UserListItem struct {
-	Id       string `json:"id"`
-	Nickname string `json:"nickname"`
-	Email    string `json:"email"`
-	Avatar   string `json:"avatar"`
+	Id          string `json:"id"`
+	Nickname    string `json:"nickname"`
+	Email       string `json:"email"`
+	Avatar      string `json:"avatar"`
+	DisplayName string `json:"display_name,optional"`
 }

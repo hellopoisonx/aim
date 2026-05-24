@@ -66,6 +66,33 @@ func TestStoreDBLockReacquireAfterClose(t *testing.T) {
 	defer func() { _ = second.Close() }()
 }
 
+func TestStoreReplacePendingMessage(t *testing.T) {
+	ctx := context.Background()
+	store, err := openStore(ctx, filepath.Join(t.TempDir(), "aim-tui.db"), "instance")
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	defer func() { _ = store.Close() }()
+
+	pending := client.MessageItem{ID: 100, ConversationID: 10, SenderID: 1, MessageType: "text", Content: "hello", ClientMsgID: "client-1", CreatedAt: 1001}
+	if err := store.SaveMessages(ctx, []client.MessageItem{pending}); err != nil {
+		t.Fatalf("save pending message: %v", err)
+	}
+
+	pending.ID = 200
+	if err := store.ReplacePendingMessage(ctx, pending); err != nil {
+		t.Fatalf("replace pending message: %v", err)
+	}
+
+	got, err := store.LoadMessages(ctx, 10, 10)
+	if err != nil {
+		t.Fatalf("load messages: %v", err)
+	}
+	if len(got) != 1 || got[0].ID != 200 || got[0].ClientMsgID != "client-1" {
+		t.Fatalf("unexpected messages after replace: %+v", got)
+	}
+}
+
 func TestStoreConversationMessagePresenceRoundTrip(t *testing.T) {
 	ctx := context.Background()
 	store, err := openStore(ctx, filepath.Join(t.TempDir(), "aim-tui.db"), "instance")

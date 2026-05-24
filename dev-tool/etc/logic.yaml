@@ -51,5 +51,5 @@ Quota:
   MaxRequests: 100
 Dev:
   # 临时会话（非好友）单会话最多可发送的消息数。
-  # 默认 10。设为 0 或负数表示不限制（仅供本地开发 / 压测使用，切勿在生产开启）。
-  TemporaryConversationMessageLimit: 0
+  # 默认 10。当前 ServiceContext 会把 0 归一化为默认值；压测环境使用 -1 表示不限制。
+  TemporaryConversationMessageLimit: -1

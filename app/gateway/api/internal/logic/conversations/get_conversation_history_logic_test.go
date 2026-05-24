@@ -214,6 +214,7 @@ func TestGetConversationHistory(t *testing.T) {
 						ClientMsgId:    "client-msg-1",
 						CreatedAt:      1700000000,
 						Mentions:       []string{"200"},
+						ReadDetails:    []types.MessageReadDetailItem{},
 					},
 					{
 						Id:             2,
@@ -224,6 +225,7 @@ func TestGetConversationHistory(t *testing.T) {
 						Content:        "hi there",
 						ClientMsgId:    "client-msg-2",
 						CreatedAt:      1700000100,
+						ReadDetails:    []types.MessageReadDetailItem{},
 					},
 				},
 				NextCursorCreatedAt: 1700000100,

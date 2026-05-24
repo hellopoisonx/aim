@@ -82,14 +82,16 @@
 
 | Method | Path | Auth | 说明 |
 | --- | --- | --- | --- |
-| `GET` | `/api/conversations/:id/members` | `Auth` 中间件 | 获取成员详情列表（user_id, email, avatar, role, joined_at） |
-| `POST` | `/api/conversations/:id/members` | `Auth` 中间件 | 添加群成员（body: `member_ids []int64`） |
-| `DELETE` | `/api/conversations/:id/members/:uid` | `Auth` 中间件 | 移除单个群成员 |
-| `POST` | `/api/conversations/:id/leave` | `Auth` 中间件 | 退出群聊 |
-| `DELETE` | `/api/conversations/:id` | `Auth` 中间件 | 解散群聊（仅 creator 可操作） |
-| `PUT` | `/api/conversations/:id` | `Auth` 中间件 | 更新群信息（body: `name`, `avatar`，均为 optional） |
+| `GET` | `/api/conversations/:id/members` | `Auth` 中间件 | 获取成员详情列表（`user_id`, `email`, `avatar`, `role`, `joined_at`） |
+| `POST` | `/api/conversations/:id/members` | `Auth` 中间件 | 邀请成员入群；服务端仅允许 `owner` 执行 |
+| `DELETE` | `/api/conversations/:id/members/:uid` | `Auth` 中间件 | 移除单个群成员；服务端仅允许 `owner` 执行 |
+| `POST` | `/api/conversations/:id/leave` | `Auth` 中间件 | 退出群聊；`owner` 需先转让或解散群聊 |
+| `DELETE` | `/api/conversations/:id` | `Auth` 中间件 | 解散群聊；仅 `owner` 可操作 |
+| `PUT` | `/api/conversations/:id` | `Auth` 中间件 | 更新群信息（body: `name`, `avatar`，均为 optional；仅 `owner` 可操作） |
 
-以上端点均通过 `LogicRpc` 调用 `ConversationService` 的对应 RPC（AddGroupMembers, RemoveGroupMembers, LeaveGroup, DismissGroup, UpdateGroupInfo, GetConversationMembersDetail）。`user_id` 和 `operator_id` 从 JWT payload 提取。
+以上端点均通过 `LogicRpc` 调用 `ConversationService` 的对应 RPC（`AddGroupMembers`, `RemoveGroupMembers`, `LeaveGroup`, `DismissGroup`, `UpdateGroupInfo`, `GetConversationMembersDetail`）。`user_id` 和 `operator_id` 从 JWT payload 提取。服务端在 logic 层统一执行角色校验：`owner / admin / member` 的权限边界以 `app/logic/rpc/internal/service/conversation_service.go` 为准，gateway 只负责传递身份与参数。
+
+**角色约束说明**：当前群管理接口按“群主强约束”实现，`admin` 角色虽然已入库并可透出到成员详情，但暂未开放额外管理权限；后续若开放管理员能力，需要同步更新 logic 侧权限矩阵与 gateway 文档。
 
 **类型更新**：`ConversationItem`、`CreateConversationRequest`、`CreateConversationResponse` 新增 `name`、`avatar`、`creator_id` 字段。`CreateConversationRequest` 新增 `Name` 字段用于创建群聊时指定群名。
 

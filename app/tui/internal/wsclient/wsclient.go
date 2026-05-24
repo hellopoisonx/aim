@@ -46,6 +46,7 @@ type Client struct {
 	opts *ClientOptions
 
 	mu        sync.RWMutex
+	writeMu   sync.Mutex
 	connected bool
 	closeOnce sync.Once
 	closeChan chan struct{}
@@ -214,6 +215,9 @@ func (c *Client) NextSeq() int64 {
 
 // SendFrame sends a binary frame to the gateway.
 func (c *Client) SendFrame(ctx context.Context, frameType FrameType, payload proto.Message) error {
+	c.writeMu.Lock()
+	defer c.writeMu.Unlock()
+
 	c.mu.RLock()
 	conn := c.conn
 	connected := c.connected

@@ -1,0 +1,23 @@
+{
+  "name": "aim-desktop-frontend",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "vue-tsc --noEmit && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@arco-design/web-vue": "^2.57.0",
+    "@vueuse/core": "^14.1.0",
+    "pinia": "^3.0.4",
+    "vue": "^3.5.25"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.2",
+    "typescript": "^5.9.3",
+    "vite": "^7.2.7",
+    "vue-tsc": "^3.1.8"
+  }
+}

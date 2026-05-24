@@ -11,6 +11,7 @@ import (
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/ws"
 	friendshippb "github.com/hellopoisonx/aim/app/logic/rpc/client/friendshipservice"
+	"github.com/hellopoisonx/aim/app/logic/rpc/client/userservice"
 
 	"github.com/redis/go-redis/v9"
 	"github.com/zeromicro/go-zero/core/logx"
@@ -85,6 +86,15 @@ func (l *GetFriendsPresenceLogic) GetFriendsPresence() (resp *types.GetFriendsPr
 			UserId: fid,
 			Status: status,
 		})
+	}
+
+	// Enrich display_name from user service (best-effort).
+	if l.svcCtx.LogicUserClient != nil {
+		for i := range presences {
+			if u, err := l.svcCtx.LogicUserClient.GetUserInfo(l.ctx, &userservice.GetUserInfoReq{Id: presences[i].UserId}); err == nil {
+				presences[i].DisplayName = u.GetUser().GetNickname()
+			}
+		}
 	}
 
 	return &types.GetFriendsPresenceResponse{Presences: presences}, nil

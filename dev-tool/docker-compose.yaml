@@ -288,7 +288,7 @@ services:
     image: jaegertracing/all-in-one:latest
     container_name: bench-jaeger
     ports:
-      - "16686:16686"    # Jaeger UI（共享，本地开发未占用）
+      - "26686:16686"    # Jaeger UI (+10000, avoids local dev Jaeger conflict)
       - "14317:4317"     # OTLP gRPC
       - "14318:4318"     # OTLP HTTP
     environment:

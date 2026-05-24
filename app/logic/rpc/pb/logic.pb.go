@@ -913,6 +913,7 @@ type ConversationResponse struct {
 	Name             string                 `protobuf:"bytes,6,opt,name=name,proto3" json:"name,omitempty"`
 	Avatar           string                 `protobuf:"bytes,7,opt,name=avatar,proto3" json:"avatar,omitempty"`
 	CreatorId        int64                  `protobuf:"varint,8,opt,name=creator_id,json=creatorId,proto3" json:"creator_id,omitempty"`
+	DisplayName      string                 `protobuf:"bytes,9,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
@@ -1001,6 +1002,13 @@ func (x *ConversationResponse) GetCreatorId() int64 {
 		return x.CreatorId
 	}
 	return 0
+}
+
+func (x *ConversationResponse) GetDisplayName() string {
+	if x != nil {
+		return x.DisplayName
+	}
+	return ""
 }
 
 type CreateConversationResp struct {
@@ -1811,6 +1819,7 @@ type MemberDetailItem struct {
 	Avatar        string                 `protobuf:"bytes,3,opt,name=avatar,proto3" json:"avatar,omitempty"`
 	Role          string                 `protobuf:"bytes,4,opt,name=role,proto3" json:"role,omitempty"`
 	JoinedAt      int64                  `protobuf:"varint,5,opt,name=joined_at,json=joinedAt,proto3" json:"joined_at,omitempty"`
+	DisplayName   string                 `protobuf:"bytes,6,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1878,6 +1887,13 @@ func (x *MemberDetailItem) GetJoinedAt() int64 {
 		return x.JoinedAt
 	}
 	return 0
+}
+
+func (x *MemberDetailItem) GetDisplayName() string {
+	if x != nil {
+		return x.DisplayName
+	}
+	return ""
 }
 
 type GetConversationMembersDetailResp struct {
@@ -1998,6 +2014,7 @@ type SenderInfo struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	Email         string                 `protobuf:"bytes,2,opt,name=email,proto3" json:"email,omitempty"`
+	DisplayName   string                 `protobuf:"bytes,3,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2046,6 +2063,13 @@ func (x *SenderInfo) GetEmail() string {
 	return ""
 }
 
+func (x *SenderInfo) GetDisplayName() string {
+	if x != nil {
+		return x.DisplayName
+	}
+	return ""
+}
+
 type MessageReadDetailItem struct {
 	state             protoimpl.MessageState `protogen:"open.v1"`
 	UserId            int64                  `protobuf:"varint,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
@@ -2055,6 +2079,7 @@ type MessageReadDetailItem struct {
 	Name              string                 `protobuf:"bytes,5,opt,name=name,proto3" json:"name,omitempty"`
 	Email             string                 `protobuf:"bytes,6,opt,name=email,proto3" json:"email,omitempty"`
 	Avatar            string                 `protobuf:"bytes,7,opt,name=avatar,proto3" json:"avatar,omitempty"`
+	DisplayName       string                 `protobuf:"bytes,8,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
@@ -2138,6 +2163,13 @@ func (x *MessageReadDetailItem) GetAvatar() string {
 	return ""
 }
 
+func (x *MessageReadDetailItem) GetDisplayName() string {
+	if x != nil {
+		return x.DisplayName
+	}
+	return ""
+}
+
 type MessageItem struct {
 	state          protoimpl.MessageState   `protogen:"open.v1"`
 	Id             int64                    `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -2150,6 +2182,7 @@ type MessageItem struct {
 	SenderInfo     *SenderInfo              `protobuf:"bytes,8,opt,name=sender_info,json=senderInfo,proto3" json:"sender_info,omitempty"`
 	Mentions       []string                 `protobuf:"bytes,9,rep,name=mentions,proto3" json:"mentions,omitempty"` // decimal user id strings, e.g. "42"
 	ReadDetails    []*MessageReadDetailItem `protobuf:"bytes,10,rep,name=read_details,json=readDetails,proto3" json:"read_details,omitempty"`
+	IsSystem       bool                     `protobuf:"varint,11,opt,name=is_system,json=isSystem,proto3" json:"is_system,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -2254,11 +2287,21 @@ func (x *MessageItem) GetReadDetails() []*MessageReadDetailItem {
 	return nil
 }
 
+func (x *MessageItem) GetIsSystem() bool {
+	if x != nil {
+		return x.IsSystem
+	}
+	return false
+}
+
 type ReadStateItem struct {
 	state             protoimpl.MessageState `protogen:"open.v1"`
 	UserId            int64                  `protobuf:"varint,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
 	LastReadMessageId int64                  `protobuf:"varint,2,opt,name=last_read_message_id,json=lastReadMessageId,proto3" json:"last_read_message_id,omitempty"`
 	UpdatedAt         int64                  `protobuf:"varint,3,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"` // unix milliseconds
+	Email             string                 `protobuf:"bytes,4,opt,name=email,proto3" json:"email,omitempty"`
+	Avatar            string                 `protobuf:"bytes,5,opt,name=avatar,proto3" json:"avatar,omitempty"`
+	DisplayName       string                 `protobuf:"bytes,6,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
@@ -2312,6 +2355,27 @@ func (x *ReadStateItem) GetUpdatedAt() int64 {
 		return x.UpdatedAt
 	}
 	return 0
+}
+
+func (x *ReadStateItem) GetEmail() string {
+	if x != nil {
+		return x.Email
+	}
+	return ""
+}
+
+func (x *ReadStateItem) GetAvatar() string {
+	if x != nil {
+		return x.Avatar
+	}
+	return ""
+}
+
+func (x *ReadStateItem) GetDisplayName() string {
+	if x != nil {
+		return x.DisplayName
+	}
+	return ""
 }
 
 type GetConversationHistoryResp struct {
@@ -4131,7 +4195,7 @@ const file_logic_proto_rawDesc = "" +
 	"\n" +
 	"member_ids\x18\x03 \x03(\x03R\tmemberIds\x12\x12\n" +
 	"\x04name\x18\x04 \x01(\tR\x04name\x12\x16\n" +
-	"\x06avatar\x18\x05 \x01(\tR\x06avatar\"\xf9\x01\n" +
+	"\x06avatar\x18\x05 \x01(\tR\x06avatar\"\x9c\x02\n" +
 	"\x14ConversationResponse\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12+\n" +
 	"\x11conversation_type\x18\x02 \x01(\tR\x10conversationType\x12\x1b\n" +
@@ -4143,7 +4207,8 @@ const file_logic_proto_rawDesc = "" +
 	"\x04name\x18\x06 \x01(\tR\x04name\x12\x16\n" +
 	"\x06avatar\x18\a \x01(\tR\x06avatar\x12\x1d\n" +
 	"\n" +
-	"creator_id\x18\b \x01(\x03R\tcreatorId\"Y\n" +
+	"creator_id\x18\b \x01(\x03R\tcreatorId\x12!\n" +
+	"\fdisplay_name\x18\t \x01(\tR\vdisplayName\"Y\n" +
 	"\x16CreateConversationResp\x12?\n" +
 	"\fconversation\x18\x01 \x01(\v2\x1b.logic.ConversationResponseR\fconversation\"D\n" +
 	"\x19GetConversationMembersReq\x12'\n" +
@@ -4196,24 +4261,26 @@ const file_logic_proto_rawDesc = "" +
 	"\x13UpdateGroupInfoResp\x12?\n" +
 	"\fconversation\x18\x01 \x01(\v2\x1b.logic.ConversationResponseR\fconversation\"J\n" +
 	"\x1fGetConversationMembersDetailReq\x12'\n" +
-	"\x0fconversation_id\x18\x01 \x01(\x03R\x0econversationId\"\x8a\x01\n" +
+	"\x0fconversation_id\x18\x01 \x01(\x03R\x0econversationId\"\xad\x01\n" +
 	"\x10MemberDetailItem\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\x03R\x06userId\x12\x14\n" +
 	"\x05email\x18\x02 \x01(\tR\x05email\x12\x16\n" +
 	"\x06avatar\x18\x03 \x01(\tR\x06avatar\x12\x12\n" +
 	"\x04role\x18\x04 \x01(\tR\x04role\x12\x1b\n" +
-	"\tjoined_at\x18\x05 \x01(\x03R\bjoinedAt\"U\n" +
+	"\tjoined_at\x18\x05 \x01(\x03R\bjoinedAt\x12!\n" +
+	"\fdisplay_name\x18\x06 \x01(\tR\vdisplayName\"U\n" +
 	" GetConversationMembersDetailResp\x121\n" +
 	"\amembers\x18\x01 \x03(\v2\x17.logic.MemberDetailItemR\amembers\"\xa3\x01\n" +
 	"\x19GetConversationHistoryReq\x12'\n" +
 	"\x0fconversation_id\x18\x01 \x01(\x03R\x0econversationId\x12*\n" +
 	"\x11cursor_created_at\x18\x02 \x01(\x03R\x0fcursorCreatedAt\x12\x1b\n" +
 	"\tcursor_id\x18\x03 \x01(\x03R\bcursorId\x12\x14\n" +
-	"\x05limit\x18\x04 \x01(\x05R\x05limit\"6\n" +
+	"\x05limit\x18\x04 \x01(\x05R\x05limit\"Y\n" +
 	"\n" +
 	"SenderInfo\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x14\n" +
-	"\x05email\x18\x02 \x01(\tR\x05email\"\xdb\x01\n" +
+	"\x05email\x18\x02 \x01(\tR\x05email\x12!\n" +
+	"\fdisplay_name\x18\x03 \x01(\tR\vdisplayName\"\xfe\x01\n" +
 	"\x15MessageReadDetailItem\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\x03R\x06userId\x12\x17\n" +
 	"\ais_read\x18\x02 \x01(\bR\x06isRead\x12/\n" +
@@ -4222,7 +4289,8 @@ const file_logic_proto_rawDesc = "" +
 	"updated_at\x18\x04 \x01(\x03R\tupdatedAt\x12\x12\n" +
 	"\x04name\x18\x05 \x01(\tR\x04name\x12\x14\n" +
 	"\x05email\x18\x06 \x01(\tR\x05email\x12\x16\n" +
-	"\x06avatar\x18\a \x01(\tR\x06avatar\"\xf4\x02\n" +
+	"\x06avatar\x18\a \x01(\tR\x06avatar\x12!\n" +
+	"\fdisplay_name\x18\b \x01(\tR\vdisplayName\"\x91\x03\n" +
 	"\vMessageItem\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12'\n" +
 	"\x0fconversation_id\x18\x02 \x01(\x03R\x0econversationId\x12\x1b\n" +
@@ -4236,12 +4304,16 @@ const file_logic_proto_rawDesc = "" +
 	"senderInfo\x12\x1a\n" +
 	"\bmentions\x18\t \x03(\tR\bmentions\x12?\n" +
 	"\fread_details\x18\n" +
-	" \x03(\v2\x1c.logic.MessageReadDetailItemR\vreadDetails\"x\n" +
+	" \x03(\v2\x1c.logic.MessageReadDetailItemR\vreadDetails\x12\x1b\n" +
+	"\tis_system\x18\v \x01(\bR\bisSystem\"\xc9\x01\n" +
 	"\rReadStateItem\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\x03R\x06userId\x12/\n" +
 	"\x14last_read_message_id\x18\x02 \x01(\x03R\x11lastReadMessageId\x12\x1d\n" +
 	"\n" +
-	"updated_at\x18\x03 \x01(\x03R\tupdatedAt\"\xf9\x01\n" +
+	"updated_at\x18\x03 \x01(\x03R\tupdatedAt\x12\x14\n" +
+	"\x05email\x18\x04 \x01(\tR\x05email\x12\x16\n" +
+	"\x06avatar\x18\x05 \x01(\tR\x06avatar\x12!\n" +
+	"\fdisplay_name\x18\x06 \x01(\tR\vdisplayName\"\xf9\x01\n" +
 	"\x1aGetConversationHistoryResp\x12.\n" +
 	"\bmessages\x18\x01 \x03(\v2\x12.logic.MessageItemR\bmessages\x123\n" +
 	"\x16next_cursor_created_at\x18\x02 \x01(\x03R\x13nextCursorCreatedAt\x12$\n" +

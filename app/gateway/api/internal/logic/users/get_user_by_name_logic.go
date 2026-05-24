@@ -62,10 +62,11 @@ func userListItemFromRPC(user *pb.UserInfoResponse) types.UserListItem {
 	}
 
 	return types.UserListItem{
-		Id:       strconv.FormatInt(user.GetId(), 10),
-		Nickname: user.GetNickname(),
-		Email:    user.GetEmail(),
-		Avatar:   user.GetAvatar(),
+		Id:          strconv.FormatInt(user.GetId(), 10),
+		Nickname:    user.GetNickname(),
+		Email:       user.GetEmail(),
+		Avatar:      user.GetAvatar(),
+		DisplayName: user.GetNickname(),
 	}
 }
 
@@ -75,13 +76,14 @@ func userInfoFromRPC(user *pb.UserInfoResponse) types.UserInfo {
 	}
 
 	return types.UserInfo{
-		Id:        user.GetId(),
-		Email:     user.GetEmail(),
-		Status:    user.GetStatus(),
-		Nickname:  user.GetNickname(),
-		Avatar:    user.GetAvatar(),
-		CreatedAt: user.GetCreatedAt(),
-		UpdatedAt: user.GetUpdatedAt(),
+		Id:          user.GetId(),
+		Email:       user.GetEmail(),
+		Status:      user.GetStatus(),
+		Nickname:    user.GetNickname(),
+		Avatar:      user.GetAvatar(),
+		DisplayName: user.GetNickname(),
+		CreatedAt:   user.GetCreatedAt(),
+		UpdatedAt:   user.GetUpdatedAt(),
 	}
 }
 

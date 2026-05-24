@@ -14,20 +14,34 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\rgateway.proto\x12\x07gateway\"\xe4\x01\n\x0ePushMessageReq\x12\x12\n\nmessage_id\x18\x01 \x01(\x03\x12\x17\n\x0f\x63onversation_id\x18\x02 \x01(\x03\x12\x19\n\x11\x63onversation_type\x18\x03 \x01(\t\x12\x14\n\x0cmessage_type\x18\x04 \x01(\t\x12\x0f\n\x07\x63ontent\x18\x05 \x01(\t\x12\x11\n\tsender_id\x18\x06 \x01(\x03\x12\x0f\n\x07sent_at\x18\x07 \x01(\x03\x12\x15\n\rclient_msg_id\x18\x08 \x01(\t\x12\x10\n\x08mentions\x18\t \x03(\t\x12\x16\n\x0etarget_user_id\x18\n \x01(\x03\"\"\n\x0fPushMessageResp\x12\x0f\n\x07success\x18\x01 \x01(\x08\"F\n\x0fPushPresenceReq\x12\x0f\n\x07user_id\x18\x01 \x01(\x03\x12\x0e\n\x06status\x18\x02 \x01(\t\x12\x12\n\nupdated_at\x18\x03 \x01(\x03\"#\n\x10PushPresenceResp\x12\x0f\n\x07success\x18\x01 \x01(\x08\"\x8e\x01\n\x18PushFriendApplicationReq\x12\x16\n\x0etarget_user_id\x18\x01 \x01(\x03\x12\x0f\n\x07user_id\x18\x02 \x01(\x03\x12\x11\n\tfriend_id\x18\x03 \x01(\x03\x12\x0e\n\x06status\x18\x04 \x01(\t\x12\x12\n\ncreated_at\x18\x05 \x01(\x03\x12\x12\n\nupdated_at\x18\x06 \x01(\x03\",\n\x19PushFriendApplicationResp\x12\x0f\n\x07success\x18\x01 \x01(\x08\"A\n\x0bKickUserReq\x12\x0f\n\x07user_id\x18\x01 \x01(\x03\x12\x11\n\tdevice_id\x18\x02 \x01(\t\x12\x0e\n\x06reason\x18\x03 \x01(\t\"$\n\x0cKickUserResp\x12\x14\n\x0ckicked_count\x18\x01 \x01(\x05\"C\n\x0e\x44rainNotifyReq\x12\x18\n\x10\x64rain_timeout_ms\x18\x01 \x01(\x03\x12\x17\n\x0fgateway_node_id\x18\x02 \x01(\t\")\n\x0f\x44rainNotifyResp\x12\x16\n\x0e\x61\x66\x66\x65\x63ted_count\x18\x01 \x01(\x05\x32\xf2\x02\n\x0eGatewayService\x12@\n\x0bPushMessage\x12\x17.gateway.PushMessageReq\x1a\x18.gateway.PushMessageResp\x12\x43\n\x0cPushPresence\x12\x18.gateway.PushPresenceReq\x1a\x19.gateway.PushPresenceResp\x12^\n\x15PushFriendApplication\x12!.gateway.PushFriendApplicationReq\x1a\".gateway.PushFriendApplicationResp\x12\x37\n\x08KickUser\x12\x14.gateway.KickUserReq\x1a\x15.gateway.KickUserResp\x12@\n\x0b\x44rainNotify\x12\x17.gateway.DrainNotifyReq\x1a\x18.gateway.DrainNotifyRespB5Z3github.com/hellopoisonx/aim/shared/proto/gateway/pbb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\rgateway.proto\x12\x07gateway\")\n\nSenderInfo\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\r\n\x05\x65mail\x18\x02 \x01(\t\"\xa1\x02\n\x0ePushMessageReq\x12\x12\n\nmessage_id\x18\x01 \x01(\x03\x12\x17\n\x0f\x63onversation_id\x18\x02 \x01(\x03\x12\x19\n\x11\x63onversation_type\x18\x03 \x01(\t\x12\x14\n\x0cmessage_type\x18\x04 \x01(\t\x12\x0f\n\x07\x63ontent\x18\x05 \x01(\t\x12\x11\n\tsender_id\x18\x06 \x01(\x03\x12\x0f\n\x07sent_at\x18\x07 \x01(\x03\x12\x15\n\rclient_msg_id\x18\x08 \x01(\t\x12\x10\n\x08mentions\x18\t \x03(\t\x12\x16\n\x0etarget_user_id\x18\n \x01(\x03\x12\x11\n\tis_system\x18\x0b \x01(\x08\x12(\n\x0bsender_info\x18\x0c \x01(\x0b\x32\x13.gateway.SenderInfo\"\"\n\x0fPushMessageResp\x12\x0f\n\x07success\x18\x01 \x01(\x08\"^\n\x0fPushPresenceReq\x12\x0f\n\x07user_id\x18\x01 \x01(\x03\x12\x0e\n\x06status\x18\x02 \x01(\t\x12\x12\n\nupdated_at\x18\x03 \x01(\x03\x12\x16\n\x0etarget_user_id\x18\x04 \x01(\x03\"#\n\x10PushPresenceResp\x12\x0f\n\x07success\x18\x01 \x01(\x08\"i\n\rPushTypingReq\x12\x16\n\x0etarget_user_id\x18\x01 \x01(\x03\x12\x14\n\x0c\x66rom_user_id\x18\x02 \x01(\x03\x12\x17\n\x0f\x63onversation_id\x18\x03 \x01(\x03\x12\x11\n\ttimestamp\x18\x04 \x01(\x03\"!\n\x0ePushTypingResp\x12\x0f\n\x07success\x18\x01 \x01(\x08\"\x8e\x01\n\x18PushFriendApplicationReq\x12\x16\n\x0etarget_user_id\x18\x01 \x01(\x03\x12\x0f\n\x07user_id\x18\x02 \x01(\x03\x12\x11\n\tfriend_id\x18\x03 \x01(\x03\x12\x0e\n\x06status\x18\x04 \x01(\t\x12\x12\n\ncreated_at\x18\x05 \x01(\x03\x12\x12\n\nupdated_at\x18\x06 \x01(\x03\",\n\x19PushFriendApplicationResp\x12\x0f\n\x07success\x18\x01 \x01(\x08\"\x8d\x01\n\x12PushReadReceiptReq\x12\x16\n\x0etarget_user_id\x18\x01 \x01(\x03\x12\x17\n\x0f\x63onversation_id\x18\x02 \x01(\x03\x12\x14\n\x0c\x66rom_user_id\x18\x03 \x01(\x03\x12\x1c\n\x14last_read_message_id\x18\x04 \x01(\x03\x12\x12\n\nupdated_at\x18\x05 \x01(\x03\"&\n\x13PushReadReceiptResp\x12\x0f\n\x07success\x18\x01 \x01(\x08\"y\n\x13PushNotificationReq\x12\x16\n\x0etarget_user_id\x18\x01 \x01(\x03\x12\x19\n\x11notification_type\x18\x02 \x01(\t\x12\r\n\x05title\x18\x03 \x01(\t\x12\x0c\n\x04\x62ody\x18\x04 \x01(\t\x12\x12\n\nrelated_id\x18\x05 \x01(\x03\"?\n\x14PushNotificationResp\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x16\n\x0e\x61\x66\x66\x65\x63ted_count\x18\x02 \x01(\x05\"A\n\x0bKickUserReq\x12\x0f\n\x07user_id\x18\x01 \x01(\x03\x12\x11\n\tdevice_id\x18\x02 \x01(\t\x12\x0e\n\x06reason\x18\x03 \x01(\t\"$\n\x0cKickUserResp\x12\x14\n\x0ckicked_count\x18\x01 \x01(\x05\"C\n\x0e\x44rainNotifyReq\x12\x18\n\x10\x64rain_timeout_ms\x18\x01 \x01(\x03\x12\x17\n\x0fgateway_node_id\x18\x02 \x01(\t\")\n\x0f\x44rainNotifyResp\x12\x16\n\x0e\x61\x66\x66\x65\x63ted_count\x18\x01 \x01(\x05\x32\xd0\x04\n\x0eGatewayService\x12@\n\x0bPushMessage\x12\x17.gateway.PushMessageReq\x1a\x18.gateway.PushMessageResp\x12\x43\n\x0cPushPresence\x12\x18.gateway.PushPresenceReq\x1a\x19.gateway.PushPresenceResp\x12=\n\nPushTyping\x12\x16.gateway.PushTypingReq\x1a\x17.gateway.PushTypingResp\x12^\n\x15PushFriendApplication\x12!.gateway.PushFriendApplicationReq\x1a\".gateway.PushFriendApplicationResp\x12L\n\x0fPushReadReceipt\x12\x1b.gateway.PushReadReceiptReq\x1a\x1c.gateway.PushReadReceiptResp\x12O\n\x10PushNotification\x12\x1c.gateway.PushNotificationReq\x1a\x1d.gateway.PushNotificationResp\x12\x37\n\x08KickUser\x12\x14.gateway.KickUserReq\x1a\x15.gateway.KickUserResp\x12@\n\x0b\x44rainNotify\x12\x17.gateway.DrainNotifyReq\x1a\x18.gateway.DrainNotifyRespB5Z3github.com/hellopoisonx/aim/shared/proto/gateway/pbb\x06proto3')
 
 
 
+_SENDERINFO = DESCRIPTOR.message_types_by_name['SenderInfo']
 _PUSHMESSAGEREQ = DESCRIPTOR.message_types_by_name['PushMessageReq']
 _PUSHMESSAGERESP = DESCRIPTOR.message_types_by_name['PushMessageResp']
 _PUSHPRESENCEREQ = DESCRIPTOR.message_types_by_name['PushPresenceReq']
 _PUSHPRESENCERESP = DESCRIPTOR.message_types_by_name['PushPresenceResp']
+_PUSHTYPINGREQ = DESCRIPTOR.message_types_by_name['PushTypingReq']
+_PUSHTYPINGRESP = DESCRIPTOR.message_types_by_name['PushTypingResp']
 _PUSHFRIENDAPPLICATIONREQ = DESCRIPTOR.message_types_by_name['PushFriendApplicationReq']
 _PUSHFRIENDAPPLICATIONRESP = DESCRIPTOR.message_types_by_name['PushFriendApplicationResp']
+_PUSHREADRECEIPTREQ = DESCRIPTOR.message_types_by_name['PushReadReceiptReq']
+_PUSHREADRECEIPTRESP = DESCRIPTOR.message_types_by_name['PushReadReceiptResp']
+_PUSHNOTIFICATIONREQ = DESCRIPTOR.message_types_by_name['PushNotificationReq']
+_PUSHNOTIFICATIONRESP = DESCRIPTOR.message_types_by_name['PushNotificationResp']
 _KICKUSERREQ = DESCRIPTOR.message_types_by_name['KickUserReq']
 _KICKUSERRESP = DESCRIPTOR.message_types_by_name['KickUserResp']
 _DRAINNOTIFYREQ = DESCRIPTOR.message_types_by_name['DrainNotifyReq']
 _DRAINNOTIFYRESP = DESCRIPTOR.message_types_by_name['DrainNotifyResp']
+SenderInfo = _reflection.GeneratedProtocolMessageType('SenderInfo', (_message.Message,), {
+  'DESCRIPTOR' : _SENDERINFO,
+  '__module__' : 'gateway_pb2'
+  # @@protoc_insertion_point(class_scope:gateway.SenderInfo)
+  })
+_sym_db.RegisterMessage(SenderInfo)
+
 PushMessageReq = _reflection.GeneratedProtocolMessageType('PushMessageReq', (_message.Message,), {
   'DESCRIPTOR' : _PUSHMESSAGEREQ,
   '__module__' : 'gateway_pb2'
@@ -56,6 +70,20 @@ PushPresenceResp = _reflection.GeneratedProtocolMessageType('PushPresenceResp', 
   })
 _sym_db.RegisterMessage(PushPresenceResp)
 
+PushTypingReq = _reflection.GeneratedProtocolMessageType('PushTypingReq', (_message.Message,), {
+  'DESCRIPTOR' : _PUSHTYPINGREQ,
+  '__module__' : 'gateway_pb2'
+  # @@protoc_insertion_point(class_scope:gateway.PushTypingReq)
+  })
+_sym_db.RegisterMessage(PushTypingReq)
+
+PushTypingResp = _reflection.GeneratedProtocolMessageType('PushTypingResp', (_message.Message,), {
+  'DESCRIPTOR' : _PUSHTYPINGRESP,
+  '__module__' : 'gateway_pb2'
+  # @@protoc_insertion_point(class_scope:gateway.PushTypingResp)
+  })
+_sym_db.RegisterMessage(PushTypingResp)
+
 PushFriendApplicationReq = _reflection.GeneratedProtocolMessageType('PushFriendApplicationReq', (_message.Message,), {
   'DESCRIPTOR' : _PUSHFRIENDAPPLICATIONREQ,
   '__module__' : 'gateway_pb2'
@@ -69,6 +97,34 @@ PushFriendApplicationResp = _reflection.GeneratedProtocolMessageType('PushFriend
   # @@protoc_insertion_point(class_scope:gateway.PushFriendApplicationResp)
   })
 _sym_db.RegisterMessage(PushFriendApplicationResp)
+
+PushReadReceiptReq = _reflection.GeneratedProtocolMessageType('PushReadReceiptReq', (_message.Message,), {
+  'DESCRIPTOR' : _PUSHREADRECEIPTREQ,
+  '__module__' : 'gateway_pb2'
+  # @@protoc_insertion_point(class_scope:gateway.PushReadReceiptReq)
+  })
+_sym_db.RegisterMessage(PushReadReceiptReq)
+
+PushReadReceiptResp = _reflection.GeneratedProtocolMessageType('PushReadReceiptResp', (_message.Message,), {
+  'DESCRIPTOR' : _PUSHREADRECEIPTRESP,
+  '__module__' : 'gateway_pb2'
+  # @@protoc_insertion_point(class_scope:gateway.PushReadReceiptResp)
+  })
+_sym_db.RegisterMessage(PushReadReceiptResp)
+
+PushNotificationReq = _reflection.GeneratedProtocolMessageType('PushNotificationReq', (_message.Message,), {
+  'DESCRIPTOR' : _PUSHNOTIFICATIONREQ,
+  '__module__' : 'gateway_pb2'
+  # @@protoc_insertion_point(class_scope:gateway.PushNotificationReq)
+  })
+_sym_db.RegisterMessage(PushNotificationReq)
+
+PushNotificationResp = _reflection.GeneratedProtocolMessageType('PushNotificationResp', (_message.Message,), {
+  'DESCRIPTOR' : _PUSHNOTIFICATIONRESP,
+  '__module__' : 'gateway_pb2'
+  # @@protoc_insertion_point(class_scope:gateway.PushNotificationResp)
+  })
+_sym_db.RegisterMessage(PushNotificationResp)
 
 KickUserReq = _reflection.GeneratedProtocolMessageType('KickUserReq', (_message.Message,), {
   'DESCRIPTOR' : _KICKUSERREQ,
@@ -103,26 +159,40 @@ if _descriptor._USE_C_DESCRIPTORS == False:
 
   DESCRIPTOR._options = None
   DESCRIPTOR._serialized_options = b'Z3github.com/hellopoisonx/aim/shared/proto/gateway/pb'
-  _PUSHMESSAGEREQ._serialized_start=27
-  _PUSHMESSAGEREQ._serialized_end=255
-  _PUSHMESSAGERESP._serialized_start=257
-  _PUSHMESSAGERESP._serialized_end=291
-  _PUSHPRESENCEREQ._serialized_start=293
-  _PUSHPRESENCEREQ._serialized_end=363
-  _PUSHPRESENCERESP._serialized_start=365
-  _PUSHPRESENCERESP._serialized_end=400
-  _PUSHFRIENDAPPLICATIONREQ._serialized_start=403
-  _PUSHFRIENDAPPLICATIONREQ._serialized_end=545
-  _PUSHFRIENDAPPLICATIONRESP._serialized_start=547
-  _PUSHFRIENDAPPLICATIONRESP._serialized_end=591
-  _KICKUSERREQ._serialized_start=593
-  _KICKUSERREQ._serialized_end=658
-  _KICKUSERRESP._serialized_start=660
-  _KICKUSERRESP._serialized_end=696
-  _DRAINNOTIFYREQ._serialized_start=698
-  _DRAINNOTIFYREQ._serialized_end=765
-  _DRAINNOTIFYRESP._serialized_start=767
-  _DRAINNOTIFYRESP._serialized_end=808
-  _GATEWAYSERVICE._serialized_start=811
-  _GATEWAYSERVICE._serialized_end=1181
+  _SENDERINFO._serialized_start=26
+  _SENDERINFO._serialized_end=67
+  _PUSHMESSAGEREQ._serialized_start=70
+  _PUSHMESSAGEREQ._serialized_end=359
+  _PUSHMESSAGERESP._serialized_start=361
+  _PUSHMESSAGERESP._serialized_end=395
+  _PUSHPRESENCEREQ._serialized_start=397
+  _PUSHPRESENCEREQ._serialized_end=491
+  _PUSHPRESENCERESP._serialized_start=493
+  _PUSHPRESENCERESP._serialized_end=528
+  _PUSHTYPINGREQ._serialized_start=530
+  _PUSHTYPINGREQ._serialized_end=635
+  _PUSHTYPINGRESP._serialized_start=637
+  _PUSHTYPINGRESP._serialized_end=670
+  _PUSHFRIENDAPPLICATIONREQ._serialized_start=673
+  _PUSHFRIENDAPPLICATIONREQ._serialized_end=815
+  _PUSHFRIENDAPPLICATIONRESP._serialized_start=817
+  _PUSHFRIENDAPPLICATIONRESP._serialized_end=861
+  _PUSHREADRECEIPTREQ._serialized_start=864
+  _PUSHREADRECEIPTREQ._serialized_end=1005
+  _PUSHREADRECEIPTRESP._serialized_start=1007
+  _PUSHREADRECEIPTRESP._serialized_end=1045
+  _PUSHNOTIFICATIONREQ._serialized_start=1047
+  _PUSHNOTIFICATIONREQ._serialized_end=1168
+  _PUSHNOTIFICATIONRESP._serialized_start=1170
+  _PUSHNOTIFICATIONRESP._serialized_end=1233
+  _KICKUSERREQ._serialized_start=1235
+  _KICKUSERREQ._serialized_end=1300
+  _KICKUSERRESP._serialized_start=1302
+  _KICKUSERRESP._serialized_end=1338
+  _DRAINNOTIFYREQ._serialized_start=1340
+  _DRAINNOTIFYREQ._serialized_end=1407
+  _DRAINNOTIFYRESP._serialized_start=1409
+  _DRAINNOTIFYRESP._serialized_end=1450
+  _GATEWAYSERVICE._serialized_start=1453
+  _GATEWAYSERVICE._serialized_end=2045
 # @@protoc_insertion_point(module_scope)

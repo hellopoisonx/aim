@@ -2,6 +2,7 @@ package conversationservicelogic
 
 import (
 	"context"
+	"strconv"
 	"testing"
 	"time"
 
@@ -212,11 +213,17 @@ func (f *fakeConversationStore) GetConversationMembersDetail(_ context.Context, 
 	for _, m := range f.members[conversationID] {
 		result = append(result, model.GetConversationMembersDetailRow{
 			UserID:   m.UserID,
+			Email:    userEmail(m.UserID),
+			Avatar:   "avatar-" + userEmail(m.UserID),
 			Role:     m.Role,
 			JoinedAt: m.JoinedAt,
 		})
 	}
 	return result, nil
+}
+
+func userEmail(userID int64) string {
+	return "user" + strconv.FormatInt(userID, 10) + "@example.com"
 }
 
 func (f *fakeConversationStore) UpsertConversationReadState(_ context.Context, arg model.UpsertConversationReadStateParams) (model.ConversationReadState, error) {
@@ -468,9 +475,75 @@ func TestGetConversationHistoryLogic(t *testing.T) {
 			if tt.name == "initial page" && len(resp.GetMessages()) > 0 {
 				assert.Equal(t, "client-1", resp.GetMessages()[0].GetClientMsgId())
 				assert.Equal(t, []string{"2"}, resp.GetMessages()[0].GetMentions())
+				// Verify per-message read details exist and exclude the sender.
+				details := resp.GetMessages()[0].GetReadDetails()
+				assert.True(t, len(details) > 0, "expected read_details on each message")
+				for _, rd := range details {
+					assert.NotEqual(t, int64(1), rd.GetUserId(), "sender should be excluded from read_details")
+				}
 			}
 		})
 	}
+}
+
+func TestGetConversationHistoryLogic_ReadDetails(t *testing.T) {
+	store := newFakeStore()
+	convID := generateTestConversationID()
+	store.conversations[convID] = model.GetConversationRow{
+		ID:               convID,
+		ConversationType: "group",
+		IsActive:         true,
+		CreatedAt:        newTS(),
+	}
+	store.members[convID] = []model.GetConversationMembersRow{
+		{ConversationID: convID, UserID: 1, JoinedAt: newTS()},
+		{ConversationID: convID, UserID: 2, JoinedAt: newTS()},
+		{ConversationID: convID, UserID: 3, JoinedAt: newTS()},
+	}
+	store.messages[convID] = []model.Message{
+		{ID: 10, ConversationID: convID, SenderID: 1, MessageType: "text", Content: []byte(`"hi"`), CreatedAt: newTS()},
+		{ID: 20, ConversationID: convID, SenderID: 2, MessageType: "text", Content: []byte(`"hello"`), CreatedAt: newTS()},
+	}
+
+	// User 2 has read up to message 20 (both messages), User 3 only up to message 10.
+	store.readStates[convID] = map[int64]model.ConversationReadState{
+		2: {ConversationID: convID, UserID: 2, LastReadMessageID: 20, UpdatedAt: newTS()},
+		3: {ConversationID: convID, UserID: 3, LastReadMessageID: 10, UpdatedAt: newTS()},
+	}
+
+	convSvc := service.NewConversationService(store, testSnowflake, nil, nil)
+	svcCtx := &svc.ServiceContext{
+		ConversationService: convSvc,
+		UserInfoService: &fakeUserInfoService{users: map[int64]model.UserInfo{
+			1: {ID: 1, Email: "u1@x.com", Nickname: "U1"},
+			2: {ID: 2, Email: "u2@x.com", Nickname: "U2"},
+			3: {ID: 3, Email: "u3@x.com", Nickname: "U3"},
+		}},
+	}
+
+	l := NewGetConversationHistoryLogic(context.Background(), svcCtx)
+	resp, err := l.GetConversationHistory(&pb.GetConversationHistoryReq{ConversationId: convID, Limit: 50})
+	require.NoError(t, err)
+	require.Len(t, resp.GetMessages(), 2)
+
+	// Message 10 (sender=1): both 2 and 3 are non-senders.
+	// 2 has last=20 >= 10 → is_read=true. 3 has last=10 >= 10 → is_read=true.
+	msg10 := resp.GetMessages()[0]
+	require.Len(t, msg10.GetReadDetails(), 2, "msg 10 should have 2 non-sender read details")
+	for _, rd := range msg10.GetReadDetails() {
+		assert.True(t, rd.GetIsRead(), "both members should have read msg 10")
+	}
+
+	// Message 20 (sender=2): non-senders are 1 and 3.
+	// 1 has no read state → default is_read=false. 3 has last=10 < 20 → is_read=false.
+	msg20 := resp.GetMessages()[1]
+	require.Len(t, msg20.GetReadDetails(), 2, "msg 20 should have 2 non-sender read details")
+	for _, rd := range msg20.GetReadDetails() {
+		assert.False(t, rd.GetIsRead(), "neither member should have read msg 20")
+	}
+
+	// Verify read_states global cursor is still returned.
+	require.Len(t, resp.GetReadStates(), 2)
 }
 
 func TestGetConversationHistoryLogic_NilService(t *testing.T) {

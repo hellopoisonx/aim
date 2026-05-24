@@ -80,6 +80,7 @@ func (l *GetConversationHistoryLogic) GetConversationHistory(in *pb.GetConversat
 			ClientMsgId:    clientMsgID,
 			CreatedAt:      service.UnixFromPGTimestamptz(msg.CreatedAt),
 			Mentions:       service.ParseMentionsJSON(msg.Mentions),
+			IsSystem:       msg.SenderID == 0 && msg.MessageType == "system",
 		})
 	}
 
@@ -99,12 +100,35 @@ func (l *GetConversationHistoryLogic) GetConversationHistory(in *pb.GetConversat
 	}
 
 	pbReadStates := make([]*pb.ReadStateItem, len(readStates))
+	readStateByUserID := make(map[int64]service.ReadState, len(readStates))
 	for i, st := range readStates {
 		pbReadStates[i] = &pb.ReadStateItem{
 			UserId:            st.UserID,
 			LastReadMessageId: st.LastReadMessageID,
 			UpdatedAt:         st.UpdatedAt,
 		}
+		readStateByUserID[st.UserID] = st
+	}
+
+	members, err := convSvc.GetConversationMembersDetail(l.ctx, in.GetConversationId())
+	if err != nil {
+		return nil, service.ConversationToGRPCError(err)
+	}
+
+	// Enrich read states and read details with member name snapshots.
+	memberByUserID := make(map[int64]service.MemberDetail, len(members))
+	for _, m := range members {
+		memberByUserID[m.UserID] = m
+	}
+	for i, st := range pbReadStates {
+		if m, ok := memberByUserID[st.UserId]; ok {
+			pbReadStates[i].Email = m.Email
+			pbReadStates[i].Avatar = m.Avatar
+			pbReadStates[i].DisplayName = m.DisplayName
+		}
+	}
+	for _, msg := range pbMessages {
+		msg.ReadDetails = buildMessageReadDetails(msg.GetId(), msg.GetSenderId(), members, readStateByUserID)
 	}
 
 	return &pb.GetConversationHistoryResp{
@@ -114,4 +138,39 @@ func (l *GetConversationHistoryLogic) GetConversationHistory(in *pb.GetConversat
 		HasMore:             hasMore,
 		ReadStates:          pbReadStates,
 	}, nil
+}
+
+func buildMessageReadDetails(
+	messageID int64,
+	senderID int64,
+	members []service.MemberDetail,
+	readStateByUserID map[int64]service.ReadState,
+) []*pb.MessageReadDetailItem {
+	if messageID <= 0 || len(members) == 0 {
+		return nil
+	}
+
+	details := make([]*pb.MessageReadDetailItem, 0, len(members))
+	for _, member := range members {
+		// The sender naturally has the message locally; omit them so read details
+		// represent how other members read this message. The comparison below
+		// relies on current Snowflake message IDs being time-ordered within a
+		// conversation. If message IDs become non-time-ordered, replace this with
+		// a per-conversation sequence or an equivalent read cursor.
+		if member.UserID == senderID {
+			continue
+		}
+		state := readStateByUserID[member.UserID]
+		details = append(details, &pb.MessageReadDetailItem{
+			UserId:            member.UserID,
+			IsRead:            state.LastReadMessageID >= messageID,
+			LastReadMessageId: state.LastReadMessageID,
+			UpdatedAt:         state.UpdatedAt,
+			Email:             member.Email,
+			Avatar:            member.Avatar,
+			DisplayName:       member.DisplayName,
+		})
+	}
+
+	return details
 }

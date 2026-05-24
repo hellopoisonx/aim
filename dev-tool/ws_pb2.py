@@ -15,7 +15,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x08ws.proto\x12\x02ws\"W\n\x07WsFrame\x12\x1b\n\x04type\x18\x01 \x01(\x0e\x32\r.ws.FrameType\x12\x0b\n\x03seq\x18\x02 \x01(\x03\x12\x0f\n\x07payload\x18\x03 \x01(\x0c\x12\x11\n\ttimestamp\x18\x04 \x01(\x03\"}\n\x12SendMessagePayload\x12\x17\n\x0f\x63onversation_id\x18\x01 \x01(\x03\x12\x14\n\x0cmessage_type\x18\x02 \x01(\t\x12\x0f\n\x07\x63ontent\x18\x03 \x01(\t\x12\x15\n\rclient_msg_id\x18\x04 \x01(\t\x12\x10\n\x08mentions\x18\x05 \x03(\t\"$\n\x10HeartbeatPayload\x12\x10\n\x08last_seq\x18\x01 \x01(\x03\"(\n\rTypingPayload\x12\x17\n\x0f\x63onversation_id\x18\x01 \x01(\x03\"B\n\x12ReadReceiptPayload\x12\x17\n\x0f\x63onversation_id\x18\x01 \x01(\x03\x12\x13\n\x0blast_msg_id\x18\x02 \x01(\x03\"#\n\x10\x43lientAckPayload\x12\x0f\n\x07\x61\x63k_seq\x18\x01 \x01(\x03\"\xbe\x01\n\x12PushMessagePayload\x12\x12\n\nmessage_id\x18\x01 \x01(\x03\x12\x17\n\x0f\x63onversation_id\x18\x02 \x01(\x03\x12\x14\n\x0cmessage_type\x18\x03 \x01(\t\x12\x0f\n\x07\x63ontent\x18\x04 \x01(\t\x12\x11\n\tsender_id\x18\x05 \x01(\x03\x12\x0f\n\x07sent_at\x18\x06 \x01(\x03\x12\x19\n\x11\x63onversation_type\x18\x07 \x01(\t\x12\x15\n\rclient_msg_id\x18\x08 \x01(\t\"J\n\x13PushPresencePayload\x12\x0f\n\x07user_id\x18\x01 \x01(\x03\x12\x0e\n\x06status\x18\x02 \x01(\t\x12\x12\n\nupdated_at\x18\x03 \x01(\x03\"e\n\x17PushNotificationPayload\x12\x19\n\x11notification_type\x18\x01 \x01(\t\x12\r\n\x05title\x18\x02 \x01(\t\x12\x0c\n\x04\x62ody\x18\x03 \x01(\t\x12\x12\n\nrelated_id\x18\x04 \x01(\x03\"z\n\x1cPushFriendApplicationPayload\x12\x0f\n\x07user_id\x18\x01 \x01(\x03\x12\x11\n\tfriend_id\x18\x02 \x01(\x03\x12\x0e\n\x06status\x18\x03 \x01(\t\x12\x12\n\ncreated_at\x18\x04 \x01(\x03\x12\x12\n\nupdated_at\x18\x05 \x01(\x03\"=\n\x11PushTypingPayload\x12\x0f\n\x07user_id\x18\x01 \x01(\x03\x12\x17\n\x0f\x63onversation_id\x18\x02 \x01(\x03\"G\n\x10ReconnectPayload\x12\x1a\n\x12reconnect_delay_ms\x18\x01 \x01(\x03\x12\x17\n\x0fgateway_node_id\x18\x02 \x01(\t\"9\n\x13TokenExpiredPayload\x12\x12\n\nexpired_at\x18\x01 \x01(\x03\x12\x0e\n\x06reason\x18\x02 \x01(\t\"\x88\x01\n\x10ServerAckPayload\x12\x0f\n\x07\x61\x63k_seq\x18\x01 \x01(\x03\x12\x15\n\rclient_msg_id\x18\x02 \x01(\t\x12\x0c\n\x04\x63ode\x18\x03 \x01(\x05\x12\x0b\n\x03msg\x18\x04 \x01(\t\x12\x1d\n\x06status\x18\x05 \x01(\x0e\x32\r.ws.AckStatus\x12\x12\n\nmessage_id\x18\x06 \x01(\x03*\x9a\x03\n\tFrameType\x12\x1a\n\x16\x46RAME_TYPE_UNSPECIFIED\x10\x00\x12\x1b\n\x17\x46RAME_TYPE_SEND_MESSAGE\x10\x01\x12\x18\n\x14\x46RAME_TYPE_HEARTBEAT\x10\x02\x12\x15\n\x11\x46RAME_TYPE_TYPING\x10\x03\x12\x1b\n\x17\x46RAME_TYPE_READ_RECEIPT\x10\x04\x12\x12\n\x0e\x46RAME_TYPE_ACK\x10\x05\x12\x1b\n\x17\x46RAME_TYPE_PUSH_MESSAGE\x10\x65\x12\x1c\n\x18\x46RAME_TYPE_PUSH_PRESENCE\x10\x66\x12 \n\x1c\x46RAME_TYPE_PUSH_NOTIFICATION\x10g\x12\x1a\n\x16\x46RAME_TYPE_PUSH_TYPING\x10h\x12\x18\n\x14\x46RAME_TYPE_RECONNECT\x10i\x12\x19\n\x15\x46RAME_TYPE_SERVER_ACK\x10j\x12\x1c\n\x18\x46RAME_TYPE_TOKEN_EXPIRED\x10k\x12&\n\"FRAME_TYPE_PUSH_FRIEND_APPLICATION\x10l*s\n\tAckStatus\x12\x1a\n\x16\x41\x43K_STATUS_UNSPECIFIED\x10\x00\x12\x17\n\x13\x41\x43K_STATUS_ACCEPTED\x10\x01\x12\x17\n\x13\x41\x43K_STATUS_REJECTED\x10\x02\x12\x18\n\x14\x41\x43K_STATUS_RETRYABLE\x10\x03\x42\x30Z.github.com/hellopoisonx/aim/shared/proto/ws/pbb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x08ws.proto\x12\x02ws\"W\n\x07WsFrame\x12\x1b\n\x04type\x18\x01 \x01(\x0e\x32\r.ws.FrameType\x12\x0b\n\x03seq\x18\x02 \x01(\x03\x12\x0f\n\x07payload\x18\x03 \x01(\x0c\x12\x11\n\ttimestamp\x18\x04 \x01(\x03\"}\n\x12SendMessagePayload\x12\x17\n\x0f\x63onversation_id\x18\x01 \x01(\x03\x12\x14\n\x0cmessage_type\x18\x02 \x01(\t\x12\x0f\n\x07\x63ontent\x18\x03 \x01(\t\x12\x15\n\rclient_msg_id\x18\x04 \x01(\t\x12\x10\n\x08mentions\x18\x05 \x03(\t\"$\n\x10HeartbeatPayload\x12\x10\n\x08last_seq\x18\x01 \x01(\x03\"(\n\rTypingPayload\x12\x17\n\x0f\x63onversation_id\x18\x01 \x01(\x03\"B\n\x12ReadReceiptPayload\x12\x17\n\x0f\x63onversation_id\x18\x01 \x01(\x03\x12\x13\n\x0blast_msg_id\x18\x02 \x01(\x03\"#\n\x10\x43lientAckPayload\x12\x0f\n\x07\x61\x63k_seq\x18\x01 \x01(\x03\")\n\nSenderInfo\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\r\n\x05\x65mail\x18\x02 \x01(\t\"\x88\x02\n\x12PushMessagePayload\x12\x12\n\nmessage_id\x18\x01 \x01(\x03\x12\x17\n\x0f\x63onversation_id\x18\x02 \x01(\x03\x12\x14\n\x0cmessage_type\x18\x03 \x01(\t\x12\x0f\n\x07\x63ontent\x18\x04 \x01(\t\x12\x11\n\tsender_id\x18\x05 \x01(\x03\x12\x0f\n\x07sent_at\x18\x06 \x01(\x03\x12\x19\n\x11\x63onversation_type\x18\x07 \x01(\t\x12\x15\n\rclient_msg_id\x18\x08 \x01(\t\x12\x11\n\tis_system\x18\t \x01(\x08\x12#\n\x0bsender_info\x18\n \x01(\x0b\x32\x0e.ws.SenderInfo\x12\x10\n\x08mentions\x18\x0b \x03(\t\"J\n\x13PushPresencePayload\x12\x0f\n\x07user_id\x18\x01 \x01(\x03\x12\x0e\n\x06status\x18\x02 \x01(\t\x12\x12\n\nupdated_at\x18\x03 \x01(\x03\"e\n\x17PushNotificationPayload\x12\x19\n\x11notification_type\x18\x01 \x01(\t\x12\r\n\x05title\x18\x02 \x01(\t\x12\x0c\n\x04\x62ody\x18\x03 \x01(\t\x12\x12\n\nrelated_id\x18\x04 \x01(\x03\"z\n\x1cPushFriendApplicationPayload\x12\x0f\n\x07user_id\x18\x01 \x01(\x03\x12\x11\n\tfriend_id\x18\x02 \x01(\x03\x12\x0e\n\x06status\x18\x03 \x01(\t\x12\x12\n\ncreated_at\x18\x04 \x01(\x03\x12\x12\n\nupdated_at\x18\x05 \x01(\x03\"=\n\x11PushTypingPayload\x12\x0f\n\x07user_id\x18\x01 \x01(\x03\x12\x17\n\x0f\x63onversation_id\x18\x02 \x01(\x03\"t\n\x16PushReadReceiptPayload\x12\x17\n\x0f\x63onversation_id\x18\x01 \x01(\x03\x12\x0f\n\x07user_id\x18\x02 \x01(\x03\x12\x1c\n\x14last_read_message_id\x18\x03 \x01(\x03\x12\x12\n\nupdated_at\x18\x04 \x01(\x03\"G\n\x10ReconnectPayload\x12\x1a\n\x12reconnect_delay_ms\x18\x01 \x01(\x03\x12\x17\n\x0fgateway_node_id\x18\x02 \x01(\t\"9\n\x13TokenExpiredPayload\x12\x12\n\nexpired_at\x18\x01 \x01(\x03\x12\x0e\n\x06reason\x18\x02 \x01(\t\"\x88\x01\n\x10ServerAckPayload\x12\x0f\n\x07\x61\x63k_seq\x18\x01 \x01(\x03\x12\x15\n\rclient_msg_id\x18\x02 \x01(\t\x12\x0c\n\x04\x63ode\x18\x03 \x01(\x05\x12\x0b\n\x03msg\x18\x04 \x01(\t\x12\x1d\n\x06status\x18\x05 \x01(\x0e\x32\r.ws.AckStatus\x12\x12\n\nmessage_id\x18\x06 \x01(\x03*\xbc\x03\n\tFrameType\x12\x1a\n\x16\x46RAME_TYPE_UNSPECIFIED\x10\x00\x12\x1b\n\x17\x46RAME_TYPE_SEND_MESSAGE\x10\x01\x12\x18\n\x14\x46RAME_TYPE_HEARTBEAT\x10\x02\x12\x15\n\x11\x46RAME_TYPE_TYPING\x10\x03\x12\x1b\n\x17\x46RAME_TYPE_READ_RECEIPT\x10\x04\x12\x12\n\x0e\x46RAME_TYPE_ACK\x10\x05\x12\x1b\n\x17\x46RAME_TYPE_PUSH_MESSAGE\x10\x65\x12\x1c\n\x18\x46RAME_TYPE_PUSH_PRESENCE\x10\x66\x12 \n\x1c\x46RAME_TYPE_PUSH_NOTIFICATION\x10g\x12\x1a\n\x16\x46RAME_TYPE_PUSH_TYPING\x10h\x12\x18\n\x14\x46RAME_TYPE_RECONNECT\x10i\x12\x19\n\x15\x46RAME_TYPE_SERVER_ACK\x10j\x12\x1c\n\x18\x46RAME_TYPE_TOKEN_EXPIRED\x10k\x12&\n\"FRAME_TYPE_PUSH_FRIEND_APPLICATION\x10l\x12 \n\x1c\x46RAME_TYPE_PUSH_READ_RECEIPT\x10m*s\n\tAckStatus\x12\x1a\n\x16\x41\x43K_STATUS_UNSPECIFIED\x10\x00\x12\x17\n\x13\x41\x43K_STATUS_ACCEPTED\x10\x01\x12\x17\n\x13\x41\x43K_STATUS_REJECTED\x10\x02\x12\x18\n\x14\x41\x43K_STATUS_RETRYABLE\x10\x03\x42\x30Z.github.com/hellopoisonx/aim/shared/proto/ws/pbb\x06proto3')
 
 _FRAMETYPE = DESCRIPTOR.enum_types_by_name['FrameType']
 FrameType = enum_type_wrapper.EnumTypeWrapper(_FRAMETYPE)
@@ -35,6 +35,7 @@ FRAME_TYPE_RECONNECT = 105
 FRAME_TYPE_SERVER_ACK = 106
 FRAME_TYPE_TOKEN_EXPIRED = 107
 FRAME_TYPE_PUSH_FRIEND_APPLICATION = 108
+FRAME_TYPE_PUSH_READ_RECEIPT = 109
 ACK_STATUS_UNSPECIFIED = 0
 ACK_STATUS_ACCEPTED = 1
 ACK_STATUS_REJECTED = 2
@@ -47,11 +48,13 @@ _HEARTBEATPAYLOAD = DESCRIPTOR.message_types_by_name['HeartbeatPayload']
 _TYPINGPAYLOAD = DESCRIPTOR.message_types_by_name['TypingPayload']
 _READRECEIPTPAYLOAD = DESCRIPTOR.message_types_by_name['ReadReceiptPayload']
 _CLIENTACKPAYLOAD = DESCRIPTOR.message_types_by_name['ClientAckPayload']
+_SENDERINFO = DESCRIPTOR.message_types_by_name['SenderInfo']
 _PUSHMESSAGEPAYLOAD = DESCRIPTOR.message_types_by_name['PushMessagePayload']
 _PUSHPRESENCEPAYLOAD = DESCRIPTOR.message_types_by_name['PushPresencePayload']
 _PUSHNOTIFICATIONPAYLOAD = DESCRIPTOR.message_types_by_name['PushNotificationPayload']
 _PUSHFRIENDAPPLICATIONPAYLOAD = DESCRIPTOR.message_types_by_name['PushFriendApplicationPayload']
 _PUSHTYPINGPAYLOAD = DESCRIPTOR.message_types_by_name['PushTypingPayload']
+_PUSHREADRECEIPTPAYLOAD = DESCRIPTOR.message_types_by_name['PushReadReceiptPayload']
 _RECONNECTPAYLOAD = DESCRIPTOR.message_types_by_name['ReconnectPayload']
 _TOKENEXPIREDPAYLOAD = DESCRIPTOR.message_types_by_name['TokenExpiredPayload']
 _SERVERACKPAYLOAD = DESCRIPTOR.message_types_by_name['ServerAckPayload']
@@ -97,6 +100,13 @@ ClientAckPayload = _reflection.GeneratedProtocolMessageType('ClientAckPayload', 
   })
 _sym_db.RegisterMessage(ClientAckPayload)
 
+SenderInfo = _reflection.GeneratedProtocolMessageType('SenderInfo', (_message.Message,), {
+  'DESCRIPTOR' : _SENDERINFO,
+  '__module__' : 'ws_pb2'
+  # @@protoc_insertion_point(class_scope:ws.SenderInfo)
+  })
+_sym_db.RegisterMessage(SenderInfo)
+
 PushMessagePayload = _reflection.GeneratedProtocolMessageType('PushMessagePayload', (_message.Message,), {
   'DESCRIPTOR' : _PUSHMESSAGEPAYLOAD,
   '__module__' : 'ws_pb2'
@@ -132,6 +142,13 @@ PushTypingPayload = _reflection.GeneratedProtocolMessageType('PushTypingPayload'
   })
 _sym_db.RegisterMessage(PushTypingPayload)
 
+PushReadReceiptPayload = _reflection.GeneratedProtocolMessageType('PushReadReceiptPayload', (_message.Message,), {
+  'DESCRIPTOR' : _PUSHREADRECEIPTPAYLOAD,
+  '__module__' : 'ws_pb2'
+  # @@protoc_insertion_point(class_scope:ws.PushReadReceiptPayload)
+  })
+_sym_db.RegisterMessage(PushReadReceiptPayload)
+
 ReconnectPayload = _reflection.GeneratedProtocolMessageType('ReconnectPayload', (_message.Message,), {
   'DESCRIPTOR' : _RECONNECTPAYLOAD,
   '__module__' : 'ws_pb2'
@@ -157,10 +174,10 @@ if _descriptor._USE_C_DESCRIPTORS == False:
 
   DESCRIPTOR._options = None
   DESCRIPTOR._serialized_options = b'Z.github.com/hellopoisonx/aim/shared/proto/ws/pb'
-  _FRAMETYPE._serialized_start=1248
-  _FRAMETYPE._serialized_end=1658
-  _ACKSTATUS._serialized_start=1660
-  _ACKSTATUS._serialized_end=1775
+  _FRAMETYPE._serialized_start=1483
+  _FRAMETYPE._serialized_end=1927
+  _ACKSTATUS._serialized_start=1929
+  _ACKSTATUS._serialized_end=2044
   _WSFRAME._serialized_start=16
   _WSFRAME._serialized_end=103
   _SENDMESSAGEPAYLOAD._serialized_start=105
@@ -173,20 +190,24 @@ if _descriptor._USE_C_DESCRIPTORS == False:
   _READRECEIPTPAYLOAD._serialized_end=378
   _CLIENTACKPAYLOAD._serialized_start=380
   _CLIENTACKPAYLOAD._serialized_end=415
-  _PUSHMESSAGEPAYLOAD._serialized_start=418
-  _PUSHMESSAGEPAYLOAD._serialized_end=608
-  _PUSHPRESENCEPAYLOAD._serialized_start=610
-  _PUSHPRESENCEPAYLOAD._serialized_end=684
-  _PUSHNOTIFICATIONPAYLOAD._serialized_start=686
-  _PUSHNOTIFICATIONPAYLOAD._serialized_end=787
-  _PUSHFRIENDAPPLICATIONPAYLOAD._serialized_start=789
-  _PUSHFRIENDAPPLICATIONPAYLOAD._serialized_end=911
-  _PUSHTYPINGPAYLOAD._serialized_start=913
-  _PUSHTYPINGPAYLOAD._serialized_end=974
-  _RECONNECTPAYLOAD._serialized_start=976
-  _RECONNECTPAYLOAD._serialized_end=1047
-  _TOKENEXPIREDPAYLOAD._serialized_start=1049
-  _TOKENEXPIREDPAYLOAD._serialized_end=1106
-  _SERVERACKPAYLOAD._serialized_start=1109
-  _SERVERACKPAYLOAD._serialized_end=1245
+  _SENDERINFO._serialized_start=417
+  _SENDERINFO._serialized_end=458
+  _PUSHMESSAGEPAYLOAD._serialized_start=461
+  _PUSHMESSAGEPAYLOAD._serialized_end=725
+  _PUSHPRESENCEPAYLOAD._serialized_start=727
+  _PUSHPRESENCEPAYLOAD._serialized_end=801
+  _PUSHNOTIFICATIONPAYLOAD._serialized_start=803
+  _PUSHNOTIFICATIONPAYLOAD._serialized_end=904
+  _PUSHFRIENDAPPLICATIONPAYLOAD._serialized_start=906
+  _PUSHFRIENDAPPLICATIONPAYLOAD._serialized_end=1028
+  _PUSHTYPINGPAYLOAD._serialized_start=1030
+  _PUSHTYPINGPAYLOAD._serialized_end=1091
+  _PUSHREADRECEIPTPAYLOAD._serialized_start=1093
+  _PUSHREADRECEIPTPAYLOAD._serialized_end=1209
+  _RECONNECTPAYLOAD._serialized_start=1211
+  _RECONNECTPAYLOAD._serialized_end=1282
+  _TOKENEXPIREDPAYLOAD._serialized_start=1284
+  _TOKENEXPIREDPAYLOAD._serialized_end=1341
+  _SERVERACKPAYLOAD._serialized_start=1344
+  _SERVERACKPAYLOAD._serialized_end=1480
 # @@protoc_insertion_point(module_scope)

@@ -63,19 +63,34 @@ func (l *GetConversationHistoryLogic) GetConversationHistory(req *types.GetConve
 	messages := make([]types.MessageItem, 0, len(rpcResp.GetMessages()))
 	for _, msg := range rpcResp.GetMessages() {
 		senderInfo := msg.GetSenderInfo()
+		readDetails := make([]types.MessageReadDetailItem, 0, len(msg.GetReadDetails()))
+		for _, rd := range msg.GetReadDetails() {
+			readDetails = append(readDetails, types.MessageReadDetailItem{
+				UserId:            rd.GetUserId(),
+				IsRead:            rd.GetIsRead(),
+				LastReadMessageId: rd.GetLastReadMessageId(),
+				UpdatedAt:         rd.GetUpdatedAt(),
+				Email:             rd.GetEmail(),
+				Avatar:            rd.GetAvatar(),
+				DisplayName:       rd.GetDisplayName(),
+			})
+		}
 		messages = append(messages, types.MessageItem{
 			Id:             msg.GetId(),
 			ConversationId: msg.GetConversationId(),
 			SenderId:       msg.GetSenderId(),
 			SenderInfo: types.SenderInfo{
-				Name:  senderInfo.GetName(),
-				Email: senderInfo.GetEmail(),
+				Name:        senderInfo.GetName(),
+				Email:       senderInfo.GetEmail(),
+				DisplayName: senderInfo.GetDisplayName(),
 			},
 			MessageType: msg.GetMessageType(),
 			Content:     msg.GetContent(),
 			ClientMsgId: msg.GetClientMsgId(),
 			CreatedAt:   msg.GetCreatedAt(),
+			IsSystem:    msg.GetIsSystem(),
 			Mentions:    msg.GetMentions(),
+			ReadDetails: readDetails,
 		})
 	}
 
@@ -87,6 +102,9 @@ func (l *GetConversationHistoryLogic) GetConversationHistory(req *types.GetConve
 				UserId:            st.GetUserId(),
 				LastReadMessageId: st.GetLastReadMessageId(),
 				UpdatedAt:         st.GetUpdatedAt(),
+				Email:             st.GetEmail(),
+				Avatar:            st.GetAvatar(),
+				DisplayName:       st.GetDisplayName(),
 			})
 		}
 	}

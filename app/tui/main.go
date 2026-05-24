@@ -67,9 +67,12 @@ type profile struct {
 }
 
 type conversationView struct {
-	Item       client.ConversationItem
-	Messages   []client.MessageItem
-	ReadStates []client.ReadStateItem
+	Item                client.ConversationItem
+	Messages            []client.MessageItem
+	ReadStates          []client.ReadStateItem
+	NextCursorCreatedAt int64
+	NextCursorID        int64
+	HasMore             bool
 }
 
 type appState struct {
@@ -98,8 +101,8 @@ type model struct {
 	wsURL      string
 	instanceID string
 	dbPath     string
-	events   chan string
-	notifyCh chan wsNotifyMsg
+	events     chan string
+	notifyCh   chan wsNotifyMsg
 
 	active   string
 	profiles map[string]*profile
@@ -109,33 +112,33 @@ type model struct {
 	windowWidth  int
 	windowHeight int
 
-	activeMenu    menuKind
-	focus         focusKind
-	input         string
-	messageInput  string
-	friendSearch  string
-	autoLoginLine string
-	phase         appPhase
-	authMode      authMode
-	authField     authField
-	authEmail     string
-	authPassword  string
-	authUsername  string
-	authStatus    string
-	commandMode      bool
-	overlay          overlayKind
-	groupName         string
-	groupField        groupField
-	groupCandidates   []pickUser
-	groupMemberCursor int
+	activeMenu          menuKind
+	focus               focusKind
+	input               string
+	messageInput        string
+	friendSearch        string
+	autoLoginLine       string
+	phase               appPhase
+	authMode            authMode
+	authField           authField
+	authEmail           string
+	authPassword        string
+	authUsername        string
+	authStatus          string
+	commandMode         bool
+	overlay             overlayKind
+	groupName           string
+	groupField          groupField
+	groupCandidates     []pickUser
+	groupMemberCursor   int
 	overlayStatus       string
-	lastTypingNotify      time.Time
-	mentionPickerActive   bool
-	mentionCursor         int
-	mentionCandidates     []pickUser
-	pendingMentions       []string
-	mentionMembersCache   map[int64][]pickUser
-	logs                  []string
+	lastTypingNotify    time.Time
+	mentionPickerActive bool
+	mentionCursor       int
+	mentionCandidates   []pickUser
+	pendingMentions     []string
+	mentionMembersCache map[int64][]pickUser
+	logs                []string
 }
 
 type resultMsg struct{ line string }
@@ -296,9 +299,9 @@ func newModel(parent context.Context, cfg appConfig, store *Store) (model, error
 		state:        &appState{conversations: views, presence: presence},
 		windowWidth:  120,
 		windowHeight: 40,
-		phase:     phaseAuth,
-		authMode:  authLogin,
-		authField: authFieldEmail,
+		phase:        phaseAuth,
+		authMode:     authLogin,
+		authField:    authFieldEmail,
 		logs: []string{
 			"AIM TUI ready. 未登录时显示注册/登录页；/ 进入命令模式。",
 			"REST=" + cfg.Gateway + " WS=" + cfg.WSURL + " instance=" + cfg.InstanceID + " db=" + cfg.DBPath,
@@ -469,6 +472,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case tea.KeyRight:
 			m.moveFocus(1)
 			return m, nil
+		case tea.KeyPgUp:
+			return m, m.loadMoreHistoryCmd()
+		case tea.KeyShiftUp:
+			return m, m.loadMoreHistoryCmd()
 		case tea.KeyUp:
 			prev := m.state.selected
 			if m.focus == focusConversationList {
@@ -618,6 +625,9 @@ func (m model) View() string {
 	}
 
 	header := styles.title.Render("AIM TUI") + " " + styles.status.Render(fmt.Sprintf("[%s] %s %s", m.instanceID, user, wsState))
+	if m.selectedConversationHasMore() {
+		header += " " + styles.muted.Render("PgUp/Shift+↑ 加载更早历史")
+	}
 	menuWidth, bodyWidth, bodyHeight := m.layoutMetrics()
 	layout := m.renderPage(menuWidth, bodyWidth, bodyHeight)
 	footer := styles.help.Render("←/→ 切换区域｜↑/↓ 选择｜Enter 确认｜/ 命令｜菜单含建群/退出｜Ctrl+C 退出")
@@ -721,6 +731,9 @@ func (m model) renderConversationWindow(width, bodyHeight int) string {
 	}
 	title := styles.title.Render(name) + styles.muted.Render(fmt.Sprintf("  members=%v", conv.Item.MemberIDs))
 	rows := []string{title}
+	if conv.HasMore {
+		rows = append(rows, styles.muted.Render(fmt.Sprintf("更早历史可加载：next_cursor=(%d,#%d)，按 PgUp 或命令 history more", conv.NextCursorCreatedAt, conv.NextCursorID)))
+	}
 	if line := m.formatTypingLine(conv.Item.ConversationID); line != "" {
 		rows = append(rows, line)
 	}
@@ -952,7 +965,7 @@ func (m *model) backspaceFocusedInput() {
 }
 
 func (m model) renderMessage(msg client.MessageItem, conv conversationView) string {
-	if msg.IsSystem || msg.MessageType == "system" {
+	if msg.IsSystem || msg.MessageType == systemMessageType {
 		return styles.muted.Render(fmt.Sprintf("[系统] %s", msg.Content))
 	}
 	sender := m.userLabelLocked(msg.SenderID)
@@ -971,7 +984,7 @@ func (m model) renderMessage(msg client.MessageItem, conv conversationView) stri
 	if mentionLine := formatMentionLabels(&m, msg.Mentions); mentionLine != "" {
 		body += "\n提及：" + mentionLine
 	}
-	if suffix := m.messageReadSuffix(msg.ID, selfID, conv.ReadStates); suffix != "" {
+	if suffix := m.formatMessageReadDetail(msg, conv); suffix != "" {
 		body += suffix
 	}
 	if msg.SenderID == selfID {

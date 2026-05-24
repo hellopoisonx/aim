@@ -49,12 +49,14 @@ PYTHONIOENCODING=utf-8 python aim_test.py <command> [--args]
 | `conv-update` | `--conversation-id` [`--name`] [`--avatar`] | Bearer | `PUT /api/conversations/:id` |
 | `history` | `--conversation-id` [`--limit`] [`--cursor-created-at`] [`--cursor-id`] | Bearer | `GET /api/conversations/history/:id` |
 
+> `POST /api/conversations` / `POST /api/conversations/group` 服务端要求 `name`；dev-tool 中 `--name` 可省略，省略时自动生成 `direct-<uid>-<uid>` 或 `group-<uid>-...`。
+
 ### WebSocket
 
 | 命令 | 参数 | 鉴权 | 帧类型 |
 |------|------|------|--------|
 | `ws-connect` | [`--profile`] | Bearer (header) | — |
-| `ws-send` | `--conversation-id` `--content` [`--message-type`] [`--profile`] | Bearer | `SEND_MESSAGE` |
+| `ws-send` | `--conversation-id` `--content` [`--message-type`] [`--mentions`] [`--profile`] | Bearer | `SEND_MESSAGE` |
 | `ws-heartbeat` | [`--profile`] | Bearer | `HEARTBEAT` |
 | `ws-typing` | `--conversation-id` [`--profile`] | Bearer | `TYPING` |
 | `ws-read-receipt` | `--conversation-id` `--last-msg-id` [`--profile`] | Bearer | `READ_RECEIPT` |
@@ -207,6 +209,7 @@ aim [bob] [#2] ·> login bob@t.com 12345678
 | `SERVER_ACK` | 106 | `ServerAckPayload` |
 | `TOKEN_EXPIRED` | 107 | `TokenExpiredPayload` |
 | `PUSH_FRIEND_APPLICATION` | 108 | `PushFriendApplicationPayload` |
+| `PUSH_READ_RECEIPT` | 109 | `PushReadReceiptPayload` (conversation_id, user_id, last_read_message_id, updated_at) |
 
 ---
 
@@ -325,4 +328,4 @@ python benchmark.py ws-message --users 100 --messages-per-user 1000 --quiet
 | `P50` | 50% 请求延迟低于此值（中位数） |
 | `P95` | 95% 请求延迟低于此值 |
 | `P99` | 99% 请求延迟低于此值（长尾） |
-| `Error Types` | 错误细分：`api_40400`、`ConnectionError` 等 |
+| `Error Types` | 错误细分：`api_40400`、`server_ack_40300`、`recv_timeout`、`ConnectionError` 等 |

@@ -44,6 +44,9 @@ func (f *fakeConversationStore) CreateConversation(ctx context.Context, arg mode
 			Time:  time.Now(),
 			Valid: true,
 		},
+		Name:      arg.Name,
+		Avatar:    arg.Avatar,
+		CreatorID: arg.CreatorID,
 	}
 	f.conversations[conv.ID] = conv
 	return model.CreateConversationRow{
@@ -396,6 +399,14 @@ func TestConversationService_CreateConversation_ValidGroup(t *testing.T) {
 	members, err := store.GetConversationMembers(context.Background(), conv.ID)
 	require.NoError(t, err)
 	assert.Len(t, members, 4)
+	var foundOwner bool
+	for _, m := range members {
+		if m.UserID == 1 {
+			assert.Equal(t, "owner", m.Role)
+			foundOwner = true
+		}
+	}
+	assert.True(t, foundOwner)
 }
 
 func TestConversationService_CreateConversation_InvalidType(t *testing.T) {
@@ -455,10 +466,6 @@ func TestConversationService_CreateConversation_EmptyMembers(t *testing.T) {
 }
 
 func TestConversationService_CreateConversation_DirectInvalidMemberCount(t *testing.T) {
-	// direct conversations require member_ids to contain exactly one peer user id.
-	// Anything else is rejected up front; passing just the creator (single_member case)
-	// is also rejected because after auto-adding the creator it still yields only one
-	// unique member.
 	tests := []struct {
 		name        string
 		memberIDs   []int64
@@ -515,7 +522,39 @@ func TestConversationService_CreateConversation_DirectWithCreatorNotInMembers(t 
 		}
 	}
 	assert.True(t, hasCreator, "creator should be auto-added to members")
+	var foundOwner bool
+	for _, m := range members {
+		if m.UserID == 1 {
+			assert.Equal(t, "owner", m.Role)
+			foundOwner = true
+		}
+	}
+	assert.True(t, foundOwner)
 }
+
+func TestConversationService_RoleGuards(t *testing.T) {
+	store := newFakeConversationStore()
+	svc := NewConversationService(store, testSnowflake, nil, nil)
+	conv, err := svc.CreateConversation(context.Background(), "group", 1, []int64{1, 2, 3}, "Group", "")
+	require.NoError(t, err)
+
+	_, err = svc.AddGroupMembers(context.Background(), conv.ID, 2, "u2", []int64{4})
+	require.ErrorIs(t, err, ErrNotOwner)
+
+	err = svc.RemoveGroupMembers(context.Background(), conv.ID, 2, "u2", []int64{3})
+	require.ErrorIs(t, err, ErrNotOwner)
+
+	_, err = svc.UpdateGroupInfo(context.Background(), conv.ID, 2, "u2", ptrString("n"), nil)
+	require.ErrorIs(t, err, ErrNotOwner)
+
+	err = svc.DismissGroup(context.Background(), conv.ID, 2)
+	require.ErrorIs(t, err, ErrNotOwner)
+
+	err = svc.LeaveGroup(context.Background(), conv.ID, 1, "u1")
+	require.ErrorIs(t, err, ErrNotOwner)
+}
+
+func ptrString(v string) *string { return &v }
 
 func TestConversationService_CreateConversation_StoreError(t *testing.T) {
 	store := newFakeConversationStore()
@@ -1332,4 +1371,3 @@ func TestConversationService_ListConversationReadStates_Empty(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, states)
 }
-

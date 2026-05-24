@@ -1023,12 +1023,15 @@ class WsMessageScenario:
         # Step 2: Create conversations (pair users)
         print("  [2/5] Creating conversations...")
         conv_lock = threading.Lock()
+        conv_idx = 0
 
         def create_conv():
+            nonlocal conv_idx
             if not user_creds:
                 return
             with conv_lock:
-                idx = len(conv_pairs)
+                idx = conv_idx
+                conv_idx += 1
             if idx * 2 + 1 >= len(user_creds):
                 return
             a_id, a_token, a_refresh, a_expires, a_device = user_creds[idx * 2]
@@ -1053,10 +1056,12 @@ class WsMessageScenario:
         # Step 3: Connect receiver WS clients (B side)
         print("  [3/5] Connecting receiver WebSocket clients...")
 
-        # pending_sends: client_msg_id → threading.Event
-        # send_times:    client_msg_id → send_timestamp
+        # pending_sends:   client_msg_id → threading.Event
+        # send_times:      client_msg_id → send_timestamp
+        # pending_results: client_msg_id → "received" or error_type
         pending_sends: Dict[str, threading.Event] = {}
         send_times: Dict[str, float] = {}
+        pending_results: Dict[str, str] = {}
         pending_lock = threading.Lock()
         # Track messages that timed out or were orphaned
         timed_out_count = {"value": 0}
@@ -1082,13 +1087,14 @@ class WsMessageScenario:
                         if msg_id:
                             recv_time = time.time()
                             with pending_lock:
-                                t0 = send_times.pop(msg_id, None)
-                                evt = pending_sends.pop(msg_id, None)
-                            if t0 is not None:
+                                t0 = send_times.get(msg_id)
+                                evt = pending_sends.get(msg_id)
+                                if evt is not None and msg_id not in pending_results:
+                                    pending_results[msg_id] = "received"
+                            if t0 is not None and evt is not None:
                                 latency = recv_time - t0
                                 self.metrics.record_success(latency)
-                                if evt:
-                                    evt.set()
+                                evt.set()
                 return on_frame
 
             ws.on_frame = make_on_frame(b_id)
@@ -1121,6 +1127,23 @@ class WsMessageScenario:
             token_mgr.user_id = a_id
             rest = RESTClient(token=token_mgr)
             ws = WSClient(token=token_mgr, rest_client=rest)
+
+            def on_sender_frame(frame, payload):
+                if frame.type != ws_pb2.FRAME_TYPE_SERVER_ACK or payload is None:
+                    return
+                msg_id = getattr(payload, "client_msg_id", "")
+                if not msg_id or getattr(payload, "status", 0) == ws_pb2.ACK_STATUS_ACCEPTED:
+                    return
+                code = getattr(payload, "code", 0)
+                status = getattr(payload, "status", 0)
+                error_type = f"server_ack_{code}" if code else f"server_ack_status_{status}"
+                with pending_lock:
+                    evt = pending_sends.get(msg_id)
+                    if evt is not None and msg_id not in pending_results:
+                        pending_results[msg_id] = error_type
+                        evt.set()
+
+            ws.on_frame = on_sender_frame
             ws.connect()
             if ws.is_connected():
                 sender_ws_clients.append((conv_id, ws))
@@ -1173,28 +1196,42 @@ class WsMessageScenario:
             max_send_retries = 2  # 最多重试 2 次（含首次共 3 次机会）
             for attempt in range(max_send_retries + 1):
                 try:
-                    # 注册 pending 追踪，再发送
+                    # 先生成 client_msg_id 并注册 pending，再发送；避免极快的 SERVER_ACK 在注册前抵达。
                     evt = threading.Event()
+                    client_msg_id = str(uuid.uuid4())
                     t0 = time.time()
-                    client_msg_id = ws.send_message(conv_id, content, "text")
                     with pending_lock:
                         send_times[client_msg_id] = t0
                         pending_sends[client_msg_id] = evt
+                    ws.send_message(conv_id, content, "text", client_msg_id=client_msg_id)
 
-                    # 等待接收方确认（带超时）
+                    # 等待接收方确认或服务端拒绝（带超时）
                     if not evt.wait(timeout=self.RECV_TIMEOUT):
                         # 超时：清理并记录错误
                         with pending_lock:
                             send_times.pop(client_msg_id, None)
                             pending_sends.pop(client_msg_id, None)
+                            pending_results.pop(client_msg_id, None)
                         timed_out_count["value"] += 1
                         latency = time.time() - t0
                         self.metrics.record_error(latency, "recv_timeout")
+                    else:
+                        with pending_lock:
+                            result = pending_results.pop(client_msg_id, None)
+                            send_times.pop(client_msg_id, None)
+                            pending_sends.pop(client_msg_id, None)
+                        if result and result != "received":
+                            latency = time.time() - t0
+                            self.metrics.record_error(latency, result)
 
                     # 返回 _SKIP_METRICS: 本函数自行管理 record_success/record_error
                     return _SKIP_METRICS
 
                 except RuntimeError as e:
+                    with pending_lock:
+                        send_times.pop(client_msg_id, None)
+                        pending_sends.pop(client_msg_id, None)
+                        pending_results.pop(client_msg_id, None)
                     if "Not connected" not in str(e) or attempt >= max_send_retries:
                         # 非断线 RuntimeError 或重试耗尽，记录错误
                         latency = time.time() - t0
@@ -1223,6 +1260,7 @@ class WsMessageScenario:
             if remaining > 0:
                 for mid in list(pending_sends.keys()):
                     t0 = send_times.pop(mid, time.time())
+                    pending_results.pop(mid, None)
                     latency = time.time() - t0
                     self.metrics.record_error(latency, "orphaned")
                 pending_sends.clear()
@@ -1306,10 +1344,13 @@ class MixedScenario:
 
         # Create conversations
         conv_lock = threading.Lock()
+        conv_idx = 0
 
         def create_conv():
+            nonlocal conv_idx
             with conv_lock:
-                idx = len(conv_pairs)
+                idx = conv_idx
+                conv_idx += 1
             if idx * 2 + 1 >= len(user_creds):
                 return
             a_id, a_token, a_refresh, a_expires, a_device = user_creds[idx * 2]

@@ -126,6 +126,7 @@ services:
         psql -h postgres -U user -d aim_logic -f /migrations/006_user_type.sql
         psql -h postgres -U user -d aim_logic -f /migrations/007_bot_tokens.sql
         psql -h postgres -U user -d aim_logic -f /migrations/008_bot_webhooks.sql
+        psql -h postgres -U user -d aim_logic -f /migrations/009_bot_actions.sql
     networks:
       - aim-network
 

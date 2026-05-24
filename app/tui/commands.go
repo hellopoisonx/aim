@@ -210,10 +210,17 @@ func (m *model) cmdAutoRefresh(ctx context.Context) string {
 	if p.RefreshToken == "" || p.ExpiresAt == 0 {
 		return "OK token refresh skipped: not logged in"
 	}
-	if time.Until(time.Unix(p.ExpiresAt, 0)) > tokenRefreshSkew {
+	if time.Until(unixMillisTime(p.ExpiresAt)) > tokenRefreshSkew {
 		return "OK token refresh skipped: token still valid"
 	}
 	return m.cmdRefresh(ctx, false)
+}
+
+func unixMillisTime(v int64) time.Time {
+	if v < 1_000_000_000_000 {
+		return time.Unix(v, 0)
+	}
+	return time.UnixMilli(v)
 }
 
 func (m *model) cmdRefresh(ctx context.Context, verbose bool) string {
@@ -549,25 +556,49 @@ func (m *model) selectedConversationID() (int64, error) {
 }
 
 func (m *model) cmdHistory(ctx context.Context, args []string) string {
-	var id int64
-	var err error
-	if len(args) > 1 {
-		id, err = strconv.ParseInt(args[1], 10, 64)
-	} else {
-		id, err = m.selectedConversationID()
-	}
-	if err != nil {
-		return errLine(err)
-	}
-	limit := int32(20)
-	if len(args) > 2 {
-		v, e := strconv.ParseInt(args[2], 10, 32)
-		if e != nil {
-			return errLine(e)
+	var (
+		id              int64
+		cursorCreatedAt int64
+		cursorID        int64
+		appendOlder     bool
+		err             error
+	)
+	limit := int32(50)
+
+	if len(args) > 1 && isHistoryMoreArg(args[1]) {
+		id, cursorCreatedAt, cursorID, appendOlder, err = m.selectedHistoryCursor()
+		if err != nil {
+			return errLine(err)
 		}
-		limit = int32(v)
+		if !appendOlder {
+			return "OK no more history"
+		}
+		if len(args) > 2 {
+			v, e := strconv.ParseInt(args[2], 10, 32)
+			if e != nil {
+				return errLine(e)
+			}
+			limit = int32(v)
+		}
+	} else {
+		if len(args) > 1 {
+			id, err = strconv.ParseInt(args[1], 10, 64)
+		} else {
+			id, err = m.selectedConversationID()
+		}
+		if err != nil {
+			return errLine(err)
+		}
+		if len(args) > 2 {
+			v, e := strconv.ParseInt(args[2], 10, 32)
+			if e != nil {
+				return errLine(e)
+			}
+			limit = int32(v)
+		}
 	}
-	resp, err := m.rest.GetConversationHistory(ctx, id, 0, 0, limit, m.currentProfile().AccessToken)
+
+	resp, err := m.rest.GetConversationHistory(ctx, id, cursorCreatedAt, cursorID, limit, m.currentProfile().AccessToken)
 	if err != nil {
 		return errLine(err)
 	}
@@ -575,13 +606,17 @@ func (m *model) cmdHistory(ctx context.Context, args []string) string {
 		return errLine(err)
 	}
 	m.rememberMessageSenders(resp.Messages)
-	m.setConversationReadStates(id, resp.ReadStates)
-	m.replaceMessages(id, resp.Messages)
+	m.applyHistoryPage(id, resp, appendOlder)
 	read := m.markConversationRead(ctx, id, lastMessageID(resp.Messages))
-	if strings.HasPrefix(read, "ERR ") {
-		return fmt.Sprintf("OK %d message(s) has_more=%t\n%s", len(resp.Messages), resp.HasMore, read)
+	prefix := "OK"
+	if appendOlder {
+		prefix = "OK older"
 	}
-	return fmt.Sprintf("OK %d message(s) has_more=%t", len(resp.Messages), resp.HasMore)
+	line := fmt.Sprintf("%s %d message(s) has_more=%t next_cursor=(%d,#%d)", prefix, len(resp.Messages), resp.HasMore, resp.NextCursorCreatedAt, resp.NextCursorID)
+	if strings.HasPrefix(read, "ERR ") {
+		return line + "\n" + read
+	}
+	return line
 }
 
 func (m *model) cmdSendSelected(ctx context.Context, args []string) string {
@@ -631,6 +666,7 @@ func (m *model) cmdConvAddMembers(ctx context.Context, args []string) string {
 	if err != nil {
 		return errLine(err)
 	}
+	m.refreshConversationsAfterGroupMutation(ctx, id)
 	return convLine("OK members added", resp.ConversationID, resp.ConversationType, resp.Name, resp.MemberIDs)
 }
 
@@ -646,6 +682,7 @@ func (m *model) cmdConvRemoveMember(ctx context.Context, args []string) string {
 	if err := m.rest.RemoveGroupMember(ctx, id, uid, m.currentProfile().AccessToken); err != nil {
 		return errLine(err)
 	}
+	m.refreshConversationsAfterGroupMutation(ctx, id)
 	return fmt.Sprintf("OK removed user=%d from conversation=%d", uid, id)
 }
 
@@ -657,6 +694,7 @@ func (m *model) cmdConvLeave(ctx context.Context, args []string) string {
 	if err := m.rest.LeaveGroup(ctx, id, m.currentProfile().AccessToken); err != nil {
 		return errLine(err)
 	}
+	m.refreshConversationsAfterGroupMutation(ctx, 0)
 	return fmt.Sprintf("OK left conversation=%d", id)
 }
 
@@ -668,6 +706,7 @@ func (m *model) cmdConvDismiss(ctx context.Context, args []string) string {
 	if err := m.rest.DismissGroup(ctx, id, m.currentProfile().AccessToken); err != nil {
 		return errLine(err)
 	}
+	m.refreshConversationsAfterGroupMutation(ctx, 0)
 	return fmt.Sprintf("OK dismissed conversation=%d", id)
 }
 
@@ -683,11 +722,25 @@ func (m *model) cmdConvUpdate(ctx context.Context, args []string) string {
 	if len(args) > 3 {
 		avatar = &args[3]
 	}
+	if name == nil && avatar == nil {
+		return "ERR usage: conv-update <conversation_id> [name] [avatar]"
+	}
 	resp, err := m.rest.UpdateGroupInfo(ctx, id, &client.UpdateGroupInfoRequest{Name: name, Avatar: avatar}, m.currentProfile().AccessToken)
 	if err != nil {
 		return errLine(err)
 	}
+	m.refreshConversationsAfterGroupMutation(ctx, id)
 	return fmt.Sprintf("OK updated conversation=%d name=%s avatar=%s", resp.ConversationID, resp.Name, resp.Avatar)
+}
+
+func (m *model) refreshConversationsAfterGroupMutation(ctx context.Context, preferredConversationID int64) {
+	if msg := m.cmdConversations(ctx); strings.HasPrefix(msg, "ERR ") {
+		m.postEvent(msg)
+		return
+	}
+	if preferredConversationID > 0 {
+		_ = m.cmdOpen([]string{"open", strconv.FormatInt(preferredConversationID, 10)})
+	}
 }
 
 func (m *model) cmdPresence(ctx context.Context) string {
@@ -700,6 +753,9 @@ func (m *model) cmdPresence(ctx context.Context) string {
 		return errLine(err)
 	}
 	m.state.mu.Lock()
+	if m.state.presence == nil {
+		m.state.presence = make(map[int64]string)
+	}
 	for _, item := range resp.Presences {
 		m.state.presence[item.UserId] = item.Status
 		_ = m.store.SavePresence(ctx, item.UserId, item.Status, item.UpdatedAt)
@@ -791,7 +847,11 @@ func (m *model) cmdWSSendWithMentions(ctx context.Context, convID int64, msgType
 		Mentions:       append([]string(nil), mentions...),
 	}
 	m.appendMessage(optimistic)
-	_ = m.store.SaveMessages(ctx, []client.MessageItem{optimistic})
+	if m.store != nil {
+		if err := m.store.SaveMessages(ctx, []client.MessageItem{optimistic}); err != nil {
+			m.postEvent("ERR save local message: " + err.Error())
+		}
+	}
 	m.maybeMarkReadAfterMessage(convID)
 	return fmt.Sprintf("OK sent client_msg_id=%s", clientMsgID)
 }
@@ -860,6 +920,9 @@ func (m *model) cmdWSAck(ctx context.Context, args []string) string {
 }
 
 func (m *model) handleFrame(frame *wsclient.WsFrame) {
+	if frame == nil {
+		return
+	}
 	payload, err := wsclient.DecodePayload(frame)
 	if err != nil {
 		m.postEvent(fmt.Sprintf("WS frame type=%s seq=%d payload_error=%v", frame.Type, frame.Seq, err))
@@ -891,11 +954,13 @@ func (m *model) handleFrame(frame *wsclient.WsFrame) {
 	case *wspb.PushFriendApplicationPayload:
 		go func() { m.postEvent(m.cmdFriendApplications(context.Background())) }()
 	case *wspb.PushReadReceiptPayload:
-		payload := *p
-		m.notifyUI(func(m *model) { m.handlePushReadReceipt(&payload) }, describeFrame(frame))
+		conversationID, userID, lastReadMessageID, updatedAt := p.ConversationId, p.UserId, p.LastReadMessageId, p.UpdatedAt
+		m.notifyUI(func(m *model) {
+			m.updateReadState(conversationID, userID, lastReadMessageID, updatedAt)
+		}, describeFrame(frame))
 	case *wspb.PushTypingPayload:
-		payload := *p
-		m.notifyUI(func(m *model) { m.handlePushTyping(&payload) }, describeFrame(frame))
+		conversationID, userID := p.ConversationId, p.UserId
+		m.notifyUI(func(m *model) { m.setTypingUser(conversationID, userID) }, describeFrame(frame))
 	case *wspb.PushNotificationPayload:
 		m.postEvent(fmt.Sprintf("通知 [%s] %s: %s", p.NotificationType, p.Title, p.Body))
 	case *wspb.ReconnectPayload:
@@ -905,18 +970,24 @@ func (m *model) handleFrame(frame *wsclient.WsFrame) {
 			if delayMs > 0 {
 				time.Sleep(time.Duration(delayMs) * time.Millisecond)
 			}
-			m.notifyUI(func(m *model) { m.scheduleWSReconnectOnMain() }, "OK gateway drain: reconnecting")
+			m.postEvent("OK gateway drain: reconnecting")
+			m.scheduleWSReconnectOnMain()
 		}()
 	case *wspb.ServerAckPayload:
-		ack := *p
-		m.notifyUI(func(m *model) { m.handleServerAck(&ack) }, describeFrame(frame))
+		clientMsgID, msg := p.ClientMsgId, p.Msg
+		status, code, messageID := p.Status, p.Code, p.MessageId
+		m.notifyUI(func(m *model) {
+			m.handleServerAck(clientMsgID, status, code, msg, messageID)
+		}, describeFrame(frame))
 	case *wspb.TokenExpiredPayload:
 		m.postEvent(fmt.Sprintf("WS TOKEN_EXPIRED seq=%d expired_at=%d reason=%s; refreshing", frame.Seq, p.ExpiredAt, p.Reason))
-		m.notifyUI(func(m *model) {
-			if line := m.cmdRefresh(context.Background(), false); line != "" {
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			if line := m.cmdRefresh(ctx, false); line != "" {
 				m.postEvent(line)
 			}
-		}, "")
+		}()
 	}
 	m.maybeAckFrame(frame)
 	switch payload.(type) {
@@ -945,14 +1016,25 @@ func (m *model) reconcileMessageID(clientMsgID string, messageID int64) {
 	if clientMsgID == "" || messageID == 0 {
 		return
 	}
+	var reconciled *client.MessageItem
 	m.state.mu.Lock()
-	defer m.state.mu.Unlock()
 	for i := range m.state.conversations {
 		for j := range m.state.conversations[i].Messages {
 			if m.state.conversations[i].Messages[j].ClientMsgID == clientMsgID {
 				m.state.conversations[i].Messages[j].ID = messageID
-				return
+				msg := m.state.conversations[i].Messages[j]
+				reconciled = &msg
+				break
 			}
+		}
+		if reconciled != nil {
+			break
+		}
+	}
+	m.state.mu.Unlock()
+	if reconciled != nil && m.store != nil {
+		if err := m.store.ReplacePendingMessage(context.Background(), *reconciled); err != nil {
+			m.postEvent("ERR reconcile local message: " + err.Error())
 		}
 	}
 }
@@ -1003,7 +1085,7 @@ Auth: register <email> <password> <username> [avatar] | login <email> <password>
 UI: open <conv_id> | send <text> | ↑/↓ select conversation
 Profiles: switch <profile> | status | config
 Users/Friends: search <name> | user <id> | friend-add <id> | friend-apps | friend-accept <id> | friend-reject <id> | friend-list
-Conversations: conv-create <uid[,uid...]> [name] | group-create <uid[,uid...]> <name> [avatar] | conversations | history [conv_id] [limit]
+Conversations: conv-create <uid[,uid...]> [name] | group-create <uid[,uid...]> <name> [avatar] | conversations | history [conv_id] [limit] | history more [limit]
 Group: conv-members <conv_id> | conv-add-members <conv_id> <uid[,uid...]> | conv-remove-member <conv_id> <uid> | conv-leave <conv_id> | conv-dismiss <conv_id> | conv-update <conv_id> [name] [avatar]
 Presence/WS: presence | ws-connect | ws-disconnect | ws-send <conv_id> <text> [type] | ws-typing <conv_id> | ws-heartbeat | ws-read <conv_id> <last_msg_id> | ws-ack <server_seq>
 Tip: 红点=离线，绿点=在线；--instance/--db 控制本机多实例隔离。`

@@ -216,6 +216,18 @@ message ServerAckPayload {
 - 网关 `PushTyping` gRPC 按 `target_user_id` 将 `FRAME_TYPE_PUSH_TYPING` 投到本节点所有连接。
 - 客户端按 2.5s 节流发送 typing 帧；收到 PUSH_TYPING 后 4s 超时自动清除。
 
+### 群成员角色边界
+
+- `conversation_members.role` 已入库，取值为 `owner / admin / member`。
+- 当前 gateway 侧群管理接口仅负责参数校验与身份透传，不在 gateway 内做角色判断；权限边界统一由 logic 层强制执行。
+- 现阶段群管理能力按“群主强约束”落地：
+  - `POST /api/conversations/:id/members`：仅 `owner` 可邀请成员。
+  - `DELETE /api/conversations/:id/members/:uid`：仅 `owner` 可移除成员。
+  - `POST /api/conversations/:id/leave`：`owner` 不能直接退群。
+  - `DELETE /api/conversations/:id`：仅 `owner` 可解散群聊。
+  - `PUT /api/conversations/:id`：仅 `owner` 可修改群名/群头像。
+- `admin` 角色目前仅作为成员详情返回字段保留，不授予额外管理权限；后续如果开放管理员能力，需要同步更新 logic 侧权限矩阵、gateway 文档和客户端交互。
+
 ## Token 过期生命周期
 
 ### Token 过期帧

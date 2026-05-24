@@ -131,6 +131,7 @@ FRAME_TYPES = {
     "SERVER_ACK": ws_pb2.FRAME_TYPE_SERVER_ACK,
     "TOKEN_EXPIRED": ws_pb2.FRAME_TYPE_TOKEN_EXPIRED,
     "PUSH_FRIEND_APPLICATION": ws_pb2.FRAME_TYPE_PUSH_FRIEND_APPLICATION,
+    "PUSH_READ_RECEIPT": ws_pb2.FRAME_TYPE_PUSH_READ_RECEIPT,
 }
 
 FRAME_TYPE_NAMES = {v: k for k, v in FRAME_TYPES.items()}
@@ -294,21 +295,31 @@ class RESTClient:
     # ── Conversations ──
 
     def create_conversation(self, member_ids: list, name: str = "") -> dict:
+        conversation_type = "direct" if len(member_ids) == 1 else "group"
+        if not name:
+            name = self._default_conversation_name(conversation_type, member_ids)
         body = {
-            "conversation_type": "direct" if len(member_ids) == 1 else "group",
+            "conversation_type": conversation_type,
             "member_ids": member_ids,
+            "name": name,
         }
-        if name:
-            body["name"] = name
         return self._post("/api/conversations", body)
 
     def create_group(self, member_ids: list, name: str = "", avatar: str = "") -> dict:
-        body = {"member_ids": member_ids}
-        if name:
-            body["name"] = name
+        if not name:
+            name = self._default_conversation_name("group", member_ids)
+        body = {"member_ids": member_ids, "name": name}
         if avatar:
             body["avatar"] = avatar
         return self._post("/api/conversations/group", body)
+
+    def _default_conversation_name(self, conversation_type: str, member_ids: list) -> str:
+        ids = [str(self.token.user_id)] if self.token.user_id else []
+        ids.extend(str(uid) for uid in member_ids)
+        if conversation_type == "direct":
+            return "direct-" + "-".join(ids)
+        suffix = "-".join(ids) if ids else str(int(time.time()))
+        return "group-" + suffix
 
     def get_history(self, conversation_id: int, cursor_created_at: int = 0,
                     cursor_id: int = 0, limit: int = 50) -> dict:
@@ -581,6 +592,7 @@ class WSClient:
             ws_pb2.FRAME_TYPE_SERVER_ACK: ws_pb2.ServerAckPayload,
             ws_pb2.FRAME_TYPE_TOKEN_EXPIRED: ws_pb2.TokenExpiredPayload,
             ws_pb2.FRAME_TYPE_PUSH_FRIEND_APPLICATION: ws_pb2.PushFriendApplicationPayload,
+            ws_pb2.FRAME_TYPE_PUSH_READ_RECEIPT: ws_pb2.PushReadReceiptPayload,
         }
         cls = mapping.get(frame.type)
         if cls is None or not frame.payload:
@@ -621,14 +633,17 @@ class WSClient:
             return False
         return self.reconnect(max_retries=max_retries)
 
-    def send_message(self, conversation_id: int, content: str, message_type: str = "text") -> str:
+    def send_message(self, conversation_id: int, content: str, message_type: str = "text",
+                     client_msg_id: str = "", mentions: Optional[list[str]] = None) -> str:
         """Send a chat message and return the client_msg_id for correlation."""
         payload = ws_pb2.SendMessagePayload()
         payload.conversation_id = conversation_id
         payload.message_type = message_type
         payload.content = content
-        client_msg_id = str(uuid.uuid4())
+        client_msg_id = client_msg_id or str(uuid.uuid4())
         payload.client_msg_id = client_msg_id
+        if mentions:
+            payload.mentions.extend(str(m) for m in mentions)
         self._send_frame(ws_pb2.FRAME_TYPE_SEND_MESSAGE, payload)
         return client_msg_id
 
@@ -950,7 +965,8 @@ def cmd_ws_send(args):
         print(f"✗ Not connected{profile_hint}. Run 'ws-connect' first.")
         return
     try:
-        ws.send_message(args.conversation_id, args.content, args.message_type or "text")
+        mentions = [m.strip() for m in (getattr(args, "mentions", "") or "").split(",") if m.strip()]
+        ws.send_message(args.conversation_id, args.content, args.message_type or "text", mentions=mentions)
     except Exception as e:
         print(f"✗ Send failed: {e}")
 
@@ -1650,6 +1666,7 @@ Examples:
     p.add_argument("--conversation-id", type=int, required=True)
     p.add_argument("--content", required=True)
     p.add_argument("--message-type", default="text")
+    p.add_argument("--mentions", default="", help="Comma-separated user IDs to mention")
     p.add_argument("--profile", default="", help="Profile name")
     p = sub.add_parser("ws-heartbeat", help="Send heartbeat via WebSocket")
     p.add_argument("--profile", default="", help="Profile name")

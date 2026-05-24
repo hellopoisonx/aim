@@ -60,6 +60,7 @@ func (l *ListConversationsLogic) ListConversations() (resp *types.ListConversati
 			Name:             conv.GetName(),
 			Avatar:           conv.GetAvatar(),
 			CreatorId:        conv.GetCreatorId(),
+			DisplayName:      conv.GetDisplayName(),
 		})
 	}
 

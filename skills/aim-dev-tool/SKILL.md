@@ -212,7 +212,7 @@ func (f *fakeQuerier) ListFriends(ctx context.Context, userID int64) ([]model.Fr
 | Redis | 16379 | 6379 | +10000 |
 | Kafka | 19092 | 9092 | +10000 |
 | Nacos | 18848 | 8848 | +10000 |
-| Jaeger UI | 16686 | 16686 | 共享 |
+| Jaeger UI | 26686 | 16686 | +10000 |
 
 压测环境配置文件在 `dev-tool/etc/`，服务名均以 `bench-` 前缀，容器间通过 `bench-network` 通信。
 
@@ -249,6 +249,7 @@ python generate_fixtures.py --count 5000   # 自定义数量
 
 ## 最近变更
 
+- 2026-05-24: 重新生成 `ws_pb2.py`/`gateway_pb2.py`，同步 `PUSH_READ_RECEIPT`、`PushReadReceiptPayload`、`PushMessagePayload.sender_info/is_system/mentions`、`GatewayService.PushReadReceipt` 等协议字段；`aim_test.py` 的帧名称表和解码表新增 `PUSH_READ_RECEIPT`，`ws-send` 支持 `--mentions`，会话创建未传 `name` 时自动生成默认名；`benchmark.py` 修复并发建会话索引竞争，并将非 ACCEPTED 的 `SERVER_ACK` 直接计入错误；压测 compose 的 Jaeger UI 改为 `26686`，避免与本地开发 Jaeger `16686` 冲突；压测 `logic.yaml` 将 `TemporaryConversationMessageLimit` 改为 `-1`，避免 `0` 被服务上下文归一化为默认 10。
 - 2026-05-23: 交互模式改用 `prompt_toolkit.patch_stdout` 包裹输入循环，后台 WS 推送/接收打印会显示在 prompt 上方并保留当前输入；新增 `presence-friends` REST 命令、`ws-read-receipt`/`ws-ack` WS 命令；`run-all` 覆盖好友在线状态接口；`benchmark.py` 新增 `presence` 场景，`mixed` REST 负载补充 presence 查询。
 - 2026-05-22: 新增 `group-create` CLI 命令和交互命令，调用 `POST /api/conversations/group` 专用创建群聊端点。`RESTClient` 新增 `create_group()` 方法（支持 `name`/`avatar` 可选参数）。详见 `references/commands.md`。
 - 2026-05-22: 新增群管理 REST 命令：`conv-members`（获取成员详情）、`conv-add-members`（添加成员）、`conv-remove-member`（移除成员）、`conv-leave`（退出群聊）、`conv-dismiss`（解散群聊）、`conv-update`（更新群信息）；`conv-create` 新增 `--name` 参数；`RESTClient` 新增 `_delete`/`_put` HTTP 方法和 6 个群管理方法；重新生成 `ws_pb2.py`/`gateway_pb2.py`（新增 `is_system` 字段）。
