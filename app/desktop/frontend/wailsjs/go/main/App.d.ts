@@ -34,6 +34,8 @@ export function GetFriendsPresence():Promise<Array<main.PresenceView>>;
 
 export function LeaveGroup(arg1:string):Promise<void>;
 
+export function ListAccounts():Promise<Array<main.AccountView>>;
+
 export function ListConversations():Promise<Array<main.ConversationView>>;
 
 export function ListFriendApplications():Promise<Array<main.FriendView>>;
@@ -61,5 +63,7 @@ export function SendMessage(arg1:string,arg2:string,arg3:string,arg4:Array<strin
 export function SendReadReceipt(arg1:string,arg2:string):Promise<void>;
 
 export function SendTyping(arg1:string):Promise<void>;
+
+export function SwitchAccount(arg1:string):Promise<main.SessionInfo>;
 
 export function UpdateGroupInfo(arg1:string,arg2:main.UpdateGroupInfoRequest):Promise<main.ConversationView>;

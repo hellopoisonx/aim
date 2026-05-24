@@ -1,5 +1,29 @@
 export namespace main {
 	
+	export class AccountView {
+	    user_id: string;
+	    email: string;
+	    nickname: string;
+	    avatar: string;
+	    active: boolean;
+	    logged_in: boolean;
+	    display_name: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new AccountView(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.user_id = source["user_id"];
+	        this.email = source["email"];
+	        this.nickname = source["nickname"];
+	        this.avatar = source["avatar"];
+	        this.active = source["active"];
+	        this.logged_in = source["logged_in"];
+	        this.display_name = source["display_name"];
+	    }
+	}
 	export class ConfigDTO {
 	    gateway_url: string;
 	    ws_url: string;

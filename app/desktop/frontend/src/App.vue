@@ -5,14 +5,22 @@
         <a-layout-header class="header">
           <div class="brand">AIM Desktop</div>
           <a-space>
+            <a-tag v-if="session" color="blue">{{ currentAccountName }}</a-tag>
             <a-tag :color="connected ? 'green' : 'gray'">{{ connected ? 'WS 已连接' : '离线/未连接' }}</a-tag>
+            <a-select v-if="accounts.length" :model-value="currentUserId" size="small" class="account-select" placeholder="切换账号" :loading="switching" @change="switchAccount">
+              <a-option v-for="acct in accounts" :key="acct.user_id" :value="acct.user_id" :label="accountName(acct)">
+                {{ accountName(acct) }}{{ acct.logged_in ? '' : '（需登录）' }}
+              </a-option>
+            </a-select>
+            <a-button v-if="loggedIn && !addingAccount" size="small" @click="startAddAccount">添加账号</a-button>
+            <a-button v-if="loggedIn" size="small" status="warning" @click="logout">退出当前账号</a-button>
             <a-button size="small" @click="showSettings = true">设置</a-button>
           </a-space>
         </a-layout-header>
         <a-layout-content class="content">
-          <div v-if="!loggedIn" class="auth-panel">
+          <div v-if="showAuthPanel" class="auth-panel">
             <a-card :bordered="false" class="auth-card">
-              <template #title>{{ authMode === 'login' ? '登录' : '注册' }}</template>
+              <template #title>{{ authMode === 'login' ? '登录' : '注册' }}{{ addingAccount ? '新账号' : '' }}</template>
               <a-form :model="authForm" layout="vertical" @submit-success="submitAuth">
                 <a-form-item field="email" label="邮箱"><a-input v-model="authForm.email" /></a-form-item>
                 <a-form-item v-if="authMode === 'register'" field="username" label="昵称"><a-input v-model="authForm.username" /></a-form-item>
@@ -20,9 +28,22 @@
                 <a-space direction="vertical" fill>
                   <a-button html-type="submit" type="primary" long :loading="loading">{{ authMode === 'login' ? '登录' : '注册并登录' }}</a-button>
                   <a-button long @click="authMode = authMode === 'login' ? 'register' : 'login'">切换到{{ authMode === 'login' ? '注册' : '登录' }}</a-button>
+                  <a-button v-if="addingAccount && loggedIn" long @click="cancelAddAccount">取消添加账号</a-button>
                   <a-alert v-if="status" :type="statusType" :content="status" />
                 </a-space>
               </a-form>
+              <template v-if="accounts.length">
+                <a-divider />
+                <div class="muted account-title">本机账号（缓存隔离）</div>
+                <a-list class="list compact" :bordered="false">
+                  <a-list-item v-for="acct in accounts" :key="acct.user_id">
+                    <a-list-item-meta :title="accountName(acct)" :description="acct.logged_in ? '已保存登录态' : '需要重新登录'" />
+                    <template #actions>
+                      <a-button size="mini" :disabled="acct.active && loggedIn" @click="switchAccount(acct.user_id)">{{ acct.active && loggedIn ? '当前' : '切换' }}</a-button>
+                    </template>
+                  </a-list-item>
+                </a-list>
+              </template>
             </a-card>
           </div>
 
@@ -173,6 +194,7 @@ import * as api from '../wailsjs/go/main/App'
 import type { main } from '../wailsjs/go/models'
 
 const loading = ref(false)
+const switching = ref(false)
 const connected = ref(false)
 const authMode = ref<'login' | 'register'>('login')
 const status = ref('')
@@ -180,9 +202,11 @@ const statusType = ref<'info' | 'success' | 'warning' | 'error'>('info')
 const showSettings = ref(false)
 const showMembers = ref(false)
 const showCreateGroup = ref(false)
+const addingAccount = ref(false)
 const authForm = reactive({ email: '', password: '', username: '' })
 const config = reactive({ gateway_url: 'http://localhost:8888', ws_url: 'ws://localhost:8888/ws' })
 const session = ref<main.SessionInfo | null>(null)
+const accounts = ref<main.AccountView[]>([])
 const conversations = ref<main.ConversationView[]>([])
 const activeConversation = ref<main.ConversationView | null>(null)
 const messages = ref<main.MessageView[]>([])
@@ -193,6 +217,8 @@ const members = ref<main.MemberView[]>([])
 const draft = ref('')
 const currentUserId = computed(() => session.value?.user_id || '')
 const loggedIn = computed(() => !!session.value?.access_token)
+const showAuthPanel = computed(() => !loggedIn.value || addingAccount.value)
+const currentAccountName = computed(() => safeName(session.value?.nickname, session.value?.email) || '当前账号')
 const isGroupConversation = computed(() => activeConversation.value?.conversation_type === 'group')
 const canManageGroup = computed(() => !!activeConversation.value && activeConversation.value.creator_id === currentUserId.value)
 
@@ -209,9 +235,10 @@ const addMemberLabels = reactive<Record<string, string>>({})
 onMounted(async () => {
   try {
     Object.assign(config, await api.GetConfig())
+    await reloadAccounts()
     const auto = await api.AutoLogin()
+    if (auto?.user_id) session.value = auto
     if (auto?.access_token) {
-      session.value = auto
       await loadCachedData()
       await refreshConversations()
       await refreshFriends()
@@ -238,7 +265,10 @@ async function submitAuth() {
     if (authMode.value === 'register') {
       await api.Register({ email: authForm.email, password: authForm.password, username: authForm.username, avatar: '' })
     }
+    resetLocalState()
     session.value = await api.Login({ email: authForm.email, password: authForm.password })
+    await reloadAccounts()
+    addingAccount.value = false
     statusType.value = 'success'; status.value = '登录成功'
     await refreshConversations(); await refreshFriends()
   } catch (e: any) {
@@ -246,7 +276,55 @@ async function submitAuth() {
   } finally { loading.value = false }
 }
 async function saveSettings() { await api.SaveConfig(config); Message.success('已保存') }
-async function refreshToken() { try { session.value = await api.RefreshToken() } catch { session.value = null } }
+async function reloadAccounts() { accounts.value = await api.ListAccounts() }
+async function refreshToken() { try { session.value = await api.RefreshToken(); await reloadAccounts() } catch { session.value = null; await reloadAccounts() } }
+function resetLocalState() {
+  connected.value = false
+  conversations.value = []
+  activeConversation.value = null
+  messages.value = []
+  friends.value = []
+  searchResults.value = []
+  members.value = []
+  draft.value = ''
+}
+function startAddAccount() {
+  addingAccount.value = true
+  authMode.value = 'login'
+  status.value = ''
+  Object.assign(authForm, { email: '', password: '', username: '' })
+}
+function cancelAddAccount() { addingAccount.value = false; status.value = ''; authForm.password = '' }
+async function switchAccount(userID: unknown) {
+  const id = String(userID || '')
+  if (!id || id === currentUserId.value) return
+  switching.value = true
+  status.value = ''
+  try {
+    resetLocalState()
+    session.value = await api.SwitchAccount(id)
+    await reloadAccounts()
+    addingAccount.value = false
+    authForm.email = session.value?.email || ''
+    authForm.password = ''
+    if (session.value?.access_token) {
+      await loadCachedData()
+      await refreshConversations()
+      await refreshFriends()
+    }
+  } catch (e: any) {
+    Message.error(String(e))
+  } finally { switching.value = false }
+}
+async function logout() {
+  const id = currentUserId.value
+  await api.Logout()
+  resetLocalState()
+  if (id) session.value = await api.SwitchAccount(id)
+  else session.value = null
+  await reloadAccounts()
+  Message.success('已退出当前账号')
+}
 async function loadCachedData() {
   try { conversations.value = await api.GetCachedConversations() } catch {}
   try { friends.value = await api.GetCachedFriends() } catch {}
@@ -307,6 +385,7 @@ function messageKey(m: main.MessageView) { return m.message_id || m.client_msg_i
 function formatTime(ts?: number) { return ts ? new Date(ts > 1e12 ? ts : ts * 1000).toLocaleString() : '' }
 
 function safeName(...names: Array<string | undefined>) { return names.find(v => v && v.trim())?.trim() || '' }
+function accountName(a: main.AccountView) { return safeName(a.display_name, a.nickname, a.email) || a.user_id || '未知账号' }
 function userName(u: main.UserView) { return safeName(u.display_name, u.nickname, u.email) || '未知用户' }
 function friendName(f: main.FriendView) { return safeName(f.display_name, f.email) || '未知用户' }
 function memberName(m: main.MemberView) { return safeName(m.display_name, m.email) || '未知用户' }

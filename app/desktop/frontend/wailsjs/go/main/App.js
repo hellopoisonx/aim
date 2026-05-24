@@ -66,6 +66,10 @@ export function LeaveGroup(arg1) {
   return window['go']['main']['App']['LeaveGroup'](arg1);
 }
 
+export function ListAccounts() {
+  return window['go']['main']['App']['ListAccounts']();
+}
+
 export function ListConversations() {
   return window['go']['main']['App']['ListConversations']();
 }
@@ -120,6 +124,10 @@ export function SendReadReceipt(arg1, arg2) {
 
 export function SendTyping(arg1) {
   return window['go']['main']['App']['SendTyping'](arg1);
+}
+
+export function SwitchAccount(arg1) {
+  return window['go']['main']['App']['SwitchAccount'](arg1);
 }
 
 export function UpdateGroupInfo(arg1, arg2) {

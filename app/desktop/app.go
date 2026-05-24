@@ -3,8 +3,10 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"time"
 
@@ -17,10 +19,13 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+const wsConnectedKey = "connected"
+
 type App struct {
 	ctx      context.Context
 	cancel   context.CancelFunc
 	mu       sync.Mutex
+	rootDir  string
 	cfg      store.Config
 	cfgStore *store.ConfigStore
 	db       *store.DB
@@ -47,6 +52,16 @@ type LoginInput struct {
 	Password string `json:"password"`
 }
 
+type AccountView struct {
+	UserID      string `json:"user_id"`
+	Email       string `json:"email"`
+	Nickname    string `json:"nickname"`
+	Avatar      string `json:"avatar"`
+	Active      bool   `json:"active"`
+	LoggedIn    bool   `json:"logged_in"`
+	DisplayName string `json:"display_name"`
+}
+
 func appDir() string {
 	if d, err := os.UserConfigDir(); err == nil {
 		return filepath.Join(d, "aim-desktop")
@@ -56,8 +71,8 @@ func appDir() string {
 
 func (a *App) startup(ctx context.Context) {
 	a.ctx, a.cancel = context.WithCancel(ctx)
-	dir := appDir()
-	a.cfgStore = store.NewConfigStore(dir)
+	a.rootDir = appDir()
+	a.cfgStore = store.NewConfigStore(a.rootDir)
 	cfg, err := a.cfgStore.Load()
 	if err == nil {
 		a.cfg = cfg
@@ -65,9 +80,9 @@ func (a *App) startup(ctx context.Context) {
 		a.cfg = store.DefaultConfig()
 	}
 	a.api = api.New(a.cfg.GatewayURL)
-	db, err := store.Open(dir)
-	if err == nil {
-		a.db = db
+	_ = a.openActiveDB()
+	if err == nil && a.cfgStore != nil {
+		_ = a.cfgStore.Save(a.cfg)
 	}
 }
 
@@ -100,8 +115,52 @@ func (a *App) SaveConfig(in ConfigDTO) error {
 	return a.cfgStore.Save(a.cfg)
 }
 
+func (a *App) ListAccounts() []AccountView {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.accountViewsLocked()
+}
+
+func (a *App) SwitchAccount(userID string) (SessionInfo, error) {
+	id, err := parseSnowflakeID(userID)
+	if err != nil {
+		return SessionInfo{}, err
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	acct, ok := a.cfg.AccountByUserID(id)
+	if !ok {
+		return SessionInfo{}, fmt.Errorf("account not found")
+	}
+	a.cfg.ActiveUserID = id
+	if err := a.cfgStore.Save(a.cfg); err != nil {
+		return SessionInfo{}, err
+	}
+	if err := a.resetRuntimeLocked(); err != nil {
+		return SessionInfo{}, err
+	}
+	if acct.RefreshToken != "" && time.Now().Add(time.Minute).Unix() >= acct.ExpiresAt {
+		if _, err := a.refreshTokenLocked(); err != nil {
+			acct.AccessToken = ""
+			acct.RefreshToken = ""
+			acct.ExpiresAt = 0
+			acct.UpdatedAt = time.Now().UnixMilli()
+			_ = a.cfgStore.Save(a.cfg)
+			return a.sessionLocked(), nil
+		}
+	}
+	if acct.AccessToken != "" {
+		a.connectWSAsyncLocked()
+	}
+	return a.sessionLocked(), nil
+}
+
 func (a *App) Register(in RegisterInput) (*RegisterResponse, error) {
-	resp, err := a.api.Register(a.ctx, api.RegisterRequest{Email: in.Email, Password: in.Password, Username: in.Username, Avatar: in.Avatar, DeviceID: a.cfg.DeviceID})
+	deviceID := uuid.NewString()
+	if acct, ok := a.cfg.AccountByEmail(in.Email); ok {
+		deviceID = acct.DeviceID
+	}
+	resp, err := a.api.Register(a.ctx, api.RegisterRequest{Email: in.Email, Password: in.Password, Username: in.Username, Avatar: in.Avatar, DeviceID: deviceID})
 	if err != nil {
 		return nil, err
 	}
@@ -109,105 +168,309 @@ func (a *App) Register(in RegisterInput) (*RegisterResponse, error) {
 }
 
 func (a *App) Login(in LoginInput) (SessionInfo, error) {
-	res, err := a.api.Login(a.ctx, api.LoginRequest{Email: in.Email, Password: in.Password, DeviceID: a.cfg.DeviceID})
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	deviceID := uuid.NewString()
+	if acct, ok := a.cfg.AccountByEmail(in.Email); ok {
+		deviceID = acct.DeviceID
+	}
+	res, err := a.api.Login(a.ctx, api.LoginRequest{Email: in.Email, Password: in.Password, DeviceID: deviceID})
 	if err != nil {
 		return SessionInfo{}, err
 	}
-	a.cfg.AccessToken = res.AccessToken
-	a.cfg.RefreshToken = res.RefreshToken
-	a.cfg.ExpiresAt = res.ExpiresAt
-	a.cfg.User.UserID = res.UserID
-	a.cfg.User.Email = in.Email
-	_ = a.cfgStore.Save(a.cfg)
-	_ = a.connectWS()
-	return a.session(), nil
+	acct := store.AccountProfile{
+		DeviceID:     deviceID,
+		AccessToken:  res.AccessToken,
+		RefreshToken: res.RefreshToken,
+		ExpiresAt:    res.ExpiresAt,
+		User:         store.UserProfile{UserID: res.UserID, Email: in.Email},
+	}
+	if existing, ok := a.cfg.AccountByUserID(res.UserID); ok {
+		acct.User.Nickname = existing.User.Nickname
+		acct.User.Avatar = existing.User.Avatar
+	}
+	a.cfg.UpsertAccount(acct)
+	a.cfg.ActiveUserID = res.UserID
+	if err := a.cfgStore.Save(a.cfg); err != nil {
+		return SessionInfo{}, err
+	}
+	if err := a.resetRuntimeLocked(); err != nil {
+		return SessionInfo{}, err
+	}
+	a.connectWSAsyncLocked()
+	return a.sessionLocked(), nil
 }
 
 func (a *App) AutoLogin() (SessionInfo, error) {
-	if a.cfg.AccessToken == "" && a.cfg.RefreshToken == "" {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	acct, ok := a.cfg.ActiveAccount()
+	if !ok || (acct.AccessToken == "" && acct.RefreshToken == "") {
 		return SessionInfo{}, nil
 	}
-	if a.cfg.RefreshToken != "" && time.Now().Add(time.Minute).Unix() >= a.cfg.ExpiresAt {
-		if _, err := a.RefreshToken(); err != nil {
+	if acct.RefreshToken != "" && time.Now().Add(time.Minute).Unix() >= acct.ExpiresAt {
+		if _, err := a.refreshTokenLocked(); err != nil {
 			return SessionInfo{}, err
 		}
 	}
-	_ = a.connectWS()
-	return a.session(), nil
+	a.connectWSAsyncLocked()
+	return a.sessionLocked(), nil
 }
 
 func (a *App) RefreshToken() (SessionInfo, error) {
-	r, err := a.api.Refresh(a.ctx, a.cfg.RefreshToken)
-	if err != nil {
-		return SessionInfo{}, err
-	}
-	a.cfg.AccessToken = r.AccessToken
-	a.cfg.RefreshToken = r.RefreshToken
-	a.cfg.ExpiresAt = r.ExpiresAt
-	_ = a.cfgStore.Save(a.cfg)
-	_ = a.connectWS()
-	return a.session(), nil
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.refreshTokenLocked()
 }
 
 func (a *App) Logout() error {
-	if a.cfg.AccessToken != "" {
-		_, _ = a.api.Logout(a.ctx, a.cfg.AccessToken)
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	acct, ok := a.cfg.ActiveAccount()
+	if ok && acct.AccessToken != "" {
+		_, _ = a.api.Logout(a.ctx, acct.AccessToken)
 	}
 	if a.ws != nil {
 		_ = a.ws.Disconnect()
 		a.ws = nil
 	}
-	a.cfg.AccessToken = ""
-	a.cfg.RefreshToken = ""
-	a.cfg.ExpiresAt = 0
+	if ok {
+		acct.AccessToken = ""
+		acct.RefreshToken = ""
+		acct.ExpiresAt = 0
+		acct.UpdatedAt = time.Now().UnixMilli()
+	}
+	runtime.EventsEmit(a.ctx, "ws:connection", map[string]any{wsConnectedKey: false})
 	return a.cfgStore.Save(a.cfg)
 }
 
-func (a *App) session() SessionInfo {
-	return SessionInfo{
-		UserID:       stringifySnowflakeID(a.cfg.User.UserID),
-		Email:        a.cfg.User.Email,
-		Nickname:     a.cfg.User.Nickname,
-		Avatar:       a.cfg.User.Avatar,
-		AccessToken:  a.cfg.AccessToken,
-		RefreshToken: a.cfg.RefreshToken,
-		ExpiresAt:    a.cfg.ExpiresAt,
-	}
-}
-
 func (a *App) token() (string, error) {
-	if a.cfg.AccessToken == "" {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	acct, ok := a.cfg.ActiveAccount()
+	if !ok || acct.AccessToken == "" {
 		return "", fmt.Errorf("not logged in")
 	}
-	if a.cfg.RefreshToken != "" && time.Now().Add(time.Minute).Unix() >= a.cfg.ExpiresAt {
-		_, err := a.RefreshToken()
+	if acct.RefreshToken != "" && time.Now().Add(time.Minute).Unix() >= acct.ExpiresAt {
+		_, err := a.refreshTokenLocked()
 		if err != nil {
 			return "", err
 		}
+		acct, _ = a.cfg.ActiveAccount()
 	}
-	return a.cfg.AccessToken, nil
+	return acct.AccessToken, nil
 }
 
 func (a *App) connectWS() error {
-	if a.ws != nil {
-		_ = a.ws.Disconnect()
-	}
-	if a.cfg.AccessToken == "" {
+	a.mu.Lock()
+	ws := a.prepareWSLocked()
+	a.mu.Unlock()
+	if ws == nil {
 		return nil
 	}
-	a.ws = dws.New(
-		a.cfg.WSURL,
-		a.cfg.AccessToken,
-		a.handleFrame,
-		func() { runtime.EventsEmit(a.ctx, "ws:connection", map[string]any{"connected": true}) },
-		func(err error) {
-			runtime.EventsEmit(a.ctx, "ws:connection", map[string]any{"connected": false, "error": fmt.Sprint(err)})
-		},
-	)
-	return a.ws.Connect(a.ctx)
+	return ws.Connect(a.ctx)
 }
 
-func (a *App) handleFrame(f *pb.WsFrame) {
+func (a *App) accountViewsLocked() []AccountView {
+	out := make([]AccountView, 0, len(a.cfg.Accounts))
+	for _, acct := range a.cfg.Accounts {
+		view := AccountView{
+			UserID:      stringifySnowflakeID(acct.User.UserID),
+			Email:       acct.User.Email,
+			Nickname:    acct.User.Nickname,
+			Avatar:      acct.User.Avatar,
+			Active:      acct.User.UserID == a.cfg.ActiveUserID,
+			LoggedIn:    acct.AccessToken != "" || acct.RefreshToken != "",
+			DisplayName: normalizeDisplayName(acct.User.Nickname, acct.User.Email, unknownUserText),
+		}
+		out = append(out, view)
+	}
+	return out
+}
+
+func (a *App) accountDir(userID int64) string {
+	return filepath.Join(a.rootDir, "accounts", strconv.FormatInt(userID, 10))
+}
+
+func (a *App) openActiveDB() error {
+	if a.db != nil {
+		_ = a.db.Close()
+		a.db = nil
+	}
+	acct, ok := a.cfg.ActiveAccount()
+	if !ok {
+		return nil
+	}
+	dir := a.accountDir(acct.User.UserID)
+	if err := a.copyLegacyCacheIfNeeded(dir); err != nil {
+		return err
+	}
+	db, err := store.Open(dir)
+	if err != nil {
+		return err
+	}
+	a.db = db
+	return nil
+}
+
+func (a *App) copyLegacyCacheIfNeeded(accountDir string) error {
+	// One-time migration from the pre-multi-account cache location. Only copy
+	// when config loading identified which legacy account owns cache.db.
+	if a.cfg.LegacyCacheUserID == 0 || a.cfg.LegacyCacheUserID != a.cfg.ActiveUserID {
+		return nil
+	}
+	legacy := filepath.Join(a.rootDir, "cache.db")
+	target := filepath.Join(accountDir, "cache.db")
+	if _, err := os.Stat(target); err == nil {
+		return nil
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+	if _, err := os.Stat(legacy); os.IsNotExist(err) {
+		return nil
+	} else if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(accountDir, 0o700); err != nil {
+		return err
+	}
+	for _, suffix := range []string{"", "-wal", "-shm"} {
+		if err := copyFileExclusive(legacy+suffix, target+suffix); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+	}
+	a.cfg.LegacyCacheUserID = 0
+	return nil
+}
+
+func copyFileExclusive(src, dst string) error {
+	// #nosec G304 -- src is derived from AIM config/cache directories, not user input.
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = in.Close() }()
+
+	// #nosec G304 -- dst is derived from AIM config/cache directories, not user input.
+	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = out.Close() }()
+
+	_, err = io.Copy(out, in)
+	return err
+}
+
+func (a *App) resetRuntimeLocked() error {
+	if a.ws != nil {
+		_ = a.ws.Disconnect()
+		a.ws = nil
+	}
+	runtime.EventsEmit(a.ctx, "ws:connection", map[string]any{wsConnectedKey: false})
+	return a.openActiveDB()
+}
+
+func (a *App) sessionLocked() SessionInfo {
+	acct, ok := a.cfg.ActiveAccount()
+	if !ok {
+		return SessionInfo{}
+	}
+	return SessionInfo{
+		UserID:       stringifySnowflakeID(acct.User.UserID),
+		Email:        acct.User.Email,
+		Nickname:     acct.User.Nickname,
+		Avatar:       acct.User.Avatar,
+		AccessToken:  acct.AccessToken,
+		RefreshToken: acct.RefreshToken,
+		ExpiresAt:    acct.ExpiresAt,
+	}
+}
+
+func (a *App) refreshTokenLocked() (SessionInfo, error) {
+	acct, ok := a.cfg.ActiveAccount()
+	if !ok || acct.RefreshToken == "" {
+		return SessionInfo{}, fmt.Errorf("not logged in")
+	}
+	r, err := a.api.Refresh(a.ctx, acct.RefreshToken)
+	if err != nil {
+		return SessionInfo{}, err
+	}
+	acct.AccessToken = r.AccessToken
+	acct.RefreshToken = r.RefreshToken
+	acct.ExpiresAt = r.ExpiresAt
+	acct.UpdatedAt = time.Now().UnixMilli()
+	if err := a.cfgStore.Save(a.cfg); err != nil {
+		return SessionInfo{}, err
+	}
+	a.connectWSAsyncLocked()
+	return a.sessionLocked(), nil
+}
+
+func (a *App) connectWSAsyncLocked() {
+	ws := a.prepareWSLocked()
+	if ws == nil {
+		return
+	}
+	go func() { _ = ws.Connect(a.ctx) }()
+}
+
+func (a *App) prepareWSLocked() *dws.Client {
+	if a.ws != nil {
+		_ = a.ws.Disconnect()
+		a.ws = nil
+	}
+	acct, ok := a.cfg.ActiveAccount()
+	if !ok || acct.AccessToken == "" {
+		return nil
+	}
+	userID := acct.User.UserID
+	a.ws = dws.New(
+		a.cfg.WSURL,
+		acct.AccessToken,
+		func(f *pb.WsFrame) { a.handleFrameFor(userID, f) },
+		func() { runtime.EventsEmit(a.ctx, "ws:connection", map[string]any{wsConnectedKey: true}) },
+		func(err error) {
+			runtime.EventsEmit(a.ctx, "ws:connection", map[string]any{wsConnectedKey: false, "error": fmt.Sprint(err)})
+		},
+	)
+	return a.ws
+}
+
+func (a *App) activeUser() store.UserProfile {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	acct, ok := a.cfg.ActiveAccount()
+	if !ok {
+		return store.UserProfile{}
+	}
+	return acct.User
+}
+
+func (a *App) currentWS() *dws.Client {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.ws
+}
+
+func (a *App) handleFrameFor(userID int64, f *pb.WsFrame) {
+	db, ws, ok := a.activeRuntimeForUser(userID)
+	if a == nil || a.ctx == nil || !ok {
+		return
+	}
+	a.handleFrame(f, db, ws)
+}
+
+func (a *App) activeRuntimeForUser(userID int64) (*store.DB, *dws.Client, bool) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if userID <= 0 || a.cfg.ActiveUserID != userID {
+		return nil, nil, false
+	}
+	return a.db, a.ws, true
+}
+
+func (a *App) handleFrame(f *pb.WsFrame, db *store.DB, ws *dws.Client) {
 	if a == nil || a.ctx == nil {
 		return
 	}
@@ -230,12 +493,12 @@ func (a *App) handleFrame(f *pb.WsFrame) {
 			if p.SenderInfo != nil {
 				m.SenderInfo = api.SenderInfo{Name: p.SenderInfo.Name, Email: p.SenderInfo.Email, DisplayName: displayNameFromSenderInfo(p.SenderInfo.Name, p.SenderInfo.Email, "")}
 			}
-			if a.db != nil {
-				_ = a.db.UpsertMessages(a.ctx, []api.MessageItem{m})
+			if db != nil {
+				_ = db.UpsertMessages(a.ctx, []api.MessageItem{m})
 			}
 			runtime.EventsEmit(a.ctx, "ws:message", messageViewFromAPI(a, m))
-			if a.ws != nil {
-				_ = a.ws.Ack(a.ctx, f.Seq)
+			if ws != nil {
+				_ = ws.Ack(a.ctx, f.Seq)
 			}
 		}
 	case pb.FrameType_FRAME_TYPE_PUSH_PRESENCE:
@@ -245,20 +508,20 @@ func (a *App) handleFrame(f *pb.WsFrame) {
 			if u, err := a.resolveUserInfo(p.UserId); err == nil {
 				item.DisplayName = u.DisplayName
 			}
-			if a.db != nil {
-				_ = a.db.UpsertPresence(a.ctx, []api.PresenceItem{item})
+			if db != nil {
+				_ = db.UpsertPresence(a.ctx, []api.PresenceItem{item})
 			}
 			runtime.EventsEmit(a.ctx, "ws:presence", presenceViewFromAPI(item))
-			if a.ws != nil {
-				_ = a.ws.Ack(a.ctx, f.Seq)
+			if ws != nil {
+				_ = ws.Ack(a.ctx, f.Seq)
 			}
 		}
 	case pb.FrameType_FRAME_TYPE_PUSH_TYPING:
 		var p pb.PushTypingPayload
 		if proto.Unmarshal(f.Payload, &p) == nil {
 			runtime.EventsEmit(a.ctx, "ws:typing", TypingView{UserID: stringifySnowflakeID(p.UserId), ConversationID: stringifySnowflakeID(p.ConversationId)})
-			if a.ws != nil {
-				_ = a.ws.Ack(a.ctx, f.Seq)
+			if ws != nil {
+				_ = ws.Ack(a.ctx, f.Seq)
 			}
 		}
 	case pb.FrameType_FRAME_TYPE_PUSH_READ_RECEIPT:
@@ -266,8 +529,8 @@ func (a *App) handleFrame(f *pb.WsFrame) {
 		if proto.Unmarshal(f.Payload, &p) == nil {
 			view := ReadReceiptView{ConversationID: stringifySnowflakeID(p.ConversationId), UserID: stringifySnowflakeID(p.UserId), LastReadMessageID: stringifySnowflakeID(p.LastReadMessageId), UpdatedAt: p.UpdatedAt}
 			runtime.EventsEmit(a.ctx, "ws:read-receipt", view)
-			if a.ws != nil {
-				_ = a.ws.Ack(a.ctx, f.Seq)
+			if ws != nil {
+				_ = ws.Ack(a.ctx, f.Seq)
 			}
 		}
 	case pb.FrameType_FRAME_TYPE_PUSH_FRIEND_APPLICATION:
@@ -281,8 +544,8 @@ func (a *App) handleFrame(f *pb.WsFrame) {
 				view.FriendDisplayName = u.DisplayName
 			}
 			runtime.EventsEmit(a.ctx, "ws:friend-application", view)
-			if a.ws != nil {
-				_ = a.ws.Ack(a.ctx, f.Seq)
+			if ws != nil {
+				_ = ws.Ack(a.ctx, f.Seq)
 			}
 		}
 	case pb.FrameType_FRAME_TYPE_SERVER_ACK:
@@ -372,17 +635,23 @@ func (a *App) SendMessage(cid, typ, content string, mentions []string) (MessageV
 	if err != nil {
 		return MessageView{}, err
 	}
+	self := a.activeUser()
 	clientID := uuid.NewString()
-	m := api.MessageItem{ID: 0, ConversationID: conversationID, SenderID: a.cfg.User.UserID, SenderInfo: api.SenderInfo{Name: a.cfg.User.Nickname, Email: a.cfg.User.Email, DisplayName: displayNameFromSenderInfo(a.cfg.User.Nickname, a.cfg.User.Email, "")}, MessageType: typ, Content: content, ClientMsgID: clientID, CreatedAt: time.Now().UnixMilli(), Mentions: mentions, Status: "pending"}
+	m := api.MessageItem{ID: 0, ConversationID: conversationID, SenderID: self.UserID, SenderInfo: api.SenderInfo{Name: self.Nickname, Email: self.Email, DisplayName: displayNameFromSenderInfo(self.Nickname, self.Email, "")}, MessageType: typ, Content: content, ClientMsgID: clientID, CreatedAt: time.Now().UnixMilli(), Mentions: mentions, Status: "pending"}
 	if a.db != nil {
 		_ = a.db.UpsertMessages(a.ctx, []api.MessageItem{m})
 	}
-	if a.ws == nil || !a.ws.IsConnected() {
+	ws := a.currentWS()
+	if ws == nil || !ws.IsConnected() {
 		if err := a.connectWS(); err != nil {
 			return messageViewFromAPI(a, m), err
 		}
+		ws = a.currentWS()
 	}
-	_, err = a.ws.SendMessage(a.ctx, conversationID, typ, content, clientID, mentions)
+	if ws == nil {
+		return messageViewFromAPI(a, m), fmt.Errorf("websocket not connected")
+	}
+	_, err = ws.SendMessage(a.ctx, conversationID, typ, content, clientID, mentions)
 	if err != nil {
 		m.Status = "failed"
 		if a.db != nil {
@@ -397,12 +666,17 @@ func (a *App) SendTyping(cid string) error {
 	if err != nil {
 		return err
 	}
-	if a.ws == nil {
+	ws := a.currentWS()
+	if ws == nil {
 		if err := a.connectWS(); err != nil {
 			return err
 		}
+		ws = a.currentWS()
 	}
-	return a.ws.Typing(a.ctx, conversationID)
+	if ws == nil {
+		return fmt.Errorf("websocket not connected")
+	}
+	return ws.Typing(a.ctx, conversationID)
 }
 
 func (a *App) SendReadReceipt(cid, lastMsgID string) error {
@@ -414,12 +688,17 @@ func (a *App) SendReadReceipt(cid, lastMsgID string) error {
 	if err != nil {
 		return err
 	}
-	if a.ws == nil {
+	ws := a.currentWS()
+	if ws == nil {
 		if err := a.connectWS(); err != nil {
 			return err
 		}
+		ws = a.currentWS()
 	}
-	return a.ws.ReadReceipt(a.ctx, conversationID, lastID)
+	if ws == nil {
+		return fmt.Errorf("websocket not connected")
+	}
+	return ws.ReadReceipt(a.ctx, conversationID, lastID)
 }
 
 func (a *App) SearchUsers(name string) ([]UserView, error) {
@@ -457,7 +736,7 @@ func (a *App) AddFriend(id string) (*FriendView, error) {
 	if a.db != nil {
 		_ = a.db.UpsertFriends(a.ctx, []api.FriendshipItem{enriched})
 	}
-	view := friendViewFromAPI(enriched, a.cfg.User.UserID)
+	view := friendViewFromAPI(enriched, a.activeUser().UserID)
 	return &view, nil
 }
 
@@ -474,7 +753,7 @@ func (a *App) ListFriends() ([]FriendView, error) {
 	if a.db != nil {
 		_ = a.db.UpsertFriends(a.ctx, enriched)
 	}
-	return friendViewsFromAPI(enriched, a.cfg.User.UserID), nil
+	return friendViewsFromAPI(enriched, a.activeUser().UserID), nil
 }
 
 func (a *App) GetCachedFriends() ([]FriendView, error) {
@@ -485,7 +764,7 @@ func (a *App) GetCachedFriends() ([]FriendView, error) {
 	if err != nil {
 		return nil, err
 	}
-	return friendViewsFromAPI(a.decorateFriendships(items), a.cfg.User.UserID), nil
+	return friendViewsFromAPI(a.decorateFriendships(items), a.activeUser().UserID), nil
 }
 
 func (a *App) ListFriendApplications() ([]FriendView, error) {
@@ -497,7 +776,7 @@ func (a *App) ListFriendApplications() ([]FriendView, error) {
 	if err != nil {
 		return nil, err
 	}
-	return friendViewsFromAPI(a.decorateFriendships(items), a.cfg.User.UserID), nil
+	return friendViewsFromAPI(a.decorateFriendships(items), a.activeUser().UserID), nil
 }
 
 func (a *App) AcceptFriend(id string) (*FriendView, error) {
@@ -517,7 +796,7 @@ func (a *App) AcceptFriend(id string) (*FriendView, error) {
 	if a.db != nil {
 		_ = a.db.UpsertFriends(a.ctx, []api.FriendshipItem{enriched})
 	}
-	view := friendViewFromAPI(enriched, a.cfg.User.UserID)
+	view := friendViewFromAPI(enriched, a.activeUser().UserID)
 	return &view, nil
 }
 
@@ -534,7 +813,7 @@ func (a *App) RejectFriend(id string) (*FriendView, error) {
 	if err != nil {
 		return nil, err
 	}
-	view := friendViewFromAPI(a.decorateFriendship(*f), a.cfg.User.UserID)
+	view := friendViewFromAPI(a.decorateFriendship(*f), a.activeUser().UserID)
 	return &view, nil
 }
 
@@ -747,8 +1026,9 @@ func (a *App) resolveUserInfo(id int64) (*api.UserInfo, error) {
 	if id <= 0 {
 		return nil, fmt.Errorf("id is required")
 	}
-	if id == a.cfg.User.UserID {
-		u := &api.UserInfo{ID: id, Email: a.cfg.User.Email, Nickname: a.cfg.User.Nickname, Avatar: a.cfg.User.Avatar}
+	self := a.activeUser()
+	if id == self.UserID {
+		u := &api.UserInfo{ID: id, Email: self.Email, Nickname: self.Nickname, Avatar: self.Avatar}
 		u.DisplayName = displayNameFromUserInfo(*u)
 		return u, nil
 	}
@@ -769,7 +1049,7 @@ func (a *App) resolveUserInfo(id int64) (*api.UserInfo, error) {
 func (a *App) decorateConversation(c api.ConversationItem) api.ConversationItem {
 	if c.DisplayName == "" {
 		if c.ConversationType == "direct" {
-			if peerID := conversationPeerID(c, a.cfg.User.UserID); peerID > 0 {
+			if peerID := conversationPeerID(c, a.activeUser().UserID); peerID > 0 {
 				if u, err := a.resolveUserInfo(peerID); err == nil {
 					c.DisplayName = u.DisplayName
 					if c.Name == "" {
@@ -797,7 +1077,7 @@ func (a *App) decorateConversations(items []api.ConversationItem) []Conversation
 }
 
 func (a *App) decorateFriendship(f api.FriendshipItem) api.FriendshipItem {
-	peerID := friendPeerID(f, a.cfg.User.UserID)
+	peerID := friendPeerID(f, a.activeUser().UserID)
 	if u, err := a.resolveUserInfo(peerID); err == nil {
 		if f.DisplayName == "" {
 			f.DisplayName = u.DisplayName
