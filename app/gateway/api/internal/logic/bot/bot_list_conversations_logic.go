@@ -50,7 +50,7 @@ func (l *BotListConversationsLogic) BotListConversations() (*types.BotListConver
 	out := make([]types.BotConversationItem, 0, len(convs))
 	for _, c := range convs {
 		out = append(out, types.BotConversationItem{
-			ConversationId:   c.GetConversationId(),
+			ConversationId:   formatID(c.GetConversationId()),
 			ConversationType: c.GetConversationType(),
 			Name:             c.GetName(),
 			Avatar:           c.GetAvatar(),

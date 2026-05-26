@@ -68,6 +68,21 @@ func (s *ConversationServiceServer) UpdateGroupInfo(ctx context.Context, in *pb.
 	return l.UpdateGroupInfo(in)
 }
 
+func (s *ConversationServiceServer) GrantGroupAdmin(ctx context.Context, in *pb.GrantGroupAdminReq) (*pb.GrantGroupAdminResp, error) {
+	l := conversationservicelogic.NewGrantGroupAdminLogic(ctx, s.svcCtx)
+	return l.GrantGroupAdmin(in)
+}
+
+func (s *ConversationServiceServer) RevokeGroupAdmin(ctx context.Context, in *pb.RevokeGroupAdminReq) (*pb.RevokeGroupAdminResp, error) {
+	l := conversationservicelogic.NewRevokeGroupAdminLogic(ctx, s.svcCtx)
+	return l.RevokeGroupAdmin(in)
+}
+
+func (s *ConversationServiceServer) TransferGroupOwner(ctx context.Context, in *pb.TransferGroupOwnerReq) (*pb.TransferGroupOwnerResp, error) {
+	l := conversationservicelogic.NewTransferGroupOwnerLogic(ctx, s.svcCtx)
+	return l.TransferGroupOwner(in)
+}
+
 func (s *ConversationServiceServer) GetConversationMembersDetail(ctx context.Context, in *pb.GetConversationMembersDetailReq) (*pb.GetConversationMembersDetailResp, error) {
 	l := conversationservicelogic.NewGetConversationMembersDetailLogic(ctx, s.svcCtx)
 	return l.GetConversationMembersDetail(in)

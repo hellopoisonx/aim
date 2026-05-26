@@ -213,6 +213,64 @@ Desktop 使用 `coder/websocket`，只发送/接收 Protobuf binary frame。
 - 已读：`READ_RECEIPT(conversation_id, last_msg_id)`；其他成员收到 `PUSH_READ_RECEIPT`。
 - 历史接口同时返回 `read_states[]`，用于初始已读展示。
 
+## 附件
+
+### 上传初始化
+
+```http
+POST /api/attachments/init
+Authorization: Bearer <access_token>
+```
+
+请求：
+
+```json
+{
+  "conversation_id": 123456,
+  "kind": "image",
+  "original_name": "photo.png",
+  "mime": "image/png",
+  "size": 204800,
+  "sha256": "abc..."
+}
+```
+
+响应 `body` 为 uploaded URL + fields，Desktop 随后直传 SeaweedFS。
+
+### 上传完成确认
+
+```http
+POST /api/attachments/{fileID}/complete
+Authorization: Bearer <access_token>
+```
+
+请求 body 可选 `{"sha256": "..."}`。响应为 `AttachmentFileInfo`。
+
+### 获取附件信息
+
+```http
+GET /api/attachments/{fileID}
+Authorization: Bearer <access_token>
+```
+
+### 获取下载授权
+
+```http
+GET /api/attachments/{fileID}/download
+Authorization: Bearer <access_token>
+```
+
+响应为临时下载 URL + headers。
+
+| 方法 | Desktop 方法 |
+|---|---|
+| `InitAttachmentUpload` | `a.api.InitAttachmentUpload()` |
+| `CompleteAttachmentUpload` | `a.api.CompleteAttachmentUpload()` |
+| `GetAttachment` | `a.api.GetAttachment()` |
+| `GetAttachmentDownload` | `a.api.GetAttachmentDownload()` |
+
+Desktop 发送附件：`ChooseAttachmentAndSend(cid)` → 选择文件 → `UploadAttachmentAndSend(cid, path, kind)` → init → SeaweedFS 直传 → complete → WS `SEND_MESSAGE`（`message_type=image/video/audio`，content 为 `aim.attachment.v1` JSON）。
+
 ## 兼容规则
 
 - 客户端必须容忍推送中的 `conversation_type` 为空。

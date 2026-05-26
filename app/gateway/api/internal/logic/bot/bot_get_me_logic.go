@@ -32,7 +32,7 @@ func (l *BotGetMeLogic) BotGetMe() (*types.BotMeResponse, error) {
 
 	return &types.BotMeResponse{
 		Bot: types.BotMe{
-			BotUserId: identity.BotUserID,
+			BotUserId: formatID(identity.BotUserID),
 			Nickname:  identity.Nickname,
 			Avatar:    identity.Avatar,
 			Status:    identity.UserStatus,

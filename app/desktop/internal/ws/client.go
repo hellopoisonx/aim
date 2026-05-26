@@ -24,6 +24,7 @@ type Client struct {
 	writeMu      sync.Mutex
 	closed       chan struct{}
 	closeOnce    sync.Once
+	closedFlag   atomic.Bool
 	seq          atomic.Int64
 	lastRead     atomic.Int64
 	onFrame      Handler
@@ -57,6 +58,7 @@ func (c *Client) Connect(ctx context.Context) error {
 	return nil
 }
 func (c *Client) readLoop(ctx context.Context) {
+	var readErr error
 	defer func() {
 		c.mu.Lock()
 		if c.conn != nil {
@@ -64,17 +66,18 @@ func (c *Client) readLoop(ctx context.Context) {
 			c.conn = nil
 		}
 		c.mu.Unlock()
-		c.closeOnce.Do(func() { close(c.closed) })
-		if c.onDisconnect != nil {
-			c.onDisconnect(nil)
+
+		if !c.closedFlag.Swap(true) {
+			c.closeOnce.Do(func() { close(c.closed) })
+			if c.onDisconnect != nil {
+				c.onDisconnect(readErr)
+			}
 		}
 	}()
 	for {
 		_, data, err := c.conn.Read(ctx)
 		if err != nil {
-			if c.onDisconnect != nil {
-				c.onDisconnect(err)
-			}
+			readErr = err
 			return
 		}
 		f, err := Decode(data)
@@ -103,6 +106,7 @@ func (c *Client) heartbeatLoop(ctx context.Context) {
 }
 func (c *Client) Disconnect() error {
 	var err error
+	c.closedFlag.Store(true)
 	c.closeOnce.Do(func() {
 		close(c.closed)
 		c.mu.Lock()

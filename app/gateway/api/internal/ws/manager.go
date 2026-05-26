@@ -23,6 +23,7 @@ type Connection struct {
 	Identity     Identity
 	Cancel       context.CancelFunc
 	Conn         *websocket.Conn
+	writeMu      sync.Mutex
 	ExpiresAt    int64       // Unix timestamp when token expires (in seconds), 0 if no expiry
 	ExpiryTimer  *time.Timer // timer that fires at token expiry, nil if not set
 	LastSeen     int64       // Unix timestamp (milliseconds) of last heartbeat or frame received
@@ -45,8 +46,8 @@ type Manager struct {
 	redisClient      *redis.Client
 	nodeID           string
 	presenceTTL      time.Duration
-	heartbeatTimeout time.Duration  // max time without heartbeat before connection is considered stale
-	reconnectGrace   time.Duration  // grace period after token-expired close for reconnection
+	heartbeatTimeout time.Duration // max time without heartbeat before connection is considered stale
+	reconnectGrace   time.Duration // grace period after token-expired close for reconnection
 
 	pendingMu      sync.Mutex
 	pendingOffline map[Identity]time.Time // identity → deadline for grace
@@ -68,8 +69,8 @@ func NewManagerWithPresence(redisClient *redis.Client, nodeID string, ttlSeconds
 		redisClient:      redisClient,
 		nodeID:           nodeID,
 		presenceTTL:      time.Duration(ttlSeconds) * time.Second,
-		heartbeatTimeout: 60 * time.Second,  // default: 60s heartbeat timeout
-		reconnectGrace:   30 * time.Second,  // default: 30s token-refresh grace
+		heartbeatTimeout: 60 * time.Second, // default: 60s heartbeat timeout
+		reconnectGrace:   30 * time.Second, // default: 30s token-refresh grace
 		pendingOffline:   make(map[Identity]time.Time),
 	}
 }
@@ -479,7 +480,6 @@ func (m *Manager) HasPendingGrace(identity Identity) bool {
 	_, exists := m.pendingOffline[identity]
 	return exists
 }
-
 
 // ForceOfflineForExpiredGrace publishes an offline event for a user/device whose grace expired.
 // It removes the device from the presence set and checks if user went offline.

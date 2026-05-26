@@ -6,6 +6,7 @@ package handler
 import (
 	"net/http"
 
+	attachments "github.com/hellopoisonx/aim/app/gateway/api/internal/handler/attachments"
 	auth "github.com/hellopoisonx/aim/app/gateway/api/internal/handler/auth"
 	bot "github.com/hellopoisonx/aim/app/gateway/api/internal/handler/bot"
 	conversations "github.com/hellopoisonx/aim/app/gateway/api/internal/handler/conversations"
@@ -89,6 +90,35 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 			[]rest.Route{
 				{
 					Method:  http.MethodPost,
+					Path:    "/init",
+					Handler: attachments.Handler(serverCtx),
+				},
+				{
+					Method:  http.MethodGet,
+					Path:    "/:id",
+					Handler: attachments.Handler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/:id/complete",
+					Handler: attachments.Handler(serverCtx),
+				},
+				{
+					Method:  http.MethodGet,
+					Path:    "/:id/download",
+					Handler: attachments.Handler(serverCtx),
+				},
+			}...,
+		),
+		rest.WithPrefix("/api/attachments"),
+	)
+
+	server.AddRoutes(
+		rest.WithMiddlewares(
+			[]rest.Middleware{serverCtx.Auth},
+			[]rest.Route{
+				{
+					Method:  http.MethodPost,
 					Path:    "/",
 					Handler: conversations.CreateConversationHandler(serverCtx),
 				},
@@ -126,6 +156,21 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 					Method:  http.MethodDelete,
 					Path:    "/:id/members/:uid",
 					Handler: conversations.RemoveGroupMemberHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/:id/members/:uid/admin",
+					Handler: conversations.GrantGroupAdminHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodDelete,
+					Path:    "/:id/members/:uid/admin",
+					Handler: conversations.RevokeGroupAdminHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/:id/owner",
+					Handler: conversations.TransferGroupOwnerHandler(serverCtx),
 				},
 				{
 					Method:  http.MethodPost,

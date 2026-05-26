@@ -10,11 +10,17 @@ export function AddGroupMembers(arg1:string,arg2:Array<string>):Promise<main.Con
 
 export function AutoLogin():Promise<main.SessionInfo>;
 
+export function ChooseAttachmentAndSend(arg1:string):Promise<main.MessageView>;
+
 export function CreateConversation(arg1:main.CreateConversationRequest):Promise<main.ConversationView>;
 
 export function CreateGroup(arg1:main.CreateGroupRequest):Promise<main.ConversationView>;
 
 export function DismissGroup(arg1:string):Promise<void>;
+
+export function GetAttachment(arg1:string):Promise<main.AttachmentView>;
+
+export function GetAttachmentDownload(arg1:string):Promise<main.AttachmentDownloadView>;
 
 export function GetCachedConversationMembers(arg1:string):Promise<Array<main.MemberView>>;
 
@@ -31,6 +37,10 @@ export function GetConversationHistory(arg1:string,arg2:number,arg3:string,arg4:
 export function GetConversationMembers(arg1:string):Promise<Array<main.MemberView>>;
 
 export function GetFriendsPresence():Promise<Array<main.PresenceView>>;
+
+export function GetUserByID(arg1:string):Promise<main.UserView>;
+
+export function GrantGroupAdmin(arg1:string,arg2:string):Promise<void>;
 
 export function LeaveGroup(arg1:string):Promise<void>;
 
@@ -54,6 +64,8 @@ export function RejectFriend(arg1:string):Promise<main.FriendView>;
 
 export function RemoveGroupMember(arg1:string,arg2:string):Promise<void>;
 
+export function RevokeGroupAdmin(arg1:string,arg2:string):Promise<void>;
+
 export function SaveConfig(arg1:main.ConfigDTO):Promise<void>;
 
 export function SearchUsers(arg1:string):Promise<Array<main.UserView>>;
@@ -66,4 +78,8 @@ export function SendTyping(arg1:string):Promise<void>;
 
 export function SwitchAccount(arg1:string):Promise<main.SessionInfo>;
 
+export function TransferGroupOwner(arg1:string,arg2:string):Promise<main.ConversationView>;
+
 export function UpdateGroupInfo(arg1:string,arg2:main.UpdateGroupInfoRequest):Promise<main.ConversationView>;
+
+export function UploadAttachmentAndSend(arg1:string,arg2:string,arg3:string):Promise<main.MessageView>;

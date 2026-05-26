@@ -99,15 +99,16 @@ func (s *GatewayServer) PushTyping(ctx context.Context, req *pb.PushTypingReq) (
 		ConversationId: req.ConversationId,
 	}
 
+	connections := s.manager.GetByUserID(req.TargetUserId)
 	var pushErr error
 
-	s.manager.ForEachUser(req.TargetUserId, func(conn *Connection) {
+	for _, conn := range connections {
 		if err := conn.WriteFrame(ctx, wspb.FrameType_FRAME_TYPE_PUSH_TYPING, payload); err != nil {
 			logx.WithContext(ctx).Errorf("PushTyping: failed to write to user_id=%d device_id=%s: %v",
 				conn.Identity.UserID, conn.Identity.DeviceID, err)
 			pushErr = err
 		}
-	})
+	}
 
 	if pushErr != nil {
 		return &pb.PushTypingResp{Success: false}, nil
@@ -137,15 +138,16 @@ func (s *GatewayServer) PushPresence(ctx context.Context, req *pb.PushPresenceRe
 	}
 
 	// Deliver to all connections of the target user.
+	connections := s.manager.GetByUserID(targetUserID)
 	var pushErr error
 
-	s.manager.ForEachUser(targetUserID, func(conn *Connection) {
+	for _, conn := range connections {
 		if err := conn.WriteFrame(ctx, wspb.FrameType_FRAME_TYPE_PUSH_PRESENCE, payload); err != nil {
 			logx.WithContext(ctx).Errorf("PushPresence: failed to write to user_id=%d device_id=%s: %v",
 				conn.Identity.UserID, conn.Identity.DeviceID, err)
 			pushErr = err
 		}
-	})
+	}
 
 	if pushErr != nil {
 		return &pb.PushPresenceResp{Success: false}, nil
@@ -167,15 +169,16 @@ func (s *GatewayServer) PushReadReceipt(ctx context.Context, req *pb.PushReadRec
 		UpdatedAt:         req.UpdatedAt,
 	}
 
+	connections := s.manager.GetByUserID(req.TargetUserId)
 	var pushErr error
 
-	s.manager.ForEachUser(req.TargetUserId, func(conn *Connection) {
+	for _, conn := range connections {
 		if err := conn.WriteFrame(ctx, wspb.FrameType_FRAME_TYPE_PUSH_READ_RECEIPT, payload); err != nil {
 			logx.WithContext(ctx).Errorf("PushReadReceipt: failed to write to user_id=%d device_id=%s: %v",
 				conn.Identity.UserID, conn.Identity.DeviceID, err)
 			pushErr = err
 		}
-	})
+	}
 
 	if pushErr != nil {
 		return &pb.PushReadReceiptResp{Success: false}, nil
@@ -367,21 +370,38 @@ func (c *Connection) WriteFrame(ctx context.Context, frameType wspb.FrameType, p
 	}
 
 	wsframe := BuildFrame(frameType, 0, payloadBytes)
-
-	data, err := EncodeFrame(wsframe)
-	if err != nil {
+	if err := c.WriteEncodedFrame(ctx, wsframe); err != nil {
 		span.RecordError(err)
 		span.SetStatus(otelcodes.Error, err.Error())
+
+		return err
+	}
+
+	return nil
+}
+
+// WriteEncodedFrame writes an already-built WsFrame to the connection.
+// It serializes all writers on the same WebSocket because coder/websocket only
+// permits one concurrent writer per connection.
+func (c *Connection) WriteEncodedFrame(ctx context.Context, frame *wspb.WsFrame) error {
+	if c.Conn == nil {
+		return fmt.Errorf("connection is nil")
+	}
+
+	data, err := EncodeFrame(frame)
+	if err != nil {
 		return fmt.Errorf("encode frame: %w", err)
+	}
+
+	c.writeMu.Lock()
+	defer c.writeMu.Unlock()
+
+	if c.Conn == nil {
+		return fmt.Errorf("connection is nil")
 	}
 
 	writeCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	if err := c.Conn.Write(writeCtx, websocket.MessageBinary, data); err != nil {
-		span.RecordError(err)
-		span.SetStatus(otelcodes.Error, err.Error())
-	}
-
-	return err
+	return c.Conn.Write(writeCtx, websocket.MessageBinary, data)
 }

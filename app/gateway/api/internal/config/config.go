@@ -49,6 +49,7 @@ type Config struct {
 		// ReadReceiptTopic is the Kafka topic for read receipt events.
 		ReadReceiptTopic string `json:",default=aim.read_receipt.events"` //nolint:staticcheck // go-zero conf uses json tag options for defaults.
 	}
+	AttachmentRpc aimnacos.Config
 	// GatewayNodeID identifies this gateway instance for the directory service.
 	// Populated from env AIM_GATEWAY_NODE_ID; startup fails if empty.
 	GatewayNodeID string `json:",optional"` //nolint:staticcheck // go-zero conf uses json tag options for defaults.

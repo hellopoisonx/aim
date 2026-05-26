@@ -22,6 +22,8 @@ func TestConfigLoadsCoreYAML(t *testing.T) {
 	require.Equal(t, "aim-message-transfer", c.KqPusherConf.Topic)
 	require.Equal(t, "gateway.rpc", c.GatewayRpc.ServiceName)
 	require.Equal(t, "aim-gateway:9090", c.GatewayRpc.Target)
+	require.Equal(t, "nacos:8848", c.AttachmentRpc.ServerAddr)
+	require.Equal(t, "attachment.rpc", c.AttachmentRpc.ServiceName)
 	require.Equal(t, "core.rpc", c.Telemetry.Name)
 	require.Equal(t, "jaeger:4318", c.Telemetry.Endpoint)
 	require.InEpsilon(t, 1.0, c.Telemetry.Sampler, 0.0001)

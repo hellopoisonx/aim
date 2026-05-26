@@ -3,7 +3,9 @@ package errorx
 import (
 	"errors"
 	"fmt"
+	"strconv"
 
+	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -17,6 +19,11 @@ const (
 	CodeTokenInvalid       = 1004
 	CodeTokenExpired       = 1005
 	CodeUserBanned         = 1006
+)
+
+const (
+	codeErrorReason   = "AIM_CODE_ERROR"
+	codeErrorMetadata = "aim.biz_code"
 )
 
 // Bot OpenAPI error codes (40110-40130). They live in the 401xx range so the
@@ -72,10 +79,21 @@ func (e *CodeError) Error() string {
 
 // GRPCStatus returns the gRPC status for this error.
 // When a gRPC server handler returns a *CodeError, the gRPC framework
-// calls this method to derive the wire status — the biz code category
-// maps to a gRPC code and the message is preserved.
+// calls this method to derive the wire status. The status code keeps gRPC
+// semantics while ErrorInfo metadata preserves the exact AIM biz code across
+// RPC boundaries.
 func (e *CodeError) GRPCStatus() *status.Status {
-	return status.New(grpcCodeFromBizCode(e.Code), e.Message)
+	st := status.New(grpcCodeFromBizCode(e.Code), e.Message)
+	withDetails, err := st.WithDetails(&errdetails.ErrorInfo{
+		Reason: codeErrorReason,
+		Metadata: map[string]string{
+			codeErrorMetadata: strconv.Itoa(e.Code),
+		},
+	})
+	if err != nil {
+		return st
+	}
+	return withDetails
 }
 
 // NewCodeError creates a new CodeError.
@@ -121,13 +139,34 @@ func FromGRPCError(err error) *CodeError {
 	}
 
 	code := bizCodeFromGRPCCode(st.Code())
-	msg := st.Message()
+	if detailedCode, ok := exactBizCodeFromStatus(st); ok {
+		code = detailedCode
+	}
 
+	msg := st.Message()
 	if isInfraGRPCCode(st.Code()) {
 		msg = "internal error"
 	}
 
 	return NewCodeError(code, msg)
+}
+
+func exactBizCodeFromStatus(st *status.Status) (int, bool) {
+	for _, detail := range st.Details() {
+		info, ok := detail.(*errdetails.ErrorInfo)
+		if !ok || info.GetReason() != codeErrorReason {
+			continue
+		}
+
+		raw := info.GetMetadata()[codeErrorMetadata]
+		code, err := strconv.Atoi(raw)
+		if err != nil {
+			return 0, false
+		}
+		return code, true
+	}
+
+	return 0, false
 }
 
 // isInfraGRPCCode returns true for gRPC codes that describe infrastructure

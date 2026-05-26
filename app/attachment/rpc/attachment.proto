@@ -1,0 +1,82 @@
+syntax = "proto3";
+
+package attachment;
+
+option go_package = "./pb";
+
+service AttachmentService {
+  rpc InitUpload(InitUploadReq) returns (InitUploadResp);
+  rpc CompleteUpload(CompleteUploadReq) returns (FileInfo);
+  rpc GetFile(GetFileReq) returns (FileInfo);
+  rpc AuthorizeDownload(AuthorizeDownloadReq) returns (AuthorizeDownloadResp);
+  rpc ValidateReference(ValidateReferenceReq) returns (FileInfo);
+}
+
+message InitUploadReq {
+  int64 owner_id = 1;
+  int64 conversation_id = 2;
+  string kind = 3;
+  string original_name = 4;
+  string mime = 5;
+  int64 size = 6;
+  string sha256 = 7;
+}
+
+message InitUploadResp {
+  string file_id = 1;
+  string bucket = 2;
+  string object_key = 3;
+  string upload_url = 4;
+  string upload_method = 5;
+  map<string, string> headers = 6;
+  int64 expires_at = 7;
+}
+
+message CompleteUploadReq {
+  int64 user_id = 1;
+  string file_id = 2;
+  string sha256 = 3;
+}
+
+message GetFileReq {
+  int64 user_id = 1;
+  string file_id = 2;
+}
+
+message AuthorizeDownloadReq {
+  int64 user_id = 1;
+  string file_id = 2;
+}
+
+message AuthorizeDownloadResp {
+  string url = 1;
+  map<string, string> headers = 2;
+  int64 expires_at = 3;
+}
+
+message ValidateReferenceReq {
+  int64 user_id = 1;
+  int64 conversation_id = 2;
+  string file_id = 3;
+  string kind = 4;
+}
+
+message FileInfo {
+  string file_id = 1;
+  int64 owner_id = 2;
+  int64 conversation_id = 3;
+  string kind = 4;
+  string original_name = 5;
+  string mime = 6;
+  int64 size = 7;
+  string sha256 = 8;
+  string status = 9;
+  string parse_status = 10;
+  string bucket = 11;
+  string object_key = 12;
+  string thumbnail_object_key = 13;
+  int64 duration_ms = 14;
+  int32 width = 15;
+  int32 height = 16;
+  string metadata_json = 17;
+}

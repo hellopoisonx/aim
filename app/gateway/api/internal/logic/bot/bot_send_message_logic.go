@@ -46,8 +46,9 @@ func (l *BotSendMessageLogic) BotSendMessage(req *types.BotSendMessageRequest) (
 		return nil, err
 	}
 
-	if req.ConversationId <= 0 {
-		return nil, errorx.NewCodeError(errorx.CodeBadInput, "conversation_id is required")
+	conversationID, err := parseRequiredID(req.ConversationId, "conversation_id")
+	if err != nil {
+		return nil, err
 	}
 
 	if req.MessageType == "" {
@@ -69,7 +70,7 @@ func (l *BotSendMessageLogic) BotSendMessage(req *types.BotSendMessageRequest) (
 	rpcResp, err := l.svcCtx.CoreClient.Transfer(ctx, &pb.TransferReq{
 		SenderId:       identity.BotUserID,
 		DeviceId:       botDeviceID,
-		ConversationId: req.ConversationId,
+		ConversationId: conversationID,
 		MessageType:    req.MessageType,
 		Content:        req.Content,
 		ClientMsgId:    req.ClientMsgId,
@@ -83,7 +84,7 @@ func (l *BotSendMessageLogic) BotSendMessage(req *types.BotSendMessageRequest) (
 	}
 
 	return &types.BotSendMessageResponse{
-		MessageId:   rpcResp.GetMessageId(),
+		MessageId:   formatID(rpcResp.GetMessageId()),
 		ClientMsgId: rpcResp.GetClientMsgId(),
 		AcceptedAt:  rpcResp.GetAcceptedAt(),
 	}, nil

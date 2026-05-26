@@ -1,0 +1,40 @@
+Name: attachment.rpc
+ListenOn: 0.0.0.0:8091
+Telemetry:
+  Name: attachment.rpc
+  Endpoint: jaeger:4318
+  Sampler: 1.0
+  Batcher: otlphttp
+  OtlpHttpPath: /v1/traces
+Nacos:
+  ServerAddr: nacos:8848
+  NamespaceID: ""
+  Group: DEFAULT_GROUP
+  Cluster: DEFAULT
+  ServiceName: attachment.rpc
+  AdvertiseIP: aim-attachment
+  AdvertisePort: 8091
+  Ephemeral: true
+  Weight: 1
+  TimeoutMs: 5000
+  Username: ""
+  Password: ""
+  LogDir: /app/log/nacos
+  CacheDir: /tmp/nacos/cache
+  LogLevel: info
+Postgres:
+  DataSource: postgres://user:password@postgres:5432/aim_logic?sslmode=disable
+Seaweed:
+  Endpoint: http://seaweed-s3:8333
+  PublicEndpoint: http://localhost:8333
+  Region: us-east-1
+  Bucket: aim-attachments
+  AccessKey: aim
+  SecretKey: aim-secret
+  PresignTTL: 900
+  DownloadTTL: 300
+  MaxSizeBytes: 5368709120
+Kafka:
+  Brokers:
+    - kafka:9092
+  Topic: aim.attachment.uploaded

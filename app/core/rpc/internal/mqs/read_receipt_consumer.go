@@ -17,10 +17,11 @@ import (
 type readReceiptEvent struct {
 	tracing.TraceContextFields
 
-	FromUserID        int64 `json:"from_user_id"`
-	ConversationID    int64 `json:"conversation_id"`
-	LastReadMessageID int64 `json:"last_read_message_id"`
-	UpdatedAt         int64 `json:"updated_at"`
+	FromUserID        int64  `json:"from_user_id"`
+	ConversationID    int64  `json:"conversation_id"`
+	LastReadMessageID int64  `json:"last_read_message_id"`
+	UpdatedAt         int64  `json:"updated_at"`
+	GatewayNodeID     string `json:"gateway_node_id"`
 }
 
 // ReadReceiptConsumer consumes aim.read_receipt.events and fans out to
@@ -78,6 +79,10 @@ func (c *ReadReceiptConsumer) Consume(ctx context.Context, key string, value str
 		}
 
 		for _, nodeID := range nodeIDs {
+			if event.GatewayNodeID != "" && nodeID == event.GatewayNodeID {
+				continue
+			}
+
 			req := &gwpb.PushReadReceiptReq{
 				TargetUserId:      memberID,
 				ConversationId:    event.ConversationID,

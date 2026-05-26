@@ -11,6 +11,7 @@ import (
 	"github.com/hellopoisonx/aim/app/core/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/core/rpc/pb"
 	logicpb "github.com/hellopoisonx/aim/app/logic/rpc/pb"
+	sharedattachment "github.com/hellopoisonx/aim/app/shared/attachment"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 	"github.com/hellopoisonx/aim/app/shared/tracing"
 
@@ -26,6 +27,7 @@ type TransferLogic struct {
 
 	idempotency idempotencyStore
 	publisher   messagePublisher
+	attachments attachmentReferenceValidator
 }
 
 func NewTransferLogic(ctx context.Context, svcCtx *svc.ServiceContext) *TransferLogic {
@@ -35,6 +37,7 @@ func NewTransferLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Transfer
 		Logger:      logx.WithContext(ctx),
 		idempotency: &redisIdempotencyStore{client: svcCtx.RedisClient},
 		publisher:   &kqMessagePublisher{pusher: svcCtx.KqPusher},
+		attachments: newGRPCAttachmentValidator(svcCtx.AttachmentClient),
 	}
 }
 
@@ -74,7 +77,12 @@ func (l *TransferLogic) Transfer(in *pb.TransferReq) (*pb.TransferResp, error) {
 		return nil, err
 	}
 
-	// 4. Generate unique message ID with Snowflake
+	// 5. Attachment messages reference files uploaded through AIM/SeaweedFS.
+	if err := l.checkAttachmentReference(in); err != nil {
+		return nil, err
+	}
+
+	// 6. Generate unique message ID with Snowflake
 	msgID, err := l.svcCtx.Snowflake.NextID()
 	if err != nil {
 		return nil, errorx.NewCodeErrorf(errorx.CodeInternal, "snowflake id generation failed: %v", err)
@@ -134,22 +142,42 @@ func (l *TransferLogic) validate(in *pb.TransferReq) error {
 	return nil
 }
 
-// checkQuota enforces the per-sender sliding-window limit. Returns a rate-limit
-// CodeError when the quota is exceeded; transient Redis failures are logged and
-// fail-open so messaging stays available even if Redis is briefly unreachable.
+// checkQuota enforces the per-(sender_id, device_id) sliding-window limit.
+// Returns a rate-limit CodeError when the quota is exceeded; transient Redis
+// failures are logged and fail-open so messaging stays available even if Redis
+// is briefly unreachable.
 func (l *TransferLogic) checkQuota(in *pb.TransferReq) error {
 	if l.svcCtx.TransferQuota == nil {
 		return nil
 	}
 
-	allowed, _, err := l.svcCtx.TransferQuota.CheckQuota(l.ctx, in.SenderId)
+	allowed, _, err := l.svcCtx.TransferQuota.CheckQuota(l.ctx, in.SenderId, in.DeviceId)
 	if err != nil {
-		l.Errorf("transfer quota check failed for sender %d: %v", in.SenderId, err)
+		l.Errorf("transfer quota check failed for sender %d device %q: %v", in.SenderId, in.DeviceId, err)
 		return nil
 	}
 
 	if !allowed {
 		return errorx.NewCodeError(errorx.CodeRateLimit, "rate limit")
+	}
+	if sharedattachment.IsAttachmentMessageType(in.MessageType) {
+		if _, err := sharedattachment.ParseContent(in.Content); err != nil {
+			return errorx.NewCodeErrorf(errorx.CodeBadInput, "invalid attachment content: %v", err)
+		}
+	}
+
+	return nil
+}
+
+func (l *TransferLogic) checkAttachmentReference(in *pb.TransferReq) error {
+	if !sharedattachment.IsAttachmentMessageType(in.MessageType) {
+		return nil
+	}
+	if l.attachments == nil {
+		return errorx.NewCodeError(errorx.CodeInternal, "attachment service is not configured")
+	}
+	if err := l.attachments.ValidateReference(l.ctx, in.SenderId, in.ConversationId, in.MessageType, in.Content); err != nil {
+		return errorx.NewCodeErrorf(errorx.CodeBadInput, "invalid attachment reference: %v", err)
 	}
 	return nil
 }
@@ -193,6 +221,17 @@ func (l *TransferLogic) checkPermission(in *pb.TransferReq) error {
 		}
 
 		return errorx.NewCodeError(code, reason)
+	}
+
+	// Apply filtered mentions: replace original mentions with those validated as conversation members.
+	// Non-member mentions are silently dropped; they remain as plain text in content.
+	if len(resp.GetFilteredMentions()) < len(in.Mentions) {
+		filtered := resp.GetFilteredMentions()
+		newMentions := make([]string, len(filtered))
+		for i, id := range filtered {
+			newMentions[i] = strconv.FormatInt(id, 10)
+		}
+		in.Mentions = newMentions
 	}
 
 	return nil

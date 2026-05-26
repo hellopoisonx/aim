@@ -1,5 +1,10 @@
 # 接口定义
 
+## 外部接口边界
+
+- Gateway 是 AIM 唯一面向客户端/公网的 REST API 与 WebSocket 入口；所有新增客户端 REST/WS 协议必须先落到 `app/gateway/api/gateway.api`。
+- 其他模块不得新增对外 REST/WS 端点；若需要访问 auth/core/logic/attachment/data_parsing 能力，由 gateway 通过内部 gRPC/Kafka 编排，并负责鉴权、错误清洗与响应包装。
+
 ## REST API - `/api`
 
 ### 规范
@@ -117,6 +122,19 @@ goctl api go -api app/gateway/api/gateway.api -dir app/gateway/api --style go_ze
 - 通过 Redis pipeline 批量 SCARD `aim:presence:{friend_id}` 得到各好友设备数，`>0` 为 `online` 否则 `offline`
 - 返回 `[{user_id, status}]` 列表，用于客户端 WS 连接/重连后填充初始在线状态
 - 不在 Redis 中记录 `updated_at`，`PresenceItem.updated_at` 字段保留为 0；实时时间戳由 Kafka 事件侧维护
+
+### 附件代理接口 - `/api/attachments`
+
+| Method | Path | Auth | Handler |
+| --- | --- | --- | --- |
+| POST | `/api/attachments/init` | `Auth` 中间件（JWT Bearer token） | `internal/handler/attachments/handler.go` |
+| GET | `/api/attachments/:id` | `Auth` 中间件（JWT Bearer token） | `internal/handler/attachments/handler.go` |
+| POST | `/api/attachments/:id/complete` | `Auth` 中间件（JWT Bearer token） | `internal/handler/attachments/handler.go` |
+| GET | `/api/attachments/:id/download` | `Auth` 中间件（JWT Bearer token） | `internal/handler/attachments/handler.go` |
+
+- Gateway 只负责把附件相关 REST 请求转换为 `AttachmentService` gRPC 调用，用户身份从 JWT 注入 `owner_id/user_id`。
+- 客户端仍只与 gateway 通信；SeaweedFS 直传 URL 由 attachment 服务签发。
+- 附件内容通过 `aim.attachment.v1` JSON schema 透传，普通消息仍保持原有 `message_type + content` 兼容路径。
 
 ### `ws` 升级 - `/ws`
 

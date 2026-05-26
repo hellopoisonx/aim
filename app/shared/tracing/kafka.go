@@ -5,6 +5,7 @@ import (
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/trace"
 )
@@ -40,6 +41,31 @@ func ExtractTraceContext(ctx context.Context, fields TraceContextFields) context
 	return propagation.TraceContext{}.Extract(ctx, carrier)
 }
 
+// DetachSpanContext returns a copy of ctx that preserves cancellation, deadlines,
+// baggage and other values, but clears the active span context.
+//
+// Use this for long-lived transports (for example, a WebSocket session after the
+// HTTP upgrade is complete) before creating short-lived per-message spans. This
+// avoids exporting spans whose parent is the still-open upgrade/request span;
+// Jaeger cannot perform clock-skew adjustment for those traces until the parent
+// has ended and logs "invalid parent span IDs=...; skipping clock skew adjustment".
+func DetachSpanContext(ctx context.Context) context.Context {
+	return trace.ContextWithSpanContext(ctx, trace.SpanContext{})
+}
+
 func StartKafkaConsumerSpan(ctx context.Context, name string, attrs ...attribute.KeyValue) (context.Context, trace.Span) {
 	return otel.Tracer(tracerName).Start(ctx, name, trace.WithSpanKind(trace.SpanKindConsumer), trace.WithAttributes(attrs...))
+}
+
+func StartKafkaProducerSpan(ctx context.Context, name string, attrs ...attribute.KeyValue) (context.Context, trace.Span) {
+	return otel.Tracer(tracerName).Start(ctx, name, trace.WithSpanKind(trace.SpanKindProducer), trace.WithAttributes(attrs...))
+}
+
+func RecordSpanError(span trace.Span, err error) {
+	if span == nil || err == nil {
+		return
+	}
+
+	span.RecordError(err)
+	span.SetStatus(codes.Error, err.Error())
 }

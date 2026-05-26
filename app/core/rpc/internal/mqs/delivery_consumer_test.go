@@ -27,9 +27,11 @@ import (
 // --- Fake implementations ---
 
 type fakeGatewayClient struct {
-	pushes   []pushRecord
-	pushErr  error
-	pushResp *gwpb.PushMessageResp
+	pushes            []pushRecord
+	typingPushes      []*gwpb.PushTypingReq
+	readReceiptPushes []*gwpb.PushReadReceiptReq
+	pushErr           error
+	pushResp          *gwpb.PushMessageResp
 }
 
 type pushRecord struct {
@@ -55,10 +57,14 @@ func (f *fakeGatewayClient) PushPresence(ctx context.Context, req *gwpb.PushPres
 }
 
 func (f *fakeGatewayClient) PushTyping(ctx context.Context, req *gwpb.PushTypingReq) (*gwpb.PushTypingResp, error) {
+	f.typingPushes = append(f.typingPushes, req)
+
 	return &gwpb.PushTypingResp{Success: true}, nil
 }
 
 func (f *fakeGatewayClient) PushReadReceipt(ctx context.Context, req *gwpb.PushReadReceiptReq) (*gwpb.PushReadReceiptResp, error) {
+	f.readReceiptPushes = append(f.readReceiptPushes, req)
+
 	return &gwpb.PushReadReceiptResp{Success: true}, nil
 }
 
@@ -115,6 +121,18 @@ func (f *fakeConversationClient) DismissGroup(context.Context, *logicpb.DismissG
 
 func (f *fakeConversationClient) UpdateGroupInfo(context.Context, *logicpb.UpdateGroupInfoReq, ...grpc.CallOption) (*logicpb.UpdateGroupInfoResp, error) {
 	return nil, errors.New("UpdateGroupInfo not implemented")
+}
+
+func (f *fakeConversationClient) GrantGroupAdmin(context.Context, *logicpb.GrantGroupAdminReq, ...grpc.CallOption) (*logicpb.GrantGroupAdminResp, error) {
+	return nil, errors.New("GrantGroupAdmin not implemented")
+}
+
+func (f *fakeConversationClient) RevokeGroupAdmin(context.Context, *logicpb.RevokeGroupAdminReq, ...grpc.CallOption) (*logicpb.RevokeGroupAdminResp, error) {
+	return nil, errors.New("RevokeGroupAdmin not implemented")
+}
+
+func (f *fakeConversationClient) TransferGroupOwner(context.Context, *logicpb.TransferGroupOwnerReq, ...grpc.CallOption) (*logicpb.TransferGroupOwnerResp, error) {
+	return nil, errors.New("TransferGroupOwner not implemented")
 }
 
 func (f *fakeConversationClient) GetConversationMembersDetail(context.Context, *logicpb.GetConversationMembersDetailReq, ...grpc.CallOption) (*logicpb.GetConversationMembersDetailResp, error) {

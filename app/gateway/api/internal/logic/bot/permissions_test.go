@@ -93,7 +93,7 @@ func TestBotGetMe_WithSelfReadAction(t *testing.T) {
 	resp, err := NewBotGetMeLogic(ctxWithBot(botperm.ActionSelfRead), &svc.ServiceContext{}).BotGetMe()
 
 	require.NoError(t, err)
-	require.Equal(t, int64(1001), resp.Bot.BotUserId)
+	require.Equal(t, "1001", resp.Bot.BotUserId)
 	require.Equal(t, []string{botperm.ActionSelfRead}, resp.Bot.Scopes)
 }
 

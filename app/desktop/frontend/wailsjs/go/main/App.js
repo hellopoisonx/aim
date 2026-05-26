@@ -18,6 +18,10 @@ export function AutoLogin() {
   return window['go']['main']['App']['AutoLogin']();
 }
 
+export function ChooseAttachmentAndSend(arg1) {
+  return window['go']['main']['App']['ChooseAttachmentAndSend'](arg1);
+}
+
 export function CreateConversation(arg1) {
   return window['go']['main']['App']['CreateConversation'](arg1);
 }
@@ -28,6 +32,14 @@ export function CreateGroup(arg1) {
 
 export function DismissGroup(arg1) {
   return window['go']['main']['App']['DismissGroup'](arg1);
+}
+
+export function GetAttachment(arg1) {
+  return window['go']['main']['App']['GetAttachment'](arg1);
+}
+
+export function GetAttachmentDownload(arg1) {
+  return window['go']['main']['App']['GetAttachmentDownload'](arg1);
 }
 
 export function GetCachedConversationMembers(arg1) {
@@ -60,6 +72,14 @@ export function GetConversationMembers(arg1) {
 
 export function GetFriendsPresence() {
   return window['go']['main']['App']['GetFriendsPresence']();
+}
+
+export function GetUserByID(arg1) {
+  return window['go']['main']['App']['GetUserByID'](arg1);
+}
+
+export function GrantGroupAdmin(arg1, arg2) {
+  return window['go']['main']['App']['GrantGroupAdmin'](arg1, arg2);
 }
 
 export function LeaveGroup(arg1) {
@@ -106,6 +126,10 @@ export function RemoveGroupMember(arg1, arg2) {
   return window['go']['main']['App']['RemoveGroupMember'](arg1, arg2);
 }
 
+export function RevokeGroupAdmin(arg1, arg2) {
+  return window['go']['main']['App']['RevokeGroupAdmin'](arg1, arg2);
+}
+
 export function SaveConfig(arg1) {
   return window['go']['main']['App']['SaveConfig'](arg1);
 }
@@ -130,6 +154,14 @@ export function SwitchAccount(arg1) {
   return window['go']['main']['App']['SwitchAccount'](arg1);
 }
 
+export function TransferGroupOwner(arg1, arg2) {
+  return window['go']['main']['App']['TransferGroupOwner'](arg1, arg2);
+}
+
 export function UpdateGroupInfo(arg1, arg2) {
   return window['go']['main']['App']['UpdateGroupInfo'](arg1, arg2);
+}
+
+export function UploadAttachmentAndSend(arg1, arg2, arg3) {
+  return window['go']['main']['App']['UploadAttachmentAndSend'](arg1, arg2, arg3);
 }

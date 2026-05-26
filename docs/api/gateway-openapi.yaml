@@ -5,6 +5,137 @@ info:
   title: aim gateway api
   version: "1.0"
 paths:
+  /api/attachments/init:
+    post:
+      consumes:
+      - application/json
+      operationId: attachmentsInitUpload
+      parameters:
+      - in: body
+        name: body
+        required: true
+        schema:
+          properties:
+            conversation_id:
+              type: integer
+            kind:
+              enum: [image, video, audio]
+              type: string
+            original_name:
+              type: string
+            mime:
+              type: string
+            size:
+              type: integer
+            sha256:
+              type: string
+          required:
+          - conversation_id
+          - kind
+          - original_name
+          - mime
+          - size
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: ""
+          schema:
+            properties:
+              file_id:
+                type: string
+              bucket:
+                type: string
+              object_key:
+                type: string
+              upload_url:
+                type: string
+              upload_method:
+                type: string
+              headers:
+                additionalProperties:
+                  type: string
+                type: object
+              expires_at:
+                type: integer
+            type: object
+      security:
+      - apiKey: []
+      summary: Init attachment upload
+  /api/attachments/{id}:
+    get:
+      operationId: attachmentsGet
+      parameters:
+      - in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: ""
+          schema:
+            $ref: '#/definitions/AttachmentFileInfo'
+      security:
+      - apiKey: []
+      summary: Get attachment metadata
+  /api/attachments/{id}/complete:
+    post:
+      consumes:
+      - application/json
+      operationId: attachmentsCompleteUpload
+      parameters:
+      - in: path
+        name: id
+        required: true
+        type: string
+      - in: body
+        name: body
+        required: false
+        schema:
+          properties:
+            sha256:
+              type: string
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: ""
+          schema:
+            $ref: '#/definitions/AttachmentFileInfo'
+      security:
+      - apiKey: []
+      summary: Complete attachment upload
+  /api/attachments/{id}/download:
+    get:
+      operationId: attachmentsDownload
+      parameters:
+      - in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: ""
+          schema:
+            properties:
+              url:
+                type: string
+              headers:
+                additionalProperties:
+                  type: string
+                type: object
+              expires_at:
+                type: integer
+            type: object
+      security:
+      - apiKey: []
+      summary: Authorize attachment download
   /api/auth/login:
     post:
       consumes:
@@ -143,29 +274,37 @@ paths:
         "200":
           description: ""
           schema:
-            properties:
-              conversations:
-                items:
-                  properties:
-                    avatar:
-                      type: string
-                    conversation_id:
-                      type: integer
-                    conversation_type:
-                      type: string
-                    created_at:
-                      type: integer
-                    name:
-                      type: string
-                  required:
-                  - conversation_id
-                  - conversation_type
-                  - name
-                  - avatar
-                  - created_at
-                  type: object
-                type: array
             type: object
+            required: [code, msg, body]
+            properties:
+              code:
+                type: integer
+                example: 0
+              msg:
+                type: string
+                example: ok
+              body:
+                type: object
+                properties:
+                  conversations:
+                    type: array
+                    items:
+                      type: object
+                      required: [conversation_id, conversation_type, name, avatar, created_at]
+                      properties:
+                        conversation_id:
+                          type: string
+                          description: Snowflake int64 decimal string.
+                        conversation_type:
+                          type: string
+                        name:
+                          type: string
+                        avatar:
+                          type: string
+                        created_at:
+                          type: integer
+      security:
+      - BotAuth: []
       schemes:
       - https
       description: 'Requires Bot action: bot.conversation.list'
@@ -179,29 +318,37 @@ paths:
         "200":
           description: ""
           schema:
-            properties:
-              bot:
-                properties:
-                  avatar:
-                    type: string
-                  bot_user_id:
-                    type: integer
-                  nickname:
-                    type: string
-                  scopes:
-                    items:
-                      type: string
-                    type: array
-                  status:
-                    type: integer
-                required:
-                - bot_user_id
-                - nickname
-                - avatar
-                - status
-                - scopes
-                type: object
             type: object
+            required: [code, msg, body]
+            properties:
+              code:
+                type: integer
+                example: 0
+              msg:
+                type: string
+                example: ok
+              body:
+                type: object
+                properties:
+                  bot:
+                    type: object
+                    required: [bot_user_id, nickname, avatar, status, scopes]
+                    properties:
+                      bot_user_id:
+                        type: string
+                        description: Snowflake int64 decimal string.
+                      nickname:
+                        type: string
+                      avatar:
+                        type: string
+                      status:
+                        type: integer
+                      scopes:
+                        type: array
+                        items:
+                          type: string
+      security:
+      - BotAuth: []
       schemes:
       - https
       description: 'Requires Bot action: bot.self.read'
@@ -216,39 +363,52 @@ paths:
         name: body
         required: true
         schema:
+          type: object
+          required: [conversation_id, message_type, content, client_msg_id]
           properties:
-            client_msg_id:
-              type: string
-            content:
-              type: string
             conversation_id:
-              type: integer
-            mentions:
-              items:
-                type: string
-              type: array
+              type: string
+              description: Snowflake int64 decimal string.
             message_type:
               type: string
-          required:
-          - conversation_id
-          - message_type
-          - content
-          - client_msg_id
-          type: object
+              maxLength: 32
+            content:
+              type: string
+            client_msg_id:
+              type: string
+            mentions:
+              type: array
+              description: Mentioned user IDs as decimal strings; max 20.
+              maxItems: 20
+              items:
+                type: string
       produces:
       - application/json
       responses:
         "200":
           description: ""
           schema:
-            properties:
-              accepted_at:
-                type: integer
-              client_msg_id:
-                type: string
-              message_id:
-                type: integer
             type: object
+            required: [code, msg, body]
+            properties:
+              code:
+                type: integer
+                example: 0
+              msg:
+                type: string
+                example: ok
+              body:
+                type: object
+                properties:
+                  message_id:
+                    type: string
+                    description: Snowflake int64 decimal string.
+                  client_msg_id:
+                    type: string
+                  accepted_at:
+                    type: integer
+      security:
+      - BotAuth: []
       schemes:
       - https
       description: 'Requires Bot action: bot.message.send'
@@ -262,10 +422,22 @@ paths:
         "200":
           description: ""
           schema:
-            properties:
-              deleted:
-                type: boolean
             type: object
+            required: [code, msg, body]
+            properties:
+              code:
+                type: integer
+                example: 0
+              msg:
+                type: string
+                example: ok
+              body:
+                type: object
+                properties:
+                  deleted:
+                    type: boolean
+      security:
+      - BotAuth: []
       schemes:
       - https
       description: 'Requires Bot action: bot.webhook.delete'
@@ -278,28 +450,35 @@ paths:
         "200":
           description: ""
           schema:
-            properties:
-              configured:
-                type: boolean
-              webhook:
-                properties:
-                  enabled:
-                    type: boolean
-                  events:
-                    items:
-                      type: string
-                    type: array
-                  updated_at:
-                    type: integer
-                  url:
-                    type: string
-                required:
-                - url
-                - events
-                - enabled
-                - updated_at
-                type: object
             type: object
+            required: [code, msg, body]
+            properties:
+              code:
+                type: integer
+                example: 0
+              msg:
+                type: string
+                example: ok
+              body:
+                type: object
+                properties:
+                  configured:
+                    type: boolean
+                  webhook:
+                    type: object
+                    properties:
+                      url:
+                        type: string
+                      events:
+                        type: array
+                        items:
+                          type: string
+                      enabled:
+                        type: boolean
+                      updated_at:
+                        type: integer
+      security:
+      - BotAuth: []
       schemes:
       - https
       description: 'Requires Bot action: bot.webhook.read'
@@ -313,50 +492,58 @@ paths:
         name: body
         required: true
         schema:
+          type: object
+          required: [url]
           properties:
-            enabled:
-              type: boolean
+            url:
+              type: string
+              description: Valid URL. HTTPS is recommended in production.
             events:
+              type: array
               items:
                 type: string
-              type: array
-            rotate_secret:
+            enabled:
               type: boolean
             secret:
               type: string
-            url:
-              type: string
-          required:
-          - url
-          type: object
+            rotate_secret:
+              type: boolean
       produces:
       - application/json
       responses:
         "200":
           description: ""
           schema:
-            properties:
-              plaintext_secret:
-                type: string
-              webhook:
-                properties:
-                  enabled:
-                    type: boolean
-                  events:
-                    items:
-                      type: string
-                    type: array
-                  updated_at:
-                    type: integer
-                  url:
-                    type: string
-                required:
-                - url
-                - events
-                - enabled
-                - updated_at
-                type: object
             type: object
+            required: [code, msg, body]
+            properties:
+              code:
+                type: integer
+                example: 0
+              msg:
+                type: string
+                example: ok
+              body:
+                type: object
+                properties:
+                  webhook:
+                    type: object
+                    properties:
+                      url:
+                        type: string
+                      events:
+                        type: array
+                        items:
+                          type: string
+                      enabled:
+                        type: boolean
+                      updated_at:
+                        type: integer
+                  plaintext_secret:
+                    type: string
+                    description: Present only when rotate_secret=true.
+      security:
+      - BotAuth: []
       schemes:
       - https
       description: 'Requires Bot actions: bot.webhook.write plus one subscribe action per event (message.created -> bot.webhook.subscribe.message_created)'
@@ -1100,10 +1287,60 @@ paths:
       schemes:
       - https
       summary: AddFriend
+definitions:
+  AttachmentFileInfo:
+    properties:
+      file_id:
+        type: string
+      owner_id:
+        type: integer
+      conversation_id:
+        type: integer
+      kind:
+        enum: [image, video, audio]
+        type: string
+      original_name:
+        type: string
+      mime:
+        type: string
+      size:
+        type: integer
+      sha256:
+        type: string
+      status:
+        type: string
+      parse_status:
+        type: string
+      bucket:
+        type: string
+      object_key:
+        type: string
+      thumbnail_object_key:
+        type: string
+      duration_ms:
+        type: integer
+      width:
+        type: integer
+      height:
+        type: integer
+      metadata:
+        type: object
+    type: object
 produces:
 - application/json
 schemes:
 - https
+securityDefinitions:
+  apiKey:
+    type: apiKey
+    in: header
+    name: Authorization
+    description: Use Bearer JWT for human-user gateway APIs.
+  BotAuth:
+    type: apiKey
+    in: header
+    name: Authorization
+    description: Use 'Bot <token>' for /api/bot/v1 APIs.
 swagger: "2.0"
 x-date: "2026-05-23 18:42:25"
 x-description: This is a goctl generated swagger file.

@@ -1112,7 +1112,7 @@ def cmd_bot_conv_list(args):
 
 def cmd_bot_send(args):
     payload = {
-        "conversation_id": args.conversation_id,
+        "conversation_id": str(args.conversation_id),
         "message_type": args.message_type,
         "content": args.content,
         "client_msg_id": args.client_msg_id or str(uuid.uuid4()),

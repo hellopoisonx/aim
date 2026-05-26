@@ -16,9 +16,10 @@ import (
 type typingEvent struct {
 	tracing.TraceContextFields
 
-	FromUserID     int64 `json:"from_user_id"`
-	ConversationID int64 `json:"conversation_id"`
-	Timestamp      int64 `json:"timestamp"`
+	FromUserID     int64  `json:"from_user_id"`
+	ConversationID int64  `json:"conversation_id"`
+	Timestamp      int64  `json:"timestamp"`
+	GatewayNodeID  string `json:"gateway_node_id"`
 }
 
 // TypingConsumer consumes aim.typing.events and fans out to conversation members' gateway nodes.
@@ -76,6 +77,10 @@ func (c *TypingConsumer) Consume(ctx context.Context, key string, value string) 
 		}
 
 		for _, nodeID := range nodeIDs {
+			if event.GatewayNodeID != "" && nodeID == event.GatewayNodeID {
+				continue
+			}
+
 			req := &gwpb.PushTypingReq{
 				TargetUserId:   memberID,
 				FromUserId:     event.FromUserID,

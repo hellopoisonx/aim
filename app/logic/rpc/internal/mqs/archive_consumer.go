@@ -4,8 +4,8 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/hellopoisonx/aim/app/logic/rpc/model"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
+	"github.com/hellopoisonx/aim/app/logic/rpc/model"
 	"github.com/hellopoisonx/aim/app/shared/tracing"
 
 	"github.com/zeromicro/go-zero/core/logx"
@@ -53,10 +53,13 @@ func (c *ArchiveConsumer) Consume(ctx context.Context, key string, value string)
 	ctx, span := tracing.StartKafkaConsumerSpan(ctx, "logic.kafka.archive.consume")
 	defer span.End()
 
-	// Marshal content to JSONB ([]byte)
-	contentJSON, err := json.Marshal(event.Content)
-	if err != nil {
-		contentJSON = []byte("{}")
+	contentJSON := json.RawMessage(event.Content)
+	if !json.Valid(contentJSON) {
+		encoded, err := json.Marshal(event.Content)
+		if err != nil {
+			encoded = []byte("{}")
+		}
+		contentJSON = encoded
 	}
 
 	// Marshal mentions to JSONB ([]byte)

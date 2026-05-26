@@ -122,7 +122,22 @@ func (f *fakeQuerier) AddConversationMembers(ctx context.Context, arg model.AddC
 }
 
 func (f *fakeQuerier) GetConversationMembers(ctx context.Context, conversationID int64) ([]model.GetConversationMembersRow, error) {
-	return nil, nil
+	rows := make([]model.GetConversationMembersRow, 0)
+
+	for _, member := range f.members {
+		if member.ConversationID != conversationID {
+			continue
+		}
+
+		rows = append(rows, model.GetConversationMembersRow{
+			ConversationID: member.ConversationID,
+			UserID:         member.UserID,
+			IsMuted:        member.IsMuted,
+			MutedUntil:     member.MutedUntil,
+		})
+	}
+
+	return rows, nil
 }
 
 func (f *fakeQuerier) GetConversationsByUserID(ctx context.Context, userID int64) ([]model.GetConversationsByUserIDRow, error) {
@@ -159,6 +174,14 @@ func (f *fakeQuerier) RemoveConversationMembers(ctx context.Context, arg model.R
 
 func (f *fakeQuerier) UpdateConversation(ctx context.Context, arg model.UpdateConversationParams) error {
 	return nil
+}
+
+func (f *fakeQuerier) UpdateConversationCreator(ctx context.Context, arg model.UpdateConversationCreatorParams) error {
+	return nil
+}
+
+func (f *fakeQuerier) UpdateConversationMemberRole(ctx context.Context, arg model.UpdateConversationMemberRoleParams) (int64, error) {
+	return 0, nil
 }
 
 func (f *fakeQuerier) DeactivateConversation(ctx context.Context, id int64) error {
@@ -249,26 +272,22 @@ func (f *fakeQuerier) GetDirectConversationByMembers(ctx context.Context, arg mo
 	if f.getConvErr != nil {
 		return model.GetDirectConversationByMembersRow{}, f.getConvErr
 	}
+
 	for _, conv := range f.conversations {
 		if conv.ConversationType != "direct" || !conv.IsActive {
 			continue
 		}
+
 		key1 := convUserKey(conv.ID, arg.UserID)
 		key2 := convUserKey(conv.ID, arg.UserID_2)
-		if _, ok1 := f.members[key1]; ok1 {
-			if _, ok2 := f.members[key2]; ok2 {
-				return model.GetDirectConversationByMembersRow{
-					ID:               conv.ID,
-					ConversationType: conv.ConversationType,
-					IsActive:         conv.IsActive,
-					Name:             conv.Name,
-					Avatar:           conv.Avatar,
-					CreatorID:        conv.CreatorID,
-					CreatedAt:        conv.CreatedAt,
-				}, nil
-			}
+		_, ok1 := f.members[key1]
+		_, ok2 := f.members[key2]
+
+		if ok1 && ok2 {
+			return model.GetDirectConversationByMembersRow(conv), nil
 		}
 	}
+
 	return model.GetDirectConversationByMembersRow{}, pgx.ErrNoRows
 }
 
@@ -278,6 +297,22 @@ func convUserKey(convID, userID int64) string {
 
 func friendshipKey(userID, friendID int64) string {
 	return fmt.Sprintf("%d:%d", userID, friendID)
+}
+
+func memberMap(members ...model.GetMemberRow) map[string]model.GetMemberRow {
+	result := make(map[string]model.GetMemberRow, len(members))
+	for _, member := range members {
+		result[convUserKey(member.ConversationID, member.UserID)] = member
+	}
+
+	return result
+}
+
+func directMembers(conversationID, userID, peerID int64) map[string]model.GetMemberRow {
+	return memberMap(
+		model.GetMemberRow{ConversationID: conversationID, UserID: userID},
+		model.GetMemberRow{ConversationID: conversationID, UserID: peerID},
+	)
 }
 
 func newPastTime() pgtype.Timestamptz {
@@ -406,7 +441,7 @@ func TestDatabasePermissionChecker_DirectFriend(t *testing.T) {
 		conversations: map[int64]model.GetConversationRow{
 			200: {ID: 200, ConversationType: "direct", IsActive: true},
 		},
-		members: map[string]model.GetMemberRow{},
+		members: directMembers(200, 100, 200),
 		friendships: map[string][]model.GetFriendshipBidirectionalRow{
 			friendshipKey(100, 200): {
 				{UserID: 100, FriendID: 200, Status: "accepted"},
@@ -425,12 +460,36 @@ func TestDatabasePermissionChecker_DirectFriend(t *testing.T) {
 	assert.Equal(t, CodeOK, decision.Code)
 }
 
+func TestDatabasePermissionChecker_DirectFriendUsesPeerMemberNotConversationID(t *testing.T) {
+	fq := &fakeQuerier{
+		conversations: map[int64]model.GetConversationRow{
+			300: {ID: 300, ConversationType: "direct", IsActive: true},
+		},
+		members: directMembers(300, 100, 200),
+		friendships: map[string][]model.GetFriendshipBidirectionalRow{
+			friendshipKey(100, 200): {
+				{UserID: 100, FriendID: 200, Status: "accepted"},
+			},
+		},
+	}
+	checker := NewDatabasePermissionChecker(fq)
+
+	decision, err := checker.CheckMessagePermission(context.Background(), PermissionCheck{
+		SenderID:       100,
+		ConversationID: 300,
+	})
+
+	require.NoError(t, err)
+	assert.True(t, decision.Allowed)
+	assert.Equal(t, CodeOK, decision.Code)
+}
+
 func TestDatabasePermissionChecker_DirectNotFriendUsesTemporaryConversation(t *testing.T) {
 	fq := &fakeQuerier{
 		conversations: map[int64]model.GetConversationRow{
 			200: {ID: 200, ConversationType: "direct", IsActive: true},
 		},
-		members: map[string]model.GetMemberRow{},
+		members: directMembers(200, 100, 200),
 		friendships: map[string][]model.GetFriendshipBidirectionalRow{
 			friendshipKey(100, 200): {
 				{UserID: 100, FriendID: 200, Status: "pending"},
@@ -455,7 +514,7 @@ func TestDatabasePermissionChecker_DirectTemporaryConversationLimitReached(t *te
 		conversations: map[int64]model.GetConversationRow{
 			200: {ID: 200, ConversationType: "direct", IsActive: true},
 		},
-		members: map[string]model.GetMemberRow{},
+		members: directMembers(200, 100, 200),
 		friendships: map[string][]model.GetFriendshipBidirectionalRow{
 			friendshipKey(100, 200): {
 				{UserID: 100, FriendID: 200, Status: "pending"},
@@ -481,7 +540,7 @@ func TestDatabasePermissionChecker_DirectTemporaryConversationCustomLimit(t *tes
 		conversations: map[int64]model.GetConversationRow{
 			200: {ID: 200, ConversationType: "direct", IsActive: true},
 		},
-		members: map[string]model.GetMemberRow{},
+		members: directMembers(200, 100, 200),
 		friendships: map[string][]model.GetFriendshipBidirectionalRow{
 			friendshipKey(100, 200): {
 				{UserID: 100, FriendID: 200, Status: "pending"},
@@ -522,7 +581,7 @@ func TestDatabasePermissionChecker_DirectBlocked(t *testing.T) {
 		conversations: map[int64]model.GetConversationRow{
 			200: {ID: 200, ConversationType: "direct", IsActive: true},
 		},
-		members: map[string]model.GetMemberRow{},
+		members: directMembers(200, 100, 200),
 		friendships: map[string][]model.GetFriendshipBidirectionalRow{
 			friendshipKey(100, 200): {
 				{UserID: 100, FriendID: 200, Status: "blocked"},
@@ -606,7 +665,7 @@ func TestDatabasePermissionChecker_DirectBidirectionalFriendship(t *testing.T) {
 		conversations: map[int64]model.GetConversationRow{
 			200: {ID: 200, ConversationType: "direct", IsActive: true},
 		},
-		members: map[string]model.GetMemberRow{},
+		members: directMembers(200, 100, 200),
 		friendships: map[string][]model.GetFriendshipBidirectionalRow{
 			friendshipKey(100, 200): {
 				{UserID: 100, FriendID: 200, Status: "accepted"},
@@ -624,4 +683,123 @@ func TestDatabasePermissionChecker_DirectBidirectionalFriendship(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, decision.Allowed)
 	assert.Equal(t, CodeOK, decision.Code)
+}
+
+func TestDatabasePermissionChecker_GroupMentionsFilteredToMembers(t *testing.T) {
+	fq := &fakeQuerier{
+		conversations: map[int64]model.GetConversationRow{
+			1: {ID: 1, ConversationType: "group", IsActive: true},
+		},
+		members: map[string]model.GetMemberRow{
+			convUserKey(1, 100): {ConversationID: 1, UserID: 100, IsMuted: false},
+			convUserKey(1, 200): {ConversationID: 1, UserID: 200, IsMuted: false},
+			convUserKey(1, 300): {ConversationID: 1, UserID: 300, IsMuted: false},
+		},
+		friendships: map[string][]model.GetFriendshipBidirectionalRow{},
+	}
+	checker := NewDatabasePermissionChecker(fq)
+
+	// Mention member 200, member 300, and non-member 999
+	decision, err := checker.CheckMessagePermission(context.Background(), PermissionCheck{
+		SenderID:       100,
+		ConversationID: 1,
+		Mentions:       []int64{200, 300, 999},
+	})
+
+	require.NoError(t, err)
+	assert.True(t, decision.Allowed)
+	assert.Equal(t, CodeOK, decision.Code)
+	// Only member IDs 200 and 300 should remain; 999 is filtered out
+	assert.Equal(t, []int64{200, 300}, decision.FilteredMentions)
+}
+
+func TestDatabasePermissionChecker_GroupAllMentionsNonMember(t *testing.T) {
+	fq := &fakeQuerier{
+		conversations: map[int64]model.GetConversationRow{
+			1: {ID: 1, ConversationType: "group", IsActive: true},
+		},
+		members: map[string]model.GetMemberRow{
+			convUserKey(1, 100): {ConversationID: 1, UserID: 100, IsMuted: false},
+		},
+		friendships: map[string][]model.GetFriendshipBidirectionalRow{},
+	}
+	checker := NewDatabasePermissionChecker(fq)
+
+	// Mention only non-members
+	decision, err := checker.CheckMessagePermission(context.Background(), PermissionCheck{
+		SenderID:       100,
+		ConversationID: 1,
+		Mentions:       []int64{888, 999},
+	})
+
+	require.NoError(t, err)
+	assert.True(t, decision.Allowed)
+	assert.Equal(t, CodeOK, decision.Code)
+	// All mentions filtered out — message still allowed
+	assert.Empty(t, decision.FilteredMentions)
+}
+
+func TestDatabasePermissionChecker_GroupNoMentions(t *testing.T) {
+	fq := &fakeQuerier{
+		conversations: map[int64]model.GetConversationRow{
+			1: {ID: 1, ConversationType: "group", IsActive: true},
+		},
+		members: map[string]model.GetMemberRow{
+			convUserKey(1, 100): {ConversationID: 1, UserID: 100, IsMuted: false},
+		},
+		friendships: map[string][]model.GetFriendshipBidirectionalRow{},
+	}
+	checker := NewDatabasePermissionChecker(fq)
+
+	decision, err := checker.CheckMessagePermission(context.Background(), PermissionCheck{
+		SenderID:       100,
+		ConversationID: 1,
+	})
+
+	require.NoError(t, err)
+	assert.True(t, decision.Allowed)
+	assert.Nil(t, decision.FilteredMentions)
+}
+
+func TestDatabasePermissionChecker_DirectMentionsFilteredToMembers(t *testing.T) {
+	fq := &fakeQuerier{
+		conversations: map[int64]model.GetConversationRow{
+			200: {ID: 200, ConversationType: "direct", IsActive: true},
+		},
+		members: directMembers(200, 100, 200),
+		friendships: map[string][]model.GetFriendshipBidirectionalRow{
+			friendshipKey(100, 200): {
+				{UserID: 100, FriendID: 200, Status: "accepted"},
+			},
+		},
+	}
+	checker := NewDatabasePermissionChecker(fq)
+
+	// In a direct conversation, only the peer (200) is a valid mention; 999 is not a member
+	decision, err := checker.CheckMessagePermission(context.Background(), PermissionCheck{
+		SenderID:       100,
+		ConversationID: 200,
+		Mentions:       []int64{200, 999},
+	})
+
+	require.NoError(t, err)
+	assert.True(t, decision.Allowed)
+	assert.Equal(t, []int64{200}, decision.FilteredMentions)
+}
+
+func TestFilterMentionsByMemberIDs(t *testing.T) {
+	t.Parallel()
+
+	assert.Nil(t, filterMentionsByMemberIDs(nil, nil))
+	assert.Empty(t, filterMentionsByMemberIDs([]int64{1, 2}, nil))
+	assert.Nil(t, filterMentionsByMemberIDs(nil, []int64{1, 2}))
+
+	// All members
+	assert.Equal(t, []int64{1, 2}, filterMentionsByMemberIDs([]int64{1, 2}, []int64{1, 2, 3}))
+
+	// Partial members
+	assert.Equal(t, []int64{2}, filterMentionsByMemberIDs([]int64{1, 2, 4}, []int64{2, 3}))
+
+	// No overlap
+	assert.Empty(t, filterMentionsByMemberIDs([]int64{5, 6}, []int64{1, 2}))
 }

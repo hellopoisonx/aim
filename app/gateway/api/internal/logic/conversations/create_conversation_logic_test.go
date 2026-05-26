@@ -54,6 +54,18 @@ func (m *mockConversationService) GetUserConversations(ctx context.Context, in *
 	return nil, errors.New("GetUserConversations not implemented")
 }
 
+func (m *mockConversationService) GrantGroupAdmin(ctx context.Context, in *conversationservice.GrantGroupAdminReq, opts ...grpc.CallOption) (*conversationservice.GrantGroupAdminResp, error) {
+	return nil, errors.New("GrantGroupAdmin not implemented")
+}
+
+func (m *mockConversationService) RevokeGroupAdmin(ctx context.Context, in *conversationservice.RevokeGroupAdminReq, opts ...grpc.CallOption) (*conversationservice.RevokeGroupAdminResp, error) {
+	return nil, errors.New("RevokeGroupAdmin not implemented")
+}
+
+func (m *mockConversationService) TransferGroupOwner(ctx context.Context, in *conversationservice.TransferGroupOwnerReq, opts ...grpc.CallOption) (*conversationservice.TransferGroupOwnerResp, error) {
+	return nil, errors.New("TransferGroupOwner not implemented")
+}
+
 func TestCreateConversation(t *testing.T) {
 	is := assert.New(t)
 
@@ -184,11 +196,11 @@ func TestCreateConversation(t *testing.T) {
 			wantErr:  errorx.NewCodeError(errorx.CodeInternal, "internal error"),
 		},
 		{
-			name: "success - direct conversation",
+			name: "success - direct conversation with empty name",
 			req: &types.CreateConversationRequest{
 				ConversationType: "direct",
 				MemberIds:        []int64{1},
-				Name:             "Direct Chat",
+				Name:             "",
 			},
 			mockSetup: func(ms *mockConversationService) {
 				ms.CreateConversationFunc = func(ctx context.Context, in *conversationservice.CreateConversationReq) (*conversationservice.CreateConversationResp, error) {
@@ -212,6 +224,17 @@ func TestCreateConversation(t *testing.T) {
 				MemberIds:        []int64{1, 2},
 			},
 			wantErr: nil,
+		},
+		{
+			name: "missing group name",
+			req: &types.CreateConversationRequest{
+				ConversationType: "group",
+				MemberIds:        []int64{1, 2},
+				Name:             "   ",
+			},
+			mockSetup: func(*mockConversationService) {},
+			wantResp:  nil,
+			wantErr:   errorx.NewCodeError(errorx.CodeBadInput, "name is required"),
 		},
 		{
 			name: "success - group conversation",

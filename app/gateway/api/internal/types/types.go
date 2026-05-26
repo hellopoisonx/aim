@@ -37,7 +37,7 @@ type AddGroupMembersResponse struct {
 }
 
 type BotConversationItem struct {
-	ConversationId   int64  `json:"conversation_id"`
+	ConversationId   string `json:"conversation_id"`
 	ConversationType string `json:"conversation_type"`
 	Name             string `json:"name"`
 	Avatar           string `json:"avatar"`
@@ -58,7 +58,7 @@ type BotListConversationsResponse struct {
 }
 
 type BotMe struct {
-	BotUserId int64    `json:"bot_user_id"`
+	BotUserId string   `json:"bot_user_id"`
 	Nickname  string   `json:"nickname"`
 	Avatar    string   `json:"avatar"`
 	Status    int32    `json:"status"`
@@ -70,7 +70,7 @@ type BotMeResponse struct {
 }
 
 type BotSendMessageRequest struct {
-	ConversationId int64    `json:"conversation_id" validate:"required"`
+	ConversationId string   `json:"conversation_id" validate:"required"`
 	MessageType    string   `json:"message_type" validate:"required,max=32"`
 	Content        string   `json:"content" validate:"required"`
 	ClientMsgId    string   `json:"client_msg_id" validate:"required"`
@@ -78,7 +78,7 @@ type BotSendMessageRequest struct {
 }
 
 type BotSendMessageResponse struct {
-	MessageId   int64  `json:"message_id"`
+	MessageId   string `json:"message_id"`
 	ClientMsgId string `json:"client_msg_id"`
 	AcceptedAt  int64  `json:"accepted_at"`
 }
@@ -198,6 +198,11 @@ type GetUserByNameResponse struct {
 	Users []UserListItem `json:"users"`
 }
 
+type GrantGroupAdminRequest struct {
+	Id  int64 `path:"id" validate:"required"`
+	Uid int64 `path:"uid" validate:"required"`
+}
+
 type LeaveGroupRequest struct {
 	Id int64 `path:"id" validate:"required"`
 }
@@ -315,10 +320,32 @@ type RemoveGroupMemberRequest struct {
 	Uid int64 `path:"uid" validate:"required"`
 }
 
+type RevokeGroupAdminRequest struct {
+	Id  int64 `path:"id" validate:"required"`
+	Uid int64 `path:"uid" validate:"required"`
+}
+
 type SenderInfo struct {
 	Name        string `json:"name"`
 	Email       string `json:"email"`
 	DisplayName string `json:"display_name,optional"`
+}
+
+type TransferGroupOwnerRequest struct {
+	Id     int64 `path:"id" validate:"required"`
+	UserId int64 `json:"user_id" validate:"required"`
+}
+
+type TransferGroupOwnerResponse struct {
+	ConversationId   int64   `json:"conversation_id"`
+	ConversationType string  `json:"conversation_type"`
+	IsActive         bool    `json:"is_active"`
+	CreatedAt        int64   `json:"created_at"`
+	MemberIds        []int64 `json:"member_ids"`
+	Name             string  `json:"name"`
+	Avatar           string  `json:"avatar"`
+	CreatorId        int64   `json:"creator_id"`
+	DisplayName      string  `json:"display_name,optional"`
 }
 
 type UpdateGroupInfoRequest struct {

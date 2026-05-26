@@ -2,6 +2,13 @@
 
 维护长连接（WebSocket / TCP）、Protobuf 协议解析、心跳保活、本地快速验证 JWT。
 
+## 外部接口边界
+
+- AIM 的客户端入口统一收敛到 gateway：REST API 只在 `app/gateway/api/gateway.api` 声明并由 `app/gateway/api` 实现；WebSocket 只由 gateway 暴露 `/ws`。
+- 非 gateway 模块（auth/core/logic/attachment/data_parsing 等）不得面向客户端或宿主机新增 REST/WS 入口；需要客户端访问的能力必须通过 gateway 代理或编排内部 gRPC/Kafka 完成。
+- 服务间接口统一优先使用 gRPC：`aim-attachment` 暴露 `AttachmentService` gRPC（Nacos 服务名 `attachment.rpc`），gateway/core 通过 `AttachmentRpc` 调用；`docker-compose.yaml` 只能 `expose` 内部端口，不能 `ports` publish 到宿主机。
+- 排查边界时重点检查：非 gateway 目录是否新增 `.api`、`rest.MustNewServer`、`http.ListenAndServe`/`http.Server`、`websocket.Accept`，以及 Compose 是否将非 gateway REST/WS 端口映射到宿主机；服务间能力应落到 gRPC proto + Nacos 配置。
+
 - 有状态服务，根据 User_ID 做一致性哈希，确保同一用户落在固定网关节点
 - 使用 150+ 虚拟节点/物理节点，减少 rebalancing 影响
 - 节点下线前推送 reconnect 帧，提供 5-10s drain 窗口，避免惊群重连

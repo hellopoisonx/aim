@@ -28,12 +28,18 @@ type (
 	GetConversationMembersResp       = pb.GetConversationMembersResp
 	GetUserConversationsReq          = pb.GetUserConversationsReq
 	GetUserConversationsResp         = pb.GetUserConversationsResp
+	GrantGroupAdminReq               = pb.GrantGroupAdminReq
+	GrantGroupAdminResp              = pb.GrantGroupAdminResp
 	LeaveGroupReq                    = pb.LeaveGroupReq
 	LeaveGroupResp                   = pb.LeaveGroupResp
 	ListConversationReadStatesReq    = pb.ListConversationReadStatesReq
 	ListConversationReadStatesResp   = pb.ListConversationReadStatesResp
 	RemoveGroupMembersReq            = pb.RemoveGroupMembersReq
 	RemoveGroupMembersResp           = pb.RemoveGroupMembersResp
+	RevokeGroupAdminReq              = pb.RevokeGroupAdminReq
+	RevokeGroupAdminResp             = pb.RevokeGroupAdminResp
+	TransferGroupOwnerReq            = pb.TransferGroupOwnerReq
+	TransferGroupOwnerResp           = pb.TransferGroupOwnerResp
 	UpdateGroupInfoReq               = pb.UpdateGroupInfoReq
 	UpdateGroupInfoResp              = pb.UpdateGroupInfoResp
 	UpdateReadReceiptReq             = pb.UpdateReadReceiptReq
@@ -49,6 +55,9 @@ type (
 		LeaveGroup(ctx context.Context, in *LeaveGroupReq, opts ...grpc.CallOption) (*LeaveGroupResp, error)
 		DismissGroup(ctx context.Context, in *DismissGroupReq, opts ...grpc.CallOption) (*DismissGroupResp, error)
 		UpdateGroupInfo(ctx context.Context, in *UpdateGroupInfoReq, opts ...grpc.CallOption) (*UpdateGroupInfoResp, error)
+		GrantGroupAdmin(ctx context.Context, in *GrantGroupAdminReq, opts ...grpc.CallOption) (*GrantGroupAdminResp, error)
+		RevokeGroupAdmin(ctx context.Context, in *RevokeGroupAdminReq, opts ...grpc.CallOption) (*RevokeGroupAdminResp, error)
+		TransferGroupOwner(ctx context.Context, in *TransferGroupOwnerReq, opts ...grpc.CallOption) (*TransferGroupOwnerResp, error)
 		GetConversationMembersDetail(ctx context.Context, in *GetConversationMembersDetailReq, opts ...grpc.CallOption) (*GetConversationMembersDetailResp, error)
 		// UpdateReadReceipt upserts the caller's last-read cursor for a conversation.
 		UpdateReadReceipt(ctx context.Context, in *UpdateReadReceiptReq, opts ...grpc.CallOption) (*UpdateReadReceiptResp, error)
@@ -110,6 +119,21 @@ func (m *defaultConversationService) DismissGroup(ctx context.Context, in *Dismi
 func (m *defaultConversationService) UpdateGroupInfo(ctx context.Context, in *UpdateGroupInfoReq, opts ...grpc.CallOption) (*UpdateGroupInfoResp, error) {
 	client := pb.NewConversationServiceClient(m.cli.Conn())
 	return client.UpdateGroupInfo(ctx, in, opts...)
+}
+
+func (m *defaultConversationService) GrantGroupAdmin(ctx context.Context, in *GrantGroupAdminReq, opts ...grpc.CallOption) (*GrantGroupAdminResp, error) {
+	client := pb.NewConversationServiceClient(m.cli.Conn())
+	return client.GrantGroupAdmin(ctx, in, opts...)
+}
+
+func (m *defaultConversationService) RevokeGroupAdmin(ctx context.Context, in *RevokeGroupAdminReq, opts ...grpc.CallOption) (*RevokeGroupAdminResp, error) {
+	client := pb.NewConversationServiceClient(m.cli.Conn())
+	return client.RevokeGroupAdmin(ctx, in, opts...)
+}
+
+func (m *defaultConversationService) TransferGroupOwner(ctx context.Context, in *TransferGroupOwnerReq, opts ...grpc.CallOption) (*TransferGroupOwnerResp, error) {
+	client := pb.NewConversationServiceClient(m.cli.Conn())
+	return client.TransferGroupOwner(ctx, in, opts...)
 }
 
 func (m *defaultConversationService) GetConversationMembersDetail(ctx context.Context, in *GetConversationMembersDetailReq, opts ...grpc.CallOption) (*GetConversationMembersDetailResp, error) {

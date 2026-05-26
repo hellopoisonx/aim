@@ -74,10 +74,11 @@ func (f *fakeMessagePublisher) Publish(ctx context.Context, key string, value []
 }
 
 type fakePermissionClient struct {
-	allowed bool
-	bizCode int32
-	reason  string
-	err     error
+	allowed          bool
+	bizCode          int32
+	reason           string
+	filteredMentions []int64
+	err              error
 }
 
 func (f *fakePermissionClient) CheckMessagePermission(ctx context.Context, req *logicpb.CheckMessagePermissionReq, opts ...grpc.CallOption) (*logicpb.CheckMessagePermissionResp, error) {
@@ -86,9 +87,10 @@ func (f *fakePermissionClient) CheckMessagePermission(ctx context.Context, req *
 	}
 
 	return &logicpb.CheckMessagePermissionResp{
-		Allowed: f.allowed,
-		BizCode: f.bizCode,
-		Reason:  f.reason,
+		Allowed:          f.allowed,
+		BizCode:          f.bizCode,
+		Reason:           f.reason,
+		FilteredMentions: f.filteredMentions,
 	}, nil
 }
 
@@ -536,7 +538,7 @@ func TestTransfer_KafkaEventContent(t *testing.T) {
 		SenderId:       42,
 		DeviceId:       "device-abc",
 		ConversationId: 200,
-		MessageType:    "image",
+		MessageType:    "text",
 		Content:        "test content",
 		ClientMsgId:    "msg-123",
 		Mentions:       []string{"alice", "bob"},
@@ -558,13 +560,42 @@ func TestTransfer_KafkaEventContent(t *testing.T) {
 	require.InEpsilon(t, float64(42), event["sender_id"], 0)
 	require.Equal(t, "device-abc", event["device_id"])
 	require.InEpsilon(t, float64(200), event["conversation_id"], 0)
-	require.Equal(t, "image", event["message_type"])
+	require.Equal(t, "text", event["message_type"])
 	require.Equal(t, "test content", event["content"])
 	require.Equal(t, "msg-123", event["client_msg_id"])
 	require.Equal(t, "alice", (event["mentions"].([]any))[0])
 	require.Equal(t, "bob", (event["mentions"].([]any))[1])
 	require.Greater(t, event["timestamp"].(float64), float64(0))
 	require.Greater(t, event["message_id"].(float64), float64(0))
+}
+
+func TestTransfer_AppliesFilteredMentionsFromPermissionCheck(t *testing.T) {
+	svcCtx := &svc.ServiceContext{
+		Snowflake:             mustSnowflake(t, 1),
+		LogicPermissionClient: &fakePermissionClient{allowed: true, filteredMentions: []int64{200}},
+	}
+	fakeIdem := &fakeIdempotencyStore{store: make(map[string]int64)}
+	fakePub := &fakeMessagePublisher{}
+	logic := newTestTransferLogic(svcCtx, fakeIdem, fakePub)
+
+	req := &pb.TransferReq{
+		SenderId:       42,
+		DeviceId:       "device-abc",
+		ConversationId: 300,
+		MessageType:    "text",
+		Content:        "hello @member @nonmember",
+		ClientMsgId:    "msg-filtered-mentions",
+		Mentions:       []string{"200", "999"},
+	}
+
+	resp, err := logic.Transfer(req)
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	require.Len(t, fakePub.messages, 1)
+
+	var event map[string]any
+	require.NoError(t, json.Unmarshal(fakePub.messages[0].Value, &event))
+	require.Equal(t, []any{"200"}, event["mentions"])
 }
 
 func TestTransfer_KafkaEventIncludesTraceContext(t *testing.T) {

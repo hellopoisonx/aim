@@ -88,6 +88,32 @@ type MessageView struct {
 	Status         string                  `json:"status,omitempty"`
 }
 
+type AttachmentView struct {
+	FileID             string         `json:"file_id"`
+	OwnerID            string         `json:"owner_id"`
+	ConversationID     string         `json:"conversation_id"`
+	Kind               string         `json:"kind"`
+	OriginalName       string         `json:"original_name"`
+	Mime               string         `json:"mime"`
+	Size               int64          `json:"size"`
+	SHA256             string         `json:"sha256,omitempty"`
+	Status             string         `json:"status"`
+	ParseStatus        string         `json:"parse_status"`
+	Bucket             string         `json:"bucket"`
+	ObjectKey          string         `json:"object_key"`
+	ThumbnailObjectKey string         `json:"thumbnail_object_key,omitempty"`
+	DurationMS         int64          `json:"duration_ms,omitempty"`
+	Width              int            `json:"width,omitempty"`
+	Height             int            `json:"height,omitempty"`
+	Metadata           map[string]any `json:"metadata,omitempty"`
+}
+
+type AttachmentDownloadView struct {
+	URL       string            `json:"url"`
+	Headers   map[string]string `json:"headers,omitempty"`
+	ExpiresAt int64             `json:"expires_at"`
+}
+
 type FriendView struct {
 	UserID      string `json:"user_id"`
 	FriendID    string `json:"friend_id"`

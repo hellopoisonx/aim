@@ -6,7 +6,14 @@
 - `gateway`：面向客户端的http网关，负责维持管理 `ws` 连接并转发请求给下游grpc服务。
 - `core`: 负责转发消息。
 - `logic`：逻辑判断层。
+- `attachment`：聊天附件服务，负责 SeaweedFS 落盘、附件元数据、下载授权。
+- `data_parsing`：附件解析服务，负责媒体元数据提取、缩略图/派生对象生成。
 - `dev-tool`：Python CLI 测试工具，覆盖 gateway REST/WS 接口，用于冒烟测试和接口调试。
+
+## 外部接口边界
+
+- 只有 `gateway` 能向外暴露 REST API 与 WebSocket：新增客户端 REST/WS 能力必须落到 `app/gateway/api`（先改 `gateway.api`），再由 gateway 调内部 gRPC/Kafka。
+- `auth`、`core`、`logic`、`attachment`、`data_parsing` 等模块不得新增面向客户端/公网的 REST/WS 服务；服务间能力优先使用 gRPC；Compose 只能使用内部网络访问，不得 `ports` 映射到宿主机。
 
 ## 交接信号
 

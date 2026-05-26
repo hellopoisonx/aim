@@ -24,6 +24,66 @@ export namespace main {
 	        this.display_name = source["display_name"];
 	    }
 	}
+	export class AttachmentDownloadView {
+	    url: string;
+	    headers?: Record<string, string>;
+	    expires_at: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new AttachmentDownloadView(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.url = source["url"];
+	        this.headers = source["headers"];
+	        this.expires_at = source["expires_at"];
+	    }
+	}
+	export class AttachmentView {
+	    file_id: string;
+	    owner_id: string;
+	    conversation_id: string;
+	    kind: string;
+	    original_name: string;
+	    mime: string;
+	    size: number;
+	    sha256?: string;
+	    status: string;
+	    parse_status: string;
+	    bucket: string;
+	    object_key: string;
+	    thumbnail_object_key?: string;
+	    duration_ms?: number;
+	    width?: number;
+	    height?: number;
+	    metadata?: Record<string, any>;
+	
+	    static createFrom(source: any = {}) {
+	        return new AttachmentView(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.file_id = source["file_id"];
+	        this.owner_id = source["owner_id"];
+	        this.conversation_id = source["conversation_id"];
+	        this.kind = source["kind"];
+	        this.original_name = source["original_name"];
+	        this.mime = source["mime"];
+	        this.size = source["size"];
+	        this.sha256 = source["sha256"];
+	        this.status = source["status"];
+	        this.parse_status = source["parse_status"];
+	        this.bucket = source["bucket"];
+	        this.object_key = source["object_key"];
+	        this.thumbnail_object_key = source["thumbnail_object_key"];
+	        this.duration_ms = source["duration_ms"];
+	        this.width = source["width"];
+	        this.height = source["height"];
+	        this.metadata = source["metadata"];
+	    }
+	}
 	export class ConfigDTO {
 	    gateway_url: string;
 	    ws_url: string;

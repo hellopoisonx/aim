@@ -141,6 +141,28 @@ func (f *fakeConversationStore) UpdateConversation(ctx context.Context, arg mode
 	return nil
 }
 
+func (f *fakeConversationStore) UpdateConversationCreator(ctx context.Context, arg model.UpdateConversationCreatorParams) error {
+	conv, ok := f.conversations[arg.ID]
+	if !ok {
+		return pgx.ErrNoRows
+	}
+	conv.CreatorID = arg.CreatorID
+	f.conversations[arg.ID] = conv
+	return nil
+}
+
+func (f *fakeConversationStore) UpdateConversationMemberRole(ctx context.Context, arg model.UpdateConversationMemberRoleParams) (int64, error) {
+	members := f.members[arg.ConversationID]
+	for i, m := range members {
+		if m.UserID == arg.UserID {
+			members[i].Role = arg.Role
+			f.members[arg.ConversationID] = members
+			return 1, nil
+		}
+	}
+	return 0, nil
+}
+
 func (f *fakeConversationStore) DeactivateConversation(ctx context.Context, id int64) error {
 	conv, ok := f.conversations[id]
 	if !ok {
@@ -431,17 +453,14 @@ func TestConversationService_CreateConversation_InvalidType(t *testing.T) {
 	}
 }
 
-func TestConversationService_CreateConversation_MissingName(t *testing.T) {
+func TestConversationService_CreateConversation_MissingGroupName(t *testing.T) {
 	tests := []struct {
 		name        string
-		convType    string
-		memberIDs   []int64
 		convName    string
 		errContains string
 	}{
-		{name: "empty_name_group", convType: "group", memberIDs: []int64{1, 2}, convName: "", errContains: "name is required"},
-		{name: "whitespace_name_group", convType: "group", memberIDs: []int64{1, 2}, convName: "   ", errContains: "name is required"},
-		{name: "empty_name_direct", convType: "direct", memberIDs: []int64{2}, convName: "", errContains: "name is required"},
+		{name: "empty_name_group", convName: "", errContains: "name is required"},
+		{name: "whitespace_name_group", convName: "   ", errContains: "name is required"},
 	}
 
 	for _, tt := range tests {
@@ -449,11 +468,20 @@ func TestConversationService_CreateConversation_MissingName(t *testing.T) {
 			store := newFakeConversationStore()
 			svc := NewConversationService(store, testSnowflake, nil, nil)
 
-			_, err := svc.CreateConversation(context.Background(), tt.convType, 1, tt.memberIDs, tt.convName, "")
+			_, err := svc.CreateConversation(context.Background(), "group", 1, []int64{1, 2}, tt.convName, "")
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), tt.errContains)
 		})
 	}
+}
+
+func TestConversationService_CreateConversation_DirectAllowsEmptyName(t *testing.T) {
+	store := newFakeConversationStore()
+	svc := NewConversationService(store, testSnowflake, nil, nil)
+
+	conv, err := svc.CreateConversation(context.Background(), "direct", 1, []int64{2}, "   ", "")
+	require.NoError(t, err)
+	assert.Equal(t, "direct-2-1", conv.Name)
 }
 
 func TestConversationService_CreateConversation_EmptyMembers(t *testing.T) {
@@ -539,13 +567,13 @@ func TestConversationService_RoleGuards(t *testing.T) {
 	require.NoError(t, err)
 
 	_, err = svc.AddGroupMembers(context.Background(), conv.ID, 2, "u2", []int64{4})
-	require.ErrorIs(t, err, ErrNotOwner)
+	require.ErrorIs(t, err, ErrNotAdmin)
 
 	err = svc.RemoveGroupMembers(context.Background(), conv.ID, 2, "u2", []int64{3})
-	require.ErrorIs(t, err, ErrNotOwner)
+	require.ErrorIs(t, err, ErrNotAdmin)
 
 	_, err = svc.UpdateGroupInfo(context.Background(), conv.ID, 2, "u2", ptrString("n"), nil)
-	require.ErrorIs(t, err, ErrNotOwner)
+	require.ErrorIs(t, err, ErrNotAdmin)
 
 	err = svc.DismissGroup(context.Background(), conv.ID, 2)
 	require.ErrorIs(t, err, ErrNotOwner)
@@ -555,6 +583,103 @@ func TestConversationService_RoleGuards(t *testing.T) {
 }
 
 func ptrString(v string) *string { return &v }
+
+func testMemberRole(t *testing.T, store *fakeConversationStore, conversationID, userID int64) string {
+	t.Helper()
+	for _, m := range store.members[conversationID] {
+		if m.UserID == userID {
+			return m.Role
+		}
+	}
+	t.Fatalf("member %d not found in conversation %d", userID, conversationID)
+	return ""
+}
+
+func TestConversationService_GrantAndRevokeGroupAdmin(t *testing.T) {
+	store := newFakeConversationStore()
+	svc := NewConversationService(store, testSnowflake, nil, nil)
+	conv, err := svc.CreateConversation(context.Background(), "group", 1, []int64{1, 2, 3}, "Group", "")
+	require.NoError(t, err)
+
+	err = svc.GrantGroupAdmin(context.Background(), conv.ID, 2, 3)
+	require.ErrorIs(t, err, ErrNotOwner)
+
+	err = svc.GrantGroupAdmin(context.Background(), conv.ID, 1, 2)
+	require.NoError(t, err)
+	assert.Equal(t, "admin", testMemberRole(t, store, conv.ID, 2))
+
+	// Idempotent for an already-admin target.
+	err = svc.GrantGroupAdmin(context.Background(), conv.ID, 1, 2)
+	require.NoError(t, err)
+	assert.Equal(t, "admin", testMemberRole(t, store, conv.ID, 2))
+
+	err = svc.RevokeGroupAdmin(context.Background(), conv.ID, 2, 3)
+	require.ErrorIs(t, err, ErrNotOwner)
+
+	err = svc.RevokeGroupAdmin(context.Background(), conv.ID, 1, 2)
+	require.NoError(t, err)
+	assert.Equal(t, "member", testMemberRole(t, store, conv.ID, 2))
+
+	// Idempotent for an already-member target.
+	err = svc.RevokeGroupAdmin(context.Background(), conv.ID, 1, 2)
+	require.NoError(t, err)
+	assert.Equal(t, "member", testMemberRole(t, store, conv.ID, 2))
+}
+
+func TestConversationService_AdminRemovePermissionMatrix(t *testing.T) {
+	store := newFakeConversationStore()
+	svc := NewConversationService(store, testSnowflake, nil, nil)
+	conv, err := svc.CreateConversation(context.Background(), "group", 1, []int64{1, 2, 3, 4}, "Group", "")
+	require.NoError(t, err)
+	require.NoError(t, svc.GrantGroupAdmin(context.Background(), conv.ID, 1, 2))
+	require.NoError(t, svc.GrantGroupAdmin(context.Background(), conv.ID, 1, 3))
+
+	err = svc.RemoveGroupMembers(context.Background(), conv.ID, 2, "admin", []int64{1})
+	require.ErrorIs(t, err, ErrNotOwner)
+
+	err = svc.RemoveGroupMembers(context.Background(), conv.ID, 2, "admin", []int64{3})
+	require.ErrorIs(t, err, ErrNotAdmin)
+
+	err = svc.RemoveGroupMembers(context.Background(), conv.ID, 2, "admin", []int64{2})
+	require.ErrorIs(t, err, ErrNotOwner)
+}
+
+func TestConversationService_TransferGroupOwner(t *testing.T) {
+	store := newFakeConversationStore()
+	svc := NewConversationService(store, testSnowflake, nil, nil)
+	conv, err := svc.CreateConversation(context.Background(), "group", 1, []int64{1, 2, 3}, "Group", "")
+	require.NoError(t, err)
+
+	_, err = svc.TransferGroupOwner(context.Background(), conv.ID, 2, 3)
+	require.ErrorIs(t, err, ErrNotOwner)
+
+	updated, err := svc.TransferGroupOwner(context.Background(), conv.ID, 1, 2)
+	require.NoError(t, err)
+	assert.Equal(t, int64(2), updated.CreatorID)
+	assert.Equal(t, int64(2), store.conversations[conv.ID].CreatorID)
+	assert.Equal(t, "admin", testMemberRole(t, store, conv.ID, 1))
+	assert.Equal(t, "owner", testMemberRole(t, store, conv.ID, 2))
+
+	// Old owner is now admin, not owner, and cannot transfer again.
+	_, err = svc.TransferGroupOwner(context.Background(), conv.ID, 1, 3)
+	require.ErrorIs(t, err, ErrNotOwner)
+}
+
+func TestConversationService_OwnerOnlyRoleTargets(t *testing.T) {
+	store := newFakeConversationStore()
+	svc := NewConversationService(store, testSnowflake, nil, nil)
+	conv, err := svc.CreateConversation(context.Background(), "group", 1, []int64{1, 2}, "Group", "")
+	require.NoError(t, err)
+
+	err = svc.GrantGroupAdmin(context.Background(), conv.ID, 1, 1)
+	require.Error(t, err)
+
+	err = svc.RevokeGroupAdmin(context.Background(), conv.ID, 1, 1)
+	require.Error(t, err)
+
+	_, err = svc.TransferGroupOwner(context.Background(), conv.ID, 1, 1)
+	require.Error(t, err)
+}
 
 func TestConversationService_CreateConversation_StoreError(t *testing.T) {
 	store := newFakeConversationStore()

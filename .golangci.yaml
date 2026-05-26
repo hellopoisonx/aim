@@ -16,7 +16,6 @@ linters:
     - gocritic
     - iface
     - mirror
-    - wsl_v5
     - usetesting
     - goconst
     - gocyclo

@@ -16,6 +16,9 @@ description: aim 的逻辑域。对应 `logic` 模块。
 
 ## 最近变更
 
+- 2026-05-25: ArchiveConsumer 修正 `messages.content` JSONB 写入：附件消息等合法 JSON 内容按 JSON object 保存，普通文本消息仍按 JSON string 保存，避免附件 `aim.attachment.v1` 被二次编码。
+- 2026-05-25: 修复 direct 会话好友权限校验误用 `conversation_id` 作为好友 `friend_id` 的问题。`DatabasePermissionChecker` 现在先从 `conversation_members` 解析发送者与对端成员，再用对端用户 ID 查询 `GetFriendshipBidirectional`，避免已成为好友后仍被判定为临时会话；同时拒绝非成员或成员数异常的 direct 会话发送。
+- 2026-05-24: `ListFriends` 查询改为双向归一化：同时读取 `user_id = 当前用户` 与 `friend_id = 当前用户` 的 accepted 关系，并统一返回 `user_id=当前用户 / friend_id=对端用户`，兼容历史单向 accepted 数据导致 presence/好友快照不对称的问题。
 - 2026-05-24: 修复历史消息内容从 `messages.content` JSONB 读取后透传 JSON 字符串字面量的问题。`GetConversationHistory` 现在会对 JSONB 字符串执行 `json.Unmarshal`，避免 Desktop/REST 历史消息展示多出首尾两个 `"`；非字符串 JSON（如系统消息对象）保持 JSON 文本。
 - 2026-05-24: 成员详情查询新增 `display_name` 字段。`GetConversationMembersDetail` SQL JOIN 新增 `ui.nickname AS display_name`，`MemberDetail` struct 新增 `DisplayName` 字段，`GetConversationMembersDetail` 映射行更新。`GetConversationHistory` 现在填充 `MessageItem.IsSystem`（`sender_id==0 && message_type=="system"`）、`ReadStateItem` 的 email/avatar/display_name（来自成员列表）、`MessageReadDetailItem.DisplayName`。`SenderInfo` 填充新增 `DisplayName`。
 - 2026-05-23: 已读回执服务落地。新增 migration `005_conversation_read_states.sql` 与 sqlc queries `read_state.sql`（`UpsertConversationReadState` 用 `GREATEST` 保证单调递增）；`ConversationService` 新增 `UpdateReadReceipt`（校验会话存在 + 成员身份 + 三字段合法）与 `ListConversationReadStates`；`GetConversationHistory` 同步返回会话成员的已读游标。

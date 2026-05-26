@@ -1,12 +1,18 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"io"
+	"mime"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -14,6 +20,7 @@ import (
 	"github.com/hellopoisonx/aim/app/desktop/internal/api"
 	"github.com/hellopoisonx/aim/app/desktop/internal/store"
 	dws "github.com/hellopoisonx/aim/app/desktop/internal/ws"
+	sharedattachment "github.com/hellopoisonx/aim/app/shared/attachment"
 	"github.com/hellopoisonx/aim/shared/proto/ws/pb"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"google.golang.org/protobuf/proto"
@@ -412,7 +419,12 @@ func (a *App) connectWSAsyncLocked() {
 	if ws == nil {
 		return
 	}
-	go func() { _ = ws.Connect(a.ctx) }()
+	userID := a.cfg.ActiveUserID
+	go func() {
+		if err := ws.Connect(a.ctx); err != nil {
+			a.emitWSConnectionFor(userID, ws, false, err)
+		}
+	}()
 }
 
 func (a *App) prepareWSLocked() *dws.Client {
@@ -425,16 +437,33 @@ func (a *App) prepareWSLocked() *dws.Client {
 		return nil
 	}
 	userID := acct.User.UserID
-	a.ws = dws.New(
+	var client *dws.Client
+	client = dws.New(
 		a.cfg.WSURL,
 		acct.AccessToken,
 		func(f *pb.WsFrame) { a.handleFrameFor(userID, f) },
-		func() { runtime.EventsEmit(a.ctx, "ws:connection", map[string]any{wsConnectedKey: true}) },
-		func(err error) {
-			runtime.EventsEmit(a.ctx, "ws:connection", map[string]any{wsConnectedKey: false, "error": fmt.Sprint(err)})
-		},
+		func() { a.emitWSConnectionFor(userID, client, true, nil) },
+		func(err error) { a.emitWSConnectionFor(userID, client, false, err) },
 	)
-	return a.ws
+	a.ws = client
+	return client
+}
+
+func (a *App) emitWSConnectionFor(userID int64, client *dws.Client, connected bool, err error) {
+	if a == nil || a.ctx == nil || client == nil {
+		return
+	}
+	a.mu.Lock()
+	current := a.cfg.ActiveUserID == userID && a.ws == client
+	a.mu.Unlock()
+	if !current {
+		return
+	}
+	payload := map[string]any{wsConnectedKey: connected}
+	if err != nil {
+		payload["error"] = fmt.Sprint(err)
+	}
+	runtime.EventsEmit(a.ctx, "ws:connection", payload)
 }
 
 func (a *App) activeUser() store.UserProfile {
@@ -630,6 +659,48 @@ func (a *App) GetCachedMessages(cid string, limit int) ([]MessageView, error) {
 	return a.decorateMessages(msgs), nil
 }
 
+func (a *App) GetAttachment(fileID string) (AttachmentView, error) {
+	t, err := a.token()
+	if err != nil {
+		return AttachmentView{}, err
+	}
+	info, err := a.api.GetAttachment(a.ctx, fileID, t)
+	if err != nil {
+		return AttachmentView{}, err
+	}
+	return AttachmentView{
+		FileID:             info.FileID,
+		OwnerID:            stringifySnowflakeID(info.OwnerID),
+		ConversationID:     stringifySnowflakeID(info.ConversationID),
+		Kind:               info.Kind,
+		OriginalName:       info.OriginalName,
+		Mime:               info.Mime,
+		Size:               info.Size,
+		SHA256:             info.SHA256,
+		Status:             info.Status,
+		ParseStatus:        info.ParseStatus,
+		Bucket:             info.Bucket,
+		ObjectKey:          info.ObjectKey,
+		ThumbnailObjectKey: info.ThumbnailObjectKey,
+		DurationMS:         info.DurationMS,
+		Width:              info.Width,
+		Height:             info.Height,
+		Metadata:           info.Metadata,
+	}, nil
+}
+
+func (a *App) GetAttachmentDownload(fileID string) (AttachmentDownloadView, error) {
+	t, err := a.token()
+	if err != nil {
+		return AttachmentDownloadView{}, err
+	}
+	resp, err := a.api.GetAttachmentDownload(a.ctx, fileID, t)
+	if err != nil {
+		return AttachmentDownloadView{}, err
+	}
+	return AttachmentDownloadView{URL: resp.URL, Headers: resp.Headers, ExpiresAt: resp.ExpiresAt}, nil
+}
+
 func (a *App) SendMessage(cid, typ, content string, mentions []string) (MessageView, error) {
 	conversationID, err := parseSnowflakeID(cid)
 	if err != nil {
@@ -661,13 +732,129 @@ func (a *App) SendMessage(cid, typ, content string, mentions []string) (MessageV
 	return messageViewFromAPI(a, m), err
 }
 
+func (a *App) ChooseAttachmentAndSend(cid string) (MessageView, error) {
+	filePath, err := runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
+		Title: "选择图片、视频或音频附件",
+		Filters: []runtime.FileFilter{
+			{DisplayName: "媒体文件", Pattern: "*.png;*.jpg;*.jpeg;*.gif;*.webp;*.mp4;*.mov;*.m4v;*.webm;*.mp3;*.wav;*.m4a;*.aac;*.ogg"},
+		},
+	})
+	if err != nil {
+		return MessageView{}, err
+	}
+	if filePath == "" {
+		return MessageView{}, fmt.Errorf("未选择文件")
+	}
+	mimeType := mime.TypeByExtension(filepath.Ext(filePath))
+	if mimeType == "" {
+		data, err := os.ReadFile(filePath)
+		if err != nil {
+			return MessageView{}, err
+		}
+		mimeType = http.DetectContentType(data)
+	}
+	kind := kindFromMime(mimeType)
+	if kind == "" {
+		return MessageView{}, fmt.Errorf("不支持的附件类型: %s", mimeType)
+	}
+	return a.UploadAttachmentAndSend(cid, filePath, kind)
+}
+
+func (a *App) UploadAttachmentAndSend(cid, filePath, kind string) (MessageView, error) {
+	conversationID, err := parseSnowflakeID(cid)
+	if err != nil {
+		return MessageView{}, err
+	}
+	if !sharedattachment.ValidKind(kind) {
+		return MessageView{}, fmt.Errorf("unsupported attachment kind: %s", kind)
+	}
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return MessageView{}, err
+	}
+	if len(data) == 0 {
+		return MessageView{}, fmt.Errorf("file is empty")
+	}
+	if int64(len(data)) > 5*1024*1024*1024 {
+		return MessageView{}, fmt.Errorf("file exceeds 5GB limit")
+	}
+	sum := sha256.Sum256(data)
+	sha := hex.EncodeToString(sum[:])
+	mimeType := mime.TypeByExtension(filepath.Ext(filePath))
+	if mimeType == "" {
+		mimeType = http.DetectContentType(data)
+	}
+	t, err := a.token()
+	if err != nil {
+		return MessageView{}, err
+	}
+	initResp, err := a.api.InitAttachmentUpload(a.ctx, api.InitAttachmentUploadRequest{ConversationID: conversationID, Kind: kind, OriginalName: filepath.Base(filePath), Mime: mimeType, Size: int64(len(data)), SHA256: sha}, t)
+	if err != nil {
+		return MessageView{}, err
+	}
+	method := initResp.UploadMethod
+	if method == "" {
+		method = http.MethodPut
+	}
+	req, err := http.NewRequestWithContext(a.ctx, method, initResp.UploadURL, bytes.NewReader(data))
+	if err != nil {
+		return MessageView{}, err
+	}
+	for k, v := range initResp.Headers {
+		req.Header.Set(k, v)
+	}
+	if req.Header.Get("Content-Type") == "" {
+		req.Header.Set("Content-Type", mimeType)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return MessageView{}, err
+	}
+	_, _ = io.Copy(io.Discard, resp.Body)
+	_ = resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return MessageView{}, fmt.Errorf("upload failed: http %d", resp.StatusCode)
+	}
+	info, err := a.api.CompleteAttachmentUpload(a.ctx, initResp.FileID, api.CompleteAttachmentUploadRequest{SHA256: sha}, t)
+	if err != nil {
+		return MessageView{}, err
+	}
+	content, err := sharedattachment.Content{
+		Schema:      sharedattachment.ContentSchemaV1,
+		FileID:      info.FileID,
+		Kind:        info.Kind,
+		Original:    sharedattachment.OriginalObject{Name: info.OriginalName, Mime: info.Mime, Size: info.Size, SHA256: info.SHA256},
+		ParseStatus: info.ParseStatus,
+		DurationMS:  info.DurationMS,
+		Width:       info.Width,
+		Height:      info.Height,
+	}.Marshal()
+	if err != nil {
+		return MessageView{}, err
+	}
+	return a.SendMessage(cid, kind, content, nil)
+}
+
+func kindFromMime(mimeType string) string {
+	switch {
+	case strings.HasPrefix(mimeType, "image/"):
+		return sharedattachment.KindImage
+	case strings.HasPrefix(mimeType, "video/"):
+		return sharedattachment.KindVideo
+	case strings.HasPrefix(mimeType, "audio/"):
+		return sharedattachment.KindAudio
+	default:
+		return ""
+	}
+}
+
 func (a *App) SendTyping(cid string) error {
 	conversationID, err := parseSnowflakeID(cid)
 	if err != nil {
 		return err
 	}
 	ws := a.currentWS()
-	if ws == nil {
+	if ws == nil || !ws.IsConnected() {
 		if err := a.connectWS(); err != nil {
 			return err
 		}
@@ -689,7 +876,7 @@ func (a *App) SendReadReceipt(cid, lastMsgID string) error {
 		return err
 	}
 	ws := a.currentWS()
-	if ws == nil {
+	if ws == nil || !ws.IsConnected() {
 		if err := a.connectWS(); err != nil {
 			return err
 		}
@@ -717,6 +904,19 @@ func (a *App) SearchUsers(name string) ([]UserView, error) {
 		views = append(views, uv)
 	}
 	return views, nil
+}
+
+func (a *App) GetUserByID(id string) (*UserView, error) {
+	userID, err := parseSnowflakeID(id)
+	if err != nil {
+		return nil, err
+	}
+	u, err := a.resolveUserInfo(userID)
+	if err != nil {
+		return nil, err
+	}
+	view := userViewFromAPI(*u)
+	return &view, nil
 }
 
 func (a *App) AddFriend(id string) (*FriendView, error) {
@@ -967,6 +1167,63 @@ func (a *App) RemoveGroupMember(cid, uid string) error {
 		return err
 	}
 	return a.api.RemoveGroupMember(a.ctx, conversationID, userID, t)
+}
+
+func (a *App) GrantGroupAdmin(cid, uid string) error {
+	conversationID, err := parseSnowflakeID(cid)
+	if err != nil {
+		return err
+	}
+	userID, err := parseSnowflakeID(uid)
+	if err != nil {
+		return err
+	}
+	t, err := a.token()
+	if err != nil {
+		return err
+	}
+	return a.api.GrantGroupAdmin(a.ctx, conversationID, userID, t)
+}
+
+func (a *App) RevokeGroupAdmin(cid, uid string) error {
+	conversationID, err := parseSnowflakeID(cid)
+	if err != nil {
+		return err
+	}
+	userID, err := parseSnowflakeID(uid)
+	if err != nil {
+		return err
+	}
+	t, err := a.token()
+	if err != nil {
+		return err
+	}
+	return a.api.RevokeGroupAdmin(a.ctx, conversationID, userID, t)
+}
+
+func (a *App) TransferGroupOwner(cid, uid string) (*ConversationView, error) {
+	conversationID, err := parseSnowflakeID(cid)
+	if err != nil {
+		return nil, err
+	}
+	userID, err := parseSnowflakeID(uid)
+	if err != nil {
+		return nil, err
+	}
+	t, err := a.token()
+	if err != nil {
+		return nil, err
+	}
+	c, err := a.api.TransferGroupOwner(a.ctx, conversationID, userID, t)
+	if err != nil {
+		return nil, err
+	}
+	enriched := a.decorateConversation(*c)
+	if a.db != nil {
+		_ = a.db.UpsertConversations(a.ctx, []api.ConversationItem{enriched})
+	}
+	view := conversationViewFromAPI(enriched)
+	return &view, nil
 }
 
 func (a *App) LeaveGroup(cid string) error {

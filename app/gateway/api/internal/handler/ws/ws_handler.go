@@ -17,6 +17,8 @@ import (
 	wsauth "github.com/hellopoisonx/aim/app/gateway/api/internal/ws/auth"
 	logicpb "github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
+	sharedtracing "github.com/hellopoisonx/aim/app/shared/tracing"
+	gwpb "github.com/hellopoisonx/aim/shared/proto/gateway/pb"
 	pb "github.com/hellopoisonx/aim/shared/proto/ws/pb"
 	"github.com/zeromicro/go-zero/core/logx"
 	"go.opentelemetry.io/otel"
@@ -69,8 +71,13 @@ func (h *WsHandler) ServeWS(w http.ResponseWriter, r *http.Request) {
 
 	conn.SetReadLimit(h.srv.Config.WebSocket.MaxMsgSize)
 
-	// 3. Create per-connection context with cancellation
-	ctx, cancel := context.WithCancel(r.Context())
+	// 3. Create per-connection context with cancellation.
+	// Detach it from the short-lived HTTP upgrade span: the WebSocket connection
+	// can stay open for a long time, while per-frame spans and downstream RPC/Kafka
+	// spans complete quickly. Keeping the upgrade span as their parent makes Jaeger
+	// see children whose parent span has not been exported yet and emit
+	// "invalid parent span IDs=...; skipping clock skew adjustment" warnings.
+	ctx, cancel := context.WithCancel(sharedtracing.DetachSpanContext(r.Context()))
 	defer cancel()
 
 	// 4. Register connection
@@ -231,7 +238,7 @@ func (h *WsHandler) handleClientAck(ctx context.Context, frame *pb.WsFrame) erro
 }
 
 // handleTyping publishes a typing notice to Kafka for fan-out by core.
-func (h *WsHandler) handleTyping(ctx context.Context, conn *websocket.Conn, frame *pb.WsFrame) error {
+func (h *WsHandler) handleTyping(ctx context.Context, _ *websocket.Conn, frame *pb.WsFrame) error {
 	tracer := otel.Tracer("github.com/hellopoisonx/aim/app/gateway/api")
 	ctx, span := tracer.Start(ctx, "ws.handle_typing")
 	defer span.End()
@@ -264,6 +271,11 @@ func (h *WsHandler) handleTyping(ctx context.Context, conn *websocket.Conn, fram
 			logx.WithContext(ctx).Errorf("failed to publish typing event: %v", err)
 		}
 	}
+
+	// Also fan out to local gateway connections immediately. Kafka/core remains
+	// the cross-node path, while this local best-effort push avoids transient UI
+	// stalls when the consumer group is starting or a topic is not ready yet.
+	go h.fanOutTypingLocal(context.WithoutCancel(ctx), identity.UserID, typingPayload.GetConversationId())
 
 	return nil
 }
@@ -341,12 +353,83 @@ func (h *WsHandler) handleReadReceipt(ctx context.Context, conn *websocket.Conn,
 		}
 	}
 
+	// Local immediate push keeps the active Desktop peer in sync even before the
+	// Kafka/core fan-out loop catches up. Cross-node delivery still goes through
+	// the Kafka event above. Run it independently so read-receipt ACK latency only
+	// depends on the durable cursor update.
+	go h.fanOutReadReceiptLocal(context.WithoutCancel(ctx), identity.UserID, receiptPayload.GetConversationId(), resp.GetReadState().GetLastReadMessageId(), resp.GetReadState().GetUpdatedAt())
+
 	ackFrame, err := ws.NewServerAck(frame.GetSeq(), "", h.nextSeq())
 	if err != nil {
 		return err
 	}
 
 	return h.writeFrame(ctx, conn, ackFrame)
+}
+
+func (h *WsHandler) fanOutTypingLocal(ctx context.Context, fromUserID, conversationID int64) {
+	if h == nil || h.srv == nil || h.srv.LogicConversationClient == nil || h.manager == nil {
+		return
+	}
+
+	members, err := h.localConversationMembers(ctx, conversationID)
+	if err != nil {
+		logx.WithContext(ctx).Debugf("local typing fan-out skipped for conv %d: %v", conversationID, err)
+		return
+	}
+
+	gateway := ws.NewGatewayServer(h.manager)
+	for _, memberID := range members {
+		if memberID <= 0 || memberID == fromUserID || len(h.manager.GetByUserID(memberID)) == 0 {
+			continue
+		}
+
+		_, _ = gateway.PushTyping(ctx, &gwpb.PushTypingReq{
+			TargetUserId:   memberID,
+			FromUserId:     fromUserID,
+			ConversationId: conversationID,
+			Timestamp:      time.Now().UnixMilli(),
+		})
+	}
+}
+
+func (h *WsHandler) fanOutReadReceiptLocal(ctx context.Context, fromUserID, conversationID, lastReadMessageID, updatedAt int64) {
+	if h == nil || h.srv == nil || h.srv.LogicConversationClient == nil || h.manager == nil {
+		return
+	}
+
+	members, err := h.localConversationMembers(ctx, conversationID)
+	if err != nil {
+		logx.WithContext(ctx).Debugf("local read receipt fan-out skipped for conv %d: %v", conversationID, err)
+		return
+	}
+
+	gateway := ws.NewGatewayServer(h.manager)
+	for _, memberID := range members {
+		if memberID <= 0 || memberID == fromUserID || len(h.manager.GetByUserID(memberID)) == 0 {
+			continue
+		}
+
+		_, _ = gateway.PushReadReceipt(ctx, &gwpb.PushReadReceiptReq{
+			TargetUserId:      memberID,
+			ConversationId:    conversationID,
+			FromUserId:        fromUserID,
+			LastReadMessageId: lastReadMessageID,
+			UpdatedAt:         updatedAt,
+		})
+	}
+}
+
+func (h *WsHandler) localConversationMembers(ctx context.Context, conversationID int64) ([]int64, error) {
+	memberCtx, cancel := context.WithTimeout(ctx, time.Second)
+	defer cancel()
+
+	resp, err := h.srv.LogicConversationClient.GetConversationMembers(memberCtx, &logicpb.GetConversationMembersReq{ConversationId: conversationID})
+	if err != nil {
+		return nil, err
+	}
+
+	return resp.GetMemberIds(), nil
 }
 
 // handleHeartbeat responds with SERVER_ACK to a client heartbeat.
@@ -372,20 +455,7 @@ func (h *WsHandler) handleHeartbeat(ctx context.Context, conn *websocket.Conn, f
 		return err
 	}
 
-	data, err := ws.EncodeFrame(ackFrame)
-	if err != nil {
-		return err
-	}
-
-	// Use a deadline for write
-	writeCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-
-	if err := conn.Write(writeCtx, websocket.MessageBinary, data); err != nil {
-		return err
-	}
-
-	return nil
+	return h.writeFrame(ctx, conn, ackFrame)
 }
 
 // handleSendMessage forwards a send message to core.Transfer and ACKs the result.
@@ -560,6 +630,20 @@ func (h *WsHandler) writeFrame(ctx context.Context, conn *websocket.Conn, frame 
 	)
 	defer span.End()
 
+	if identity, ok := ws.IdentityFromContext(ctx); ok {
+		entry, err := h.manager.Get(identity)
+		if err == nil && entry.Conn == conn {
+			if err := entry.WriteEncodedFrame(ctx, frame); err != nil {
+				span.RecordError(err)
+				span.SetStatus(codes.Error, err.Error())
+
+				return err
+			}
+
+			return nil
+		}
+	}
+
 	data, err := ws.EncodeFrame(frame)
 	if err != nil {
 		span.RecordError(err)
@@ -601,16 +685,7 @@ func (h *WsHandler) sendTokenExpired(ctx context.Context, conn *websocket.Conn, 
 
 	frame := ws.BuildFrame(pb.FrameType_FRAME_TYPE_TOKEN_EXPIRED, h.nextSeq(), payloadBytes)
 
-	frameBytes, err := ws.EncodeFrame(frame)
-	if err != nil {
-		logx.WithContext(ctx).Errorf("failed to encode token expired frame: %v", err)
-		return
-	}
-
-	writeCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-
-	if err := conn.Write(writeCtx, websocket.MessageBinary, frameBytes); err != nil {
+	if err := h.writeFrame(ctx, conn, frame); err != nil {
 		logx.WithContext(ctx).Errorf("failed to send token expired frame: %v", err)
 	}
 

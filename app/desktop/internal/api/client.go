@@ -167,6 +167,17 @@ func (c *Client) AddGroupMembers(ctx context.Context, id int64, ids []int64, tok
 func (c *Client) RemoveGroupMember(ctx context.Context, id, uid int64, token string) error {
 	return c.do(ctx, http.MethodDelete, "/api/conversations/"+strconv.FormatInt(id, 10)+"/members/"+strconv.FormatInt(uid, 10), nil, token, nil)
 }
+func (c *Client) GrantGroupAdmin(ctx context.Context, id, uid int64, token string) error {
+	return c.do(ctx, http.MethodPost, "/api/conversations/"+strconv.FormatInt(id, 10)+"/members/"+strconv.FormatInt(uid, 10)+"/admin", nil, token, nil)
+}
+func (c *Client) RevokeGroupAdmin(ctx context.Context, id, uid int64, token string) error {
+	return c.do(ctx, http.MethodDelete, "/api/conversations/"+strconv.FormatInt(id, 10)+"/members/"+strconv.FormatInt(uid, 10)+"/admin", nil, token, nil)
+}
+func (c *Client) TransferGroupOwner(ctx context.Context, id, uid int64, token string) (*ConversationItem, error) {
+	var out ConversationItem
+	err := c.do(ctx, http.MethodPost, "/api/conversations/"+strconv.FormatInt(id, 10)+"/owner", map[string]int64{"user_id": uid}, token, &out)
+	return &out, err
+}
 func (c *Client) LeaveGroup(ctx context.Context, id int64, token string) error {
 	return c.do(ctx, http.MethodPost, "/api/conversations/"+strconv.FormatInt(id, 10)+"/leave", nil, token, nil)
 }

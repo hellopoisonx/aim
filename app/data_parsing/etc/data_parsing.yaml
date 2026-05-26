@@ -1,0 +1,28 @@
+Name: data_parsing
+Telemetry:
+  Name: data_parsing
+  Endpoint: jaeger:4318
+  Sampler: 1.0
+  Batcher: otlphttp
+  OtlpHttpPath: /v1/traces
+Postgres:
+  DataSource: postgres://user:password@postgres:5432/aim_logic?sslmode=disable
+Seaweed:
+  Endpoint: http://seaweed-s3:8333
+  Bucket: aim-attachments
+  AccessKey: aim
+  SecretKey: aim-secret
+UploadedConsumer:
+  Name: data-parsing-uploaded-consumer
+  Brokers:
+    - kafka:9092
+  Group: aim-data-parsing-uploaded
+  Topic: aim.attachment.uploaded
+  Offset: first
+  Consumers: 1
+  Processors: 1
+ParsedProducer:
+  Brokers:
+    - kafka:9092
+  Topic: aim.attachment.parsed
+ThumbnailMaxWidth: 320

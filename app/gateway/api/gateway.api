@@ -228,6 +228,21 @@ type RemoveGroupMemberRequest {
 	Uid int64 `path:"uid" validate:"required"`
 }
 
+type GrantGroupAdminRequest {
+	Id  int64 `path:"id" validate:"required"`
+	Uid int64 `path:"uid" validate:"required"`
+}
+
+type RevokeGroupAdminRequest {
+	Id  int64 `path:"id" validate:"required"`
+	Uid int64 `path:"uid" validate:"required"`
+}
+
+type TransferGroupOwnerRequest {
+	Id     int64 `path:"id" validate:"required"`
+	UserId int64 `json:"user_id" validate:"required"`
+}
+
 type LeaveGroupRequest {
 	Id int64 `path:"id" validate:"required"`
 }
@@ -281,6 +296,76 @@ type UpdateGroupInfoResponse {
 	CreatedAt        int64  `json:"created_at"`
 }
 
+type TransferGroupOwnerResponse {
+	ConversationId   int64   `json:"conversation_id"`
+	ConversationType string  `json:"conversation_type"`
+	IsActive         bool    `json:"is_active"`
+	CreatedAt        int64   `json:"created_at"`
+	MemberIds        []int64 `json:"member_ids"`
+	Name             string  `json:"name"`
+	Avatar           string  `json:"avatar"`
+	CreatorId        int64   `json:"creator_id"`
+	DisplayName      string  `json:"display_name,optional"`
+}
+
+type InitAttachmentUploadRequest {
+	ConversationId int64  `json:"conversation_id" validate:"required"`
+	Kind           string `json:"kind" validate:"required,oneof=image video audio"`
+	OriginalName   string `json:"original_name" validate:"required"`
+	Mime           string `json:"mime" validate:"required"`
+	Size           int64  `json:"size" validate:"required"`
+	Sha256         string `json:"sha256,optional"`
+}
+
+type InitAttachmentUploadResponse {
+	FileId       string            `json:"file_id"`
+	Bucket       string            `json:"bucket"`
+	ObjectKey    string            `json:"object_key"`
+	UploadUrl    string            `json:"upload_url"`
+	UploadMethod string            `json:"upload_method"`
+	Headers      map[string]string `json:"headers,optional"`
+	ExpiresAt    int64             `json:"expires_at"`
+}
+
+type CompleteAttachmentUploadRequest {
+	Id     string `path:"id" validate:"required"`
+	Sha256 string `json:"sha256,optional"`
+}
+
+type GetAttachmentRequest {
+	Id string `path:"id" validate:"required"`
+}
+
+type DownloadAttachmentRequest {
+	Id string `path:"id" validate:"required"`
+}
+
+type AttachmentFileInfo {
+	FileId             string         `json:"file_id"`
+	OwnerId            int64          `json:"owner_id"`
+	ConversationId     int64          `json:"conversation_id"`
+	Kind               string         `json:"kind"`
+	OriginalName       string         `json:"original_name"`
+	Mime               string         `json:"mime"`
+	Size               int64          `json:"size"`
+	Sha256             string         `json:"sha256,optional"`
+	Status             string         `json:"status"`
+	ParseStatus        string         `json:"parse_status"`
+	Bucket             string         `json:"bucket"`
+	ObjectKey          string         `json:"object_key"`
+	ThumbnailObjectKey string         `json:"thumbnail_object_key,optional"`
+	DurationMs         int64          `json:"duration_ms,optional"`
+	Width              int32          `json:"width,optional"`
+	Height             int32          `json:"height,optional"`
+	Metadata           map[string]any `json:"metadata,optional"`
+}
+
+type DownloadAttachmentResponse {
+	Url       string            `json:"url"`
+	Headers   map[string]string `json:"headers,optional"`
+	ExpiresAt int64             `json:"expires_at"`
+}
+
 @server (
 	prefix: /api/auth
 	group:  auth
@@ -297,6 +382,25 @@ service gateway-api {
 
 	@handler Logout
 	post /logout returns (LogoutResponse)
+}
+
+@server (
+	middleware: Auth
+	prefix:     /api/attachments
+	group:      attachments
+)
+service gateway-api {
+	@handler InitAttachmentUpload
+	post /init (InitAttachmentUploadRequest) returns (InitAttachmentUploadResponse)
+
+	@handler GetAttachment
+	get /:id (GetAttachmentRequest) returns (AttachmentFileInfo)
+
+	@handler CompleteAttachmentUpload
+	post /:id/complete (CompleteAttachmentUploadRequest) returns (AttachmentFileInfo)
+
+	@handler DownloadAttachment
+	get /:id/download (DownloadAttachmentRequest) returns (DownloadAttachmentResponse)
 }
 
 @server (
@@ -341,6 +445,15 @@ service gateway-api {
 
 	@handler RemoveGroupMember
 	delete /:id/members/:uid (RemoveGroupMemberRequest)
+
+	@handler GrantGroupAdmin
+	post /:id/members/:uid/admin (GrantGroupAdminRequest)
+
+	@handler RevokeGroupAdmin
+	delete /:id/members/:uid/admin (RevokeGroupAdminRequest)
+
+	@handler TransferGroupOwner
+	post /:id/owner (TransferGroupOwnerRequest) returns (TransferGroupOwnerResponse)
 
 	@handler LeaveGroup
 	post /:id/leave (LeaveGroupRequest)
@@ -402,7 +515,7 @@ service gateway-api {
 //   - revoked or expired tokens (CodeBotTokenRevoked → HTTP 401)
 //   - tokens belonging to disabled bots (CodeBotDisabled → HTTP 401)
 type BotMe {
-	BotUserId int64    `json:"bot_user_id"`
+	BotUserId string   `json:"bot_user_id"`
 	Nickname  string   `json:"nickname"`
 	Avatar    string   `json:"avatar"`
 	Status    int32    `json:"status"`
@@ -414,7 +527,7 @@ type BotMeResponse {
 }
 
 type BotConversationItem {
-	ConversationId   int64  `json:"conversation_id"`
+	ConversationId   string `json:"conversation_id"`
 	ConversationType string `json:"conversation_type"`
 	Name             string `json:"name"`
 	Avatar           string `json:"avatar"`
@@ -426,7 +539,7 @@ type BotListConversationsResponse {
 }
 
 type BotSendMessageRequest {
-	ConversationId int64    `json:"conversation_id" validate:"required"`
+	ConversationId string   `json:"conversation_id" validate:"required"`
 	MessageType    string   `json:"message_type" validate:"required,max=32"`
 	Content        string   `json:"content" validate:"required"`
 	ClientMsgId    string   `json:"client_msg_id" validate:"required"`
@@ -434,7 +547,7 @@ type BotSendMessageRequest {
 }
 
 type BotSendMessageResponse {
-	MessageId   int64  `json:"message_id"`
+	MessageId   string `json:"message_id"`
 	ClientMsgId string `json:"client_msg_id"`
 	AcceptedAt  int64  `json:"accepted_at"`
 }

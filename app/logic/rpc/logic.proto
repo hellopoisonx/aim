@@ -42,7 +42,9 @@ message CheckMessagePermissionResp {
   bool allowed = 1;
   int32 biz_code = 2;
   string reason = 3;
+  repeated int64 filtered_mentions = 4; // mentions filtered to conversation members only
 }
+
 
 // UserService messages
 
@@ -123,6 +125,9 @@ service ConversationService {
   rpc LeaveGroup(LeaveGroupReq) returns (LeaveGroupResp);
   rpc DismissGroup(DismissGroupReq) returns (DismissGroupResp);
   rpc UpdateGroupInfo(UpdateGroupInfoReq) returns (UpdateGroupInfoResp);
+  rpc GrantGroupAdmin(GrantGroupAdminReq) returns (GrantGroupAdminResp);
+  rpc RevokeGroupAdmin(RevokeGroupAdminReq) returns (RevokeGroupAdminResp);
+  rpc TransferGroupOwner(TransferGroupOwnerReq) returns (TransferGroupOwnerResp);
   rpc GetConversationMembersDetail(GetConversationMembersDetailReq) returns (GetConversationMembersDetailResp);
   // UpdateReadReceipt upserts the caller's last-read cursor for a conversation.
   // Validates membership and ensures last_read_message_id only advances monotonically.
@@ -218,6 +223,32 @@ message UpdateGroupInfoReq {
 }
 
 message UpdateGroupInfoResp {
+  ConversationResponse conversation = 1;
+}
+
+message GrantGroupAdminReq {
+  int64 conversation_id = 1;
+  int64 operator_id = 2;
+  int64 target_user_id = 3;
+}
+
+message GrantGroupAdminResp {}
+
+message RevokeGroupAdminReq {
+  int64 conversation_id = 1;
+  int64 operator_id = 2;
+  int64 target_user_id = 3;
+}
+
+message RevokeGroupAdminResp {}
+
+message TransferGroupOwnerReq {
+  int64 conversation_id = 1;
+  int64 operator_id = 2;
+  int64 target_user_id = 3;
+}
+
+message TransferGroupOwnerResp {
   ConversationResponse conversation = 1;
 }
 

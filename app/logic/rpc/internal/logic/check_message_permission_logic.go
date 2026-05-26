@@ -84,9 +84,17 @@ func (l *CheckMessagePermissionLogic) CheckMessagePermission(in *pb.CheckMessage
 		return nil, errorx.NewCodeError(errorx.CodeInternal, "check message permission failed")
 	}
 
+	filteredMentions := decision.FilteredMentions
+	if filteredMentions == nil && len(in.GetMentions()) > 0 {
+		// Backward-compatible fallback for checkers that don't implement filtering.
+		filteredMentions = in.GetMentions()
+	}
+
 	return &pb.CheckMessagePermissionResp{
-		Allowed: decision.Allowed,
-		BizCode: decision.Code,
-		Reason:  decision.Reason,
+		Allowed:          decision.Allowed,
+		BizCode:          decision.Code,
+		Reason:           decision.Reason,
+		FilteredMentions: filteredMentions,
 	}, nil
+
 }

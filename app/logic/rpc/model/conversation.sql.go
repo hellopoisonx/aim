@@ -373,3 +373,39 @@ func (q *Queries) UpdateConversation(ctx context.Context, arg UpdateConversation
 	_, err := q.db.Exec(ctx, updateConversation, arg.ID, arg.Name, arg.Avatar)
 	return err
 }
+
+const updateConversationCreator = `-- name: UpdateConversationCreator :exec
+UPDATE conversations
+SET creator_id = $2
+WHERE id = $1
+`
+
+type UpdateConversationCreatorParams struct {
+	ID        int64 `json:"id"`
+	CreatorID int64 `json:"creator_id"`
+}
+
+func (q *Queries) UpdateConversationCreator(ctx context.Context, arg UpdateConversationCreatorParams) error {
+	_, err := q.db.Exec(ctx, updateConversationCreator, arg.ID, arg.CreatorID)
+	return err
+}
+
+const updateConversationMemberRole = `-- name: UpdateConversationMemberRole :execrows
+UPDATE conversation_members
+SET role = $3
+WHERE conversation_id = $1 AND user_id = $2
+`
+
+type UpdateConversationMemberRoleParams struct {
+	ConversationID int64  `json:"conversation_id"`
+	UserID         int64  `json:"user_id"`
+	Role           string `json:"role"`
+}
+
+func (q *Queries) UpdateConversationMemberRole(ctx context.Context, arg UpdateConversationMemberRoleParams) (int64, error) {
+	result, err := q.db.Exec(ctx, updateConversationMemberRole, arg.ConversationID, arg.UserID, arg.Role)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}

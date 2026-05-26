@@ -11,9 +11,9 @@ import (
 )
 
 // QuotaStore enforces a Redis-backed sliding-window rate limit on the message
-// hot path. It keys by sender so each user has their own bucket regardless of
-// the conversation they post into. Score is the Unix-millisecond timestamp of
-// the request and a monotonic atomic counter is appended to the member to
+// hot path. It keys by (sender_id, device_id) so each user's devices and Bot
+// OpenAPI calls have separate buckets. Score is the Unix-millisecond timestamp
+// of the request and a monotonic atomic counter is appended to the member to
 // avoid ZADD collisions when multiple requests share a millisecond.
 type QuotaStore struct {
 	client      *redis.Client
@@ -33,7 +33,7 @@ func NewQuotaStore(client *redis.Client, windowSeconds int, maxRequests int64) *
 // CheckQuota records the current request and returns whether it is within the
 // configured rate. The function is best-effort: when Redis is unavailable it
 // returns the upstream error; callers can choose to allow or deny on error.
-func (s *QuotaStore) CheckQuota(ctx context.Context, senderID int64) (bool, int64, error) {
+func (s *QuotaStore) CheckQuota(ctx context.Context, senderID int64, deviceID string) (bool, int64, error) {
 	if s == nil || s.client == nil {
 		return true, 0, nil
 	}
@@ -46,7 +46,7 @@ func (s *QuotaStore) CheckQuota(ctx context.Context, senderID int64) (bool, int6
 	nowMs := now.UnixMilli()
 	seq := s.counter.Add(1)
 	member := fmt.Sprintf("%d-%d", nowMs, seq)
-	key := fmt.Sprintf("aim:transfer:quota:%d", senderID)
+	key := quotaKey(senderID, deviceID)
 
 	pipe := s.client.Pipeline()
 	pipe.ZRemRangeByScore(ctx, key, "0", fmt.Sprintf("%d", windowStart))
@@ -67,4 +67,11 @@ func (s *QuotaStore) CheckQuota(ctx context.Context, senderID int64) (bool, int6
 		remaining = 0
 	}
 	return true, remaining, nil
+}
+
+func quotaKey(senderID int64, deviceID string) string {
+	if deviceID == "" {
+		deviceID = "unknown"
+	}
+	return fmt.Sprintf("aim:transfer:quota:%d:%s", senderID, deviceID)
 }

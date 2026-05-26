@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -14,12 +15,16 @@ import (
 	jwtlib "github.com/golang-jwt/jwt/v4"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/redis/go-redis/v9"
+	"go.opentelemetry.io/otel"
+	tracesdk "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	"google.golang.org/grpc"
 
 	"github.com/hellopoisonx/aim/app/auth/rpc/authservice"
 	corepb "github.com/hellopoisonx/aim/app/core/rpc/pb"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/config"
 	wsmanager "github.com/hellopoisonx/aim/app/gateway/api/internal/ws"
+	logicpb "github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 	"github.com/hellopoisonx/aim/app/shared/jwt"
 	pb "github.com/hellopoisonx/aim/shared/proto/ws/pb"
@@ -210,6 +215,67 @@ func TestHandleFrameRejectsInvalidFrame(t *testing.T) {
 	require.Error(t, handler.handleFrame(context.Background(), nil, []byte("not protobuf")))
 }
 
+//nolint:wsl_v5 // 本测试按 trace 初始化、WS 往返、span 断言三段组织，保持步骤紧凑更易读。
+func TestServeWSDetachesFrameSpansFromUpgradeSpan(t *testing.T) {
+	spans := tracetest.NewSpanRecorder()
+	tp := tracesdk.NewTracerProvider(tracesdk.WithSpanProcessor(spans))
+	prev := otel.GetTracerProvider()
+
+	otel.SetTracerProvider(tp)
+	t.Cleanup(func() {
+		otel.SetTracerProvider(prev)
+		require.NoError(t, tp.Shutdown(context.Background()))
+	})
+
+	upgradeCtx, upgradeSpan := otel.Tracer("test").Start(context.Background(), "http.upgrade")
+	upgradeSpanID := upgradeSpan.SpanContext().SpanID()
+
+	defer upgradeSpan.End()
+
+	serverCtx := newTestServiceContext(t)
+	handler := NewWsHandler(serverCtx, wsmanager.NewManager())
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handler.ServeWS(w, r.WithContext(upgradeCtx))
+	}))
+	t.Cleanup(server.Close)
+
+	token, _, err := jwt.NewManager(serverCtx.Config.Auth.AccessSecret).GenerateAccessToken(42, "desktop-1")
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	conn, _, err := dialTestWebSocket(ctx, server.URL, token)
+	require.NoError(t, err)
+
+	defer func() { _ = conn.Close(websocket.StatusNormalClosure, "test complete") }()
+
+	payload, err := wsmanager.EncodePayload(&pb.HeartbeatPayload{LastSeq: 7})
+	require.NoError(t, err)
+
+	frame := wsmanager.BuildFrame(pb.FrameType_FRAME_TYPE_HEARTBEAT, 11, payload)
+	data, err := wsmanager.EncodeFrame(frame)
+	require.NoError(t, err)
+	require.NoError(t, conn.Write(ctx, websocket.MessageBinary, data))
+
+	_, ackData, err := conn.Read(ctx)
+	require.NoError(t, err)
+	ackFrame, err := wsmanager.DecodeFrame(ackData)
+	require.NoError(t, err)
+	require.Equal(t, pb.FrameType_FRAME_TYPE_SERVER_ACK, ackFrame.GetType())
+
+	var wsSpanNames []string
+
+	for _, span := range spans.Ended() {
+		if !strings.HasPrefix(span.Name(), "ws.") {
+			continue
+		}
+
+		wsSpanNames = append(wsSpanNames, span.Name())
+		require.NotEqual(t, upgradeSpanID, span.Parent().SpanID(), "span %s must not use the long-lived upgrade span as parent", span.Name())
+	}
+
+	require.NotEmpty(t, wsSpanNames)
+}
+
 func TestHandleSendMessageRejectsInvalidPayload(t *testing.T) {
 	t.Parallel()
 
@@ -218,6 +284,129 @@ func TestHandleSendMessageRejectsInvalidPayload(t *testing.T) {
 	frame := wsmanager.BuildFrame(pb.FrameType_FRAME_TYPE_SEND_MESSAGE, 1, []byte{0xff})
 
 	require.Error(t, handler.handleSendMessage(context.Background(), nil, frame))
+}
+
+func TestServeWSTypingPushesToLocalPeer(t *testing.T) {
+	t.Parallel()
+
+	serverCtx := newTestServiceContext(t)
+	serverCtx.LogicConversationClient = &mockConversationClient{memberIDs: []int64{42, 43}}
+
+	manager := wsmanager.NewManager()
+	handler := NewWsHandler(serverCtx, manager)
+	server := httptest.NewServer(http.HandlerFunc(handler.ServeWS))
+	t.Cleanup(server.Close)
+
+	ctx := context.Background()
+	sender := dialUser(t, ctx, server.URL, 42, "desktop-a")
+	peer := dialUser(t, ctx, server.URL, 43, "desktop-b")
+	require.Eventually(t, func() bool {
+		return manager.CountByUser(42) == 1 && manager.CountByUser(43) == 1
+	}, time.Second, 10*time.Millisecond)
+
+	payload, err := wsmanager.EncodePayload(&pb.TypingPayload{ConversationId: 100})
+	require.NoError(t, err)
+
+	frame := wsmanager.BuildFrame(pb.FrameType_FRAME_TYPE_TYPING, 31, payload)
+	data, err := wsmanager.EncodeFrame(frame)
+	require.NoError(t, err)
+	require.NoError(t, sender.Write(ctx, websocket.MessageBinary, data))
+
+	pushFrame := readWSFrame(t, peer)
+	require.Equal(t, pb.FrameType_FRAME_TYPE_PUSH_TYPING, pushFrame.GetType())
+
+	pushPayload, err := wsmanager.DecodePayload(pushFrame)
+	require.NoError(t, err)
+
+	typing, ok := pushPayload.(*pb.PushTypingPayload)
+	require.True(t, ok)
+	require.Equal(t, int64(42), typing.GetUserId())
+	require.Equal(t, int64(100), typing.GetConversationId())
+}
+
+func TestServeWSReadReceiptPushesToLocalPeer(t *testing.T) {
+	t.Parallel()
+
+	serverCtx := newTestServiceContext(t)
+	serverCtx.LogicConversationClient = &mockConversationClient{
+		memberIDs: []int64{42, 43},
+		readState: &logicpb.ReadStateItem{
+			UserId:            42,
+			LastReadMessageId: 99,
+			UpdatedAt:         123456,
+		},
+	}
+
+	manager := wsmanager.NewManager()
+	handler := NewWsHandler(serverCtx, manager)
+	server := httptest.NewServer(http.HandlerFunc(handler.ServeWS))
+	t.Cleanup(server.Close)
+
+	ctx := context.Background()
+	sender := dialUser(t, ctx, server.URL, 42, "desktop-a")
+	peer := dialUser(t, ctx, server.URL, 43, "desktop-b")
+	require.Eventually(t, func() bool {
+		return manager.CountByUser(42) == 1 && manager.CountByUser(43) == 1
+	}, time.Second, 10*time.Millisecond)
+
+	payload, err := wsmanager.EncodePayload(&pb.ReadReceiptPayload{ConversationId: 100, LastMsgId: 99})
+	require.NoError(t, err)
+
+	frame := wsmanager.BuildFrame(pb.FrameType_FRAME_TYPE_READ_RECEIPT, 32, payload)
+	data, err := wsmanager.EncodeFrame(frame)
+	require.NoError(t, err)
+	require.NoError(t, sender.Write(ctx, websocket.MessageBinary, data))
+
+	ackFrame := readWSFrame(t, sender)
+	require.Equal(t, pb.FrameType_FRAME_TYPE_SERVER_ACK, ackFrame.GetType())
+
+	ackPayload, err := wsmanager.DecodePayload(ackFrame)
+	require.NoError(t, err)
+
+	ack, ok := ackPayload.(*pb.ServerAckPayload)
+	require.True(t, ok)
+	require.Equal(t, int64(32), ack.GetAckSeq())
+
+	pushFrame := readWSFrame(t, peer)
+	require.Equal(t, pb.FrameType_FRAME_TYPE_PUSH_READ_RECEIPT, pushFrame.GetType())
+
+	pushPayload, err := wsmanager.DecodePayload(pushFrame)
+	require.NoError(t, err)
+
+	receipt, ok := pushPayload.(*pb.PushReadReceiptPayload)
+	require.True(t, ok)
+	require.Equal(t, int64(42), receipt.GetUserId())
+	require.Equal(t, int64(100), receipt.GetConversationId())
+	require.Equal(t, int64(99), receipt.GetLastReadMessageId())
+}
+
+func dialUser(t *testing.T, ctx context.Context, serverURL string, userID int64, deviceID string) *websocket.Conn {
+	t.Helper()
+
+	token, _, err := jwt.NewManager("test-secret").GenerateAccessToken(userID, deviceID)
+	require.NoError(t, err)
+
+	conn, _, err := dialTestWebSocket(ctx, serverURL, token)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = conn.Close(websocket.StatusNormalClosure, "test complete") })
+
+	return conn
+}
+
+func readWSFrame(t *testing.T, conn *websocket.Conn) *pb.WsFrame {
+	t.Helper()
+
+	readCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	messageType, data, err := conn.Read(readCtx)
+	require.NoError(t, err)
+	require.Equal(t, websocket.MessageBinary, messageType)
+
+	frame, err := wsmanager.DecodeFrame(data)
+	require.NoError(t, err)
+
+	return frame
 }
 
 func newTestServiceContext(t *testing.T) *svc.ServiceContext {
@@ -263,6 +452,71 @@ type mockCoreClient struct {
 
 func (m *mockCoreClient) Transfer(ctx context.Context, req *corepb.TransferReq, opts ...grpc.CallOption) (*corepb.TransferResp, error) {
 	return m.resp, m.err
+}
+
+type mockConversationClient struct {
+	memberIDs []int64
+	readState *logicpb.ReadStateItem
+}
+
+func (m *mockConversationClient) CreateConversation(context.Context, *logicpb.CreateConversationReq, ...grpc.CallOption) (*logicpb.CreateConversationResp, error) {
+	return nil, status.Error(codes.Unimplemented, "not implemented")
+}
+
+func (m *mockConversationClient) GetConversationHistory(context.Context, *logicpb.GetConversationHistoryReq, ...grpc.CallOption) (*logicpb.GetConversationHistoryResp, error) {
+	return nil, status.Error(codes.Unimplemented, "not implemented")
+}
+
+func (m *mockConversationClient) GetConversationMembers(context.Context, *logicpb.GetConversationMembersReq, ...grpc.CallOption) (*logicpb.GetConversationMembersResp, error) {
+	return &logicpb.GetConversationMembersResp{MemberIds: m.memberIDs}, nil
+}
+
+func (m *mockConversationClient) GetUserConversations(context.Context, *logicpb.GetUserConversationsReq, ...grpc.CallOption) (*logicpb.GetUserConversationsResp, error) {
+	return nil, status.Error(codes.Unimplemented, "not implemented")
+}
+
+func (m *mockConversationClient) AddGroupMembers(context.Context, *logicpb.AddGroupMembersReq, ...grpc.CallOption) (*logicpb.AddGroupMembersResp, error) {
+	return nil, status.Error(codes.Unimplemented, "not implemented")
+}
+
+func (m *mockConversationClient) RemoveGroupMembers(context.Context, *logicpb.RemoveGroupMembersReq, ...grpc.CallOption) (*logicpb.RemoveGroupMembersResp, error) {
+	return nil, status.Error(codes.Unimplemented, "not implemented")
+}
+
+func (m *mockConversationClient) LeaveGroup(context.Context, *logicpb.LeaveGroupReq, ...grpc.CallOption) (*logicpb.LeaveGroupResp, error) {
+	return nil, status.Error(codes.Unimplemented, "not implemented")
+}
+
+func (m *mockConversationClient) DismissGroup(context.Context, *logicpb.DismissGroupReq, ...grpc.CallOption) (*logicpb.DismissGroupResp, error) {
+	return nil, status.Error(codes.Unimplemented, "not implemented")
+}
+
+func (m *mockConversationClient) UpdateGroupInfo(context.Context, *logicpb.UpdateGroupInfoReq, ...grpc.CallOption) (*logicpb.UpdateGroupInfoResp, error) {
+	return nil, status.Error(codes.Unimplemented, "not implemented")
+}
+
+func (m *mockConversationClient) GrantGroupAdmin(context.Context, *logicpb.GrantGroupAdminReq, ...grpc.CallOption) (*logicpb.GrantGroupAdminResp, error) {
+	return nil, status.Error(codes.Unimplemented, "not implemented")
+}
+
+func (m *mockConversationClient) RevokeGroupAdmin(context.Context, *logicpb.RevokeGroupAdminReq, ...grpc.CallOption) (*logicpb.RevokeGroupAdminResp, error) {
+	return nil, status.Error(codes.Unimplemented, "not implemented")
+}
+
+func (m *mockConversationClient) TransferGroupOwner(context.Context, *logicpb.TransferGroupOwnerReq, ...grpc.CallOption) (*logicpb.TransferGroupOwnerResp, error) {
+	return nil, status.Error(codes.Unimplemented, "not implemented")
+}
+
+func (m *mockConversationClient) GetConversationMembersDetail(context.Context, *logicpb.GetConversationMembersDetailReq, ...grpc.CallOption) (*logicpb.GetConversationMembersDetailResp, error) {
+	return nil, status.Error(codes.Unimplemented, "not implemented")
+}
+
+func (m *mockConversationClient) UpdateReadReceipt(context.Context, *logicpb.UpdateReadReceiptReq, ...grpc.CallOption) (*logicpb.UpdateReadReceiptResp, error) {
+	return &logicpb.UpdateReadReceiptResp{ReadState: m.readState}, nil
+}
+
+func (m *mockConversationClient) ListConversationReadStates(context.Context, *logicpb.ListConversationReadStatesReq, ...grpc.CallOption) (*logicpb.ListConversationReadStatesResp, error) {
+	return nil, status.Error(codes.Unimplemented, "not implemented")
 }
 
 func newTestServiceContextWithCore(t *testing.T, coreClient corepb.TransferServiceClient) *svc.ServiceContext {

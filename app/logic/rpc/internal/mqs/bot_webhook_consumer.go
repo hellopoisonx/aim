@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"sync"
 	"time"
 
@@ -161,16 +162,16 @@ func (c *BotWebhookConsumer) deliver(ctx context.Context, hook model.BotWebhook,
 
 // botWebhookPayload is the V0 message.created envelope.
 type botWebhookPayload struct {
-	EventID        string                  `json:"event_id"`
-	Type           string                  `json:"type"`
-	CreatedAt      int64                   `json:"created_at"`
-	ConversationID int64                   `json:"conversation_id"`
+	EventID        string                   `json:"event_id"`
+	Type           string                   `json:"type"`
+	CreatedAt      int64                    `json:"created_at"`
+	ConversationID string                   `json:"conversation_id"`
 	Message        botWebhookMessagePayload `json:"message"`
 }
 
 type botWebhookMessagePayload struct {
-	MessageID   int64    `json:"message_id"`
-	SenderID    int64    `json:"sender_id"`
+	MessageID   string   `json:"message_id"`
+	SenderID    string   `json:"sender_id"`
 	SenderType  string   `json:"sender_type,omitempty"`
 	MessageType string   `json:"message_type"`
 	Content     string   `json:"content"`
@@ -189,10 +190,10 @@ func (c *BotWebhookConsumer) buildPayload(event transferEvent, senderType string
 		EventID:        eventID,
 		Type:           botWebhookEventType,
 		CreatedAt:      c.now().UnixMilli(),
-		ConversationID: event.ConversationID,
+		ConversationID: strconv.FormatInt(event.ConversationID, 10),
 		Message: botWebhookMessagePayload{
-			MessageID:   event.MessageID,
-			SenderID:    event.SenderID,
+			MessageID:   strconv.FormatInt(event.MessageID, 10),
+			SenderID:    strconv.FormatInt(event.SenderID, 10),
 			SenderType:  senderType,
 			MessageType: event.MessageType,
 			Content:     event.Content,

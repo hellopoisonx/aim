@@ -45,6 +45,16 @@ VALUES ($1, $2, $3);
 DELETE FROM conversation_members
 WHERE conversation_id = $1 AND user_id = ANY($2::bigint[]);
 
+-- name: UpdateConversationMemberRole :execrows
+UPDATE conversation_members
+SET role = $3
+WHERE conversation_id = $1 AND user_id = $2;
+
+-- name: UpdateConversationCreator :exec
+UPDATE conversations
+SET creator_id = $2
+WHERE id = $1;
+
 -- name: UpdateConversation :exec
 UPDATE conversations
 SET name = COALESCE(sqlc.narg('name'), name),

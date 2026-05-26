@@ -53,6 +53,18 @@ func (m *mockGetHistoryConversationService) GetUserConversations(ctx context.Con
 	return nil, errors.New("GetUserConversations not implemented")
 }
 
+func (m *mockGetHistoryConversationService) GrantGroupAdmin(ctx context.Context, in *conversationservice.GrantGroupAdminReq, opts ...grpc.CallOption) (*conversationservice.GrantGroupAdminResp, error) {
+	return nil, errors.New("GrantGroupAdmin not implemented")
+}
+
+func (m *mockGetHistoryConversationService) RevokeGroupAdmin(ctx context.Context, in *conversationservice.RevokeGroupAdminReq, opts ...grpc.CallOption) (*conversationservice.RevokeGroupAdminResp, error) {
+	return nil, errors.New("RevokeGroupAdmin not implemented")
+}
+
+func (m *mockGetHistoryConversationService) TransferGroupOwner(ctx context.Context, in *conversationservice.TransferGroupOwnerReq, opts ...grpc.CallOption) (*conversationservice.TransferGroupOwnerResp, error) {
+	return nil, errors.New("TransferGroupOwner not implemented")
+}
+
 func TestGetConversationHistory(t *testing.T) {
 	is := assert.New(t)
 

@@ -34,7 +34,7 @@ func TestCheckMessagePermission(t *testing.T) {
 				MessageType:    "text",
 				Mentions:       []int64{30, 40},
 			},
-			wantResp: &pb.CheckMessagePermissionResp{Allowed: true, BizCode: service.CodeOK},
+			wantResp: &pb.CheckMessagePermissionResp{Allowed: true, BizCode: service.CodeOK, FilteredMentions: []int64{30, 40}},
 		},
 		{
 			name:    "message type too long",

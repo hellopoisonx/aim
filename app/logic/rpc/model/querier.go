@@ -56,6 +56,8 @@ type Querier interface {
 	RevokeBotToken(ctx context.Context, arg RevokeBotTokenParams) (int64, error)
 	SearchUserInfoByNickname(ctx context.Context, arg SearchUserInfoByNicknameParams) ([]UserInfo, error)
 	UpdateConversation(ctx context.Context, arg UpdateConversationParams) error
+	UpdateConversationCreator(ctx context.Context, arg UpdateConversationCreatorParams) error
+	UpdateConversationMemberRole(ctx context.Context, arg UpdateConversationMemberRoleParams) (int64, error)
 	UpdateUserInfoProfile(ctx context.Context, arg UpdateUserInfoProfileParams) (UserInfo, error)
 	UpdateUserInfoStatus(ctx context.Context, arg UpdateUserInfoStatusParams) (UserInfo, error)
 	UpdateUserInfoType(ctx context.Context, arg UpdateUserInfoTypeParams) (int64, error)

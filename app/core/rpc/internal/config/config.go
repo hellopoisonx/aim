@@ -10,15 +10,16 @@ import (
 
 type Config struct {
 	zrpc.RpcServerConf
-	Nacos                         nacos.Config   `json:",optional"`
-	KqPusherConf                  KqPusherConf   `json:",optional"`
-	KqConsumerConf                kq.KqConf      `json:",optional"`
-	PresenceConsumerConf          kq.KqConf      `json:",optional"`
-	TypingConsumerConf            kq.KqConf      `json:",optional"`
-	ReadReceiptConsumerConf       kq.KqConf      `json:",optional"`
-	ConversationEventConsumerConf kq.KqConf      `json:",optional"`
-	LogicRpc                      nacos.Config   `json:",optional"`
-	GatewayRpc                    GatewayRpcConf `json:",optional"`
+	Nacos                         nacos.Config      `json:",optional"`
+	KqPusherConf                  KqPusherConf      `json:",optional"`
+	KqConsumerConf                kq.KqConf         `json:",optional"`
+	PresenceConsumerConf          kq.KqConf         `json:",optional"`
+	TypingConsumerConf            kq.KqConf         `json:",optional"`
+	ReadReceiptConsumerConf       kq.KqConf         `json:",optional"`
+	ConversationEventConsumerConf kq.KqConf         `json:",optional"`
+	LogicRpc                      nacos.Config      `json:",optional"`
+	GatewayRpc                    GatewayRpcConf    `json:",optional"`
+	AttachmentRpc                 nacos.Config      `json:",optional"`
 	CacheRedis                    RedisConf         `json:",optional"`
 	SnowflakeMachineID            int64             `json:",default=1"`
 	Presence                      PresenceConf      `json:",optional"`
@@ -37,9 +38,9 @@ type KqPusherConf struct {
 }
 
 type GatewayRpcConf struct {
-	ServiceName string                 `json:",default=gateway.rpc"`
-	Target      string                 `json:",default=127.0.0.1:9090"`
-	Nodes       []GatewayNodeTarget    `json:",optional"`
+	ServiceName string              `json:",default=gateway.rpc"`
+	Target      string              `json:",default=127.0.0.1:9090"`
+	Nodes       []GatewayNodeTarget `json:",optional"`
 }
 
 // GatewayNodeTarget configures a per-node gateway client. NodeID must match

@@ -76,6 +76,23 @@ Kafka:
     - kafka:9092
   PresenceTopic: aim.presence.events
   TypingTopic: aim.typing.events
+  ReadReceiptTopic: aim.read_receipt.events
+AttachmentRpc:
+  ServerAddr: nacos:8848
+  NamespaceID: ""
+  Group: DEFAULT_GROUP
+  Cluster: DEFAULT
+  ServiceName: attachment.rpc
+  AdvertiseIP: ""
+  AdvertisePort: 0
+  Ephemeral: true
+  Weight: 1
+  TimeoutMs: 5000
+  Username: ""
+  Password: ""
+  LogDir: /app/log/nacos
+  CacheDir: /tmp/nacos/cache
+  LogLevel: info
 GatewayRpc:
   Name: gateway.rpc
   ListenOn: 0.0.0.0:9090

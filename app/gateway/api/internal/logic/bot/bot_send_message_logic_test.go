@@ -53,7 +53,7 @@ func TestBotSendMessage_RequiresScope(t *testing.T) {
 	l := NewBotSendMessageLogic(ctxWithBot("bot.conversation.list"), &svc.ServiceContext{CoreClient: core})
 
 	_, err := l.BotSendMessage(&types.BotSendMessageRequest{
-		ConversationId: 7,
+		ConversationId: "7",
 		MessageType:    "text",
 		Content:        "hi",
 		ClientMsgId:    "client-1",
@@ -71,7 +71,7 @@ func TestBotSendMessage_ForwardsToCore(t *testing.T) {
 	l := NewBotSendMessageLogic(ctxWithBot("bot.message.send"), &svc.ServiceContext{CoreClient: core})
 
 	resp, err := l.BotSendMessage(&types.BotSendMessageRequest{
-		ConversationId: 7,
+		ConversationId: "7",
 		MessageType:    "text",
 		Content:        "hello",
 		ClientMsgId:    "client-1",
@@ -79,7 +79,7 @@ func TestBotSendMessage_ForwardsToCore(t *testing.T) {
 	})
 
 	require.NoError(t, err)
-	require.Equal(t, int64(42), resp.MessageId)
+	require.Equal(t, "42", resp.MessageId)
 	require.Equal(t, "client-1", resp.ClientMsgId)
 
 	require.True(t, core.called)
@@ -94,7 +94,7 @@ func TestBotSendMessage_ValidatesRequest(t *testing.T) {
 	core := &fakeCoreClient{}
 	l := NewBotSendMessageLogic(ctxWithBot("bot.message.send"), &svc.ServiceContext{CoreClient: core})
 
-	_, err := l.BotSendMessage(&types.BotSendMessageRequest{ConversationId: 0, MessageType: "text", ClientMsgId: "x"})
+	_, err := l.BotSendMessage(&types.BotSendMessageRequest{ConversationId: "0", MessageType: "text", ClientMsgId: "x"})
 	require.Error(t, err)
 	require.False(t, core.called)
 }
@@ -105,7 +105,7 @@ func TestBotSendMessage_PropagatesCoreError(t *testing.T) {
 	l := NewBotSendMessageLogic(ctxWithBot("bot.message.send"), &svc.ServiceContext{CoreClient: core})
 
 	_, err := l.BotSendMessage(&types.BotSendMessageRequest{
-		ConversationId: 7,
+		ConversationId: "7",
 		MessageType:    "text",
 		Content:        "hi",
 		ClientMsgId:    "x",
@@ -121,7 +121,7 @@ func TestBotSendMessage_NoCoreClient(t *testing.T) {
 	l := NewBotSendMessageLogic(ctxWithBot("bot.message.send"), &svc.ServiceContext{})
 
 	_, err := l.BotSendMessage(&types.BotSendMessageRequest{
-		ConversationId: 7,
+		ConversationId: "7",
 		MessageType:    "text",
 		Content:        "hi",
 		ClientMsgId:    "x",
@@ -133,7 +133,7 @@ func TestBotSendMessage_RequiresIdentity(t *testing.T) {
 	l := NewBotSendMessageLogic(context.Background(), &svc.ServiceContext{})
 
 	_, err := l.BotSendMessage(&types.BotSendMessageRequest{
-		ConversationId: 7,
+		ConversationId: "7",
 		MessageType:    "text",
 		Content:        "hi",
 		ClientMsgId:    "x",

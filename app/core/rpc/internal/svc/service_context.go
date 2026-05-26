@@ -3,6 +3,7 @@ package svc
 import (
 	"context"
 
+	attachmentpb "github.com/hellopoisonx/aim/app/attachment/rpc/pb"
 	"github.com/hellopoisonx/aim/app/core/rpc/internal/cache"
 	"github.com/hellopoisonx/aim/app/core/rpc/internal/config"
 	"github.com/hellopoisonx/aim/app/core/rpc/internal/rpc"
@@ -29,7 +30,9 @@ type ServiceContext struct {
 	GatewayClient           rpc.GatewayPusher
 	PresenceStore           *cache.PresenceStore
 	TransferQuota           *cache.QuotaStore
+	AttachmentClient        attachmentpb.AttachmentServiceClient
 	namingClient            nacos.NamingClient
+	attachmentNamingClient  nacos.NamingClient
 }
 
 func (s *ServiceContext) Close() {
@@ -43,6 +46,14 @@ func (s *ServiceContext) Close() {
 		if err := closer.Close(); err != nil {
 			logx.Errorf("failed to close gateway client: %v", err)
 		}
+	}
+
+	if s.namingClient != nil {
+		s.namingClient.CloseClient()
+	}
+
+	if s.attachmentNamingClient != nil {
+		s.attachmentNamingClient.CloseClient()
 	}
 }
 
@@ -103,6 +114,27 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		}
 	}
 
+	var attachmentClient attachmentpb.AttachmentServiceClient
+	var attachmentNamingClient nacos.NamingClient
+	if c.AttachmentRpc.ServiceName != "" {
+		if err := c.AttachmentRpc.ApplyDefaults("attachment.rpc", "127.0.0.1:8091"); err != nil {
+			logx.Errorf("failed to apply AttachmentRpc defaults: %v", err)
+		} else {
+			attachmentNamingClient, err = nacos.NewNamingClient(c.AttachmentRpc)
+			if err != nil {
+				logx.Errorf("failed to create NamingClient for AttachmentRpc: %v", err)
+			} else {
+				nacos.RegisterResolver(attachmentNamingClient, c.AttachmentRpc)
+				client, err := zrpc.NewClientWithTarget("nacos:///" + c.AttachmentRpc.ServiceName)
+				if err != nil {
+					logx.Errorf("failed to create RPC client for AttachmentRpc: %v", err)
+				} else {
+					attachmentClient = attachmentpb.NewAttachmentServiceClient(client.Conn())
+				}
+			}
+		}
+	}
+
 	// Presence store (nil if not configured)
 	var presenceStore *cache.PresenceStore
 	if c.Presence.TTLSeconds > 0 {
@@ -154,6 +186,8 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		GatewayClient:           gatewayClient,
 		PresenceStore:           presenceStore,
 		TransferQuota:           transferQuota,
+		AttachmentClient:        attachmentClient,
 		namingClient:            namingClient,
+		attachmentNamingClient:  attachmentNamingClient,
 	}
 }

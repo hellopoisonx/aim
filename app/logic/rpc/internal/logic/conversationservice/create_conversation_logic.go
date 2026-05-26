@@ -36,23 +36,28 @@ func (l *CreateConversationLogic) CreateConversation(in *pb.CreateConversationRe
 	}
 
 	name := strings.TrimSpace(in.GetName())
-	if name == "" {
-		return nil, errorx.NewCodeError(errorx.CodeBadInput, "name is required")
-	}
 
 	memberIDs := in.GetMemberIds()
 	if in.GetConversationType() == "direct" {
 		if len(memberIDs) != 1 {
 			return nil, errorx.NewCodeError(errorx.CodeBadInput, "direct conversation member_ids must contain exactly one peer user id")
 		}
+
 		if memberIDs[0] <= 0 {
 			return nil, errorx.NewCodeError(errorx.CodeBadInput, "member_ids must contain positive user ids")
 		}
+
 		if memberIDs[0] == in.GetCreatorId() {
 			return nil, errorx.NewCodeError(errorx.CodeBadInput, "direct conversation peer must not be creator")
 		}
-	} else if len(memberIDs) == 0 {
-		return nil, errorx.NewCodeError(errorx.CodeBadInput, "member_ids must not be empty")
+	} else {
+		if name == "" {
+			return nil, errorx.NewCodeError(errorx.CodeBadInput, "name is required")
+		}
+
+		if len(memberIDs) == 0 {
+			return nil, errorx.NewCodeError(errorx.CodeBadInput, "member_ids must not be empty")
+		}
 	}
 
 	convSvc := l.svcCtx.ConversationService

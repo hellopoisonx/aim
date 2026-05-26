@@ -181,6 +181,28 @@ func (f *fakeConversationStore) UpdateConversation(_ context.Context, arg model.
 	return nil
 }
 
+func (f *fakeConversationStore) UpdateConversationCreator(_ context.Context, arg model.UpdateConversationCreatorParams) error {
+	conv, ok := f.conversations[arg.ID]
+	if !ok {
+		return pgx.ErrNoRows
+	}
+	conv.CreatorID = arg.CreatorID
+	f.conversations[arg.ID] = conv
+	return nil
+}
+
+func (f *fakeConversationStore) UpdateConversationMemberRole(_ context.Context, arg model.UpdateConversationMemberRoleParams) (int64, error) {
+	members := f.members[arg.ConversationID]
+	for i, m := range members {
+		if m.UserID == arg.UserID {
+			members[i].Role = arg.Role
+			f.members[arg.ConversationID] = members
+			return 1, nil
+		}
+	}
+	return 0, nil
+}
+
 func (f *fakeConversationStore) DeactivateConversation(_ context.Context, id int64) error {
 	conv, ok := f.conversations[id]
 	if !ok {
@@ -305,12 +327,12 @@ func TestCreateConversationLogic(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name: "valid direct conversation",
+			name: "valid direct conversation with empty name",
 			req: &pb.CreateConversationReq{
 				ConversationType: "direct",
 				CreatorId:        1,
 				MemberIds:        []int64{2},
-				Name:             "Direct Chat",
+				Name:             "",
 			},
 			wantErr: false,
 		},
@@ -349,6 +371,16 @@ func TestCreateConversationLogic(t *testing.T) {
 				ConversationType: "direct",
 				CreatorId:        1,
 				MemberIds:        []int64{},
+			},
+			wantErr: true,
+		},
+		{
+			name: "missing group name",
+			req: &pb.CreateConversationReq{
+				ConversationType: "group",
+				CreatorId:        1,
+				MemberIds:        []int64{2},
+				Name:             "   ",
 			},
 			wantErr: true,
 		},

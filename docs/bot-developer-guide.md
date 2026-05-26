@@ -64,6 +64,8 @@ Authorization: Bot aim_bot_<64位hex>
 
 响应封装统一为 `{ "code": 0, "msg": "ok", "body": {...} }`，错误时 `code != 0`。
 
+所有 Snowflake ID（如 `bot_user_id`、`conversation_id`、`message_id`、`sender_id`）在 Bot OpenAPI / Webhook JSON 中均使用**十进制字符串**传输，避免 JavaScript `Number` 精度丢失。
+
 ## 3. 接口
 
 服务地址（本地）：`http://127.0.0.1:8888`。
@@ -83,7 +85,7 @@ curl -H "Authorization: Bot $TOKEN" \
   "msg": "ok",
   "body": {
     "bot": {
-      "bot_user_id": 9000000001,
+      "bot_user_id": "9000000001",
       "nickname": "broadcast-bot",
       "avatar": "https://implement.me",
       "status": 1,
@@ -106,7 +108,7 @@ curl -X POST \
   -H "Authorization: Bot $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
-        "conversation_id": 1,
+        "conversation_id": "1",
         "message_type": "text",
         "content": "hello from bot",
         "client_msg_id": "550e8400-e29b-41d4-a716-446655440000"
@@ -118,18 +120,18 @@ curl -X POST \
 
 | 字段 | 必填 | 说明 |
 |------|------|------|
-| `conversation_id` | 是 | 目标会话 ID，Bot 必须是该会话成员 |
+| `conversation_id` | 是 | 目标会话 ID，十进制字符串；Bot 必须是该会话成员 |
 | `message_type` | 是 | 业务消息类型，例如 `text`、`image`，最多 32 字符 |
 | `content` | 是 | 业务消息载荷，由你和你的客户端协商；服务端只透传 |
 | `client_msg_id` | 是 | **幂等键**：相同 `(bot_user_id, "bot-api", client_msg_id)` 重复调用返回同一 `message_id` |
-| `mentions` | 否 | 被 @ 的用户 ID，最多 20 个 |
+| `mentions` | 否 | 被 @ 的用户 ID，十进制字符串数组，最多 20 个，例如 `["123"]` |
 
 成功响应：
 
 ```json
 {
   "body": {
-    "message_id": 123456789,
+    "message_id": "123456789",
     "client_msg_id": "550e8400-...",
     "accepted_at": 1700000000000
   }
@@ -174,7 +176,7 @@ curl -X POST \
 
 | 字段 | 说明 |
 |------|------|
-| `url` | 必填，HTTPS 地址 |
+| `url` | 必填，合法 URL；生产环境建议 HTTPS |
 | `events` | 可选，订阅的事件名数组；省略默认 `["message.created"]` |
 | `enabled` | 可选，默认 `true` |
 | `secret` | 提供你已有的签名 secret；与 `rotate_secret` 二选一 |
@@ -213,10 +215,10 @@ curl -X POST \
   "event_id": "9d4a3f5c1c1a4f5fbb7e6d3c4f8a1b2d",
   "type": "message.created",
   "created_at": 1700000000123,
-  "conversation_id": 1,
+  "conversation_id": "1",
   "message": {
-    "message_id": 123456789,
-    "sender_id": 1001,
+    "message_id": "123456789",
+    "sender_id": "1001",
     "sender_type": "human",
     "message_type": "text",
     "content": "hi bot",
@@ -298,5 +300,3 @@ python aim_test.py bot-webhook-get
 
 - 始终带上 `client_msg_id` —— 你的客户端崩溃 / 网络重试都不会重复发消息。
 - Webhook 处理建议异步：把 `event_id` 入队后立即返回 200；否则容易触发
-  服务端的指数退避重试。
-- 为每个 Bot 单独维护一个 secret，避免共用导致泄露面扩大。

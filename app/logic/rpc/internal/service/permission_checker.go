@@ -17,9 +17,10 @@ type PermissionCheck struct {
 }
 
 type PermissionDecision struct {
-	Allowed bool
-	Code    int32
-	Reason  string
+	Allowed          bool
+	Code             int32
+	Reason           string
+	FilteredMentions []int64 // mentions filtered to only conversation members
 }
 
 type PermissionChecker interface {

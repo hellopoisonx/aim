@@ -75,6 +75,8 @@ services:
         condition: service_healthy
       jaeger:
         condition: service_started
+      aim-attachment:
+        condition: service_started
     networks:
       - aim-network
 
@@ -154,6 +156,52 @@ services:
       jaeger:
         condition: service_started
       aim-logic:
+        condition: service_started
+      aim-attachment:
+        condition: service_started
+    networks:
+      - aim-network
+
+  aim-attachment:
+    build:
+      context: .
+      dockerfile: app/attachment/Dockerfile
+    container_name: aim-attachment
+    expose:
+      - "8091"  # internal-only gRPC: gateway/core call attachment.rpc; do not publish to host
+    volumes:
+      - ./app/attachment/rpc/etc/attachment.yaml:/app/etc/attachment.yaml:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+      seaweed-s3:
+        condition: service_started
+      jaeger:
+        condition: service_started
+    networks:
+      - aim-network
+
+  aim-data-parsing:
+    build:
+      context: .
+      dockerfile: app/data_parsing/Dockerfile
+    container_name: aim-data-parsing
+    volumes:
+      - ./app/data_parsing/etc/data_parsing.yaml:/app/etc/data_parsing.yaml:ro
+    depends_on:
+      aim-attachment:
+        condition: service_started
+      kafka:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+      seaweed-s3:
+        condition: service_started
+      jaeger:
         condition: service_started
     networks:
       - aim-network
@@ -239,6 +287,77 @@ services:
      networks:
        - aim-network
 
+  seaweed-master:
+    image: chrislusf/seaweedfs:latest
+    container_name: aim-seaweed-master
+    command: "master -ip=seaweed-master -mdir=/data"
+    ports:
+      - "9333:9333"
+    volumes:
+      - seaweed_master_data:/data
+    networks:
+      - aim-network
+
+  seaweed-volume:
+    image: chrislusf/seaweedfs:latest
+    container_name: aim-seaweed-volume
+    command: "volume -mserver=seaweed-master:9333 -ip=seaweed-volume -dir=/data -max=0"
+    depends_on:
+      - seaweed-master
+    ports:
+      - "8088:8080"
+    volumes:
+      - seaweed_volume_data:/data
+    networks:
+      - aim-network
+
+  seaweed-filer:
+    image: chrislusf/seaweedfs:latest
+    container_name: aim-seaweed-filer
+    command: "filer -master=seaweed-master:9333 -ip=seaweed-filer"
+    depends_on:
+      - seaweed-master
+      - seaweed-volume
+    ports:
+      - "8889:8888"
+    volumes:
+      - seaweed_filer_data:/data
+    networks:
+      - aim-network
+
+  seaweed-s3:
+    image: chrislusf/seaweedfs:latest
+    container_name: aim-seaweed-s3
+    command: "s3 -filer=seaweed-filer:8888 -ip.bind=0.0.0.0 -port=8333 -iam=false -config=/etc/seaweedfs/s3.json"
+    depends_on:
+      - seaweed-filer
+    ports:
+      - "8333:8333"
+    volumes:
+      - ./app/attachment/rpc/etc/seaweed-s3.json:/etc/seaweedfs/s3.json:ro
+    networks:
+      - aim-network
+
+  seaweed-bucket-init:
+    image: amazon/aws-cli:latest
+    container_name: aim-seaweed-bucket-init
+    depends_on:
+      - seaweed-s3
+    environment:
+      AWS_ACCESS_KEY_ID: aim
+      AWS_SECRET_ACCESS_KEY: aim-secret
+      AWS_DEFAULT_REGION: us-east-1
+    entrypoint: ["/bin/sh", "-c"]
+    command: >
+      "for i in $$(seq 1 30); do
+        aws --endpoint-url http://seaweed-s3:8333 s3 ls s3://aim-attachments && exit 0;
+        aws --endpoint-url http://seaweed-s3:8333 s3 mb s3://aim-attachments && exit 0;
+        sleep 2;
+      done;
+      exit 1"
+    networks:
+      - aim-network
+
   kafka-init:
     image: apache/kafka:4.0.2
     container_name: aim-kafka-init
@@ -252,6 +371,11 @@ services:
         /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic aim.user.events --partitions 3 --replication-factor 1
         /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic aim-message-transfer --partitions 3 --replication-factor 1
         /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic aim.conversation.events --partitions 3 --replication-factor 1
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic aim.presence.events --partitions 3 --replication-factor 1
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic aim.typing.events --partitions 3 --replication-factor 1
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic aim.read_receipt.events --partitions 3 --replication-factor 1
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic aim.attachment.uploaded --partitions 3 --replication-factor 1
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic aim.attachment.parsed --partitions 3 --replication-factor 1
     networks:
       - aim-network
 
@@ -306,3 +430,6 @@ volumes:
   auth_log:
   logic_log:
   core_log:
+  seaweed_master_data:
+  seaweed_volume_data:
+  seaweed_filer_data:

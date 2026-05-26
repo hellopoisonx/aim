@@ -29,6 +29,22 @@ ORDER BY created_at DESC;
 
 -- name: ListFriends :many
 SELECT user_id, friend_id, status, created_at, updated_at
-FROM friendships
-WHERE user_id = $1 AND status = 'accepted'
-ORDER BY created_at DESC;
+FROM (
+    SELECT DISTINCT ON (peer_id)
+        $1::bigint AS user_id,
+        peer_id AS friend_id,
+        status,
+        created_at,
+        updated_at
+    FROM (
+        SELECT
+            CASE WHEN user_id = $1 THEN friend_id ELSE user_id END AS peer_id,
+            status,
+            created_at,
+            updated_at
+        FROM friendships
+        WHERE status = 'accepted' AND (user_id = $1 OR friend_id = $1)
+    ) normalized
+    ORDER BY peer_id, updated_at DESC
+) deduped
+ORDER BY updated_at DESC;

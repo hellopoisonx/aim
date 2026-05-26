@@ -1,0 +1,14 @@
+{
+  "identities": [
+    {
+      "name": "aim",
+      "credentials": [
+        {
+          "accessKey": "aim",
+          "secretKey": "aim-secret"
+        }
+      ],
+      "actions": ["Admin", "Read", "Write", "List"]
+    }
+  ]
+}

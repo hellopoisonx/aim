@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"time"
 
+	attachmentpb "github.com/hellopoisonx/aim/app/attachment/rpc/pb"
 	"github.com/hellopoisonx/aim/app/auth/rpc/authservice"
 	"github.com/hellopoisonx/aim/app/core/rpc/pb"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/config"
@@ -79,15 +80,16 @@ type presenceEvent struct {
 // typingEvent is the Kafka message for typing notification.
 type typingEvent struct {
 	tracing.TraceContextFields
-	FromUserID     int64 `json:"from_user_id"`
-	ConversationID int64 `json:"conversation_id"`
-	Timestamp      int64 `json:"timestamp"`
+	FromUserID     int64  `json:"from_user_id"`
+	ConversationID int64  `json:"conversation_id"`
+	Timestamp      int64  `json:"timestamp"`
+	GatewayNodeID  string `json:"gateway_node_id"`
 }
 
 // kafkaPresencePublisher implements PresencePublisher via Kafka.
 type kafkaPresencePublisher struct {
-	pusher  *kq.Pusher
-	nodeID  string
+	pusher *kq.Pusher
+	nodeID string
 }
 
 func (p *kafkaPresencePublisher) PublishPresence(ctx context.Context, userID int64, status string) error {
@@ -110,6 +112,7 @@ func (p *kafkaPresencePublisher) PublishPresence(ctx context.Context, userID int
 // kafkaTypingPublisher implements TypingPublisher via Kafka.
 type kafkaTypingPublisher struct {
 	pusher *kq.Pusher
+	nodeID string
 }
 
 func (p *kafkaTypingPublisher) PublishTyping(ctx context.Context, fromUserID, conversationID int64) error {
@@ -118,6 +121,7 @@ func (p *kafkaTypingPublisher) PublishTyping(ctx context.Context, fromUserID, co
 		FromUserID:         fromUserID,
 		ConversationID:     conversationID,
 		Timestamp:          time.Now().UnixMilli(),
+		GatewayNodeID:      p.nodeID,
 	}
 	data, err := json.Marshal(event)
 	if err != nil {
@@ -131,15 +135,17 @@ func (p *kafkaTypingPublisher) PublishTyping(ctx context.Context, fromUserID, co
 // readReceiptEvent is the Kafka message for read receipt notification.
 type readReceiptEvent struct {
 	tracing.TraceContextFields
-	FromUserID        int64 `json:"from_user_id"`
-	ConversationID    int64 `json:"conversation_id"`
-	LastReadMessageID int64 `json:"last_read_message_id"`
-	UpdatedAt         int64 `json:"updated_at"`
+	FromUserID        int64  `json:"from_user_id"`
+	ConversationID    int64  `json:"conversation_id"`
+	LastReadMessageID int64  `json:"last_read_message_id"`
+	UpdatedAt         int64  `json:"updated_at"`
+	GatewayNodeID     string `json:"gateway_node_id"`
 }
 
 // kafkaReadReceiptPublisher implements ReadReceiptPublisher via Kafka.
 type kafkaReadReceiptPublisher struct {
 	pusher *kq.Pusher
+	nodeID string
 }
 
 func (p *kafkaReadReceiptPublisher) PublishReadReceipt(ctx context.Context, fromUserID, conversationID, lastReadMessageID, updatedAt int64) error {
@@ -149,6 +155,7 @@ func (p *kafkaReadReceiptPublisher) PublishReadReceipt(ctx context.Context, from
 		ConversationID:     conversationID,
 		LastReadMessageID:  lastReadMessageID,
 		UpdatedAt:          updatedAt,
+		GatewayNodeID:      p.nodeID,
 	}
 	data, err := json.Marshal(event)
 	if err != nil {
@@ -167,11 +174,13 @@ type ServiceContext struct {
 	LogicConversationClient conversationservice.ConversationService
 	LogicFriendshipClient   friendshipservice.FriendshipService
 	LogicBotClient          botservice.BotService
+	AttachmentClient        attachmentpb.AttachmentServiceClient
 	Auth                    rest.Middleware
 	BotAuth                 rest.Middleware
 	namingClient            aimnacos.NamingClient
 	coreNamingClient        aimnacos.NamingClient
 	logicNamingClient       aimnacos.NamingClient
+	attachmentNamingClient  aimnacos.NamingClient
 	RedisClient             *redis.Client
 	PresencePub             PresencePublisher
 	TypingPub               TypingPublisher
@@ -226,6 +235,16 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	logicClient, err := zrpc.NewClientWithTarget("nacos:///" + c.LogicRpc.ServiceName)
 	logx.Must(err)
 
+	logx.Must(c.AttachmentRpc.ApplyDefaults("attachment.rpc", "127.0.0.1:8091"))
+
+	attachmentNamingClient, err := aimnacos.NewNamingClient(c.AttachmentRpc)
+	logx.Must(err)
+
+	aimnacos.RegisterResolver(attachmentNamingClient, c.AttachmentRpc)
+
+	attachmentClient, err := zrpc.NewClientWithTarget("nacos:///" + c.AttachmentRpc.ServiceName)
+	logx.Must(err)
+
 	// Create Redis client for presence heartbeat state management.
 	redisClient := redis.NewClient(&redis.Options{
 		Addr:     c.Redis.Addr,
@@ -253,11 +272,13 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		LogicConversationClient: conversationservice.NewConversationService(logicClient),
 		LogicFriendshipClient:   friendshipservice.NewFriendshipService(logicClient),
 		LogicBotClient:          logicBotClient,
+		AttachmentClient:        attachmentpb.NewAttachmentServiceClient(attachmentClient.Conn()),
 		Auth:                    middleware.NewAuthMiddleware(c.Auth.AccessSecret).Handle,
 		BotAuth:                 middleware.NewBotAuthMiddleware(logicBotClient).Handle,
 		namingClient:            namingClient,
 		coreNamingClient:        coreNamingClient,
 		logicNamingClient:       logicNamingClient,
+		attachmentNamingClient:  attachmentNamingClient,
 		RedisClient:             redisClient,
 		PresencePub:             newPresencePub(c, redisClient),
 		TypingPub:               newTypingPub(c, redisClient),
@@ -284,8 +305,8 @@ func newPresencePub(c config.Config, redisClient *redis.Client) PresencePublishe
 	if len(c.Kafka.Brokers) > 0 && c.Kafka.PresenceTopic != "" && redisClient != nil {
 		logx.Infof("presence publisher: Kafka topic=%s (balancer: murmur2)", c.Kafka.PresenceTopic)
 		return &kafkaPresencePublisher{
-			pusher:  kq.NewPusher(c.Kafka.Brokers, c.Kafka.PresenceTopic, kq.WithBalancer(&kafka.Murmur2Balancer{})),
-			nodeID:  c.GatewayNodeID,
+			pusher: kq.NewPusher(c.Kafka.Brokers, c.Kafka.PresenceTopic, kq.WithBalancer(&kafka.Murmur2Balancer{})),
+			nodeID: c.GatewayNodeID,
 		}
 	}
 	return &noopPublisher{}
@@ -295,7 +316,7 @@ func newPresencePub(c config.Config, redisClient *redis.Client) PresencePublishe
 func newTypingPub(c config.Config, redisClient *redis.Client) TypingPublisher {
 	if len(c.Kafka.Brokers) > 0 && c.Kafka.TypingTopic != "" && redisClient != nil {
 		logx.Infof("typing publisher: Kafka topic=%s (balancer: murmur2)", c.Kafka.TypingTopic)
-		return &kafkaTypingPublisher{pusher: kq.NewPusher(c.Kafka.Brokers, c.Kafka.TypingTopic, kq.WithBalancer(&kafka.Murmur2Balancer{}))}
+		return &kafkaTypingPublisher{pusher: kq.NewPusher(c.Kafka.Brokers, c.Kafka.TypingTopic, kq.WithBalancer(&kafka.Murmur2Balancer{})), nodeID: c.GatewayNodeID}
 	}
 	return &noopPublisher{}
 }
@@ -304,7 +325,7 @@ func newTypingPub(c config.Config, redisClient *redis.Client) TypingPublisher {
 func newReadReceiptPub(c config.Config, redisClient *redis.Client) ReadReceiptPublisher {
 	if len(c.Kafka.Brokers) > 0 && c.Kafka.ReadReceiptTopic != "" && redisClient != nil {
 		logx.Infof("read receipt publisher: Kafka topic=%s (balancer: murmur2)", c.Kafka.ReadReceiptTopic)
-		return &kafkaReadReceiptPublisher{pusher: kq.NewPusher(c.Kafka.Brokers, c.Kafka.ReadReceiptTopic, kq.WithBalancer(&kafka.Murmur2Balancer{}))}
+		return &kafkaReadReceiptPublisher{pusher: kq.NewPusher(c.Kafka.Brokers, c.Kafka.ReadReceiptTopic, kq.WithBalancer(&kafka.Murmur2Balancer{})), nodeID: c.GatewayNodeID}
 	}
 	return &noopPublisher{}
 }
@@ -325,6 +346,10 @@ func (s *ServiceContext) Close() {
 
 	if s.logicNamingClient != nil {
 		s.logicNamingClient.CloseClient()
+	}
+
+	if s.attachmentNamingClient != nil {
+		s.attachmentNamingClient.CloseClient()
 	}
 
 	if s.RedisClient != nil {

@@ -38,6 +38,7 @@ aim-gateway（唯一服务端入口）
 | `internal/ws/client.go` | WS client，Protobuf encode/decode，心跳、ACK、发消息、输入中、已读。 |
 | `internal/store/config.go` | `config.json`，多账号与旧配置迁移。 |
 | `internal/store/sqlite.go` | 账号级 SQLite cache schema 与 upsert/list 方法。 |
+| `internal/api/attachments.go` | Gateway REST 附件 client，init/complete/get/download。 |
 | `frontend/src/App.vue` | 单页桌面 UI。 |
 | `frontend/wailsjs` | Wails 生成的 Go 绑定与 runtime helper。 |
 
