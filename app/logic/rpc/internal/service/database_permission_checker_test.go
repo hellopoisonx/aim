@@ -21,6 +21,7 @@ type fakeQuerier struct {
 	members          map[string]model.GetMemberRow // key: "convID:userID"
 	friendships      map[string][]model.GetFriendshipBidirectionalRow
 	messageCounts    map[int64]int64
+	userTypes        map[int64]string
 	getConvErr       error
 	getMemberErr     error
 	getFriendshipErr error
@@ -213,6 +214,10 @@ func (f *fakeQuerier) ListConversationReadStates(ctx context.Context, conversati
 }
 
 func (f *fakeQuerier) GetUserType(ctx context.Context, id int64) (string, error) {
+	if userType, ok := f.userTypes[id]; ok {
+		return userType, nil
+	}
+
 	return "human", nil
 }
 
@@ -533,6 +538,54 @@ func TestDatabasePermissionChecker_DirectTemporaryConversationLimitReached(t *te
 	assert.False(t, decision.Allowed)
 	assert.Equal(t, CodePermissionDenied, decision.Code)
 	assert.Contains(t, decision.Reason, "temporary conversation message limit reached")
+}
+
+func TestDatabasePermissionChecker_DirectBotConversationSkipsTemporaryLimit(t *testing.T) {
+	tests := []struct {
+		name     string
+		senderID int64
+		peerID   int64
+	}{
+		{
+			name:     "human sends to bot",
+			senderID: 100,
+			peerID:   9001,
+		},
+		{
+			name:     "bot sends to human",
+			senderID: 9001,
+			peerID:   100,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fq := &fakeQuerier{
+				conversations: map[int64]model.GetConversationRow{
+					200: {ID: 200, ConversationType: "direct", IsActive: true},
+				},
+				members: directMembers(200, tt.senderID, tt.peerID),
+				friendships: map[string][]model.GetFriendshipBidirectionalRow{
+					friendshipKey(tt.senderID, tt.peerID): {
+						{UserID: tt.senderID, FriendID: tt.peerID, Status: "pending"},
+					},
+				},
+				messageCounts: map[int64]int64{200: temporaryConversationMessageLimit},
+				userTypes:     map[int64]string{9001: UserTypeBot},
+			}
+			checker := NewDatabasePermissionChecker(fq)
+
+			decision, err := checker.CheckMessagePermission(context.Background(), PermissionCheck{
+				SenderID:       tt.senderID,
+				ConversationID: 200,
+			})
+
+			require.NoError(t, err)
+			assert.True(t, decision.Allowed)
+			assert.Equal(t, CodeOK, decision.Code)
+			assert.Equal(t, "bot direct conversation", decision.Reason)
+		})
+	}
 }
 
 func TestDatabasePermissionChecker_DirectTemporaryConversationCustomLimit(t *testing.T) {

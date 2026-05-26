@@ -137,12 +137,25 @@ func (c *DatabasePermissionChecker) checkDirectPermission(ctx context.Context, c
 	}
 
 	if !hasAccepted {
+		if c.temporaryConversationMessageLimit <= 0 {
+			return PermissionDecision{Allowed: true, Code: CodeOK, Reason: "temporary conversation", FilteredMentions: filtered}, nil
+		}
+
 		count, err := c.queries.CountMessagesByConversation(ctx, check.ConversationID)
 		if err != nil {
 			return PermissionDecision{}, err
 		}
 
-		if c.temporaryConversationMessageLimit > 0 && count >= c.temporaryConversationMessageLimit {
+		if count >= c.temporaryConversationMessageLimit {
+			hasBot, err := c.directConversationHasBot(ctx, check.SenderID, peerID)
+			if err != nil {
+				return PermissionDecision{}, err
+			}
+
+			if hasBot {
+				return PermissionDecision{Allowed: true, Code: CodeOK, Reason: "bot direct conversation", FilteredMentions: filtered}, nil
+			}
+
 			return PermissionDecision{Allowed: false, Code: CodePermissionDenied, Reason: "temporary conversation message limit reached"}, nil
 		}
 
@@ -150,6 +163,25 @@ func (c *DatabasePermissionChecker) checkDirectPermission(ctx context.Context, c
 	}
 
 	return PermissionDecision{Allowed: true, Code: CodeOK, FilteredMentions: filtered}, nil
+}
+
+func (c *DatabasePermissionChecker) directConversationHasBot(ctx context.Context, senderID, peerID int64) (bool, error) {
+	for _, userID := range []int64{senderID, peerID} {
+		userType, err := c.queries.GetUserType(ctx, userID)
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				continue
+			}
+
+			return false, err
+		}
+
+		if userType == UserTypeBot {
+			return true, nil
+		}
+	}
+
+	return false, nil
 }
 
 func directConversationPeerID(members []model.GetConversationMembersRow, senderID int64) (peerID int64, senderIsMember bool, ok bool) {

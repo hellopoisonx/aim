@@ -91,6 +91,7 @@ description: aim 的 Bot OpenAPI 域。覆盖第三方 Bot 接入、token 鉴权
 
 ## 最近变更
 
+- 2026-05-27: Bot direct 会话不再消耗/触发非好友临时会话累计消息上限；`DatabasePermissionChecker` 识别发送者或对端为 `user_type='bot'` 后跳过限额，但仍保留 direct 成员校验与 block 拦截。
 - 2026-05-23: 新增基于 action 的 Bot 权限系统。新增 migration 009（`bot_actions`、`bot_token_permissions`、`bot_event_actions`），`ValidateBotToken` 从 action 关联表加载权限，Gateway Bot API 全量校验 action，webhook event 通过 `bot_event_actions` 映射订阅 action。
 - 2026-05-23: V0 落地。新增 migrations 006-008、`BotService` RPC、`BotAuth`
   middleware、`/api/bot/v1/*` REST、`BotWebhookConsumer`（HMAC 签名 + 指数退避）、
