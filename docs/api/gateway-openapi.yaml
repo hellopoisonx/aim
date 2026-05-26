@@ -1,1349 +1,1622 @@
-basePath: /
-consumes:
-- application/json
+openapi: 3.0.3
 info:
-  title: aim gateway api
-  version: "1.0"
+  title: AIM Gateway Client API
+  version: "1.0.0"
+  description: |
+    AIM 客户端统一入口（gateway）对外暴露的 REST API 文档。
+
+    ## 边界
+    - 只有 gateway 面向客户端/公网暴露 REST API 与 WebSocket：REST 前缀为 `/api/*`，WebSocket 入口为 `GET /ws`。
+    - auth / core / logic / attachment / data_parsing 等服务只通过内部 gRPC / Kafka 被 gateway 编排，不直接暴露给客户端。
+    - WebSocket 二进制帧协议不适合用 OpenAPI 完整表达，详见 `docs/ws.md`。
+
+    ## HTTP 响应封装
+    绝大多数 REST 成功响应为：
+
+    ```json
+    { "code": 0, "msg": "ok", "body": { } }
+    ```
+
+    错误响应通常为：
+
+    ```json
+    { "code": 40000, "msg": "...", "body": null }
+    ```
+
+    认证中间件失败路径可能只返回 `{ "code": 40100, "msg": "..." }`，不带 `body` 字段。
+    少数无返回体操作当前实现调用 `httpx.Ok(w)`，成功时仅返回 HTTP 200 且响应体为空。
+
+    ## 时间与 ID
+    - 除特别说明外，人类用户 REST API 中 Snowflake ID 使用 JSON number（int64）。
+    - Bot OpenAPI 与 Webhook JSON 为避免 JavaScript 精度丢失，Snowflake ID 使用十进制字符串。
+    - `created_at` / `updated_at` / 附件 `expires_at` 多为 Unix milliseconds；认证 token `expires_at` 为 Unix seconds。
+servers:
+  - url: http://127.0.0.1:8888
+    description: 本地开发默认 gateway-api 地址
+  - url: https://gateway.example.com
+    description: 生产环境示例地址，请按部署替换
+tags:
+  - name: Auth
+    description: 人类用户认证代理接口
+  - name: Users
+    description: 用户查询与发起好友申请
+  - name: Friends
+    description: 好友列表与好友申请处理
+  - name: Conversations
+    description: 会话、历史消息、群管理
+  - name: Presence
+    description: 好友在线状态快照
+  - name: Attachments
+    description: 附件上传、完成、元数据与下载授权
+  - name: Bot OpenAPI
+    description: "第三方 Bot HTTP 接入接口，使用 `Authorization: Bot <token>`"
 paths:
-  /api/attachments/init:
-    post:
-      consumes:
-      - application/json
-      operationId: attachmentsInitUpload
-      parameters:
-      - in: body
-        name: body
-        required: true
-        schema:
-          properties:
-            conversation_id:
-              type: integer
-            kind:
-              enum: [image, video, audio]
-              type: string
-            original_name:
-              type: string
-            mime:
-              type: string
-            size:
-              type: integer
-            sha256:
-              type: string
-          required:
-          - conversation_id
-          - kind
-          - original_name
-          - mime
-          - size
-          type: object
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: ""
-          schema:
-            properties:
-              file_id:
-                type: string
-              bucket:
-                type: string
-              object_key:
-                type: string
-              upload_url:
-                type: string
-              upload_method:
-                type: string
-              headers:
-                additionalProperties:
-                  type: string
-                type: object
-              expires_at:
-                type: integer
-            type: object
-      security:
-      - apiKey: []
-      summary: Init attachment upload
-  /api/attachments/{id}:
-    get:
-      operationId: attachmentsGet
-      parameters:
-      - in: path
-        name: id
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: ""
-          schema:
-            $ref: '#/definitions/AttachmentFileInfo'
-      security:
-      - apiKey: []
-      summary: Get attachment metadata
-  /api/attachments/{id}/complete:
-    post:
-      consumes:
-      - application/json
-      operationId: attachmentsCompleteUpload
-      parameters:
-      - in: path
-        name: id
-        required: true
-        type: string
-      - in: body
-        name: body
-        required: false
-        schema:
-          properties:
-            sha256:
-              type: string
-          type: object
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: ""
-          schema:
-            $ref: '#/definitions/AttachmentFileInfo'
-      security:
-      - apiKey: []
-      summary: Complete attachment upload
-  /api/attachments/{id}/download:
-    get:
-      operationId: attachmentsDownload
-      parameters:
-      - in: path
-        name: id
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: ""
-          schema:
-            properties:
-              url:
-                type: string
-              headers:
-                additionalProperties:
-                  type: string
-                type: object
-              expires_at:
-                type: integer
-            type: object
-      security:
-      - apiKey: []
-      summary: Authorize attachment download
-  /api/auth/login:
-    post:
-      consumes:
-      - application/json
-      operationId: authLogin
-      parameters:
-      - in: body
-        name: body
-        required: true
-        schema:
-          properties:
-            device_id:
-              type: string
-            email:
-              type: string
-            password:
-              type: string
-          required:
-          - email
-          - password
-          - device_id
-          type: object
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: ""
-          schema:
-            properties:
-              access_token:
-                type: string
-              expires_at:
-                type: integer
-              refresh_token:
-                type: string
-              user_id:
-                type: integer
-            type: object
-      schemes:
-      - https
-      summary: Login
-  /api/auth/logout:
-    post:
-      operationId: authLogout
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: ""
-          schema:
-            properties:
-              success:
-                type: boolean
-            type: object
-      schemes:
-      - https
-      summary: Logout
-  /api/auth/refresh:
-    post:
-      consumes:
-      - application/json
-      operationId: authRefresh
-      parameters:
-      - in: body
-        name: body
-        required: true
-        schema:
-          properties:
-            refresh_token:
-              type: string
-          required:
-          - refresh_token
-          type: object
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: ""
-          schema:
-            properties:
-              access_token:
-                type: string
-              expires_at:
-                type: integer
-              refresh_token:
-                type: string
-            type: object
-      schemes:
-      - https
-      summary: Refresh
   /api/auth/register:
     post:
-      consumes:
-      - application/json
+      tags: [Auth]
       operationId: authRegister
-      parameters:
-      - in: body
-        name: body
+      summary: 注册用户
+      description: |
+        无需鉴权。gateway 将请求转发给 auth RPC 创建用户凭据，并初始化对应用户资料。
+      requestBody:
         required: true
-        schema:
-          properties:
-            avatar:
-              type: string
-            device_id:
-              type: string
-            email:
-              type: string
-            password:
-              type: string
-            username:
-              type: string
-          required:
-          - email
-          - password
-          - device_id
-          type: object
-      produces:
-      - application/json
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
       responses:
         "200":
-          description: ""
-          schema:
-            properties:
-              user_id:
-                type: integer
-            type: object
-      schemes:
-      - https
-      summary: Register
-  /api/bot/v1/conversations:
-    get:
-      operationId: botBotListConversations
-      produces:
-      - application/json
+          description: 注册成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterResponseEnvelope'
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "409": { $ref: '#/components/responses/Conflict' }
+        "500": { $ref: '#/components/responses/InternalError' }
+  /api/auth/login:
+    post:
+      tags: [Auth]
+      operationId: authLogin
+      summary: 登录并签发 token
+      description: 无需鉴权。返回 access token、refresh token 和 access token 过期时间。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
       responses:
         "200":
-          description: ""
-          schema:
-            type: object
-            required: [code, msg, body]
-            properties:
-              code:
-                type: integer
-                example: 0
-              msg:
-                type: string
-                example: ok
-              body:
-                type: object
-                properties:
-                  conversations:
-                    type: array
-                    items:
-                      type: object
-                      required: [conversation_id, conversation_type, name, avatar, created_at]
-                      properties:
-                        conversation_id:
-                          type: string
-                          description: Snowflake int64 decimal string.
-                        conversation_type:
-                          type: string
-                        name:
-                          type: string
-                        avatar:
-                          type: string
-                        created_at:
-                          type: integer
+          description: 登录成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponseEnvelope'
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "403": { $ref: '#/components/responses/Forbidden' }
+        "500": { $ref: '#/components/responses/InternalError' }
+  /api/auth/refresh:
+    post:
+      tags: [Auth]
+      operationId: authRefresh
+      summary: 刷新 access token
+      description: 无需 Bearer 鉴权；通过 refresh token 换取新的 access/refresh token。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshRequest'
+      responses:
+        "200":
+          description: 刷新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefreshResponseEnvelope'
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "500": { $ref: '#/components/responses/InternalError' }
+  /api/auth/logout:
+    post:
+      tags: [Auth]
+      operationId: authLogout
+      summary: 登出当前设备
+      description: |
+        需要 `Authorization: Bearer <access_token>`。gateway 本地解析 JWT 中的 `user_id` 与 `device_id`，调用 auth RPC 注销 refresh token；随后 best-effort 踢掉当前设备的 WebSocket 连接。
       security:
-      - BotAuth: []
-      schemes:
-      - https
-      description: 'Requires Bot action: bot.conversation.list'
-      summary: BotListConversations
-  /api/bot/v1/me:
-    get:
-      operationId: botBotGetMe
-      produces:
-      - application/json
+        - BearerAuth: []
       responses:
         "200":
-          description: ""
-          schema:
-            type: object
-            required: [code, msg, body]
-            properties:
-              code:
-                type: integer
-                example: 0
-              msg:
-                type: string
-                example: ok
-              body:
-                type: object
-                properties:
-                  bot:
-                    type: object
-                    required: [bot_user_id, nickname, avatar, status, scopes]
-                    properties:
-                      bot_user_id:
-                        type: string
-                        description: Snowflake int64 decimal string.
-                      nickname:
-                        type: string
-                      avatar:
-                        type: string
-                      status:
-                        type: integer
-                      scopes:
-                        type: array
-                        items:
-                          type: string
-      security:
-      - BotAuth: []
-      schemes:
-      - https
-      description: 'Requires Bot action: bot.self.read'
-      summary: BotGetMe
-  /api/bot/v1/messages:
-    post:
-      consumes:
-      - application/json
-      operationId: botBotSendMessage
-      parameters:
-      - in: body
-        name: body
-        required: true
-        schema:
-          type: object
-          required: [conversation_id, message_type, content, client_msg_id]
-          properties:
-            conversation_id:
-              type: string
-              description: Snowflake int64 decimal string.
-            message_type:
-              type: string
-              maxLength: 32
-            content:
-              type: string
-            client_msg_id:
-              type: string
-            mentions:
-              type: array
-              description: Mentioned user IDs as decimal strings; max 20.
-              maxItems: 20
-              items:
-                type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: ""
-          schema:
-            type: object
-            required: [code, msg, body]
-            properties:
-              code:
-                type: integer
-                example: 0
-              msg:
-                type: string
-                example: ok
-              body:
-                type: object
-                properties:
-                  message_id:
-                    type: string
-                    description: Snowflake int64 decimal string.
-                  client_msg_id:
-                    type: string
-                  accepted_at:
-                    type: integer
-      security:
-      - BotAuth: []
-      schemes:
-      - https
-      description: 'Requires Bot action: bot.message.send'
-      summary: BotSendMessage
-  /api/bot/v1/webhook:
-    delete:
-      operationId: botBotDeleteWebhook
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: ""
-          schema:
-            type: object
-            required: [code, msg, body]
-            properties:
-              code:
-                type: integer
-                example: 0
-              msg:
-                type: string
-                example: ok
-              body:
-                type: object
-                properties:
-                  deleted:
-                    type: boolean
-      security:
-      - BotAuth: []
-      schemes:
-      - https
-      description: 'Requires Bot action: bot.webhook.delete'
-      summary: BotDeleteWebhook
-    get:
-      operationId: botBotGetWebhook
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: ""
-          schema:
-            type: object
-            required: [code, msg, body]
-            properties:
-              code:
-                type: integer
-                example: 0
-              msg:
-                type: string
-                example: ok
-              body:
-                type: object
-                properties:
-                  configured:
-                    type: boolean
-                  webhook:
-                    type: object
-                    properties:
-                      url:
-                        type: string
-                      events:
-                        type: array
-                        items:
-                          type: string
-                      enabled:
-                        type: boolean
-                      updated_at:
-                        type: integer
-      security:
-      - BotAuth: []
-      schemes:
-      - https
-      description: 'Requires Bot action: bot.webhook.read'
-      summary: BotGetWebhook
-    put:
-      consumes:
-      - application/json
-      operationId: botBotSetWebhook
-      parameters:
-      - in: body
-        name: body
-        required: true
-        schema:
-          type: object
-          required: [url]
-          properties:
-            url:
-              type: string
-              description: Valid URL. HTTPS is recommended in production.
-            events:
-              type: array
-              items:
-                type: string
-            enabled:
-              type: boolean
-            secret:
-              type: string
-            rotate_secret:
-              type: boolean
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: ""
-          schema:
-            type: object
-            required: [code, msg, body]
-            properties:
-              code:
-                type: integer
-                example: 0
-              msg:
-                type: string
-                example: ok
-              body:
-                type: object
-                properties:
-                  webhook:
-                    type: object
-                    properties:
-                      url:
-                        type: string
-                      events:
-                        type: array
-                        items:
-                          type: string
-                      enabled:
-                        type: boolean
-                      updated_at:
-                        type: integer
-                  plaintext_secret:
-                    type: string
-                    description: Present only when rotate_secret=true.
-      security:
-      - BotAuth: []
-      schemes:
-      - https
-      description: 'Requires Bot actions: bot.webhook.write plus one subscribe action per event (message.created -> bot.webhook.subscribe.message_created)'
-      summary: BotSetWebhook
-  /api/conversations:
-    get:
-      operationId: conversationsListConversations
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: ""
-          schema:
-            properties:
-              conversations:
-                items:
-                  properties:
-                    avatar:
-                      type: string
-                    conversation_id:
-                      type: integer
-                    conversation_type:
-                      type: string
-                    created_at:
-                      type: integer
-                    creator_id:
-                      type: integer
-                    is_active:
-                      type: boolean
-                    member_ids:
-                      items:
-                        type: integer
-                      type: array
-                    name:
-                      type: string
-                  required:
-                  - conversation_id
-                  - conversation_type
-                  - is_active
-                  - created_at
-                  - member_ids
-                  - name
-                  - avatar
-                  - creator_id
-                  type: object
-                type: array
-            type: object
-      schemes:
-      - https
-      summary: ListConversations
-    post:
-      consumes:
-      - application/json
-      operationId: conversationsCreateConversation
-      parameters:
-      - in: body
-        name: body
-        required: true
-        schema:
-          properties:
-            avatar:
-              type: string
-            conversation_type:
-              type: string
-            member_ids:
-              items:
-                type: integer
-              type: array
-            name:
-              type: string
-          required:
-          - conversation_type
-          - member_ids
-          - name
-          type: object
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: ""
-          schema:
-            properties:
-              avatar:
-                type: string
-              conversation_id:
-                type: integer
-              conversation_type:
-                type: string
-              created_at:
-                type: integer
-              creator_id:
-                type: integer
-              is_active:
-                type: boolean
-              member_ids:
-                items:
-                  type: integer
-                type: array
-              name:
-                type: string
-            type: object
-      schemes:
-      - https
-      summary: CreateConversation
-  /api/conversations/{id}:
-    delete:
-      consumes:
-      - application/x-www-form-urlencoded
-      operationId: conversationsDismissGroup
-      parameters:
-      - in: path
-        name: id
-        required: true
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: ""
-          schema: {}
-      schemes:
-      - https
-      summary: DismissGroup
-    put:
-      consumes:
-      - application/json
-      operationId: conversationsUpdateGroupInfo
-      parameters:
-      - in: path
-        name: id
-        required: true
-        type: integer
-      - in: body
-        name: body
-        required: true
-        schema:
-          properties:
-            avatar:
-              type: string
-            name:
-              type: string
-          type: object
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: ""
-          schema:
-            properties:
-              avatar:
-                type: string
-              conversation_id:
-                type: integer
-              conversation_type:
-                type: string
-              created_at:
-                type: integer
-              creator_id:
-                type: integer
-              is_active:
-                type: boolean
-              name:
-                type: string
-            type: object
-      schemes:
-      - https
-      summary: UpdateGroupInfo
-  /api/conversations/{id}/leave:
-    post:
-      consumes:
-      - application/x-www-form-urlencoded
-      operationId: conversationsLeaveGroup
-      parameters:
-      - in: path
-        name: id
-        required: true
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: ""
-          schema: {}
-      schemes:
-      - https
-      summary: LeaveGroup
-  /api/conversations/{id}/members:
-    get:
-      operationId: conversationsGetConversationMembers
-      parameters:
-      - in: path
-        name: id
-        required: true
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: ""
-          schema:
-            properties:
-              members:
-                items:
-                  properties:
-                    avatar:
-                      type: string
-                    email:
-                      type: string
-                    joined_at:
-                      type: integer
-                    role:
-                      type: string
-                    user_id:
-                      type: integer
-                  required:
-                  - user_id
-                  - email
-                  - avatar
-                  - role
-                  - joined_at
-                  type: object
-                type: array
-            type: object
-      schemes:
-      - https
-      summary: GetConversationMembers
-    post:
-      consumes:
-      - application/json
-      operationId: conversationsAddGroupMembers
-      parameters:
-      - in: path
-        name: id
-        required: true
-        type: integer
-      - in: body
-        name: body
-        required: true
-        schema:
-          properties:
-            member_ids:
-              items:
-                type: integer
-              type: array
-          required:
-          - member_ids
-          type: object
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: ""
-          schema:
-            properties:
-              avatar:
-                type: string
-              conversation_id:
-                type: integer
-              conversation_type:
-                type: string
-              created_at:
-                type: integer
-              creator_id:
-                type: integer
-              is_active:
-                type: boolean
-              member_ids:
-                items:
-                  type: integer
-                type: array
-              name:
-                type: string
-            type: object
-      schemes:
-      - https
-      summary: AddGroupMembers
-  /api/conversations/{id}/members/{uid}:
-    delete:
-      consumes:
-      - application/x-www-form-urlencoded
-      operationId: conversationsRemoveGroupMember
-      parameters:
-      - in: path
-        name: id
-        required: true
-        type: integer
-      - in: path
-        name: uid
-        required: true
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: ""
-          schema: {}
-      schemes:
-      - https
-      summary: RemoveGroupMember
-  /api/conversations/group:
-    post:
-      consumes:
-      - application/json
-      operationId: conversationsCreateGroup
-      parameters:
-      - in: body
-        name: body
-        required: true
-        schema:
-          properties:
-            avatar:
-              type: string
-            member_ids:
-              items:
-                type: integer
-              type: array
-            name:
-              type: string
-          required:
-          - member_ids
-          - name
-          type: object
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: ""
-          schema:
-            properties:
-              avatar:
-                type: string
-              conversation_id:
-                type: integer
-              conversation_type:
-                type: string
-              created_at:
-                type: integer
-              creator_id:
-                type: integer
-              is_active:
-                type: boolean
-              member_ids:
-                items:
-                  type: integer
-                type: array
-              name:
-                type: string
-            type: object
-      schemes:
-      - https
-      summary: CreateGroup
-  /api/conversations/history/{id}:
-    get:
-      operationId: conversationsGetConversationHistory
-      parameters:
-      - in: path
-        name: id
-        required: true
-        type: integer
-      - allowEmptyValue: true
-        in: query
-        name: cursor_created_at
-        type: integer
-      - allowEmptyValue: true
-        in: query
-        name: cursor_id
-        type: integer
-      - allowEmptyValue: true
-        default: 50
-        example: 50
-        in: query
-        name: limit
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: ""
-          schema:
-            properties:
-              has_more:
-                type: boolean
-              messages:
-                items:
-                  properties:
-                    client_msg_id:
-                      type: string
-                    content:
-                      type: string
-                    conversation_id:
-                      type: integer
-                    created_at:
-                      type: integer
-                    id:
-                      type: integer
-                    message_type:
-                      type: string
-                    sender_id:
-                      type: integer
-                    sender_info:
-                      properties:
-                        email:
-                          type: string
-                        name:
-                          type: string
-                      required:
-                      - name
-                      - email
-                      type: object
-                  required:
-                  - id
-                  - conversation_id
-                  - sender_id
-                  - sender_info
-                  - message_type
-                  - content
-                  - client_msg_id
-                  - created_at
-                  type: object
-                type: array
-              next_cursor_created_at:
-                type: integer
-              next_cursor_id:
-                type: integer
-              read_states:
-                items:
-                  properties:
-                    last_read_message_id:
-                      type: integer
-                    updated_at:
-                      type: integer
-                    user_id:
-                      type: integer
-                  required:
-                  - user_id
-                  - last_read_message_id
-                  - updated_at
-                  type: object
-                type: array
-            type: object
-      schemes:
-      - https
-      summary: GetConversationHistory
-  /api/friends/accept/{id}:
-    post:
-      consumes:
-      - application/x-www-form-urlencoded
-      operationId: friendsAcceptFriend
-      parameters:
-      - in: path
-        name: id
-        required: true
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: ""
-          schema:
-            properties:
-              friendship:
-                properties:
-                  created_at:
-                    type: integer
-                  friend_id:
-                    type: integer
-                  status:
-                    type: string
-                  updated_at:
-                    type: integer
-                  user_id:
-                    type: integer
-                required:
-                - user_id
-                - friend_id
-                - status
-                - created_at
-                - updated_at
-                type: object
-            type: object
-      schemes:
-      - https
-      summary: AcceptFriend
-  /api/friends/applications:
-    get:
-      operationId: friendsListFriendApplications
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: ""
-          schema:
-            properties:
-              applications:
-                items:
-                  properties:
-                    created_at:
-                      type: integer
-                    friend_id:
-                      type: integer
-                    status:
-                      type: string
-                    updated_at:
-                      type: integer
-                    user_id:
-                      type: integer
-                  required:
-                  - user_id
-                  - friend_id
-                  - status
-                  - created_at
-                  - updated_at
-                  type: object
-                type: array
-            type: object
-      schemes:
-      - https
-      summary: ListFriendApplications
-  /api/friends/me:
-    get:
-      operationId: friendsListFriends
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: ""
-          schema:
-            properties:
-              friends:
-                items:
-                  properties:
-                    created_at:
-                      type: integer
-                    friend_id:
-                      type: integer
-                    status:
-                      type: string
-                    updated_at:
-                      type: integer
-                    user_id:
-                      type: integer
-                  required:
-                  - user_id
-                  - friend_id
-                  - status
-                  - created_at
-                  - updated_at
-                  type: object
-                type: array
-            type: object
-      schemes:
-      - https
-      summary: ListFriends
-  /api/friends/reject/{id}:
-    post:
-      consumes:
-      - application/x-www-form-urlencoded
-      operationId: friendsRejectFriend
-      parameters:
-      - in: path
-        name: id
-        required: true
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: ""
-          schema:
-            properties:
-              friendship:
-                properties:
-                  created_at:
-                    type: integer
-                  friend_id:
-                    type: integer
-                  status:
-                    type: string
-                  updated_at:
-                    type: integer
-                  user_id:
-                    type: integer
-                required:
-                - user_id
-                - friend_id
-                - status
-                - created_at
-                - updated_at
-                type: object
-            type: object
-      schemes:
-      - https
-      summary: RejectFriend
-  /api/presence/friends:
-    get:
-      operationId: presenceGetFriendsPresence
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: ""
-          schema:
-            properties:
-              presences:
-                items:
-                  properties:
-                    status:
-                      type: string
-                    updated_at:
-                      type: integer
-                    user_id:
-                      type: integer
-                  required:
-                  - user_id
-                  - status
-                  - updated_at
-                  type: object
-                type: array
-            type: object
-      schemes:
-      - https
-      summary: GetFriendsPresence
-  /api/users/by-id/{id}:
-    get:
-      operationId: usersGetUserById
-      parameters:
-      - in: path
-        name: id
-        required: true
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: ""
-          schema:
-            properties:
-              user:
-                properties:
-                  avatar:
-                    type: string
-                  created_at:
-                    type: integer
-                  email:
-                    type: string
-                  id:
-                    type: integer
-                  nickname:
-                    type: string
-                  status:
-                    type: integer
-                  updated_at:
-                    type: integer
-                required:
-                - id
-                - email
-                - status
-                - nickname
-                - avatar
-                - created_at
-                - updated_at
-                type: object
-            type: object
-      schemes:
-      - https
-      summary: GetUserById
+          description: 登出成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LogoutResponseEnvelope'
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "500": { $ref: '#/components/responses/InternalError' }
   /api/users/by-name/{name}:
     get:
-      operationId: usersGetUserByName
+      tags: [Users]
+      operationId: usersGetByName
+      summary: 按昵称模糊搜索用户
+      description: |
+        需要 Bearer JWT。调用 logic `UserService.SearchUserInfoByNickname` 做昵称模糊查询。昵称不唯一，本接口返回列表，不应作为单用户详情查询。
+      security:
+        - BearerAuth: []
       parameters:
-      - in: path
-        name: name
-        required: true
-        type: string
-      produces:
-      - application/json
+        - $ref: '#/components/parameters/UserNamePath'
       responses:
         "200":
-          description: ""
-          schema:
-            properties:
-              users:
-                items:
-                  properties:
-                    avatar:
-                      type: string
-                    email:
-                      type: string
-                    id:
-                      type: string
-                    nickname:
-                      type: string
-                  required:
-                  - id
-                  - nickname
-                  - email
-                  - avatar
-                  type: object
-                type: array
-            type: object
-      schemes:
-      - https
-      summary: GetUserByName
+          description: 用户列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetUserByNameResponseEnvelope'
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "500": { $ref: '#/components/responses/InternalError' }
+  /api/users/by-id/{id}:
+    get:
+      tags: [Users]
+      operationId: usersGetById
+      summary: 按 ID 获取用户详情
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UserIdPath'
+      responses:
+        "200":
+          description: 用户详情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetUserByIdResponseEnvelope'
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "404": { $ref: '#/components/responses/NotFound' }
+        "500": { $ref: '#/components/responses/InternalError' }
   /api/users/friends/{id}:
     post:
-      consumes:
-      - application/x-www-form-urlencoded
+      tags: [Users]
       operationId: usersAddFriend
+      summary: 向指定用户发起好友申请
+      description: |
+        需要 Bearer JWT。路径参数 `id` 为目标用户 ID；当前用户来自 JWT。成功创建好友申请后，如果目标用户连接在本 gateway 节点，会通过 WS 推送 `FRAME_TYPE_PUSH_FRIEND_APPLICATION`。
+      security:
+        - BearerAuth: []
       parameters:
-      - in: path
-        name: id
-        required: true
-        type: integer
-      produces:
-      - application/json
+        - $ref: '#/components/parameters/UserIdPath'
       responses:
         "200":
-          description: ""
-          schema:
-            properties:
-              friendship:
-                properties:
-                  created_at:
-                    type: integer
-                  friend_id:
-                    type: integer
-                  status:
-                    type: string
-                  updated_at:
-                    type: integer
-                  user_id:
-                    type: integer
-                required:
-                - user_id
-                - friend_id
-                - status
-                - created_at
-                - updated_at
-                type: object
-            type: object
-      schemes:
-      - https
-      summary: AddFriend
-definitions:
-  AttachmentFileInfo:
-    properties:
-      file_id:
-        type: string
-      owner_id:
-        type: integer
-      conversation_id:
-        type: integer
-      kind:
-        enum: [image, video, audio]
-        type: string
-      original_name:
-        type: string
-      mime:
-        type: string
-      size:
-        type: integer
-      sha256:
-        type: string
-      status:
-        type: string
-      parse_status:
-        type: string
-      bucket:
-        type: string
-      object_key:
-        type: string
-      thumbnail_object_key:
-        type: string
-      duration_ms:
-        type: integer
-      width:
-        type: integer
-      height:
-        type: integer
-      metadata:
-        type: object
-    type: object
-produces:
-- application/json
-schemes:
-- https
-securityDefinitions:
-  apiKey:
-    type: apiKey
-    in: header
-    name: Authorization
-    description: Use Bearer JWT for human-user gateway APIs.
-  BotAuth:
-    type: apiKey
-    in: header
-    name: Authorization
-    description: Use 'Bot <token>' for /api/bot/v1 APIs.
-swagger: "2.0"
-x-date: "2026-05-23 18:42:25"
-x-description: This is a goctl generated swagger file.
-x-github: https://github.com/zeromicro/go-zero
-x-go-zero-doc: https://go-zero.dev/
-x-goctl-version: 1.10.1
+          description: 好友关系/申请状态
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FriendshipResponseEnvelope'
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "403": { $ref: '#/components/responses/Forbidden' }
+        "404": { $ref: '#/components/responses/NotFound' }
+        "409": { $ref: '#/components/responses/Conflict' }
+        "500": { $ref: '#/components/responses/InternalError' }
+  /api/friends/me:
+    get:
+      tags: [Friends]
+      operationId: friendsListMine
+      summary: 列出当前用户好友
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: 当前用户好友列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListFriendsResponseEnvelope'
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "500": { $ref: '#/components/responses/InternalError' }
+  /api/friends/applications:
+    get:
+      tags: [Friends]
+      operationId: friendsListApplications
+      summary: 列出当前用户收到/相关的好友申请
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: 好友申请列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListFriendApplicationsResponseEnvelope'
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "500": { $ref: '#/components/responses/InternalError' }
+  /api/friends/accept/{id}:
+    post:
+      tags: [Friends]
+      operationId: friendsAccept
+      summary: 接受好友申请
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/FriendApplicationIdPath'
+      responses:
+        "200":
+          description: 接受后的好友关系
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FriendshipResponseEnvelope'
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "403": { $ref: '#/components/responses/Forbidden' }
+        "404": { $ref: '#/components/responses/NotFound' }
+        "409": { $ref: '#/components/responses/Conflict' }
+        "500": { $ref: '#/components/responses/InternalError' }
+  /api/friends/reject/{id}:
+    post:
+      tags: [Friends]
+      operationId: friendsReject
+      summary: 拒绝好友申请
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/FriendApplicationIdPath'
+      responses:
+        "200":
+          description: 拒绝后的好友关系/申请状态
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FriendshipResponseEnvelope'
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "403": { $ref: '#/components/responses/Forbidden' }
+        "404": { $ref: '#/components/responses/NotFound' }
+        "409": { $ref: '#/components/responses/Conflict' }
+        "500": { $ref: '#/components/responses/InternalError' }
+  /api/conversations:
+    get:
+      tags: [Conversations]
+      operationId: conversationsList
+      summary: 列出当前用户参与的会话
+      description: 需要 Bearer JWT。返回直聊/群聊会话基本信息与成员 ID 列表。
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: 会话列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListConversationsResponseEnvelope'
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "500": { $ref: '#/components/responses/InternalError' }
+    post:
+      tags: [Conversations]
+      operationId: conversationsCreate
+      summary: 创建直聊或群聊会话
+      description: |
+        需要 Bearer JWT。
+        - `conversation_type=direct`：`member_ids` 必须只包含一个对端用户 ID，且不能是创建者本人。
+        - `conversation_type=group`：`member_ids` 至少一个，`name` 必填。
+        专用群聊创建接口也可使用 `POST /api/conversations/group`。
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateConversationRequest'
+      responses:
+        "200":
+          description: 新建会话
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationResponseEnvelope'
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "403": { $ref: '#/components/responses/Forbidden' }
+        "404": { $ref: '#/components/responses/NotFound' }
+        "409": { $ref: '#/components/responses/Conflict' }
+        "500": { $ref: '#/components/responses/InternalError' }
+  /api/conversations/group:
+    post:
+      tags: [Conversations]
+      operationId: conversationsCreateGroup
+      summary: 创建群聊
+      description: 需要 Bearer JWT。固定创建 `conversation_type=group`，请求体无需传 `conversation_type`。
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateGroupRequest'
+      responses:
+        "200":
+          description: 新建群聊
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationResponseEnvelope'
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "403": { $ref: '#/components/responses/Forbidden' }
+        "404": { $ref: '#/components/responses/NotFound' }
+        "409": { $ref: '#/components/responses/Conflict' }
+        "500": { $ref: '#/components/responses/InternalError' }
+  /api/conversations/history/{id}:
+    get:
+      tags: [Conversations]
+      operationId: conversationsHistory
+      summary: 分页获取会话历史消息
+      description: |
+        需要 Bearer JWT。使用 `(cursor_created_at, cursor_id)` 游标分页；`limit` 默认 50，当前逻辑上限 100。
+        响应包含消息列表、下一页游标、`read_states` 会话成员已读游标快照，以及每条消息的 `read_details`。
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ConversationIdPath'
+        - $ref: '#/components/parameters/CursorCreatedAtQuery'
+        - $ref: '#/components/parameters/CursorIdQuery'
+        - $ref: '#/components/parameters/LimitQuery'
+      responses:
+        "200":
+          description: 历史消息分页结果
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetConversationHistoryResponseEnvelope'
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "403": { $ref: '#/components/responses/Forbidden' }
+        "404": { $ref: '#/components/responses/NotFound' }
+        "500": { $ref: '#/components/responses/InternalError' }
+  /api/conversations/{id}/members:
+    get:
+      tags: [Conversations]
+      operationId: conversationsGetMembers
+      summary: 获取会话成员详情
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ConversationIdPath'
+      responses:
+        "200":
+          description: 成员详情列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetConversationMembersResponseEnvelope'
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "403": { $ref: '#/components/responses/Forbidden' }
+        "404": { $ref: '#/components/responses/NotFound' }
+        "500": { $ref: '#/components/responses/InternalError' }
+    post:
+      tags: [Conversations]
+      operationId: conversationsAddMembers
+      summary: 添加群成员
+      description: |
+        需要 Bearer JWT。仅群聊有效；当前 logic 权限为 `owner` 或 `admin` 可添加成员。会产生 `message_type=system` 的群变更系统消息并通过 WS 推送。
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ConversationIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddGroupMembersRequest'
+      responses:
+        "200":
+          description: 更新后的会话信息
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationResponseEnvelope'
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "403": { $ref: '#/components/responses/Forbidden' }
+        "404": { $ref: '#/components/responses/NotFound' }
+        "409": { $ref: '#/components/responses/Conflict' }
+        "500": { $ref: '#/components/responses/InternalError' }
+  /api/conversations/{id}/members/{uid}:
+    delete:
+      tags: [Conversations]
+      operationId: conversationsRemoveMember
+      summary: 移除群成员
+      description: |
+        需要 Bearer JWT。仅群聊有效。当前 logic 权限：`owner` 可移除非 owner 成员；`admin` 只能移除普通 `member`，不能移除 owner/admin 或自己。成功时返回 HTTP 200 空响应体，并产生群变更系统消息。
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ConversationIdPath'
+        - $ref: '#/components/parameters/MemberUidPath'
+      responses:
+        "200": { $ref: '#/components/responses/EmptyOK' }
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "403": { $ref: '#/components/responses/Forbidden' }
+        "404": { $ref: '#/components/responses/NotFound' }
+        "500": { $ref: '#/components/responses/InternalError' }
+  /api/conversations/{id}/members/{uid}/admin:
+    post:
+      tags: [Conversations]
+      operationId: conversationsGrantAdmin
+      summary: 授予群管理员
+      description: |
+        需要 Bearer JWT。仅群主 (`owner`) 可操作；目标用户必须是当前群成员且不能是群主本人。成功时返回 HTTP 200 空响应体。
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ConversationIdPath'
+        - $ref: '#/components/parameters/MemberUidPath'
+      responses:
+        "200": { $ref: '#/components/responses/EmptyOK' }
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "403": { $ref: '#/components/responses/Forbidden' }
+        "404": { $ref: '#/components/responses/NotFound' }
+        "500": { $ref: '#/components/responses/InternalError' }
+    delete:
+      tags: [Conversations]
+      operationId: conversationsRevokeAdmin
+      summary: 撤销群管理员
+      description: |
+        需要 Bearer JWT。仅群主 (`owner`) 可操作；不能对群主本人执行。目标为普通成员时为幂等成功。成功时返回 HTTP 200 空响应体。
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ConversationIdPath'
+        - $ref: '#/components/parameters/MemberUidPath'
+      responses:
+        "200": { $ref: '#/components/responses/EmptyOK' }
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "403": { $ref: '#/components/responses/Forbidden' }
+        "404": { $ref: '#/components/responses/NotFound' }
+        "500": { $ref: '#/components/responses/InternalError' }
+  /api/conversations/{id}/owner:
+    post:
+      tags: [Conversations]
+      operationId: conversationsTransferOwner
+      summary: 转让群主
+      description: |
+        需要 Bearer JWT。仅当前群主 (`owner`) 可操作；`user_id` 必须是不同于当前群主的群成员。转让后原群主变为 `admin`。
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ConversationIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransferGroupOwnerRequest'
+      responses:
+        "200":
+          description: 转让后的会话信息
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationResponseEnvelope'
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "403": { $ref: '#/components/responses/Forbidden' }
+        "404": { $ref: '#/components/responses/NotFound' }
+        "500": { $ref: '#/components/responses/InternalError' }
+  /api/conversations/{id}/leave:
+    post:
+      tags: [Conversations]
+      operationId: conversationsLeave
+      summary: 退出群聊
+      description: |
+        需要 Bearer JWT。仅群聊有效；群主不能直接退出，需先转让群主或解散群聊。成功时返回 HTTP 200 空响应体，并产生群变更系统消息。
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ConversationIdPath'
+      responses:
+        "200": { $ref: '#/components/responses/EmptyOK' }
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "403": { $ref: '#/components/responses/Forbidden' }
+        "404": { $ref: '#/components/responses/NotFound' }
+        "500": { $ref: '#/components/responses/InternalError' }
+  /api/conversations/{id}:
+    delete:
+      tags: [Conversations]
+      operationId: conversationsDismiss
+      summary: 解散群聊
+      description: |
+        需要 Bearer JWT。仅群主 (`owner`) 可解散群聊。成功时返回 HTTP 200 空响应体，并产生 `group_dismissed` 系统消息。
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ConversationIdPath'
+      responses:
+        "200": { $ref: '#/components/responses/EmptyOK' }
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "403": { $ref: '#/components/responses/Forbidden' }
+        "404": { $ref: '#/components/responses/NotFound' }
+        "500": { $ref: '#/components/responses/InternalError' }
+    put:
+      tags: [Conversations]
+      operationId: conversationsUpdateGroupInfo
+      summary: 更新群信息
+      description: |
+        需要 Bearer JWT。仅群聊有效；当前 logic 权限为 `owner` 或 `admin` 可更新。`name` 与 `avatar` 均为可选；空字符串会被忽略。成功时可能产生 `group_renamed` 或 `group_avatar_changed` 系统消息。
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ConversationIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateGroupInfoRequest'
+      responses:
+        "200":
+          description: 更新后的群信息
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpdateGroupInfoResponseEnvelope'
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "403": { $ref: '#/components/responses/Forbidden' }
+        "404": { $ref: '#/components/responses/NotFound' }
+        "500": { $ref: '#/components/responses/InternalError' }
+  /api/presence/friends:
+    get:
+      tags: [Presence]
+      operationId: presenceFriends
+      summary: 获取好友在线状态快照
+      description: |
+        需要 Bearer JWT。gateway 先通过 logic 获取好友列表，再批量查询 Redis `aim:presence:{friend_id}` 得到 `online/offline` 快照。`updated_at` 当前保留为 0；实时变更通过 WebSocket `FRAME_TYPE_PUSH_PRESENCE` 推送。
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: 好友在线状态列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetFriendsPresenceResponseEnvelope'
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "500": { $ref: '#/components/responses/InternalError' }
+  /api/attachments/init:
+    post:
+      tags: [Attachments]
+      operationId: attachmentsInitUpload
+      summary: 初始化附件上传并获取直传授权
+      description: |
+        需要 Bearer JWT。gateway 将当前用户作为 `owner_id`，通过内部 `AttachmentService.InitUpload` 获取 SeaweedFS/S3 直传 URL。附件内容仍由客户端直接上传到对象存储。
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InitAttachmentUploadRequest'
+      responses:
+        "200":
+          description: 上传授权信息
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InitAttachmentUploadResponseEnvelope'
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "403": { $ref: '#/components/responses/Forbidden' }
+        "404": { $ref: '#/components/responses/NotFound' }
+        "500": { $ref: '#/components/responses/InternalError' }
+  /api/attachments/{id}:
+    get:
+      tags: [Attachments]
+      operationId: attachmentsGet
+      summary: 获取附件元数据
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/AttachmentIdPath'
+      responses:
+        "200":
+          description: 附件元数据
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttachmentFileInfoResponseEnvelope'
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "403": { $ref: '#/components/responses/Forbidden' }
+        "404": { $ref: '#/components/responses/NotFound' }
+        "500": { $ref: '#/components/responses/InternalError' }
+  /api/attachments/{id}/complete:
+    post:
+      tags: [Attachments]
+      operationId: attachmentsCompleteUpload
+      summary: 标记附件上传完成
+      description: |
+        需要 Bearer JWT。客户端完成对象存储直传后调用本接口，attachment 服务会校验对象并回写状态，随后发布 `aim.attachment.uploaded` 事件供解析服务处理。
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/AttachmentIdPath'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompleteAttachmentUploadRequest'
+      responses:
+        "200":
+          description: 附件元数据
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AttachmentFileInfoResponseEnvelope'
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "403": { $ref: '#/components/responses/Forbidden' }
+        "404": { $ref: '#/components/responses/NotFound' }
+        "500": { $ref: '#/components/responses/InternalError' }
+  /api/attachments/{id}/download:
+    get:
+      tags: [Attachments]
+      operationId: attachmentsDownload
+      summary: 获取附件下载授权
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/AttachmentIdPath'
+      responses:
+        "200":
+          description: 下载授权 URL 与请求头
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DownloadAttachmentResponseEnvelope'
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "403": { $ref: '#/components/responses/Forbidden' }
+        "404": { $ref: '#/components/responses/NotFound' }
+        "500": { $ref: '#/components/responses/InternalError' }
+  /api/bot/v1/me:
+    get:
+      tags: [Bot OpenAPI]
+      operationId: botGetMe
+      summary: 获取当前 Bot 身份
+      description: "需要 `Authorization: Bot <token>`，且 token 具备 `bot.self.read` action。"
+      security:
+        - BotAuth: []
+      responses:
+        "200":
+          description: Bot 资料
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BotMeResponseEnvelope'
+        "401": { $ref: '#/components/responses/BotUnauthorized' }
+        "403": { $ref: '#/components/responses/BotForbidden' }
+        "500": { $ref: '#/components/responses/InternalError' }
+  /api/bot/v1/conversations:
+    get:
+      tags: [Bot OpenAPI]
+      operationId: botListConversations
+      summary: 列出 Bot 所在会话
+      description: 需要 `bot.conversation.list` action。Bot OpenAPI 中所有 Snowflake ID 均使用十进制字符串。
+      security:
+        - BotAuth: []
+      responses:
+        "200":
+          description: Bot 所在会话列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BotListConversationsResponseEnvelope'
+        "401": { $ref: '#/components/responses/BotUnauthorized' }
+        "403": { $ref: '#/components/responses/BotForbidden' }
+        "500": { $ref: '#/components/responses/InternalError' }
+  /api/bot/v1/messages:
+    post:
+      tags: [Bot OpenAPI]
+      operationId: botSendMessage
+      summary: Bot 发送消息
+      description: |
+        需要 `bot.message.send` action。gateway 以 Bot 用户身份调用 core `Transfer`，`device_id` 固定为 `bot-api`，配额与人类用户设备隔离。`client_msg_id` 用作幂等键；重复请求会复用已有消息结果。
+      security:
+        - BotAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BotSendMessageRequest'
+      responses:
+        "200":
+          description: 消息被 core 接受
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BotSendMessageResponseEnvelope'
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "401": { $ref: '#/components/responses/BotUnauthorized' }
+        "403": { $ref: '#/components/responses/BotForbidden' }
+        "404": { $ref: '#/components/responses/NotFound' }
+        "409": { $ref: '#/components/responses/Conflict' }
+        "429": { $ref: '#/components/responses/RateLimited' }
+        "500": { $ref: '#/components/responses/InternalError' }
+  /api/bot/v1/webhook:
+    get:
+      tags: [Bot OpenAPI]
+      operationId: botGetWebhook
+      summary: 获取 Bot Webhook 配置
+      description: 需要 `bot.webhook.read` action。响应不会返回明文 secret。
+      security:
+        - BotAuth: []
+      responses:
+        "200":
+          description: Webhook 配置
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BotGetWebhookResponseEnvelope'
+        "401": { $ref: '#/components/responses/BotUnauthorized' }
+        "403": { $ref: '#/components/responses/BotForbidden' }
+        "500": { $ref: '#/components/responses/InternalError' }
+    put:
+      tags: [Bot OpenAPI]
+      operationId: botSetWebhook
+      summary: 新建或更新 Bot Webhook 配置
+      description: |
+        需要 `bot.webhook.write` action；订阅每个事件还需对应订阅 action，例如 `message.created` 需要 `bot.webhook.subscribe.message_created`。
+        当前 V0 支持事件：`message.created`。创建新 webhook 时必须提供 `secret` 或设置 `rotate_secret=true`；更新已有 webhook 时可省略 secret 以保留原 secret。`secret` 与 `rotate_secret` 互斥。`rotate_secret=true` 时响应中的 `plaintext_secret` 仅返回一次。
+      security:
+        - BotAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BotSetWebhookRequest'
+      responses:
+        "200":
+          description: Webhook 配置已保存
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BotSetWebhookResponseEnvelope'
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "401": { $ref: '#/components/responses/BotUnauthorized' }
+        "403": { $ref: '#/components/responses/BotForbidden' }
+        "500": { $ref: '#/components/responses/InternalError' }
+    delete:
+      tags: [Bot OpenAPI]
+      operationId: botDeleteWebhook
+      summary: 删除 Bot Webhook 配置
+      description: 需要 `bot.webhook.delete` action。删除后不再投递回调。
+      security:
+        - BotAuth: []
+      responses:
+        "200":
+          description: 删除结果
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BotDeleteWebhookResponseEnvelope'
+        "401": { $ref: '#/components/responses/BotUnauthorized' }
+        "403": { $ref: '#/components/responses/BotForbidden' }
+        "500": { $ref: '#/components/responses/InternalError' }
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: "人类用户 REST 与 WebSocket 使用 `Authorization: Bearer <access_token>`。"
+    BotAuth:
+      type: apiKey
+      in: header
+      name: Authorization
+      description: "Bot OpenAPI 使用 `Authorization: Bot <token>`，不要使用 Bearer scheme。"
+  parameters:
+    UserIdPath:
+      name: id
+      in: path
+      required: true
+      schema: { type: integer, format: int64, minimum: 1 }
+      description: 用户 ID。
+    UserNamePath:
+      name: name
+      in: path
+      required: true
+      schema: { type: string, minLength: 1 }
+      description: 昵称搜索关键字。
+    FriendApplicationIdPath:
+      name: id
+      in: path
+      required: true
+      schema: { type: integer, format: int64, minimum: 1 }
+      description: 好友申请/关系 ID。
+    ConversationIdPath:
+      name: id
+      in: path
+      required: true
+      schema: { type: integer, format: int64, minimum: 1 }
+      description: 会话 ID。
+    MemberUidPath:
+      name: uid
+      in: path
+      required: true
+      schema: { type: integer, format: int64, minimum: 1 }
+      description: 目标群成员用户 ID。
+    AttachmentIdPath:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, minLength: 1 }
+      description: 附件 file_id。
+    CursorCreatedAtQuery:
+      name: cursor_created_at
+      in: query
+      required: false
+      schema: { type: integer, format: int64, minimum: 0 }
+      description: 上一页最后一条消息的创建时间（Unix milliseconds）；首次请求可省略或为 0。
+    CursorIdQuery:
+      name: cursor_id
+      in: query
+      required: false
+      schema: { type: integer, format: int64, minimum: 0 }
+      description: 上一页最后一条消息 ID；首次请求可省略或为 0。
+    LimitQuery:
+      name: limit
+      in: query
+      required: false
+      schema: { type: integer, format: int32, default: 50, minimum: 1, maximum: 100 }
+      description: 每页数量；默认 50，当前逻辑上限 100。
+  responses:
+    EmptyOK:
+      description: 成功。当前实现返回 HTTP 200 且响应体为空。
+    BadRequest:
+      description: 请求参数错误或请求体校验失败。
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+          examples:
+            badInput:
+              value: { code: 40000, msg: "bad input", body: null }
+    Unauthorized:
+      description: 未认证、access token 缺失/无效/过期。
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+          examples:
+            auth:
+              value: { code: 40100, msg: "unauthorized" }
+    Forbidden:
+      description: 无权限、非会话成员、被禁言/拉黑等。
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+          examples:
+            forbidden:
+              value: { code: 40300, msg: "forbidden", body: null }
+    NotFound:
+      description: 用户、会话、附件或资源不存在。
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+          examples:
+            notFound:
+              value: { code: 40400, msg: "not found", body: null }
+    Conflict:
+      description: 资源状态冲突，例如重复申请、重复 client_msg_id 等业务冲突。
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+          examples:
+            conflict:
+              value: { code: 40900, msg: "conflict", body: null }
+    RateLimited:
+      description: 触发滑动窗口限流。
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+          examples:
+            rateLimit:
+              value: { code: 42900, msg: "rate limit", body: null }
+    InternalError:
+      description: 内部基础设施错误；gateway 会清洗为 `internal error`，原始错误保留在日志/链路追踪中。
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+          examples:
+            internal:
+              value: { code: 50000, msg: "internal error", body: null }
+    BotUnauthorized:
+      description: Bot token 缺失、格式错误、未知、撤销、过期或 Bot 用户禁用。
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+          examples:
+            invalid:
+              value: { code: 40110, msg: "invalid bot token" }
+            revoked:
+              value: { code: 40111, msg: "bot token revoked" }
+            disabled:
+              value: { code: 40112, msg: "bot disabled" }
+    BotForbidden:
+      description: Bot token 缺少所需 action。
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+          examples:
+            denied:
+              value: { code: 40310, msg: "bot action denied" }
+  schemas:
+    SuccessEnvelopeBase:
+      type: object
+      required: [code, msg]
+      properties:
+        code:
+          type: integer
+          format: int32
+          enum: [0]
+          description: 业务码，0 表示成功。
+        msg:
+          type: string
+          example: ok
+    ErrorEnvelope:
+      type: object
+      required: [code, msg]
+      properties:
+        code:
+          type: integer
+          format: int32
+          description: AIM 业务错误码。常见范围：400xx、401xx、403xx、404xx、409xx、429xx、500xx；历史 auth sentinel 码 1001-1006 也可能出现。
+        msg:
+          type: string
+          description: 可展示给客户端的错误消息；基础设施错误会被清洗为 `internal error`。
+        body:
+          nullable: true
+          description: 错误响应中通常为 null；部分中间件失败路径可能省略该字段。
+    RegisterRequest:
+      type: object
+      required: [email, password, username, device_id]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string, minLength: 8, format: password }
+        username: { type: string, minLength: 1 }
+        avatar: { type: string, nullable: true }
+        device_id: { type: string, minLength: 1, description: 客户端设备 ID；会写入 access token claims。 }
+    RegisterResponse:
+      type: object
+      required: [user_id]
+      properties:
+        user_id: { type: integer, format: int64 }
+    RegisterResponseEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelopeBase'
+        - type: object
+          required: [body]
+          properties:
+            body: { $ref: '#/components/schemas/RegisterResponse' }
+    LoginRequest:
+      type: object
+      required: [email, password, device_id]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string, minLength: 8, format: password }
+        device_id: { type: string, minLength: 1 }
+    LoginResponse:
+      type: object
+      required: [user_id, access_token, refresh_token, expires_at]
+      properties:
+        user_id: { type: integer, format: int64 }
+        access_token: { type: string, description: JWT access token。 }
+        refresh_token: { type: string, description: 用于刷新 access token 的 refresh token。 }
+        expires_at: { type: integer, format: int64, description: access token 过期时间，Unix seconds。 }
+    LoginResponseEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelopeBase'
+        - type: object
+          required: [body]
+          properties:
+            body: { $ref: '#/components/schemas/LoginResponse' }
+    RefreshRequest:
+      type: object
+      required: [refresh_token]
+      properties:
+        refresh_token: { type: string, minLength: 1 }
+    RefreshResponse:
+      type: object
+      required: [access_token, refresh_token, expires_at]
+      properties:
+        access_token: { type: string }
+        refresh_token: { type: string }
+        expires_at: { type: integer, format: int64, description: access token 过期时间，Unix seconds。 }
+    RefreshResponseEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelopeBase'
+        - type: object
+          required: [body]
+          properties:
+            body: { $ref: '#/components/schemas/RefreshResponse' }
+    LogoutResponse:
+      type: object
+      required: [success]
+      properties:
+        success: { type: boolean }
+    LogoutResponseEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelopeBase'
+        - type: object
+          required: [body]
+          properties:
+            body: { $ref: '#/components/schemas/LogoutResponse' }
+    UserInfo:
+      type: object
+      required: [id, email, status, nickname, avatar, created_at, updated_at]
+      properties:
+        id: { type: integer, format: int64 }
+        email: { type: string, format: email }
+        status: { type: integer, format: int32 }
+        nickname: { type: string }
+        avatar: { type: string }
+        display_name: { type: string, nullable: true, description: 显示名快照，可能来自昵称。 }
+        created_at: { type: integer, format: int64, description: Unix milliseconds。 }
+        updated_at: { type: integer, format: int64, description: Unix milliseconds。 }
+    UserListItem:
+      type: object
+      required: [id, nickname, email, avatar]
+      properties:
+        id: { type: string, description: 用户 ID 十进制字符串。 }
+        nickname: { type: string }
+        email: { type: string, format: email }
+        avatar: { type: string }
+        display_name: { type: string, nullable: true }
+    GetUserByIdResponse:
+      type: object
+      required: [user]
+      properties:
+        user: { $ref: '#/components/schemas/UserInfo' }
+    GetUserByIdResponseEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelopeBase'
+        - type: object
+          required: [body]
+          properties:
+            body: { $ref: '#/components/schemas/GetUserByIdResponse' }
+    GetUserByNameResponse:
+      type: object
+      required: [users]
+      properties:
+        users:
+          type: array
+          items: { $ref: '#/components/schemas/UserListItem' }
+    GetUserByNameResponseEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelopeBase'
+        - type: object
+          required: [body]
+          properties:
+            body: { $ref: '#/components/schemas/GetUserByNameResponse' }
+    FriendshipItem:
+      type: object
+      required: [user_id, friend_id, status, created_at, updated_at]
+      properties:
+        user_id: { type: integer, format: int64 }
+        friend_id: { type: integer, format: int64 }
+        status: { type: string, description: 好友关系状态，例如 pending / accepted / rejected。 }
+        created_at: { type: integer, format: int64, description: Unix milliseconds。 }
+        updated_at: { type: integer, format: int64, description: Unix milliseconds。 }
+        display_name: { type: string, nullable: true }
+        email: { type: string, nullable: true, format: email }
+        avatar: { type: string, nullable: true }
+    FriendshipResponse:
+      type: object
+      required: [friendship]
+      properties:
+        friendship: { $ref: '#/components/schemas/FriendshipItem' }
+    FriendshipResponseEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelopeBase'
+        - type: object
+          required: [body]
+          properties:
+            body: { $ref: '#/components/schemas/FriendshipResponse' }
+    ListFriendApplicationsResponse:
+      type: object
+      required: [applications]
+      properties:
+        applications:
+          type: array
+          items: { $ref: '#/components/schemas/FriendshipItem' }
+    ListFriendApplicationsResponseEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelopeBase'
+        - type: object
+          required: [body]
+          properties:
+            body: { $ref: '#/components/schemas/ListFriendApplicationsResponse' }
+    ListFriendsResponse:
+      type: object
+      required: [friends]
+      properties:
+        friends:
+          type: array
+          items: { $ref: '#/components/schemas/FriendshipItem' }
+    ListFriendsResponseEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelopeBase'
+        - type: object
+          required: [body]
+          properties:
+            body: { $ref: '#/components/schemas/ListFriendsResponse' }
+    ConversationType:
+      type: string
+      enum: [direct, group]
+      description: 会话类型；历史注释中的 private/single 已废弃。
+    CreateConversationRequest:
+      oneOf:
+        - type: object
+          required: [conversation_type, member_ids]
+          properties:
+            conversation_type: { type: string, enum: [direct] }
+            member_ids:
+              type: array
+              minItems: 1
+              maxItems: 1
+              items: { type: integer, format: int64, minimum: 1 }
+            name: { type: string, nullable: true, description: 直聊当前逻辑忽略该字段。 }
+            avatar: { type: string, nullable: true }
+        - type: object
+          required: [conversation_type, member_ids, name]
+          properties:
+            conversation_type: { type: string, enum: [group] }
+            member_ids:
+              type: array
+              minItems: 1
+              items: { type: integer, format: int64, minimum: 1 }
+            name: { type: string, minLength: 1 }
+            avatar: { type: string, nullable: true }
+    CreateGroupRequest:
+      type: object
+      required: [member_ids, name]
+      properties:
+        member_ids:
+          type: array
+          minItems: 1
+          items: { type: integer, format: int64, minimum: 1 }
+        name: { type: string, minLength: 1 }
+        avatar: { type: string, nullable: true }
+    ConversationItem:
+      type: object
+      required: [conversation_id, conversation_type, is_active, created_at, member_ids, name, avatar, creator_id]
+      properties:
+        conversation_id: { type: integer, format: int64 }
+        conversation_type: { $ref: '#/components/schemas/ConversationType' }
+        is_active: { type: boolean }
+        created_at: { type: integer, format: int64, description: Unix milliseconds。 }
+        member_ids:
+          type: array
+          items: { type: integer, format: int64 }
+        name: { type: string }
+        avatar: { type: string }
+        creator_id: { type: integer, format: int64 }
+        display_name: { type: string, nullable: true }
+    ConversationResponse:
+      allOf:
+        - $ref: '#/components/schemas/ConversationItem'
+    ConversationResponseEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelopeBase'
+        - type: object
+          required: [body]
+          properties:
+            body: { $ref: '#/components/schemas/ConversationResponse' }
+    ListConversationsResponse:
+      type: object
+      required: [conversations]
+      properties:
+        conversations:
+          type: array
+          items: { $ref: '#/components/schemas/ConversationItem' }
+    ListConversationsResponseEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelopeBase'
+        - type: object
+          required: [body]
+          properties:
+            body: { $ref: '#/components/schemas/ListConversationsResponse' }
+    SenderInfo:
+      type: object
+      required: [name, email]
+      properties:
+        name: { type: string }
+        email: { type: string, format: email }
+        display_name: { type: string, nullable: true }
+    MessageReadDetailItem:
+      type: object
+      required: [user_id, is_read, last_read_message_id, updated_at, email, avatar]
+      properties:
+        user_id: { type: integer, format: int64 }
+        is_read: { type: boolean }
+        last_read_message_id: { type: integer, format: int64 }
+        updated_at: { type: integer, format: int64, description: Unix milliseconds。 }
+        email: { type: string, format: email }
+        avatar: { type: string }
+        display_name: { type: string, nullable: true }
+    MessageItem:
+      type: object
+      required: [id, conversation_id, sender_id, sender_info, message_type, content, client_msg_id, created_at, read_details]
+      properties:
+        id: { type: integer, format: int64 }
+        conversation_id: { type: integer, format: int64 }
+        sender_id: { type: integer, format: int64, description: 系统消息为 0。 }
+        sender_info: { $ref: '#/components/schemas/SenderInfo' }
+        message_type: { type: string, description: text / image / file / system / 业务扩展类型。 }
+        content: { type: string, description: text 为纯文本；附件或系统消息通常为 JSON 字符串。 }
+        client_msg_id: { type: string }
+        created_at: { type: integer, format: int64, description: Unix milliseconds。 }
+        is_system: { type: boolean, nullable: true, description: true 表示群变更系统消息。 }
+        mentions:
+          type: array
+          nullable: true
+          items: { type: string, description: 被 @ 用户 ID 的十进制字符串。 }
+        read_details:
+          type: array
+          items: { $ref: '#/components/schemas/MessageReadDetailItem' }
+    ReadStateItem:
+      type: object
+      required: [user_id, last_read_message_id, updated_at]
+      properties:
+        user_id: { type: integer, format: int64 }
+        last_read_message_id: { type: integer, format: int64 }
+        updated_at: { type: integer, format: int64, description: Unix milliseconds。 }
+        email: { type: string, nullable: true, format: email }
+        avatar: { type: string, nullable: true }
+        display_name: { type: string, nullable: true }
+    GetConversationHistoryResponse:
+      type: object
+      required: [messages, next_cursor_created_at, next_cursor_id, has_more, read_states]
+      properties:
+        messages:
+          type: array
+          items: { $ref: '#/components/schemas/MessageItem' }
+        next_cursor_created_at: { type: integer, format: int64 }
+        next_cursor_id: { type: integer, format: int64 }
+        has_more: { type: boolean }
+        read_states:
+          type: array
+          items: { $ref: '#/components/schemas/ReadStateItem' }
+    GetConversationHistoryResponseEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelopeBase'
+        - type: object
+          required: [body]
+          properties:
+            body: { $ref: '#/components/schemas/GetConversationHistoryResponse' }
+    AddGroupMembersRequest:
+      type: object
+      required: [member_ids]
+      properties:
+        member_ids:
+          type: array
+          minItems: 1
+          items: { type: integer, format: int64, minimum: 1 }
+    TransferGroupOwnerRequest:
+      type: object
+      required: [user_id]
+      properties:
+        user_id: { type: integer, format: int64, minimum: 1, description: 新群主用户 ID。 }
+    UpdateGroupInfoRequest:
+      type: object
+      properties:
+        name: { type: string, nullable: true }
+        avatar: { type: string, nullable: true }
+    UpdateGroupInfoResponse:
+      type: object
+      required: [conversation_id, conversation_type, is_active, name, avatar, creator_id, created_at]
+      properties:
+        conversation_id: { type: integer, format: int64 }
+        conversation_type: { $ref: '#/components/schemas/ConversationType' }
+        is_active: { type: boolean }
+        name: { type: string }
+        avatar: { type: string }
+        creator_id: { type: integer, format: int64 }
+        created_at: { type: integer, format: int64, description: Unix milliseconds。 }
+    UpdateGroupInfoResponseEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelopeBase'
+        - type: object
+          required: [body]
+          properties:
+            body: { $ref: '#/components/schemas/UpdateGroupInfoResponse' }
+    MemberDetailItem:
+      type: object
+      required: [user_id, email, avatar, role, joined_at]
+      properties:
+        user_id: { type: integer, format: int64 }
+        email: { type: string, format: email }
+        avatar: { type: string }
+        role: { type: string, enum: [owner, admin, member] }
+        joined_at: { type: integer, format: int64, description: Unix milliseconds。 }
+        display_name: { type: string, nullable: true }
+    GetConversationMembersResponse:
+      type: object
+      required: [members]
+      properties:
+        members:
+          type: array
+          items: { $ref: '#/components/schemas/MemberDetailItem' }
+    GetConversationMembersResponseEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelopeBase'
+        - type: object
+          required: [body]
+          properties:
+            body: { $ref: '#/components/schemas/GetConversationMembersResponse' }
+    PresenceItem:
+      type: object
+      required: [user_id, status, updated_at]
+      properties:
+        user_id: { type: integer, format: int64 }
+        status: { type: string, enum: [online, offline] }
+        updated_at: { type: integer, format: int64, description: 当前快照接口保留为 0。 }
+        display_name: { type: string, nullable: true }
+    GetFriendsPresenceResponse:
+      type: object
+      required: [presences]
+      properties:
+        presences:
+          type: array
+          items: { $ref: '#/components/schemas/PresenceItem' }
+    GetFriendsPresenceResponseEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelopeBase'
+        - type: object
+          required: [body]
+          properties:
+            body: { $ref: '#/components/schemas/GetFriendsPresenceResponse' }
+    InitAttachmentUploadRequest:
+      type: object
+      required: [conversation_id, kind, original_name, mime, size]
+      properties:
+        conversation_id: { type: integer, format: int64, minimum: 1 }
+        kind: { type: string, enum: [image, video, audio] }
+        original_name: { type: string, minLength: 1 }
+        mime: { type: string, minLength: 1 }
+        size: { type: integer, format: int64, minimum: 1 }
+        sha256: { type: string, nullable: true }
+    InitAttachmentUploadResponse:
+      type: object
+      required: [file_id, bucket, object_key, upload_url, upload_method, expires_at]
+      properties:
+        file_id: { type: string }
+        bucket: { type: string }
+        object_key: { type: string }
+        upload_url: { type: string, format: uri }
+        upload_method: { type: string, example: PUT }
+        headers:
+          type: object
+          nullable: true
+          additionalProperties: { type: string }
+        expires_at: { type: integer, format: int64, description: 直传授权过期时间，Unix milliseconds。 }
+    InitAttachmentUploadResponseEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelopeBase'
+        - type: object
+          required: [body]
+          properties:
+            body: { $ref: '#/components/schemas/InitAttachmentUploadResponse' }
+    CompleteAttachmentUploadRequest:
+      type: object
+      properties:
+        sha256: { type: string, nullable: true }
+    AttachmentFileInfo:
+      type: object
+      required: [file_id, owner_id, conversation_id, kind, original_name, mime, size, status, parse_status, bucket, object_key]
+      properties:
+        file_id: { type: string }
+        owner_id: { type: integer, format: int64 }
+        conversation_id: { type: integer, format: int64 }
+        kind: { type: string, enum: [image, video, audio] }
+        original_name: { type: string }
+        mime: { type: string }
+        size: { type: integer, format: int64 }
+        sha256: { type: string, nullable: true }
+        status: { type: string, description: 上传状态。 }
+        parse_status: { type: string, description: 解析状态。 }
+        bucket: { type: string }
+        object_key: { type: string }
+        thumbnail_object_key: { type: string, nullable: true }
+        duration_ms: { type: integer, format: int64, nullable: true }
+        width: { type: integer, format: int32, nullable: true }
+        height: { type: integer, format: int32, nullable: true }
+        metadata:
+          type: object
+          nullable: true
+          additionalProperties: true
+    AttachmentFileInfoResponseEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelopeBase'
+        - type: object
+          required: [body]
+          properties:
+            body: { $ref: '#/components/schemas/AttachmentFileInfo' }
+    DownloadAttachmentResponse:
+      type: object
+      required: [url, expires_at]
+      properties:
+        url: { type: string, format: uri }
+        headers:
+          type: object
+          nullable: true
+          additionalProperties: { type: string }
+        expires_at: { type: integer, format: int64, description: 下载授权过期时间，Unix milliseconds。 }
+    DownloadAttachmentResponseEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelopeBase'
+        - type: object
+          required: [body]
+          properties:
+            body: { $ref: '#/components/schemas/DownloadAttachmentResponse' }
+    BotMe:
+      type: object
+      required: [bot_user_id, nickname, avatar, status, scopes]
+      properties:
+        bot_user_id: { type: string, description: Bot 用户 ID，Snowflake 十进制字符串。 }
+        nickname: { type: string }
+        avatar: { type: string }
+        status: { type: integer, format: int32 }
+        scopes:
+          type: array
+          description: 字段名保留为 scopes，语义为 action grant。
+          items: { type: string }
+    BotMeResponse:
+      type: object
+      required: [bot]
+      properties:
+        bot: { $ref: '#/components/schemas/BotMe' }
+    BotMeResponseEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelopeBase'
+        - type: object
+          required: [body]
+          properties:
+            body: { $ref: '#/components/schemas/BotMeResponse' }
+    BotConversationItem:
+      type: object
+      required: [conversation_id, conversation_type, name, avatar, created_at]
+      properties:
+        conversation_id: { type: string, description: 会话 ID，Snowflake 十进制字符串。 }
+        conversation_type: { $ref: '#/components/schemas/ConversationType' }
+        name: { type: string }
+        avatar: { type: string }
+        created_at: { type: integer, format: int64, description: Unix milliseconds。 }
+    BotListConversationsResponse:
+      type: object
+      required: [conversations]
+      properties:
+        conversations:
+          type: array
+          items: { $ref: '#/components/schemas/BotConversationItem' }
+    BotListConversationsResponseEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelopeBase'
+        - type: object
+          required: [body]
+          properties:
+            body: { $ref: '#/components/schemas/BotListConversationsResponse' }
+    BotSendMessageRequest:
+      type: object
+      required: [conversation_id, message_type, content, client_msg_id]
+      properties:
+        conversation_id: { type: string, minLength: 1, description: 会话 ID，Snowflake 十进制字符串；Bot 必须是会话成员。 }
+        message_type: { type: string, minLength: 1, maxLength: 32 }
+        content: { type: string, minLength: 1 }
+        client_msg_id: { type: string, minLength: 1, description: 幂等键，建议 UUID。 }
+        mentions:
+          type: array
+          maxItems: 20
+          nullable: true
+          items: { type: string, description: 被 @ 用户 ID 的十进制字符串。 }
+    BotSendMessageResponse:
+      type: object
+      required: [message_id, client_msg_id, accepted_at]
+      properties:
+        message_id: { type: string, description: 消息 ID，Snowflake 十进制字符串。 }
+        client_msg_id: { type: string }
+        accepted_at: { type: integer, format: int64, description: Unix milliseconds。 }
+    BotSendMessageResponseEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelopeBase'
+        - type: object
+          required: [body]
+          properties:
+            body: { $ref: '#/components/schemas/BotSendMessageResponse' }
+    BotWebhookConfig:
+      type: object
+      required: [url, events, enabled, updated_at]
+      properties:
+        url: { type: string, format: uri }
+        events:
+          type: array
+          items: { type: string, enum: [message.created] }
+        enabled: { type: boolean }
+        updated_at: { type: integer, format: int64, description: Unix milliseconds。 }
+    BotGetWebhookResponse:
+      type: object
+      required: [configured, webhook]
+      properties:
+        configured: { type: boolean }
+        webhook: { $ref: '#/components/schemas/BotWebhookConfig' }
+    BotGetWebhookResponseEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelopeBase'
+        - type: object
+          required: [body]
+          properties:
+            body: { $ref: '#/components/schemas/BotGetWebhookResponse' }
+    BotSetWebhookRequest:
+      type: object
+      required: [url]
+      properties:
+        url: { type: string, format: uri }
+        events:
+          type: array
+          nullable: true
+          description: 省略时默认订阅 `message.created`。
+          items: { type: string, enum: [message.created] }
+        enabled: { type: boolean, nullable: true, default: true }
+        secret:
+          type: string
+          nullable: true
+          description: HMAC-SHA256 签名 secret；创建新 webhook 时如未 rotate 则必填。
+        rotate_secret:
+          type: boolean
+          nullable: true
+          default: false
+          description: true 时服务端生成新 secret 并仅在本次响应返回。
+    BotSetWebhookResponse:
+      type: object
+      required: [webhook]
+      properties:
+        webhook: { $ref: '#/components/schemas/BotWebhookConfig' }
+        plaintext_secret:
+          type: string
+          nullable: true
+          description: 仅在 `rotate_secret=true` 时返回一次。
+    BotSetWebhookResponseEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelopeBase'
+        - type: object
+          required: [body]
+          properties:
+            body: { $ref: '#/components/schemas/BotSetWebhookResponse' }
+    BotDeleteWebhookResponse:
+      type: object
+      required: [deleted]
+      properties:
+        deleted: { type: boolean }
+    BotDeleteWebhookResponseEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelopeBase'
+        - type: object
+          required: [body]
+          properties:
+            body: { $ref: '#/components/schemas/BotDeleteWebhookResponse' }
