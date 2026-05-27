@@ -204,6 +204,20 @@ http.Handle("/aim/webhook", processor)
 log.Fatal(http.ListenAndServe(":9000", nil))
 ```
 
+### 运行时密钥轮换
+
+`AsyncProcessor.UpdateSecret` 允许在进程运行期间更新验签密钥，无需重启服务：
+
+```go
+processor.UpdateSecret(newPlaintextSecret)
+```
+
+传入空字符串会被忽略；方法内部加锁，与 `ServeHTTP` 并发调用安全。
+
+典型的轮换流程：先调 `PUT /api/bot/v1/webhook` 设置 `rotate_secret=true`，拿到新的
+`plaintext_secret` 后调用 `UpdateSecret` 更新即可。
+
+
 ### 队列满与 AIM 重试
 
 默认队列满时返回 `503 Service Unavailable`，AIM Webhook 投递端会按指数退避重试。可自定义状态码：

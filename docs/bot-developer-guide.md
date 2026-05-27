@@ -331,6 +331,10 @@ http.Handle("/aim/webhook", processor)
 log.Fatal(http.ListenAndServe(":9000", nil))
 ```
 
+密钥轮换时，无需重启进程：先调 `PUT /api/bot/v1/webhook` 设置 `rotate_secret=true`，
+拿到新的 `plaintext_secret` 后调用 `processor.UpdateSecret(newSecret)` 即可。
+该方法内部加锁，与 `ServeHTTP` 并发安全。
+
 ### 4.3 防回调循环
 
 - AIM 在分发前会过滤 `sender_id == bot_user_id` 的事件；Bot 自己发的消息
