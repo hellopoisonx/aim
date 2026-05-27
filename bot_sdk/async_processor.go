@@ -151,7 +151,10 @@ func (p *AsyncProcessor) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !VerifySignature(p.secret, rawBody, r.Header.Get("X-AIM-Signature")) {
+	p.mu.Lock()
+	secret := p.secret
+	p.mu.Unlock()
+	if !VerifySignature(secret, rawBody, r.Header.Get("X-AIM-Signature")) {
 		http.Error(w, "invalid signature", http.StatusUnauthorized)
 		return
 	}
@@ -203,6 +206,17 @@ func (p *AsyncProcessor) Shutdown(ctx context.Context) error {
 	case <-done:
 		return nil
 	}
+}
+
+// UpdateSecret 安全更新验签密钥。
+// 与 ServeHTTP 并发调用安全，用于 webhook 密钥轮换后无需重启即可使用新密钥验签。
+func (p *AsyncProcessor) UpdateSecret(newSecret string) {
+	if newSecret == "" {
+		return
+	}
+	p.mu.Lock()
+	p.secret = newSecret
+	p.mu.Unlock()
 }
 
 func (p *AsyncProcessor) worker(ctx context.Context) {
