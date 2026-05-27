@@ -13,7 +13,7 @@
 | `nacos` | Nacos v2 注册、注销、gRPC resolver | gateway/auth/core/logic |
 | `jwt` | HS256 access token 签发/验证，claims 含 user_id/device_id | auth 签发，gateway 验证 |
 | `events` | Kafka 事件契约，如 `UserCreatedEvent`、`AttachmentUploadedEvent` | auth/attachment 生产，logic/data_parsing 消费 |
-| `attachment` | 附件内容 schema、JSON 解析与校验 | gateway/core/desktop/logic |
+| `attachment` | 附件内容 schema、JSON 解析与校验 | gateway/core/logic |
 | `s3signer` | SeaweedFS S3 预签名工具 | attachment/data_parsing |
 | `tracing` | W3C trace context 经 Kafka payload 传播；Kafka producer/consumer span 与错误标记 helper | auth/core/logic/gateway/attachment/data_parsing |
 | `tools` | Snowflake ID 生成器 | auth/core |

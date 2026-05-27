@@ -7,7 +7,6 @@
 - "用户信息、逻辑、logic" -> `aim-logic-domain`
 - "附件、二进制、SeaweedFS、上传、下载、缩略图、解析、AttachmentService、分片" -> `aim-attachment-domain` 或 `aim-data-parsing-domain`（若涉及 REST 入口则仍先看 `aim-gateway-domain`）
 - "核心、core、转发" -> `aim-core-domain`
-- "Desktop、桌面、客户端、Wails、前端、Vue、多账号、缓存" -> `aim-desktop-domain`
 - "dev-tool、aim_test、冒烟测试、集成测试、接口调试、测试脚本" -> `aim-dev-tool`
 ## 不要误判
 

@@ -23,7 +23,6 @@ cd app/logic/rpc && go run logic.go
 
 ```
 ┌──────────┐     ┌──────────────┐
-│ Desktop  │     │   Mobile /   │
 │  Client  │     │    Web       │
 └────┬─────┘     └──────┬───────┘
      │  WS/Protobuf      │
@@ -66,7 +65,6 @@ cd app/logic/rpc && go run logic.go
 | 注册中心 | Nacos |
 | 链路追踪 | OpenTelemetry → Jaeger |
 | 数据模型 | sqlc |
-| 桌面客户端 | Wails + Vue 3 + Arco Design |
 
 ## 模块
 
@@ -78,7 +76,6 @@ cd app/logic/rpc && go run logic.go
 | aim-logic | 用户/好友/群组、历史消息 | `aim-logic-domain` |
 | aim-attachment | 附件上传/下载授权 | `aim-attachment-domain` |
 | aim-data-parsing | 附件元数据提取 | `aim-data-parsing-domain` |
-| app/desktop | Wails 桌面客户端 | `aim-desktop-domain` |
 | app/shared | 共享库（errorx/jwt/tracing 等） | `aim-shared-domain` |
 | dev-tool | 开发测试工具 | `aim-dev-tool` |
 
