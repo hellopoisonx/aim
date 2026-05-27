@@ -249,6 +249,20 @@ if err != nil {
 }
 ```
 
+## 测试
+
+SDK 单元测试默认不依赖外部服务：
+
+```bash
+go test ./bot_sdk
+```
+
+`integration` build tag 会启用包内集成测试环境。该环境使用 `httptest` 构造内存版 Bot Gateway，覆盖 REST Client 全链路方法、APIError 解析，以及 Gateway Webhook 投递到 `AsyncProcessor` 的签名/去重/异步处理流程：
+
+```bash
+go test -tags=integration ./bot_sdk
+```
+
 ## ID 与时间约定
 
 - Bot OpenAPI 与 Webhook 中的 Snowflake ID 使用十进制字符串，避免 JavaScript/JSON number 精度问题。

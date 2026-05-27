@@ -97,6 +97,7 @@ description: aim 的 Bot OpenAPI 域。覆盖第三方 Bot 接入、token 鉴权
 
 ## 最近变更
 
+- 2026-05-27: `bot_sdk` 新增 `integration` build tag 集成测试环境，使用内存 Gateway 覆盖 REST Client、APIError、Webhook 投递到 `AsyncProcessor` 的端到端流程。
 - 2026-05-27: Bot direct 会话不再消耗/触发非好友临时会话累计消息上限；`DatabasePermissionChecker` 识别发送者或对端为 `user_type='bot'` 后跳过限额，但仍保留 direct 成员校验与 block 拦截。
 - 2026-05-27: 补全 Bot 会话读侧接口（历史消息、成员详情、已读上报/读取状态），新增 `bot.conversation.*`、`bot.read_receipt.*` action，并新增 Go SDK `bot_sdk`（REST Client、rotate-secret Webhook 验签、异步处理器）。
 - 2026-05-23: 新增基于 action 的 Bot 权限系统。新增 migration 009（`bot_actions`、`bot_token_permissions`、`bot_event_actions`），`ValidateBotToken` 从 action 关联表加载权限，Gateway Bot API 全量校验 action，webhook event 通过 `bot_event_actions` 映射订阅 action。
