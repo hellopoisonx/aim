@@ -161,11 +161,12 @@ type DeleteWebhookResponse struct {
 }
 
 type WebhookEvent struct {
-	EventID        string         `json:"event_id"`
-	Type           string         `json:"type"`
-	CreatedAt      int64          `json:"created_at"`
-	ConversationID string         `json:"conversation_id"`
-	Message        WebhookMessage `json:"message"`
+	EventID          string         `json:"event_id"`
+	Type             string         `json:"type"`
+	CreatedAt        int64          `json:"created_at"`
+	ConversationID   string         `json:"conversation_id"`
+	ConversationType string         `json:"conversation_type,omitempty"`
+	Message          WebhookMessage `json:"message"`
 }
 
 type WebhookMessage struct {
