@@ -263,6 +263,14 @@ go test ./bot_sdk
 go test -tags=integration ./bot_sdk
 ```
 
+需要真实 AIM 服务栈时，可使用包内 Docker Compose 环境。它独立于根目录本地开发环境，宿主机端口全部按主环境 `+3000` 偏移：
+
+```bash
+docker compose -f bot_sdk/testdata/integration/docker-compose.yaml up -d
+# Gateway REST: http://127.0.0.1:11888
+docker compose -f bot_sdk/testdata/integration/docker-compose.yaml down -v
+```
+
 ## ID 与时间约定
 
 - Bot OpenAPI 与 Webhook 中的 Snowflake ID 使用十进制字符串，避免 JavaScript/JSON number 精度问题。

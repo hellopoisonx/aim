@@ -1,0 +1,38 @@
+Name: auth.rpc
+ListenOn: 0.0.0.0:8989
+Telemetry:
+  Name: auth.rpc
+  Endpoint: jaeger:4318
+  Sampler: 1.0
+  Batcher: otlphttp
+  OtlpHttpPath: /v1/traces
+Nacos:
+  ServerAddr: nacos:8848
+  NamespaceID: ""
+  Group: DEFAULT_GROUP
+  Cluster: DEFAULT
+  ServiceName: auth.rpc
+  AdvertiseIP: aim-auth
+  AdvertisePort: 8989
+  Ephemeral: true
+  Weight: 1
+  TimeoutMs: 5000
+  Username: ""
+  Password: ""
+  LogDir: /app/log/nacos
+  CacheDir: /tmp/nacos/cache
+  LogLevel: info
+Postgres:
+  DataSource: postgres://user:password@postgres:5432/aim_auth?sslmode=disable
+SessionRedis:
+  Host: redis:6379
+  Pass: ""
+Token:
+  AccessSecret: aim-dev-access-secret
+  AccessTTL: 5m
+  RefreshTTL: 168h
+  SnowflakeMachineID: 1
+KqPusherConf:
+  Brokers:
+    - kafka:9092
+  Topic: aim.user.events

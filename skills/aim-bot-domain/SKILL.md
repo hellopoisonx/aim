@@ -97,6 +97,7 @@ description: aim 的 Bot OpenAPI 域。覆盖第三方 Bot 接入、token 鉴权
 
 ## 最近变更
 
+- 2026-05-27: `bot_sdk/testdata/integration/` 新增真实服务栈 Docker Compose 环境，所有宿主机发布端口相对主环境 `+3000` 偏移。
 - 2026-05-27: `bot_sdk` 新增 `integration` build tag 集成测试环境，使用内存 Gateway 覆盖 REST Client、APIError、Webhook 投递到 `AsyncProcessor` 的端到端流程。
 - 2026-05-27: Bot direct 会话不再消耗/触发非好友临时会话累计消息上限；`DatabasePermissionChecker` 识别发送者或对端为 `user_type='bot'` 后跳过限额，但仍保留 direct 成员校验与 block 拦截。
 - 2026-05-27: 补全 Bot 会话读侧接口（历史消息、成员详情、已读上报/读取状态），新增 `bot.conversation.*`、`bot.read_receipt.*` action，并新增 Go SDK `bot_sdk`（REST Client、rotate-secret Webhook 验签、异步处理器）。

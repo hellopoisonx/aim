@@ -1,0 +1,106 @@
+Name: core.rpc
+ListenOn: 0.0.0.0:8080
+Telemetry:
+  Name: core.rpc
+  Endpoint: jaeger:4318
+  Sampler: 1.0
+  Batcher: otlphttp
+  OtlpHttpPath: /v1/traces
+Nacos:
+  ServerAddr: nacos:8848
+  NamespaceID: ""
+  Group: DEFAULT_GROUP
+  Cluster: DEFAULT
+  ServiceName: core.rpc
+  AdvertiseIP: aim-core
+  AdvertisePort: 8080
+  Ephemeral: true
+  Weight: 1
+  TimeoutMs: 5000
+  Username: ""
+  Password: ""
+  LogDir: /app/log/nacos
+  CacheDir: /tmp/nacos/cache
+  LogLevel: info
+SnowflakeMachineID: 1
+CacheRedis:
+  Addr: redis:6379
+  Password: ""
+  DB: 0
+LogicRpc:
+  ServerAddr: nacos:8848
+  NamespaceID: ""
+  Group: DEFAULT_GROUP
+  Cluster: DEFAULT
+  ServiceName: logic.rpc
+  AdvertiseIP: ""
+  AdvertisePort: 0
+  Ephemeral: true
+  Weight: 1
+  TimeoutMs: 5000
+  Username: ""
+  Password: ""
+  LogDir: /app/log/nacos
+  CacheDir: /tmp/nacos/cache
+  LogLevel: info
+KqPusherConf:
+  Brokers:
+    - kafka:9092
+  Topic: aim-message-transfer
+KqConsumerConf:
+  Name: core-delivery-consumer
+  Brokers:
+    - kafka:9092
+  Group: aim-core-delivery
+  Topic: aim-message-transfer
+  Offset: first
+  Consumers: 1
+  Processors: 1
+PresenceConsumerConf:
+  Name: core-presence-consumer
+  Brokers:
+    - kafka:9092
+  Group: aim-core-presence
+  Topic: aim.presence.events
+  Offset: first
+  Consumers: 1
+  Processors: 1
+TypingConsumerConf:
+  Name: core-typing-consumer
+  Brokers:
+    - kafka:9092
+  Group: aim-core-typing
+  Topic: aim.typing.events
+  Offset: first
+  Consumers: 1
+  Processors: 1
+ReadReceiptConsumerConf:
+  Name: core-read-receipt-consumer
+  Brokers:
+    - kafka:9092
+  Group: aim-core-read-receipt
+  Topic: aim.read_receipt.events
+  Offset: first
+  Consumers: 1
+  Processors: 1
+GatewayRpc:
+  ServiceName: gateway.rpc
+  Target: aim-gateway:9090
+AttachmentRpc:
+  ServerAddr: nacos:8848
+  NamespaceID: ""
+  Group: DEFAULT_GROUP
+  Cluster: DEFAULT
+  ServiceName: attachment.rpc
+  AdvertiseIP: ""
+  AdvertisePort: 0
+  Ephemeral: true
+  Weight: 1
+  TimeoutMs: 5000
+  Username: ""
+  Password: ""
+  LogDir: /app/log/nacos
+  CacheDir: /tmp/nacos/cache
+  LogLevel: info
+Presence:
+  TTLSeconds: 30
