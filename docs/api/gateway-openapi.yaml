@@ -730,6 +730,107 @@ paths:
         "401": { $ref: '#/components/responses/BotUnauthorized' }
         "403": { $ref: '#/components/responses/BotForbidden' }
         "500": { $ref: '#/components/responses/InternalError' }
+  /api/bot/v1/conversations/{id}/history:
+    get:
+      tags: [Bot OpenAPI]
+      operationId: botGetConversationHistory
+      summary: Bot 分页读取会话历史
+      description: 需要 `bot.conversation.history` action。Bot 必须是该会话成员。所有 Snowflake ID 均使用十进制字符串。
+      security:
+        - BotAuth: []
+      parameters:
+        - $ref: '#/components/parameters/BotConversationIdPath'
+        - $ref: '#/components/parameters/CursorCreatedAtQuery'
+        - in: query
+          name: cursor_id
+          required: false
+          schema: { type: string }
+          description: 上一页最后一条消息 ID，十进制字符串。
+        - $ref: '#/components/parameters/LimitQuery'
+      responses:
+        "200":
+          description: Bot 历史消息分页结果
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BotGetConversationHistoryResponseEnvelope'
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "401": { $ref: '#/components/responses/BotUnauthorized' }
+        "403": { $ref: '#/components/responses/BotForbidden' }
+        "404": { $ref: '#/components/responses/NotFound' }
+        "500": { $ref: '#/components/responses/InternalError' }
+  /api/bot/v1/conversations/{id}/members:
+    get:
+      tags: [Bot OpenAPI]
+      operationId: botGetConversationMembers
+      summary: Bot 读取会话成员详情
+      description: 需要 `bot.conversation.members.read` action。Bot 必须是该会话成员。
+      security:
+        - BotAuth: []
+      parameters:
+        - $ref: '#/components/parameters/BotConversationIdPath'
+      responses:
+        "200":
+          description: 会话成员详情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BotGetConversationMembersResponseEnvelope'
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "401": { $ref: '#/components/responses/BotUnauthorized' }
+        "403": { $ref: '#/components/responses/BotForbidden' }
+        "404": { $ref: '#/components/responses/NotFound' }
+        "500": { $ref: '#/components/responses/InternalError' }
+  /api/bot/v1/conversations/{id}/read-receipt:
+    post:
+      tags: [Bot OpenAPI]
+      operationId: botMarkRead
+      summary: Bot 上报会话已读游标
+      description: 需要 `bot.read_receipt.write` action。更新成功后复用现有已读回执 fan-out。
+      security:
+        - BotAuth: []
+      parameters:
+        - $ref: '#/components/parameters/BotConversationIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BotMarkReadRequest'
+      responses:
+        "200":
+          description: 更新后的已读状态
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BotMarkReadResponseEnvelope'
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "401": { $ref: '#/components/responses/BotUnauthorized' }
+        "403": { $ref: '#/components/responses/BotForbidden' }
+        "404": { $ref: '#/components/responses/NotFound' }
+        "500": { $ref: '#/components/responses/InternalError' }
+  /api/bot/v1/conversations/{id}/read-states:
+    get:
+      tags: [Bot OpenAPI]
+      operationId: botListReadStates
+      summary: Bot 读取会话成员已读状态
+      description: 需要 `bot.read_receipt.read` action。Bot 必须是该会话成员。
+      security:
+        - BotAuth: []
+      parameters:
+        - $ref: '#/components/parameters/BotConversationIdPath'
+      responses:
+        "200":
+          description: 成员已读游标列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BotListReadStatesResponseEnvelope'
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "401": { $ref: '#/components/responses/BotUnauthorized' }
+        "403": { $ref: '#/components/responses/BotForbidden' }
+        "404": { $ref: '#/components/responses/NotFound' }
+        "500": { $ref: '#/components/responses/InternalError' }
   /api/bot/v1/messages:
     post:
       tags: [Bot OpenAPI]
@@ -902,6 +1003,12 @@ components:
       required: true
       schema: { type: string, minLength: 1 }
       description: 附件 file_id。
+    BotConversationIdPath:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, minLength: 1 }
+      description: Bot OpenAPI 会话 ID，Snowflake 十进制字符串。
     CursorCreatedAtQuery:
       name: cursor_created_at
       in: query
@@ -1589,6 +1696,119 @@ components:
           required: [body]
           properties:
             body: { $ref: '#/components/schemas/BotListConversationsResponse' }
+    BotSenderInfo:
+      type: object
+      properties:
+        name: { type: string }
+        email: { type: string }
+        display_name: { type: string, nullable: true }
+    BotMessageReadDetailItem:
+      type: object
+      properties:
+        user_id: { type: string }
+        is_read: { type: boolean }
+        last_read_message_id: { type: string }
+        updated_at: { type: integer, format: int64 }
+        email: { type: string }
+        avatar: { type: string }
+        display_name: { type: string, nullable: true }
+    BotMessageItem:
+      type: object
+      properties:
+        id: { type: string }
+        conversation_id: { type: string }
+        sender_id: { type: string }
+        sender_info: { $ref: '#/components/schemas/BotSenderInfo' }
+        message_type: { type: string }
+        content: { type: string }
+        client_msg_id: { type: string }
+        created_at: { type: integer, format: int64 }
+        is_system: { type: boolean }
+        mentions:
+          type: array
+          items: { type: string }
+        read_details:
+          type: array
+          items: { $ref: '#/components/schemas/BotMessageReadDetailItem' }
+    BotReadStateItem:
+      type: object
+      properties:
+        user_id: { type: string }
+        last_read_message_id: { type: string }
+        updated_at: { type: integer, format: int64 }
+        email: { type: string, nullable: true }
+        avatar: { type: string, nullable: true }
+        display_name: { type: string, nullable: true }
+    BotGetConversationHistoryResponse:
+      type: object
+      properties:
+        messages:
+          type: array
+          items: { $ref: '#/components/schemas/BotMessageItem' }
+        next_cursor_created_at: { type: integer, format: int64 }
+        next_cursor_id: { type: string }
+        has_more: { type: boolean }
+        read_states:
+          type: array
+          items: { $ref: '#/components/schemas/BotReadStateItem' }
+    BotGetConversationHistoryResponseEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelopeBase'
+        - type: object
+          required: [body]
+          properties:
+            body: { $ref: '#/components/schemas/BotGetConversationHistoryResponse' }
+    BotMemberDetailItem:
+      type: object
+      properties:
+        user_id: { type: string }
+        email: { type: string }
+        avatar: { type: string }
+        role: { type: string }
+        joined_at: { type: integer, format: int64 }
+        display_name: { type: string, nullable: true }
+    BotGetConversationMembersResponse:
+      type: object
+      properties:
+        members:
+          type: array
+          items: { $ref: '#/components/schemas/BotMemberDetailItem' }
+    BotGetConversationMembersResponseEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelopeBase'
+        - type: object
+          required: [body]
+          properties:
+            body: { $ref: '#/components/schemas/BotGetConversationMembersResponse' }
+    BotMarkReadRequest:
+      type: object
+      required: [last_read_message_id]
+      properties:
+        last_read_message_id: { type: string, minLength: 1 }
+    BotMarkReadResponse:
+      type: object
+      properties:
+        read_state: { $ref: '#/components/schemas/BotReadStateItem' }
+    BotMarkReadResponseEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelopeBase'
+        - type: object
+          required: [body]
+          properties:
+            body: { $ref: '#/components/schemas/BotMarkReadResponse' }
+    BotListReadStatesResponse:
+      type: object
+      properties:
+        read_states:
+          type: array
+          items: { $ref: '#/components/schemas/BotReadStateItem' }
+    BotListReadStatesResponseEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelopeBase'
+        - type: object
+          required: [body]
+          properties:
+            body: { $ref: '#/components/schemas/BotListReadStatesResponse' }
     BotSendMessageRequest:
       type: object
       required: [conversation_id, message_type, content, client_msg_id]

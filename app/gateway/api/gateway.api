@@ -552,6 +552,94 @@ type BotSendMessageResponse {
 	AcceptedAt  int64  `json:"accepted_at"`
 }
 
+type BotGetConversationHistoryRequest {
+	Id              string `path:"id" validate:"required"`
+	CursorCreatedAt int64  `form:"cursor_created_at,optional"`
+	CursorId        string `form:"cursor_id,optional"`
+	Limit           int32  `form:"limit,default=50,optional"`
+}
+
+type BotSenderInfo {
+	Name        string `json:"name"`
+	Email       string `json:"email"`
+	DisplayName string `json:"display_name,optional"`
+}
+
+type BotMessageReadDetailItem {
+	UserId            string `json:"user_id"`
+	IsRead            bool   `json:"is_read"`
+	LastReadMessageId string `json:"last_read_message_id"`
+	UpdatedAt         int64  `json:"updated_at"`
+	Email             string `json:"email"`
+	Avatar            string `json:"avatar"`
+	DisplayName       string `json:"display_name,optional"`
+}
+
+type BotMessageItem {
+	Id             string                     `json:"id"`
+	ConversationId string                     `json:"conversation_id"`
+	SenderId       string                     `json:"sender_id"`
+	SenderInfo     BotSenderInfo              `json:"sender_info"`
+	MessageType    string                     `json:"message_type"`
+	Content        string                     `json:"content"`
+	ClientMsgId    string                     `json:"client_msg_id"`
+	CreatedAt      int64                      `json:"created_at"`
+	IsSystem       bool                       `json:"is_system,optional"`
+	Mentions       []string                   `json:"mentions,optional"`
+	ReadDetails    []BotMessageReadDetailItem `json:"read_details"`
+}
+
+type BotReadStateItem {
+	UserId            string `json:"user_id"`
+	LastReadMessageId string `json:"last_read_message_id"`
+	UpdatedAt         int64  `json:"updated_at"`
+	Email             string `json:"email,optional"`
+	Avatar            string `json:"avatar,optional"`
+	DisplayName       string `json:"display_name,optional"`
+}
+
+type BotGetConversationHistoryResponse {
+	Messages            []BotMessageItem   `json:"messages"`
+	NextCursorCreatedAt int64              `json:"next_cursor_created_at"`
+	NextCursorId        string             `json:"next_cursor_id"`
+	HasMore             bool               `json:"has_more"`
+	ReadStates          []BotReadStateItem `json:"read_states"`
+}
+
+type BotGetConversationMembersRequest {
+	Id string `path:"id" validate:"required"`
+}
+
+type BotMemberDetailItem {
+	UserId      string `json:"user_id"`
+	Email       string `json:"email"`
+	Avatar      string `json:"avatar"`
+	Role        string `json:"role"`
+	JoinedAt    int64  `json:"joined_at"`
+	DisplayName string `json:"display_name,optional"`
+}
+
+type BotGetConversationMembersResponse {
+	Members []BotMemberDetailItem `json:"members"`
+}
+
+type BotMarkReadRequest {
+	Id                string `path:"id" validate:"required"`
+	LastReadMessageId string `json:"last_read_message_id" validate:"required"`
+}
+
+type BotMarkReadResponse {
+	ReadState BotReadStateItem `json:"read_state"`
+}
+
+type BotListReadStatesRequest {
+	Id string `path:"id" validate:"required"`
+}
+
+type BotListReadStatesResponse {
+	ReadStates []BotReadStateItem `json:"read_states"`
+}
+
 type BotDownloadAttachmentRequest {
 	Id string `path:"id" validate:"required"`
 }
@@ -608,6 +696,18 @@ service gateway-api {
 
 	@handler BotListConversations
 	get /conversations returns (BotListConversationsResponse)
+
+	@handler BotGetConversationHistory
+	get /conversations/:id/history (BotGetConversationHistoryRequest) returns (BotGetConversationHistoryResponse)
+
+	@handler BotGetConversationMembers
+	get /conversations/:id/members (BotGetConversationMembersRequest) returns (BotGetConversationMembersResponse)
+
+	@handler BotMarkRead
+	post /conversations/:id/read-receipt (BotMarkReadRequest) returns (BotMarkReadResponse)
+
+	@handler BotListReadStates
+	get /conversations/:id/read-states (BotListReadStatesRequest) returns (BotListReadStatesResponse)
 
 	@handler BotSendMessage
 	post /messages (BotSendMessageRequest) returns (BotSendMessageResponse)

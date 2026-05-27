@@ -43,11 +43,12 @@ func (l *GetConversationMembersDetailLogic) GetConversationMembersDetail(in *pb.
 	pbMembers := make([]*pb.MemberDetailItem, 0, len(details))
 	for _, d := range details {
 		pbMembers = append(pbMembers, &pb.MemberDetailItem{
-			UserId:   d.UserID,
-			Email:    d.Email,
-			Avatar:   d.Avatar,
-			Role:     d.Role,
-			JoinedAt: d.JoinedAt,
+			UserId:      d.UserID,
+			Email:       d.Email,
+			Avatar:      d.Avatar,
+			Role:        d.Role,
+			JoinedAt:    d.JoinedAt,
+			DisplayName: d.DisplayName,
 		})
 	}
 

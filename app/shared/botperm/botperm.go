@@ -13,8 +13,14 @@ const (
 	ActionBotAll                         = "bot.*"
 	ActionSelfRead                       = "bot.self.read"
 	ActionConversationList               = "bot.conversation.list"
+	ActionConversationAll                = "bot.conversation.*"
+	ActionConversationHistory            = "bot.conversation.history"
+	ActionConversationMembersRead        = "bot.conversation.members.read"
 	ActionMessageAll                     = "bot.message.*"
 	ActionMessageSend                    = "bot.message.send"
+	ActionReadReceiptAll                 = "bot.read_receipt.*"
+	ActionReadReceiptWrite               = "bot.read_receipt.write"
+	ActionReadReceiptRead                = "bot.read_receipt.read"
 	ActionWebhookRead                    = "bot.webhook.read"
 	ActionWebhookWrite                   = "bot.webhook.write"
 	ActionWebhookDelete                  = "bot.webhook.delete"
@@ -28,7 +34,11 @@ const (
 var BuiltinActions = []string{
 	ActionSelfRead,
 	ActionConversationList,
+	ActionConversationHistory,
+	ActionConversationMembersRead,
 	ActionMessageSend,
+	ActionReadReceiptWrite,
+	ActionReadReceiptRead,
 	ActionWebhookRead,
 	ActionWebhookWrite,
 	ActionWebhookDelete,
@@ -36,7 +46,9 @@ var BuiltinActions = []string{
 	ActionAttachmentDownload,
 	ActionAll,
 	ActionBotAll,
+	ActionConversationAll,
 	ActionMessageAll,
+	ActionReadReceiptAll,
 	ActionWebhookSubscribeAll,
 }
 

@@ -16,6 +16,8 @@ func TestIsValidAction(t *testing.T) {
 		{ActionMessageSend, true},
 		{ActionWebhookSubscribeMessageCreated, true},
 		{ActionWebhookSubscribeAll, true},
+		{ActionConversationHistory, true},
+		{ActionReadReceiptAll, true},
 		{"messages:send", false},
 		{"Bot.message.send", false},
 		{"bot.message", false},
@@ -35,11 +37,14 @@ func TestHasAction(t *testing.T) {
 	require.True(t, HasAction([]string{ActionBotAll}, ActionWebhookRead))
 	require.True(t, HasAction([]string{ActionMessageAll}, ActionMessageSend))
 	require.True(t, HasAction([]string{ActionWebhookSubscribeAll}, ActionWebhookSubscribeMessageCreated))
+	require.True(t, HasAction([]string{ActionConversationAll}, ActionConversationHistory))
+	require.True(t, HasAction([]string{ActionReadReceiptAll}, ActionReadReceiptWrite))
 
 	require.False(t, HasAction([]string{"messages:send"}, ActionMessageSend))
 	require.False(t, HasAction([]string{ActionWebhookRead}, ActionWebhookWrite))
 	require.False(t, HasAction([]string{"bot.message.*.x"}, ActionMessageSend))
 	require.False(t, HasAction([]string{ActionMessageAll}, ActionWebhookRead))
+	require.False(t, HasAction([]string{ActionConversationAll}, ActionReadReceiptRead))
 }
 
 func TestRequireAction(t *testing.T) {

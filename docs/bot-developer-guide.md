@@ -43,13 +43,17 @@ Authorization: Bot aim_bot_<64位hex>
 |---|---|
 | `bot.self.read` | 调用 `GET /api/bot/v1/me` |
 | `bot.conversation.list` | 调用 `GET /api/bot/v1/conversations` |
+| `bot.conversation.history` | 调用 `GET /api/bot/v1/conversations/:id/history` |
+| `bot.conversation.members.read` | 调用 `GET /api/bot/v1/conversations/:id/members` |
 | `bot.message.send` | 调用 `POST /api/bot/v1/messages` |
+| `bot.read_receipt.write` | 调用 `POST /api/bot/v1/conversations/:id/read-receipt` |
+| `bot.read_receipt.read` | 调用 `GET /api/bot/v1/conversations/:id/read-states` |
 | `bot.webhook.read` | 调用 `GET /api/bot/v1/webhook` |
 | `bot.webhook.write` | 新建/更新 webhook 基础配置 |
 | `bot.webhook.delete` | 删除 webhook |
 | `bot.webhook.subscribe.message_created` | 订阅 `message.created` webhook event |
 
-支持通配 grant：`*`、`bot.*`、`bot.message.*`、`bot.webhook.subscribe.*`。
+支持通配 grant：`*`、`bot.*`、`bot.conversation.*`、`bot.message.*`、`bot.read_receipt.*`、`bot.webhook.subscribe.*`。
 
 错误码（biz code → HTTP）：
 
@@ -141,7 +145,37 @@ curl -X POST \
 服务端会按 `conversation_id` 路由到 Kafka，群内其他成员通过 WebSocket
 立即收到 `PUSH_MESSAGE` 帧。
 
-### 3.4 GET `/api/bot/v1/webhook`
+### 3.4 GET `/api/bot/v1/conversations/:id/history`
+
+分页读取 Bot 所在会话的历史消息。需要 `bot.conversation.history` action。
+
+Query 参数：
+
+| 参数 | 说明 |
+|------|------|
+| `cursor_created_at` | 上一页最后一条消息创建时间，Unix milliseconds；首次可省略 |
+| `cursor_id` | 上一页最后一条消息 ID，十进制字符串；首次可省略 |
+| `limit` | 每页数量，默认 50，最大 100 |
+
+响应中的 `messages[].id`、`conversation_id`、`sender_id`、`read_states[].user_id` 等 ID 均为字符串。
+
+### 3.5 GET `/api/bot/v1/conversations/:id/members`
+
+读取会话成员详情。需要 `bot.conversation.members.read` action；Bot 必须是会话成员。
+
+### 3.6 POST `/api/bot/v1/conversations/:id/read-receipt`
+
+上报 Bot 的已读游标。需要 `bot.read_receipt.write` action。成功后会复用 AIM 已读回执 fan-out，在线客户端可收到 `PUSH_READ_RECEIPT`。
+
+```json
+{ "last_read_message_id": "123456789" }
+```
+
+### 3.7 GET `/api/bot/v1/conversations/:id/read-states`
+
+读取会话内成员已读状态。需要 `bot.read_receipt.read` action；Bot 必须是会话成员。
+
+### 3.8 GET `/api/bot/v1/webhook`
 
 返回当前 webhook 配置（**不含** plaintext secret）。
 
@@ -159,7 +193,7 @@ curl -X POST \
 }
 ```
 
-### 3.5 PUT `/api/bot/v1/webhook`
+### 3.9 PUT `/api/bot/v1/webhook`
 
 新建或更新 webhook 配置。
 
@@ -200,11 +234,11 @@ curl -X POST \
 
 注意：服务端只保存 secret 的 SHA-256 哈希；丢失明文只能再次 rotate。
 
-### 3.6 DELETE `/api/bot/v1/webhook`
+### 3.10 DELETE `/api/bot/v1/webhook`
 
 删除 webhook 配置（之后将不再有回调）。
 
-### 3.7 GET `/api/bot/v1/attachments/:id/download`
+### 3.11 GET `/api/bot/v1/attachments/:id/download`
 
 获取附件的预签名下载 URL。Bot 通过 Webhook 收到 `message.created` 事件后，
 若 `message_type` 为 `image`/`video`/`audio`/`file`，可从此端点获取短期有效的下载链接。
@@ -273,22 +307,28 @@ curl -H "Authorization: Bot $TOKEN" \
 
 ### 4.2 校验签名
 
-签名 = HMAC-SHA256(secret_hash, raw_body)，hex 编码。注意 V0 用的是
-**stored secret_hash**，因为这是服务端唯一保存的值；如果你需要直接用
-plaintext secret 验签，未来版本会通过 X-AIM-Signature 的算法前缀升级
-（仍然向后兼容）。
+推荐通过 `PUT /api/bot/v1/webhook` 设置 `rotate_secret=true`，将响应中的
+`plaintext_secret` 安全保存到 Bot 服务密钥管理中。AIM V0 线缆签名为：
+`HMAC-SHA256(SHA256(plaintext_secret), raw_body)`，hex 编码后放入
+`X-AIM-Signature: sha256=<hex>`。仓库内 Go SDK 已封装该细节，业务只需传入
+`plaintext_secret`。
 
-Python 示例（V0）：
+Go SDK 示例：
 
-```python
-import hmac, hashlib
+```go
+processor, err := botsdk.NewAsyncProcessor(plaintextSecret, botsdk.MessageHandlerFunc(
+    func(ctx context.Context, event botsdk.WebhookEvent) error {
+        // 按 event.EventID 做业务幂等；耗时处理在 SDK worker 中异步执行。
+        return nil
+    },
+))
+if err != nil {
+    log.Fatal(err)
+}
+defer processor.Shutdown(context.Background())
 
-def verify(stored_secret_hash: str, raw_body: bytes, signature_header: str) -> bool:
-    if not signature_header.startswith("sha256="):
-        return False
-    expected = signature_header[len("sha256="):]
-    digest = hmac.new(stored_secret_hash.encode(), raw_body, hashlib.sha256).hexdigest()
-    return hmac.compare_digest(digest, expected)
+http.Handle("/aim/webhook", processor)
+log.Fatal(http.ListenAndServe(":9000", nil))
 ```
 
 ### 4.3 防回调循环
@@ -323,6 +363,25 @@ python aim_test.py bot-send --conversation-id 1 --content "hello from bot"
 python aim_test.py bot-webhook-set --url https://your.tunnel.example/aim --rotate-secret
 python aim_test.py bot-webhook-get
 ```
+
+
+Go SDK 快速调用：
+
+```go
+client, err := botsdk.NewClient("http://127.0.0.1:8888", os.Getenv("AIM_BOT_TOKEN"))
+if err != nil {
+    log.Fatal(err)
+}
+
+resp, err := client.SendMessage(ctx, botsdk.SendMessageRequest{
+    ConversationID: "1",
+    MessageType:    "text",
+    Content:        "hello from sdk",
+    ClientMsgID:    uuid.NewString(),
+})
+```
+
+SDK 的 `AsyncProcessor` 内置有界内存队列、worker pool、重试/退避、失败回调、幂等去重接口与 `Shutdown(ctx)` 优雅退出；生产环境可把 `Deduper` 接到 Redis/数据库。
 
 如需让一个本地 HTTP 服务接收回调，配合 `ngrok http 9000` 这类隧道工具
 将 `--url` 暴露给 docker-compose 中的 `aim-logic`。

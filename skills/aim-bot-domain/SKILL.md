@@ -53,8 +53,13 @@ description: aim 的 Bot OpenAPI 域。覆盖第三方 Bot 接入、token 鉴权
    并签发首个 token。
 2. 运维把 plaintext token 通过安全渠道交给 Bot 开发者。
 3. Bot 服务用 `Authorization: Bot <token>` 调 `/api/bot/v1/messages` 发消息；
-   通过 `PUT /api/bot/v1/webhook` 注册回调地址。每个接口都要求对应 action：`bot.self.read`、`bot.conversation.list`、`bot.message.send`、`bot.webhook.*`；订阅 `message.created` 还要求 `bot.webhook.subscribe.message_created`。
-4. 第三方 HTTP 服务在 `X-AIM-Signature` 校验通过后处理 `message.created` 事件。
+   通过 `GET /api/bot/v1/conversations/:id/history` 读历史、
+   `GET /api/bot/v1/conversations/:id/members` 读成员、
+   `POST /api/bot/v1/conversations/:id/read-receipt` 上报已读，
+   `GET /api/bot/v1/conversations/:id/read-states` 读取已读状态。
+4. Go 业务可导入 `github.com/hellopoisonx/aim/bot_sdk`（包名 `botsdk`）使用
+   REST Client、rotate-secret Webhook 验签与异步消息处理器。
+5. 第三方 HTTP 服务在 `X-AIM-Signature` 校验通过后处理 `message.created` 事件。
 
 ## 错误码
 
@@ -74,6 +79,7 @@ description: aim 的 Bot OpenAPI 域。覆盖第三方 Bot 接入、token 鉴权
 - OpenAPI 规范：`docs/api/gateway-openapi.yaml`（Bot 路径前缀 `/api/bot/v1/`）
 - 运维 provision：`scripts/bot-provision/README.md`
 - 历史规划：`PLAN_BOT_ABILITY.md`（V0 之外的扩展计划）
+- Go SDK：`bot_sdk/`
 
 ## 反模式
 
@@ -92,6 +98,7 @@ description: aim 的 Bot OpenAPI 域。覆盖第三方 Bot 接入、token 鉴权
 ## 最近变更
 
 - 2026-05-27: Bot direct 会话不再消耗/触发非好友临时会话累计消息上限；`DatabasePermissionChecker` 识别发送者或对端为 `user_type='bot'` 后跳过限额，但仍保留 direct 成员校验与 block 拦截。
+- 2026-05-27: 补全 Bot 会话读侧接口（历史消息、成员详情、已读上报/读取状态），新增 `bot.conversation.*`、`bot.read_receipt.*` action，并新增 Go SDK `bot_sdk`（REST Client、rotate-secret Webhook 验签、异步处理器）。
 - 2026-05-23: 新增基于 action 的 Bot 权限系统。新增 migration 009（`bot_actions`、`bot_token_permissions`、`bot_event_actions`），`ValidateBotToken` 从 action 关联表加载权限，Gateway Bot API 全量校验 action，webhook event 通过 `bot_event_actions` 映射订阅 action。
 - 2026-05-23: V0 落地。新增 migrations 006-008、`BotService` RPC、`BotAuth`
   middleware、`/api/bot/v1/*` REST、`BotWebhookConsumer`（HMAC 签名 + 指数退避）、

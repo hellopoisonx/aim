@@ -78,6 +78,29 @@ type BotDownloadAttachmentResponse struct {
 	ExpiresAt int64             `json:"expires_at"`
 }
 
+type BotGetConversationHistoryRequest struct {
+	Id              string `path:"id" validate:"required"`
+	CursorCreatedAt int64  `form:"cursor_created_at,optional"`
+	CursorId        string `form:"cursor_id,optional"`
+	Limit           int32  `form:"limit,default=50,optional"`
+}
+
+type BotGetConversationHistoryResponse struct {
+	Messages            []BotMessageItem   `json:"messages"`
+	NextCursorCreatedAt int64              `json:"next_cursor_created_at"`
+	NextCursorId        string             `json:"next_cursor_id"`
+	HasMore             bool               `json:"has_more"`
+	ReadStates          []BotReadStateItem `json:"read_states"`
+}
+
+type BotGetConversationMembersRequest struct {
+	Id string `path:"id" validate:"required"`
+}
+
+type BotGetConversationMembersResponse struct {
+	Members []BotMemberDetailItem `json:"members"`
+}
+
 type BotGetWebhookResponse struct {
 	Configured bool             `json:"configured"`
 	Webhook    BotWebhookConfig `json:"webhook"`
@@ -85,6 +108,23 @@ type BotGetWebhookResponse struct {
 
 type BotListConversationsResponse struct {
 	Conversations []BotConversationItem `json:"conversations"`
+}
+
+type BotListReadStatesRequest struct {
+	Id string `path:"id" validate:"required"`
+}
+
+type BotListReadStatesResponse struct {
+	ReadStates []BotReadStateItem `json:"read_states"`
+}
+
+type BotMarkReadRequest struct {
+	Id                string `path:"id" validate:"required"`
+	LastReadMessageId string `json:"last_read_message_id" validate:"required"`
+}
+
+type BotMarkReadResponse struct {
+	ReadState BotReadStateItem `json:"read_state"`
 }
 
 type BotMe struct {
@@ -99,6 +139,48 @@ type BotMeResponse struct {
 	Bot BotMe `json:"bot"`
 }
 
+type BotMemberDetailItem struct {
+	UserId      string `json:"user_id"`
+	Email       string `json:"email"`
+	Avatar      string `json:"avatar"`
+	Role        string `json:"role"`
+	JoinedAt    int64  `json:"joined_at"`
+	DisplayName string `json:"display_name,optional"`
+}
+
+type BotMessageItem struct {
+	Id             string                     `json:"id"`
+	ConversationId string                     `json:"conversation_id"`
+	SenderId       string                     `json:"sender_id"`
+	SenderInfo     BotSenderInfo              `json:"sender_info"`
+	MessageType    string                     `json:"message_type"`
+	Content        string                     `json:"content"`
+	ClientMsgId    string                     `json:"client_msg_id"`
+	CreatedAt      int64                      `json:"created_at"`
+	IsSystem       bool                       `json:"is_system,optional"`
+	Mentions       []string                   `json:"mentions,optional"`
+	ReadDetails    []BotMessageReadDetailItem `json:"read_details"`
+}
+
+type BotMessageReadDetailItem struct {
+	UserId            string `json:"user_id"`
+	IsRead            bool   `json:"is_read"`
+	LastReadMessageId string `json:"last_read_message_id"`
+	UpdatedAt         int64  `json:"updated_at"`
+	Email             string `json:"email"`
+	Avatar            string `json:"avatar"`
+	DisplayName       string `json:"display_name,optional"`
+}
+
+type BotReadStateItem struct {
+	UserId            string `json:"user_id"`
+	LastReadMessageId string `json:"last_read_message_id"`
+	UpdatedAt         int64  `json:"updated_at"`
+	Email             string `json:"email,optional"`
+	Avatar            string `json:"avatar,optional"`
+	DisplayName       string `json:"display_name,optional"`
+}
+
 type BotSendMessageRequest struct {
 	ConversationId string   `json:"conversation_id" validate:"required"`
 	MessageType    string   `json:"message_type" validate:"required,max=32"`
@@ -111,6 +193,12 @@ type BotSendMessageResponse struct {
 	MessageId   string `json:"message_id"`
 	ClientMsgId string `json:"client_msg_id"`
 	AcceptedAt  int64  `json:"accepted_at"`
+}
+
+type BotSenderInfo struct {
+	Name        string `json:"name"`
+	Email       string `json:"email"`
+	DisplayName string `json:"display_name,optional"`
 }
 
 type BotSetWebhookRequest struct {

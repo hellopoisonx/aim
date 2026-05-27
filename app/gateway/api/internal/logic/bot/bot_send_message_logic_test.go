@@ -2,7 +2,6 @@ package bot
 
 import (
 	"context"
-	"errors"
 	"testing"
 
 	corepb "github.com/hellopoisonx/aim/app/core/rpc/pb"
@@ -139,5 +138,5 @@ func TestBotSendMessage_RequiresIdentity(t *testing.T) {
 		ClientMsgId:    "x",
 	})
 	require.Error(t, err)
-	require.True(t, errors.Is(err, errorx.NewCodeError(errorx.CodeBotTokenInvalid, "")))
+	require.ErrorIs(t, err, errorx.NewCodeError(errorx.CodeBotTokenInvalid, ""))
 }

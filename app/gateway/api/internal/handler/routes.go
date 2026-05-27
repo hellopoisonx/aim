@@ -90,6 +90,26 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				},
 				{
 					Method:  http.MethodGet,
+					Path:    "/conversations/:id/history",
+					Handler: bot.BotGetConversationHistoryHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodGet,
+					Path:    "/conversations/:id/members",
+					Handler: bot.BotGetConversationMembersHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/conversations/:id/read-receipt",
+					Handler: bot.BotMarkReadHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodGet,
+					Path:    "/conversations/:id/read-states",
+					Handler: bot.BotListReadStatesHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodGet,
 					Path:    "/me",
 					Handler: bot.BotGetMeHandler(serverCtx),
 				},
