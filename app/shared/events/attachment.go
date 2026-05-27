@@ -8,7 +8,7 @@ const (
 )
 
 // AttachmentUploadedEvent is published after AIM confirms a client-direct
-// SeaweedFS upload and the attachment becomes eligible for chat message use.
+// SeaweedFS media upload and the attachment becomes eligible for parsing.
 type AttachmentUploadedEvent struct {
 	tracing.TraceContextFields
 

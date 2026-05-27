@@ -296,30 +296,26 @@ class RESTClient:
 
     def create_conversation(self, member_ids: list, name: str = "") -> dict:
         conversation_type = "direct" if len(member_ids) == 1 else "group"
-        if not name:
-            name = self._default_conversation_name(conversation_type, member_ids)
         body = {
             "conversation_type": conversation_type,
             "member_ids": member_ids,
-            "name": name,
         }
+        if conversation_type == "group":
+            if not name:
+                raise ValueError("group conversation requires name")
+            body["name"] = name
+        elif name:
+            # direct conversation does not require name, but keep explicit user input for compatibility.
+            body["name"] = name
         return self._post("/api/conversations", body)
 
     def create_group(self, member_ids: list, name: str = "", avatar: str = "") -> dict:
         if not name:
-            name = self._default_conversation_name("group", member_ids)
+            raise ValueError("group conversation requires name")
         body = {"member_ids": member_ids, "name": name}
         if avatar:
             body["avatar"] = avatar
         return self._post("/api/conversations/group", body)
-
-    def _default_conversation_name(self, conversation_type: str, member_ids: list) -> str:
-        ids = [str(self.token.user_id)] if self.token.user_id else []
-        ids.extend(str(uid) for uid in member_ids)
-        if conversation_type == "direct":
-            return "direct-" + "-".join(ids)
-        suffix = "-".join(ids) if ids else str(int(time.time()))
-        return "group-" + suffix
 
     def get_history(self, conversation_id: int, cursor_created_at: int = 0,
                     cursor_id: int = 0, limit: int = 50) -> dict:
@@ -819,7 +815,7 @@ def cmd_create_conversation(args):
         if name:
             print(f"  Name: {name}")
         print_json(conv)
-    except APIError as e:
+    except (APIError, ValueError) as e:
         print(f"✗ Create conversation failed: {e}")
 
 
@@ -840,7 +836,7 @@ def cmd_create_group(args):
         if avatar:
             print(f"  Avatar: {avatar}")
         print_json(conv)
-    except APIError as e:
+    except (APIError, ValueError) as e:
         print(f"✗ Create group failed: {e}")
 
 
@@ -1051,8 +1047,8 @@ def _print_help():
 │  friend-list          presence-friends             │
 ├─ Conversations ──────────────────────────────────┤
 │  conv-list                                         │
-│  conv-create <member_id> [name]  (or comma-sep)    │
-│  group-create <member_id> [name] (or comma-sep)    │
+│  conv-create <member_id> [name]  (name required for group) │
+│  group-create <member_id> <name> (or comma-sep)     │
 │  conv-members <conv_id>                            │
 │  conv-add-members <conv_id> <uid,uid,...>          │
 │  conv-remove-member <conv_id> <uid>                │
@@ -1623,12 +1619,12 @@ Examples:
     p = sub.add_parser("conv-create", help="Create conversation")
     p.add_argument("--member-id", type=int, help="Single member ID")
     p.add_argument("--member-ids", help="Comma-separated member IDs (e.g. 2,3,4)")
-    p.add_argument("--name", default="", help="Group name (optional)")
+    p.add_argument("--name", default="", help="Group name (required when creating a group; direct conversation does not require name)")
 
     p = sub.add_parser("group-create", help="Create group conversation")
     p.add_argument("--member-id", type=int, help="Single member ID")
     p.add_argument("--member-ids", help="Comma-separated member IDs (e.g. 2,3,4)")
-    p.add_argument("--name", default="", help="Group name (optional)")
+    p.add_argument("--name", required=True, help="Group name (required)")
     p.add_argument("--avatar", default="", help="Group avatar URL (optional)")
 
     p = sub.add_parser("conv-members", help="Get conversation member details")

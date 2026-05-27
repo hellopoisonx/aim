@@ -12,13 +12,14 @@ const (
 	KindImage = "image"
 	KindVideo = "video"
 	KindAudio = "audio"
+	KindFile  = "file"
 
 	ParseStatusPending = "pending"
 	ParseStatusReady   = "ready"
 	ParseStatusFailed  = "failed"
 )
 
-// Content is the JSON shape carried by message.content for image/video/audio
+// Content is the JSON shape carried by message.content for image/video/audio/file
 // chat attachments. The value is serialized as a string on protobuf/WebSocket
 // boundaries, and should be stored as a JSON object in PostgreSQL JSONB.
 type Content struct {
@@ -45,7 +46,7 @@ type OriginalObject struct {
 // IsAttachmentMessageType reports whether message_type should carry Content.
 func IsAttachmentMessageType(messageType string) bool {
 	switch messageType {
-	case KindImage, KindVideo, KindAudio:
+	case KindImage, KindVideo, KindAudio, KindFile:
 		return true
 	default:
 		return false
@@ -55,6 +56,17 @@ func IsAttachmentMessageType(messageType string) bool {
 // ValidKind reports whether kind is a supported chat attachment kind.
 func ValidKind(kind string) bool {
 	return IsAttachmentMessageType(kind)
+}
+
+// RequiresDataParsing reports whether an uploaded attachment kind should enter
+// the asynchronous media parsing pipeline.
+func RequiresDataParsing(kind string) bool {
+	switch kind {
+	case KindImage, KindVideo, KindAudio:
+		return true
+	default:
+		return false
+	}
 }
 
 // ParseContent decodes and validates an aim.attachment.v1 JSON content string.

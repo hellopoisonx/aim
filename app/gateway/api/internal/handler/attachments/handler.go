@@ -14,7 +14,7 @@ import (
 
 type initAttachmentUploadRequest struct {
 	ConversationId int64  `json:"conversation_id" validate:"required"`
-	Kind           string `json:"kind" validate:"required,oneof=image video audio"`
+	Kind           string `json:"kind" validate:"required,oneof=image video audio file"`
 	OriginalName   string `json:"original_name" validate:"required"`
 	Mime           string `json:"mime" validate:"required"`
 	Size           int64  `json:"size" validate:"required"`

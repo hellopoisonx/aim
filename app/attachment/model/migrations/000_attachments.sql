@@ -2,7 +2,7 @@ CREATE TABLE IF NOT EXISTS attachment_files (
     file_id UUID PRIMARY KEY,
     owner_id BIGINT NOT NULL,
     conversation_id BIGINT NOT NULL,
-    kind VARCHAR(16) NOT NULL CHECK (kind IN ('image', 'video', 'audio')),
+    kind VARCHAR(16) NOT NULL CHECK (kind IN ('image', 'video', 'audio', 'file')),
     original_name TEXT NOT NULL,
     mime TEXT NOT NULL,
     size_bytes BIGINT NOT NULL CHECK (size_bytes > 0 AND size_bytes <= 5368709120),

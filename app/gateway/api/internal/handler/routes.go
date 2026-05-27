@@ -20,6 +20,35 @@ import (
 
 func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 	server.AddRoutes(
+		rest.WithMiddlewares(
+			[]rest.Middleware{serverCtx.Auth},
+			[]rest.Route{
+				{
+					Method:  http.MethodGet,
+					Path:    "/:id",
+					Handler: attachments.GetAttachmentHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/:id/complete",
+					Handler: attachments.CompleteAttachmentUploadHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodGet,
+					Path:    "/:id/download",
+					Handler: attachments.DownloadAttachmentHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/init",
+					Handler: attachments.InitAttachmentUploadHandler(serverCtx),
+				},
+			}...,
+		),
+		rest.WithPrefix("/api/attachments"),
+	)
+
+	server.AddRoutes(
 		[]rest.Route{
 			{
 				Method:  http.MethodPost,
@@ -49,6 +78,11 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 		rest.WithMiddlewares(
 			[]rest.Middleware{serverCtx.BotAuth},
 			[]rest.Route{
+				{
+					Method:  http.MethodGet,
+					Path:    "/attachments/:id/download",
+					Handler: bot.BotDownloadAttachmentHandler(serverCtx),
+				},
 				{
 					Method:  http.MethodGet,
 					Path:    "/conversations",
@@ -82,35 +116,6 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 			}...,
 		),
 		rest.WithPrefix("/api/bot/v1"),
-	)
-
-	server.AddRoutes(
-		rest.WithMiddlewares(
-			[]rest.Middleware{serverCtx.Auth},
-			[]rest.Route{
-				{
-					Method:  http.MethodPost,
-					Path:    "/init",
-					Handler: attachments.Handler(serverCtx),
-				},
-				{
-					Method:  http.MethodGet,
-					Path:    "/:id",
-					Handler: attachments.Handler(serverCtx),
-				},
-				{
-					Method:  http.MethodPost,
-					Path:    "/:id/complete",
-					Handler: attachments.Handler(serverCtx),
-				},
-				{
-					Method:  http.MethodGet,
-					Path:    "/:id/download",
-					Handler: attachments.Handler(serverCtx),
-				},
-			}...,
-		),
-		rest.WithPrefix("/api/attachments"),
 	)
 
 	server.AddRoutes(

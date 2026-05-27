@@ -76,6 +76,7 @@ Kafka:
     - bench-kafka:9092
   PresenceTopic: aim.presence.events
   TypingTopic: aim.typing.events
+  ReadReceiptTopic: aim.read_receipt.events
 GatewayRpc:
   Name: gateway.rpc
   ListenOn: 0.0.0.0:9090
@@ -85,3 +86,19 @@ GatewayRpc:
     Sampler: 1.0
     Batcher: otlphttp
     OtlpHttpPath: /v1/traces
+AttachmentRpc:
+  ServerAddr: bench-nacos:8848
+  NamespaceID: ""
+  Group: DEFAULT_GROUP
+  Cluster: DEFAULT
+  ServiceName: attachment.rpc
+  AdvertiseIP: ""
+  AdvertisePort: 0
+  Ephemeral: true
+  Weight: 1
+  TimeoutMs: 5000
+  Username: ""
+  Password: ""
+  LogDir: /app/log/nacos
+  CacheDir: /tmp/nacos/cache
+  LogLevel: info

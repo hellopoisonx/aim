@@ -10,7 +10,7 @@ description: AIM 的附件域。涉及 `app/attachment`、AttachmentService gRPC
 - `attachment` 是内部 gRPC 服务，不向客户端/公网暴露 REST/WS。
 - 客户端附件能力只能经 gateway 的 `/api/attachments/*` REST 入口访问；gateway 通过 `AttachmentRpc` 调用 `attachment.rpc`。
 - core 校验附件消息引用只能通过 `AttachmentService.ValidateReference` gRPC，不再调用内部 HTTP。
-- `attachment` 可直接访问 SeaweedFS/S3 与 PostgreSQL，并在上传完成后发布 `aim.attachment.uploaded`。
+- `attachment` 可直接访问 SeaweedFS/S3 与 PostgreSQL；媒体附件（`image`/`video`/`audio`）上传完成后发布 `aim.attachment.uploaded`，普通文件（`file`）上传完成后直接置为解析完成，不进入 data_parsing。
 - 不要恢复 `internal/httpx`、`http.Server`、`/v1/attachments/*` 等模块间 HTTP 接口。
 
 ## 关键位置
@@ -31,7 +31,7 @@ description: AIM 的附件域。涉及 `app/attachment`、AttachmentService gRPC
 - 对外 REST 字段转换在 gateway 完成；attachment 只暴露内部 pb 类型。
 - gRPC 业务错误使用 `errorx.NewCodeError` 映射：参数错误 `CodeBadInput`，无记录 `CodeNotFound`，权限/引用不匹配 `CodeForbidden`，基础设施错误对外清洗为 `internal error`。
 - SeaweedFS/S3 HTTP 调用是对象存储协议，不是 AIM 模块间 API；必须用 context-aware request 并保留 tracing。
-- 上传完成事件使用 `aim.attachment.uploaded`，key 使用 `file_id`，payload 要携带 trace context。
+- 媒体上传完成事件使用 `aim.attachment.uploaded`，key 使用 `file_id`，payload 要携带 trace context；`file` 普通附件不得发布给 data_parsing。
 
 ## 常用验证
 

@@ -40,7 +40,7 @@ PYTHONIOENCODING=utf-8 python aim_test.py <command> [--args]
 | 命令 | 参数 | 鉴权 | 对应 API |
 |------|------|------|----------|
 | `conv-create` | `--member-id` 或 `--member-ids` [`--name`] | Bearer | `POST /api/conversations` |
-| `group-create` | `--member-id` 或 `--member-ids` [`--name`] [`--avatar`] | Bearer | `POST /api/conversations/group` |
+| `group-create` | `--member-id` 或 `--member-ids` `--name` [`--avatar`] | Bearer | `POST /api/conversations/group` |
 | `conv-members` | `--conversation-id` | Bearer | `GET /api/conversations/:id/members` |
 | `conv-add-members` | `--conversation-id` `--member-ids` | Bearer | `POST /api/conversations/:id/members` |
 | `conv-remove-member` | `--conversation-id` `--user-id` | Bearer | `DELETE /api/conversations/:id/members/:uid` |
@@ -49,7 +49,7 @@ PYTHONIOENCODING=utf-8 python aim_test.py <command> [--args]
 | `conv-update` | `--conversation-id` [`--name`] [`--avatar`] | Bearer | `PUT /api/conversations/:id` |
 | `history` | `--conversation-id` [`--limit`] [`--cursor-created-at`] [`--cursor-id`] | Bearer | `GET /api/conversations/history/:id` |
 
-> `POST /api/conversations` / `POST /api/conversations/group` 服务端要求 `name`；dev-tool 中 `--name` 可省略，省略时自动生成 `direct-<uid>-<uid>` 或 `group-<uid>-...`。
+注：`direct` 会话（单个成员）不需要客户端上传 `name` 参数；`group` 会话必须上传 `name`。`conv-create` 在 `--member-ids` 指定多个成员时等价创建群聊，需同时传 `--name`；推荐直接使用 `group-create --name <name>`。
 
 ### WebSocket
 

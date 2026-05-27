@@ -169,7 +169,11 @@ func (s *Service) CompleteUpload(ctx context.Context, userID int64, fileID strin
 		if err := s.verifyObject(ctx, pending.ObjectKey, pending.Size); err != nil {
 			return nil, err
 		}
-		cmd, err := s.db.Exec(ctx, `UPDATE attachment_files SET status='uploaded', uploaded_at=NOW(), updated_at=NOW(), sha256=COALESCE(NULLIF($3,''), sha256) WHERE file_id=$1 AND owner_id=$2 AND status='pending'`, id, userID, req.SHA256)
+		cmd, err := s.db.Exec(ctx, `UPDATE attachment_files
+			SET status='uploaded', uploaded_at=NOW(), updated_at=NOW(),
+				sha256=COALESCE(NULLIF($3,''), sha256),
+				parse_status=CASE WHEN kind=$4 THEN 'ready' ELSE parse_status END
+			WHERE file_id=$1 AND owner_id=$2 AND status='pending'`, id, userID, req.SHA256, sharedattachment.KindFile)
 		if err != nil {
 			return nil, err
 		}
@@ -181,7 +185,9 @@ func (s *Service) CompleteUpload(ctx context.Context, userID int64, fileID strin
 	if err != nil {
 		return nil, err
 	}
-	_ = s.publishUploaded(ctx, info)
+	if sharedattachment.RequiresDataParsing(info.Kind) {
+		_ = s.publishUploaded(ctx, info)
+	}
 	return info, nil
 }
 
@@ -317,7 +323,10 @@ func objectKey(conversationID int64, fileID, role string) string {
 }
 
 func allowedMime(kind, mime string) bool {
-	mime = strings.ToLower(mime)
+	mime = strings.TrimSpace(strings.ToLower(mime))
+	if mime == "" || !strings.Contains(mime, "/") {
+		return false
+	}
 	switch kind {
 	case sharedattachment.KindImage:
 		return strings.HasPrefix(mime, "image/")
@@ -325,6 +334,8 @@ func allowedMime(kind, mime string) bool {
 		return strings.HasPrefix(mime, "video/")
 	case sharedattachment.KindAudio:
 		return strings.HasPrefix(mime, "audio/")
+	case sharedattachment.KindFile:
+		return !strings.HasPrefix(mime, "image/") && !strings.HasPrefix(mime, "video/") && !strings.HasPrefix(mime, "audio/")
 	default:
 		return false
 	}

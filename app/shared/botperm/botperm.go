@@ -20,6 +20,7 @@ const (
 	ActionWebhookDelete                  = "bot.webhook.delete"
 	ActionWebhookSubscribeAll            = "bot.webhook.subscribe.*"
 	ActionWebhookSubscribeMessageCreated = "bot.webhook.subscribe.message_created"
+	ActionAttachmentDownload             = "bot.attachment.download"
 	WebhookEventMessageCreated           = "message.created"
 )
 
@@ -32,6 +33,7 @@ var BuiltinActions = []string{
 	ActionWebhookWrite,
 	ActionWebhookDelete,
 	ActionWebhookSubscribeMessageCreated,
+	ActionAttachmentDownload,
 	ActionAll,
 	ActionBotAll,
 	ActionMessageAll,

@@ -79,6 +79,7 @@ services:
         condition: service_started
     networks:
       - aim-network
+      - aim_shared
 
   aim-logic:
     build:
@@ -129,6 +130,7 @@ services:
         psql -h postgres -U user -d aim_logic -f /migrations/007_bot_tokens.sql
         psql -h postgres -U user -d aim_logic -f /migrations/008_bot_webhooks.sql
         psql -h postgres -U user -d aim_logic -f /migrations/009_bot_actions.sql
+        psql -h postgres -U user -d aim_logic -f /migrations/010_bot_attachment_actions.sql
     networks:
       - aim-network
 
@@ -184,6 +186,7 @@ services:
         condition: service_started
     networks:
       - aim-network
+      - aim_shared
 
   aim-data-parsing:
     build:
@@ -297,6 +300,7 @@ services:
       - seaweed_master_data:/data
     networks:
       - aim-network
+      - aim_shared
 
   seaweed-volume:
     image: chrislusf/seaweedfs:latest
@@ -310,6 +314,7 @@ services:
       - seaweed_volume_data:/data
     networks:
       - aim-network
+      - aim_shared
 
   seaweed-filer:
     image: chrislusf/seaweedfs:latest
@@ -324,6 +329,7 @@ services:
       - seaweed_filer_data:/data
     networks:
       - aim-network
+      - aim_shared
 
   seaweed-s3:
     image: chrislusf/seaweedfs:latest
@@ -337,6 +343,7 @@ services:
       - ./app/attachment/rpc/etc/seaweed-s3.json:/etc/seaweedfs/s3.json:ro
     networks:
       - aim-network
+      - aim_shared
 
   seaweed-bucket-init:
     image: amazon/aws-cli:latest
@@ -419,6 +426,8 @@ services:
 networks:
   aim-network:
     driver: bridge
+  aim_shared:
+    external: true
 
 volumes:
   postgres_data:

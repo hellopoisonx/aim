@@ -650,7 +650,7 @@ paths:
       operationId: attachmentsCompleteUpload
       summary: 标记附件上传完成
       description: |
-        需要 Bearer JWT。客户端完成对象存储直传后调用本接口，attachment 服务会校验对象并回写状态，随后发布 `aim.attachment.uploaded` 事件供解析服务处理。
+        需要 Bearer JWT。客户端完成对象存储直传后调用本接口，attachment 服务会校验对象并回写状态；媒体附件会发布 `aim.attachment.uploaded` 事件供解析服务处理，普通文件附件直接标记为解析完成。
       security:
         - BearerAuth: []
       parameters:
@@ -819,6 +819,39 @@ paths:
                 $ref: '#/components/schemas/BotDeleteWebhookResponseEnvelope'
         "401": { $ref: '#/components/responses/BotUnauthorized' }
         "403": { $ref: '#/components/responses/BotForbidden' }
+        "500": { $ref: '#/components/responses/InternalError' }
+
+  /api/bot/v1/attachments/{id}/download:
+    get:
+      tags: [Bot OpenAPI]
+      operationId: botDownloadAttachment
+      summary: 获取附件下载 URL
+      description: |
+        需要 `bot.attachment.download` action。Bot 通过 Webhook 收到 `message.created`
+        事件后，若 `message_type` 为 `image`/`video`/`audio`/`file`，可从 content 中的 `file_id`
+        获取短期预签名下载 URL。Bot 必须是附件所属会话的成员。
+
+        URL 有效期为 5 分钟（可配置），过期后需重新请求。
+      security:
+        - BotAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: 附件 file_id（UUID 字符串）
+      responses:
+        "200":
+          description: 下载 URL
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BotDownloadAttachmentResponseEnvelope'
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "401": { $ref: '#/components/responses/BotUnauthorized' }
+        "403": { $ref: '#/components/responses/BotForbidden' }
+        "404": { $ref: '#/components/responses/NotFound' }
         "500": { $ref: '#/components/responses/InternalError' }
 components:
   securitySchemes:
@@ -1076,7 +1109,7 @@ components:
         status: { type: integer, format: int32 }
         nickname: { type: string }
         avatar: { type: string }
-        display_name: { type: string, nullable: true, description: 显示名快照，可能来自昵称。 }
+        display_name: { type: string, description: 显示名快照，可能来自昵称。 }
         created_at: { type: integer, format: int64, description: Unix milliseconds。 }
         updated_at: { type: integer, format: int64, description: Unix milliseconds。 }
     UserListItem:
@@ -1087,7 +1120,7 @@ components:
         nickname: { type: string }
         email: { type: string, format: email }
         avatar: { type: string }
-        display_name: { type: string, nullable: true }
+        display_name: { type: string }
     GetUserByIdResponse:
       type: object
       required: [user]
@@ -1123,7 +1156,7 @@ components:
         status: { type: string, description: 好友关系状态，例如 pending / accepted / rejected。 }
         created_at: { type: integer, format: int64, description: Unix milliseconds。 }
         updated_at: { type: integer, format: int64, description: Unix milliseconds。 }
-        display_name: { type: string, nullable: true }
+        display_name: { type: string }
         email: { type: string, nullable: true, format: email }
         avatar: { type: string, nullable: true }
     FriendshipResponse:
@@ -1181,7 +1214,7 @@ components:
               minItems: 1
               maxItems: 1
               items: { type: integer, format: int64, minimum: 1 }
-            name: { type: string, nullable: true, description: 直聊当前逻辑忽略该字段。 }
+            name: { type: string, description: 直聊不需要客户端上传该字段；当前逻辑会忽略该字段。 }
             avatar: { type: string, nullable: true }
         - type: object
           required: [conversation_type, member_ids, name]
@@ -1217,7 +1250,7 @@ components:
         name: { type: string }
         avatar: { type: string }
         creator_id: { type: integer, format: int64 }
-        display_name: { type: string, nullable: true }
+        display_name: { type: string }
     ConversationResponse:
       allOf:
         - $ref: '#/components/schemas/ConversationItem'
@@ -1248,7 +1281,7 @@ components:
       properties:
         name: { type: string }
         email: { type: string, format: email }
-        display_name: { type: string, nullable: true }
+        display_name: { type: string }
     MessageReadDetailItem:
       type: object
       required: [user_id, is_read, last_read_message_id, updated_at, email, avatar]
@@ -1259,7 +1292,7 @@ components:
         updated_at: { type: integer, format: int64, description: Unix milliseconds。 }
         email: { type: string, format: email }
         avatar: { type: string }
-        display_name: { type: string, nullable: true }
+        display_name: { type: string }
     MessageItem:
       type: object
       required: [id, conversation_id, sender_id, sender_info, message_type, content, client_msg_id, created_at, read_details]
@@ -1268,11 +1301,11 @@ components:
         conversation_id: { type: integer, format: int64 }
         sender_id: { type: integer, format: int64, description: 系统消息为 0。 }
         sender_info: { $ref: '#/components/schemas/SenderInfo' }
-        message_type: { type: string, description: text / image / file / system / 业务扩展类型。 }
-        content: { type: string, description: text 为纯文本；附件或系统消息通常为 JSON 字符串。 }
+        message_type: { type: string, description: text / image / video / audio / file / system / 业务扩展类型。 }
+        content: { type: string, description: text 为纯文本；当 message_type 为附件类型时，为 `aim.attachment.v1` JSON 字符串，见 AttachmentContent schema。 }
         client_msg_id: { type: string }
         created_at: { type: integer, format: int64, description: Unix milliseconds。 }
-        is_system: { type: boolean, nullable: true, description: true 表示群变更系统消息。 }
+        is_system: { type: boolean, default: false, description: true 表示群变更系统消息。 }
         mentions:
           type: array
           nullable: true
@@ -1289,7 +1322,7 @@ components:
         updated_at: { type: integer, format: int64, description: Unix milliseconds。 }
         email: { type: string, nullable: true, format: email }
         avatar: { type: string, nullable: true }
-        display_name: { type: string, nullable: true }
+        display_name: { type: string }
     GetConversationHistoryResponse:
       type: object
       required: [messages, next_cursor_created_at, next_cursor_id, has_more, read_states]
@@ -1355,7 +1388,7 @@ components:
         avatar: { type: string }
         role: { type: string, enum: [owner, admin, member] }
         joined_at: { type: integer, format: int64, description: Unix milliseconds。 }
-        display_name: { type: string, nullable: true }
+        display_name: { type: string }
     GetConversationMembersResponse:
       type: object
       required: [members]
@@ -1377,7 +1410,7 @@ components:
         user_id: { type: integer, format: int64 }
         status: { type: string, enum: [online, offline] }
         updated_at: { type: integer, format: int64, description: 当前快照接口保留为 0。 }
-        display_name: { type: string, nullable: true }
+        display_name: { type: string }
     GetFriendsPresenceResponse:
       type: object
       required: [presences]
@@ -1397,7 +1430,7 @@ components:
       required: [conversation_id, kind, original_name, mime, size]
       properties:
         conversation_id: { type: integer, format: int64, minimum: 1 }
-        kind: { type: string, enum: [image, video, audio] }
+        kind: { type: string, enum: [image, video, audio, file] }
         original_name: { type: string, minLength: 1 }
         mime: { type: string, minLength: 1 }
         size: { type: integer, format: int64, minimum: 1 }
@@ -1434,13 +1467,13 @@ components:
         file_id: { type: string }
         owner_id: { type: integer, format: int64 }
         conversation_id: { type: integer, format: int64 }
-        kind: { type: string, enum: [image, video, audio] }
+        kind: { type: string, enum: [image, video, audio, file] }
         original_name: { type: string }
         mime: { type: string }
         size: { type: integer, format: int64 }
         sha256: { type: string, nullable: true }
-        status: { type: string, description: 上传状态。 }
-        parse_status: { type: string, description: 解析状态。 }
+        status: { type: string, enum: [pending, uploaded, failed, deleted], description: 上传状态。 }
+        parse_status: { type: string, enum: [pending, ready, failed], description: 解析状态；普通 file 附件上传完成后直接为 ready。 }
         bucket: { type: string }
         object_key: { type: string }
         thumbnail_object_key: { type: string, nullable: true }
@@ -1458,6 +1491,40 @@ components:
           required: [body]
           properties:
             body: { $ref: '#/components/schemas/AttachmentFileInfo' }
+    AttachmentOriginalObject:
+      type: object
+      description: 用户上传的原始附件对象。
+      required: [name, mime, size]
+      properties:
+        name: { type: string, description: 原始文件名。 }
+        mime: { type: string, description: 客户端/HTTP 检测到的 MIME 类型。 }
+        size: { type: integer, format: int64, description: 文件字节数。 }
+        sha256: { type: string, nullable: true, description: 客户端计算的 SHA-256 摘要。 }
+    AttachmentContent:
+      type: object
+      description: |
+        附件消息 `content` 字段的 JSON 结构（`aim.attachment.v1` schema）。
+        当 `message_type` 为 `image` / `video` / `audio` / `file` 时，
+        `content` 字段序列化为该结构的 JSON 字符串。
+      required: [schema, file_id, kind, original, parse_status]
+      properties:
+        schema:
+          type: string
+          enum: [aim.attachment.v1]
+          description: 固定 schema 标记。
+        file_id: { type: string, description: 附件 UUID。 }
+        kind: { type: string, enum: [image, video, audio, file], description: 附件类型。 }
+        original: { $ref: '#/components/schemas/AttachmentOriginalObject' }
+        thumbnail_file_id: { type: string, nullable: true, description: 缩略图 SeaweedFS object_key。 }
+        parse_status: { type: string, enum: [pending, ready, failed], description: 解析状态。 }
+        duration_ms: { type: integer, format: int64, nullable: true, description: 媒体时长，毫秒。 }
+        width: { type: integer, format: int32, nullable: true }
+        height: { type: integer, format: int32, nullable: true }
+        metadata:
+          type: object
+          nullable: true
+          additionalProperties: true
+          description: 解析器提取的附加元数据。
     DownloadAttachmentResponse:
       type: object
       required: [url, expires_at]
@@ -1528,7 +1595,7 @@ components:
       properties:
         conversation_id: { type: string, minLength: 1, description: 会话 ID，Snowflake 十进制字符串；Bot 必须是会话成员。 }
         message_type: { type: string, minLength: 1, maxLength: 32 }
-        content: { type: string, minLength: 1 }
+        content: { type: string, minLength: 1, description: 附件消息应为 `aim.attachment.v1` JSON 字符串，见 AttachmentContent schema。 }
         client_msg_id: { type: string, minLength: 1, description: 幂等键，建议 UUID。 }
         mentions:
           type: array
@@ -1549,6 +1616,22 @@ components:
           required: [body]
           properties:
             body: { $ref: '#/components/schemas/BotSendMessageResponse' }
+    BotDownloadAttachmentResponse:
+      type: object
+      required: [url, expires_at]
+      properties:
+        url: { type: string, format: uri }
+        headers:
+          type: object
+          additionalProperties: { type: string }
+        expires_at: { type: integer, format: int64, description: Unix milliseconds。 }
+    BotDownloadAttachmentResponseEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelopeBase'
+        - type: object
+          required: [body]
+          properties:
+            body: { $ref: '#/components/schemas/BotDownloadAttachmentResponse' }
     BotWebhookConfig:
       type: object
       required: [url, events, enabled, updated_at]

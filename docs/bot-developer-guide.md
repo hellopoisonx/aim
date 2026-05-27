@@ -204,6 +204,37 @@ curl -X POST \
 
 删除 webhook 配置（之后将不再有回调）。
 
+### 3.7 GET `/api/bot/v1/attachments/:id/download`
+
+获取附件的预签名下载 URL。Bot 通过 Webhook 收到 `message.created` 事件后，
+若 `message_type` 为 `image`/`video`/`audio`/`file`，可从此端点获取短期有效的下载链接。
+
+需要 `bot.attachment.download` action。
+
+```bash
+curl -H "Authorization: Bot $TOKEN" \
+     http://127.0.0.1:8888/api/bot/v1/attachments/<file_id>/download
+```
+
+`<file_id>` 从 webhook 回调中 `content` 字段（`aim.attachment.v1` JSON）的 `file_id` 获取。
+
+成功响应：
+
+```json
+{
+  "body": {
+    "url": "http://seaweed-s3:8333/aim-attachments/...?X-Amz-Algorithm=...",
+    "headers": {},
+    "expires_at": 1700000000000
+  }
+}
+```
+
+- `url`：SeaweedFS/S3 预签名下载 URL，**有效期 5 分钟**（可配置），过期后需重新请求
+- `headers`：下载时需携带的 HTTP 头（通常为空）
+- `expires_at`：URL 过期时间（Unix milliseconds）
+
+**权限要求：** Bot 必须是附件所属会话的成员。非成员将收到 `403` 错误。
 ## 4. 接收 Webhook 回调
 
 ### 4.1 请求格式

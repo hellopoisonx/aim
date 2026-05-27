@@ -36,6 +36,26 @@ type AddGroupMembersResponse struct {
 	DisplayName      string  `json:"display_name,optional"`
 }
 
+type AttachmentFileInfo struct {
+	FileId             string                 `json:"file_id"`
+	OwnerId            int64                  `json:"owner_id"`
+	ConversationId     int64                  `json:"conversation_id"`
+	Kind               string                 `json:"kind"`
+	OriginalName       string                 `json:"original_name"`
+	Mime               string                 `json:"mime"`
+	Size               int64                  `json:"size"`
+	Sha256             string                 `json:"sha256,optional"`
+	Status             string                 `json:"status"`
+	ParseStatus        string                 `json:"parse_status"`
+	Bucket             string                 `json:"bucket"`
+	ObjectKey          string                 `json:"object_key"`
+	ThumbnailObjectKey string                 `json:"thumbnail_object_key,optional"`
+	DurationMs         int64                  `json:"duration_ms,optional"`
+	Width              int32                  `json:"width,optional"`
+	Height             int32                  `json:"height,optional"`
+	Metadata           map[string]interface{} `json:"metadata,optional"`
+}
+
 type BotConversationItem struct {
 	ConversationId   string `json:"conversation_id"`
 	ConversationType string `json:"conversation_type"`
@@ -46,6 +66,16 @@ type BotConversationItem struct {
 
 type BotDeleteWebhookResponse struct {
 	Deleted bool `json:"deleted"`
+}
+
+type BotDownloadAttachmentRequest struct {
+	Id string `path:"id" validate:"required"`
+}
+
+type BotDownloadAttachmentResponse struct {
+	Url       string            `json:"url"`
+	Headers   map[string]string `json:"headers,optional"`
+	ExpiresAt int64             `json:"expires_at"`
 }
 
 type BotGetWebhookResponse struct {
@@ -103,6 +133,11 @@ type BotWebhookConfig struct {
 	UpdatedAt int64    `json:"updated_at"`
 }
 
+type CompleteAttachmentUploadRequest struct {
+	Id     string `path:"id" validate:"required"`
+	Sha256 string `json:"sha256,optional"`
+}
+
 type ConversationItem struct {
 	ConversationId   int64   `json:"conversation_id"`
 	ConversationType string  `json:"conversation_type"`
@@ -118,7 +153,7 @@ type ConversationItem struct {
 type CreateConversationRequest struct {
 	ConversationType string  `json:"conversation_type" validate:"required,oneof=direct group"`
 	MemberIds        []int64 `json:"member_ids" validate:"required,min=1"`
-	Name             string  `json:"name" validate:"required"`
+	Name             string  `json:"name,optional"`
 	Avatar           string  `json:"avatar,optional"`
 }
 
@@ -144,6 +179,16 @@ type DismissGroupRequest struct {
 	Id int64 `path:"id" validate:"required"`
 }
 
+type DownloadAttachmentRequest struct {
+	Id string `path:"id" validate:"required"`
+}
+
+type DownloadAttachmentResponse struct {
+	Url       string            `json:"url"`
+	Headers   map[string]string `json:"headers,optional"`
+	ExpiresAt int64             `json:"expires_at"`
+}
+
 type FriendshipItem struct {
 	UserId      int64  `json:"user_id"`
 	FriendId    int64  `json:"friend_id"`
@@ -153,6 +198,10 @@ type FriendshipItem struct {
 	DisplayName string `json:"display_name,optional"`
 	Email       string `json:"email,optional"`
 	Avatar      string `json:"avatar,optional"`
+}
+
+type GetAttachmentRequest struct {
+	Id string `path:"id" validate:"required"`
 }
 
 type GetConversationHistoryRequest struct {
@@ -201,6 +250,25 @@ type GetUserByNameResponse struct {
 type GrantGroupAdminRequest struct {
 	Id  int64 `path:"id" validate:"required"`
 	Uid int64 `path:"uid" validate:"required"`
+}
+
+type InitAttachmentUploadRequest struct {
+	ConversationId int64  `json:"conversation_id" validate:"required"`
+	Kind           string `json:"kind" validate:"required,oneof=image video audio file"`
+	OriginalName   string `json:"original_name" validate:"required"`
+	Mime           string `json:"mime" validate:"required"`
+	Size           int64  `json:"size" validate:"required"`
+	Sha256         string `json:"sha256,optional"`
+}
+
+type InitAttachmentUploadResponse struct {
+	FileId       string            `json:"file_id"`
+	Bucket       string            `json:"bucket"`
+	ObjectKey    string            `json:"object_key"`
+	UploadUrl    string            `json:"upload_url"`
+	UploadMethod string            `json:"upload_method"`
+	Headers      map[string]string `json:"headers,optional"`
+	ExpiresAt    int64             `json:"expires_at"`
 }
 
 type LeaveGroupRequest struct {

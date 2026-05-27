@@ -135,6 +135,7 @@ goctl api go -api app/gateway/api/gateway.api -dir app/gateway/api --style go_ze
 - Gateway 只负责把附件相关 REST 请求转换为 `AttachmentService` gRPC 调用，用户身份从 JWT 注入 `owner_id/user_id`。
 - 客户端仍只与 gateway 通信；SeaweedFS 直传 URL 由 attachment 服务签发。
 - 附件内容通过 `aim.attachment.v1` JSON schema 透传，普通消息仍保持原有 `message_type + content` 兼容路径。
+- `kind` 支持 `image` / `video` / `audio` / `file`；`file` 用于普通文件，上传完成后不进入 data_parsing。
 
 ### `ws` 升级 - `/ws`
 

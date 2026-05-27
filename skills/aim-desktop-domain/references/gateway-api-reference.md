@@ -233,7 +233,10 @@ Authorization: Bearer <access_token>
   "size": 204800,
   "sha256": "abc..."
 }
+
 ```
+
+`kind` 支持 `image` / `video` / `audio` / `file`；普通文件使用 `file`，上传完成后不进入 data_parsing。
 
 响应 `body` 为 uploaded URL + fields，Desktop 随后直传 SeaweedFS。
 
@@ -269,7 +272,7 @@ Authorization: Bearer <access_token>
 | `GetAttachment` | `a.api.GetAttachment()` |
 | `GetAttachmentDownload` | `a.api.GetAttachmentDownload()` |
 
-Desktop 发送附件：`ChooseAttachmentAndSend(cid)` → 选择文件 → `UploadAttachmentAndSend(cid, path, kind)` → init → SeaweedFS 直传 → complete → WS `SEND_MESSAGE`（`message_type=image/video/audio`，content 为 `aim.attachment.v1` JSON）。
+Desktop 发送附件：`ChooseAttachmentAndSend(cid)` → 选择文件 → `UploadAttachmentAndSend(cid, path, kind)` → init → SeaweedFS 直传 → complete → WS `SEND_MESSAGE`（`message_type=image/video/audio/file`，content 为 `aim.attachment.v1` JSON）。
 
 ## 兼容规则
 

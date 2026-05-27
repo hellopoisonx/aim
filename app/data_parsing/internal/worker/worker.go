@@ -73,6 +73,13 @@ func (w *Worker) Consume(ctx context.Context, key string, value string) (err err
 		span.End()
 	}()
 
+	if !attachment.RequiresDataParsing(event.Kind) {
+		if w.db != nil {
+			_, err = w.db.Exec(ctx, `UPDATE attachment_files SET parse_status='ready', updated_at=NOW() WHERE file_id=$1`, event.FileID)
+		}
+		return err
+	}
+
 	data, err := w.getObject(ctx, event.ObjectKey)
 	if err != nil {
 		return w.fail(ctx, event, err)

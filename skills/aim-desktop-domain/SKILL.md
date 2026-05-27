@@ -74,10 +74,11 @@ docker compose -f docker-compose.yaml -f docker-compose.desktop-gui.yaml up --bu
 
 ## 最近变更
 
+- 2026-05-27: Desktop 附件选择器支持任意普通文件；非 `image`/`video`/`audio` MIME 自动按 `file` 附件发送，普通文件只展示通用附件卡片与下载/打开入口，不进入 data_parsing。
 - 2026-05-25: Desktop 附件卡片支持图片/视频缩略图渲染，点击附件通过独立预览窗口展示原始媒体，并新增 `GetAttachmentDownload` Wails 绑定获取 Gateway 授权下载 URL。
 - 2026-05-25: Desktop 附件卡片新增按 `file_id` 查询 Gateway `/api/attachments/{id}` 的当前附件状态缓存/轮询，用权威附件状态覆盖消息内容中的发送时快照，避免解析完成后仍显示 `pending`。
 - 2026-05-25: `aim-desktop-domain` skill 同步更新：合并删除了的 `app/desktop/*/README.md` 内容，附件链路文档由 HTTP 代理更新为 `AttachmentService` gRPC。
-- 2026-05-25: Desktop 新增聊天附件发送入口：通过 Wails 文件选择器选取图片/视频/音频，调用 Gateway `/api/attachments`（gateway 侧以 gRPC 转发 `attachment.rpc`）完成上传初始化、SeaweedFS 直传、完成确认，再发送 `aim.attachment.v1` 附件消息；前端新增附件卡片基础渲染。
+- 2026-05-25: Desktop 新增聊天附件发送入口：通过 Wails 文件选择器选取图片/视频/音频/普通文件，调用 Gateway `/api/attachments`（gateway 侧以 gRPC 转发 `attachment.rpc`）完成上传初始化、SeaweedFS 直传、完成确认，再发送 `aim.attachment.v1` 附件消息；前端新增附件卡片基础渲染。
 - 2026-05-24: 新增 Desktop 图形化 Docker 运行环境，使用 Debian Slim、Xvfb、Openbox、x11vnc、noVNC 启动 Linux 版 Wails Desktop，可通过 `docker-compose.desktop-gui.yaml` 在浏览器访问。
 - 2026-05-24: 修复 Desktop WS 状态竞态：前端启动时先注册 Wails 运行时事件再 AutoLogin，Go 侧仅允许当前活跃 WS client 发出连接状态事件，避免旧连接断开覆盖新连接；WS client 断连回调改为单次触发，`SendTyping`/`SendReadReceipt` 在连接对象存在但已断开时也会重连。
 - 2026-05-24: Desktop 支持同设备多账号：`config.json` 使用 `accounts[]` 保存账号级 `device_id`/Token，SQLite 缓存迁移到 `accounts/{user_id}/cache.db`，切换账号时重置 WS 与本地缓存句柄。
