@@ -66,7 +66,6 @@ func userListItemFromRPC(user *pb.UserInfoResponse) types.UserListItem {
 		Nickname:    user.GetNickname(),
 		Email:       user.GetEmail(),
 		Avatar:      user.GetAvatar(),
-		DisplayName: user.GetNickname(),
 	}
 }
 
@@ -81,7 +80,6 @@ func userInfoFromRPC(user *pb.UserInfoResponse) types.UserInfo {
 		Status:      user.GetStatus(),
 		Nickname:    user.GetNickname(),
 		Avatar:      user.GetAvatar(),
-		DisplayName: user.GetNickname(),
 		CreatedAt:   user.GetCreatedAt(),
 		UpdatedAt:   user.GetUpdatedAt(),
 	}

@@ -73,7 +73,7 @@ func (l *AddFriendLogic) AddFriend(req *types.AddFriendRequest) (resp *types.Add
 	}
 	if l.svcCtx.LogicUserClient != nil && peerID > 0 {
 		if u, err := l.svcCtx.LogicUserClient.GetUserInfo(l.ctx, &userservice.GetUserInfoReq{Id: peerID}); err == nil {
-			item.DisplayName = u.GetUser().GetNickname()
+			item.Name = u.GetUser().GetNickname()
 			item.Email = u.GetUser().GetEmail()
 			item.Avatar = u.GetUser().GetAvatar()
 		}

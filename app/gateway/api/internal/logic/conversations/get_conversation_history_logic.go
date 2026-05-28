@@ -72,7 +72,6 @@ func (l *GetConversationHistoryLogic) GetConversationHistory(req *types.GetConve
 				UpdatedAt:         rd.GetUpdatedAt(),
 				Email:             rd.GetEmail(),
 				Avatar:            rd.GetAvatar(),
-				DisplayName:       rd.GetDisplayName(),
 			})
 		}
 		messages = append(messages, types.MessageItem{
@@ -82,7 +81,6 @@ func (l *GetConversationHistoryLogic) GetConversationHistory(req *types.GetConve
 			SenderInfo: types.SenderInfo{
 				Name:        senderInfo.GetName(),
 				Email:       senderInfo.GetEmail(),
-				DisplayName: senderInfo.GetDisplayName(),
 			},
 			MessageType: msg.GetMessageType(),
 			Content:     msg.GetContent(),
@@ -104,7 +102,7 @@ func (l *GetConversationHistoryLogic) GetConversationHistory(req *types.GetConve
 				UpdatedAt:         st.GetUpdatedAt(),
 				Email:             st.GetEmail(),
 				Avatar:            st.GetAvatar(),
-				DisplayName:       st.GetDisplayName(),
+				Name:              st.GetName(),
 			})
 		}
 	}

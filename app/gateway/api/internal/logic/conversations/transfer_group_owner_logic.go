@@ -62,6 +62,5 @@ func (l *TransferGroupOwnerLogic) TransferGroupOwner(req *types.TransferGroupOwn
 		Name:             conv.GetName(),
 		Avatar:           conv.GetAvatar(),
 		CreatorId:        conv.GetCreatorId(),
-		DisplayName:      conv.GetDisplayName(),
 	}, nil
 }

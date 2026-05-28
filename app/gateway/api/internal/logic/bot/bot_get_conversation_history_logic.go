@@ -80,7 +80,6 @@ func (l *BotGetConversationHistoryLogic) BotGetConversationHistory(req *types.Bo
 				UpdatedAt:         rd.GetUpdatedAt(),
 				Email:             rd.GetEmail(),
 				Avatar:            rd.GetAvatar(),
-				DisplayName:       rd.GetDisplayName(),
 			})
 		}
 
@@ -91,7 +90,6 @@ func (l *BotGetConversationHistoryLogic) BotGetConversationHistory(req *types.Bo
 			SenderInfo: types.BotSenderInfo{
 				Name:        senderInfo.GetName(),
 				Email:       senderInfo.GetEmail(),
-				DisplayName: senderInfo.GetDisplayName(),
 			},
 			MessageType: msg.GetMessageType(),
 			Content:     msg.GetContent(),

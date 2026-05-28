@@ -87,7 +87,7 @@ func enrichPeerInfo(ctx context.Context, svcCtx *svc.ServiceContext, peerID int6
 	if err != nil {
 		return
 	}
-	item.DisplayName = u.GetUser().GetNickname()
+	item.Name = u.GetUser().GetNickname()
 	item.Email = u.GetUser().GetEmail()
 	item.Avatar = u.GetUser().GetAvatar()
 }

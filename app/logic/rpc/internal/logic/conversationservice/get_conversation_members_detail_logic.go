@@ -48,7 +48,7 @@ func (l *GetConversationMembersDetailLogic) GetConversationMembersDetail(in *pb.
 			Avatar:      d.Avatar,
 			Role:        d.Role,
 			JoinedAt:    d.JoinedAt,
-			DisplayName: d.DisplayName,
+			Name:      d.Name,
 		})
 	}
 

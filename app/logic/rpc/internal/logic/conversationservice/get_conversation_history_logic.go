@@ -125,7 +125,7 @@ func (l *GetConversationHistoryLogic) GetConversationHistory(in *pb.GetConversat
 		if m, ok := memberByUserID[st.UserId]; ok {
 			pbReadStates[i].Email = m.Email
 			pbReadStates[i].Avatar = m.Avatar
-			pbReadStates[i].DisplayName = m.DisplayName
+			pbReadStates[i].Name = m.Name
 		}
 	}
 	for _, msg := range pbMessages {
@@ -184,7 +184,6 @@ func buildMessageReadDetails(
 			UpdatedAt:         state.UpdatedAt,
 			Email:             member.Email,
 			Avatar:            member.Avatar,
-			DisplayName:       member.DisplayName,
 		})
 	}
 

@@ -81,7 +81,7 @@ type MemberDetail struct {
 	UserID      int64
 	Email       string
 	Avatar      string
-	DisplayName string
+	Name        string
 	Role        string
 	JoinedAt    int64
 }
@@ -289,8 +289,7 @@ func (s ConversationService) CreateConversation(ctx context.Context, conversatio
 
 	name = strings.TrimSpace(name)
 
-	nameWasEmpty := name == ""
-	if nameWasEmpty && conversationType == ConversationTypeGroup {
+	if name == "" && conversationType == ConversationTypeGroup {
 		return model.Conversation{}, errorx.NewCodeError(errorx.CodeBadInput, "name is required")
 	}
 
@@ -336,10 +335,6 @@ func (s ConversationService) CreateConversation(ctx context.Context, conversatio
 
 	if conversationType == ConversationTypeDirect && len(memberIDs) != 2 {
 		return model.Conversation{}, errorx.NewCodeError(errorx.CodeBadInput, "direct conversation must have exactly 2 members")
-	}
-
-	if conversationType == ConversationTypeDirect && nameWasEmpty {
-		name = fmt.Sprintf("direct-%d-%d", memberIDs[0], memberIDs[1])
 	}
 
 	if conversationType == ConversationTypeDirect {
@@ -1120,7 +1115,7 @@ func (s ConversationService) GetConversationMembersDetail(ctx context.Context, c
 			UserID:      r.UserID,
 			Email:       r.Email,
 			Avatar:      r.Avatar,
-			DisplayName: r.DisplayName,
+			Name:        r.Name,
 			Role:        r.Role,
 			JoinedAt:    unixFromPGTimestamptz(r.JoinedAt),
 		}

@@ -61,7 +61,7 @@ func (l *BotGetConversationMembersLogic) BotGetConversationMembers(req *types.Bo
 			Avatar:      m.GetAvatar(),
 			Role:        m.GetRole(),
 			JoinedAt:    m.GetJoinedAt(),
-			DisplayName: m.GetDisplayName(),
+			Name:      m.GetName(),
 		})
 	}
 

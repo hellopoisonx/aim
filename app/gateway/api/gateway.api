@@ -67,9 +67,9 @@ type FriendshipItem {
 	Status      string `json:"status"`
 	CreatedAt   int64  `json:"created_at"`
 	UpdatedAt   int64  `json:"updated_at"`
-	DisplayName string `json:"display_name,optional"`
-	Email       string `json:"email,optional"`
-	Avatar      string `json:"avatar,optional"`
+	Name      string `json:"name,optional"`
+	Email     string `json:"email,optional"`
+	Avatar    string `json:"avatar,optional"`
 }
 
 type AddFriendResponse {
@@ -101,14 +101,13 @@ type RejectFriendResponse {
 }
 
 type UserInfo {
-	Id          int64  `json:"id"`
-	Email       string `json:"email"`
-	Status      int32  `json:"status"`
-	Nickname    string `json:"nickname"`
-	Avatar      string `json:"avatar"`
-	DisplayName string `json:"display_name,optional"`
-	CreatedAt   int64  `json:"created_at"`
-	UpdatedAt   int64  `json:"updated_at"`
+	Id        int64  `json:"id"`
+	Email     string `json:"email"`
+	Status    int32  `json:"status"`
+	Nickname  string `json:"nickname"`
+	Avatar    string `json:"avatar"`
+	CreatedAt int64  `json:"created_at"`
+	UpdatedAt int64  `json:"updated_at"`
 }
 
 type GetUserByNameResponse {
@@ -116,11 +115,10 @@ type GetUserByNameResponse {
 }
 
 type UserListItem {
-	Id          string `json:"id"`
-	Nickname    string `json:"nickname"`
-	Email       string `json:"email"`
-	Avatar      string `json:"avatar"`
-	DisplayName string `json:"display_name,optional"`
+	Id       string `json:"id"`
+	Nickname string `json:"nickname"`
+	Email    string `json:"email"`
+	Avatar   string `json:"avatar"`
 }
 
 type CreateGroupRequest {
@@ -145,7 +143,6 @@ type CreateConversationResponse {
 	Name             string  `json:"name"`
 	Avatar           string  `json:"avatar"`
 	CreatorId        int64   `json:"creator_id"`
-	DisplayName      string  `json:"display_name,optional"`
 }
 
 type GetConversationHistoryRequest {
@@ -156,9 +153,8 @@ type GetConversationHistoryRequest {
 }
 
 type SenderInfo {
-	Name        string `json:"name"`
-	Email       string `json:"email"`
-	DisplayName string `json:"display_name,optional"`
+	Name  string `json:"name"`
+	Email string `json:"email"`
 }
 
 type MessageItem {
@@ -181,7 +177,7 @@ type ReadStateItem {
 	UpdatedAt         int64  `json:"updated_at"`
 	Email             string `json:"email,optional"`
 	Avatar            string `json:"avatar,optional"`
-	DisplayName       string `json:"display_name,optional"`
+	Name              string `json:"name,optional"`
 }
 
 type MessageReadDetailItem {
@@ -191,7 +187,6 @@ type MessageReadDetailItem {
 	UpdatedAt         int64  `json:"updated_at"`
 	Email             string `json:"email"`
 	Avatar            string `json:"avatar"`
-	DisplayName       string `json:"display_name,optional"`
 }
 
 type GetConversationHistoryResponse {
@@ -211,7 +206,6 @@ type ConversationItem {
 	Name             string  `json:"name"`
 	Avatar           string  `json:"avatar"`
 	CreatorId        int64   `json:"creator_id"`
-	DisplayName      string  `json:"display_name,optional"`
 }
 
 type ListConversationsResponse {
@@ -262,12 +256,12 @@ type GetConversationMembersDetailRequest {
 }
 
 type MemberDetailItem {
-	UserId      int64  `json:"user_id"`
-	Email       string `json:"email"`
-	Avatar      string `json:"avatar"`
-	Role        string `json:"role"`
-	JoinedAt    int64  `json:"joined_at"`
-	DisplayName string `json:"display_name,optional"`
+	UserId   int64  `json:"user_id"`
+	Email    string `json:"email"`
+	Avatar   string `json:"avatar"`
+	Role     string `json:"role"`
+	JoinedAt int64  `json:"joined_at"`
+	Name     string `json:"name,optional"`
 }
 
 type GetConversationMembersResponse {
@@ -283,7 +277,6 @@ type AddGroupMembersResponse {
 	Name             string  `json:"name"`
 	Avatar           string  `json:"avatar"`
 	CreatorId        int64   `json:"creator_id"`
-	DisplayName      string  `json:"display_name,optional"`
 }
 
 type UpdateGroupInfoResponse {
@@ -305,7 +298,6 @@ type TransferGroupOwnerResponse {
 	Name             string  `json:"name"`
 	Avatar           string  `json:"avatar"`
 	CreatorId        int64   `json:"creator_id"`
-	DisplayName      string  `json:"display_name,optional"`
 }
 
 type InitAttachmentUploadRequest {
@@ -485,10 +477,10 @@ service gateway-api {
 }
 
 type PresenceItem {
-	UserId      int64  `json:"user_id"`
-	Status      string `json:"status"`
-	UpdatedAt   int64  `json:"updated_at"`
-	DisplayName string `json:"display_name,optional"`
+	UserId    int64  `json:"user_id"`
+	Status    string `json:"status"`
+	UpdatedAt int64  `json:"updated_at"`
+	Name      string `json:"name,optional"`
 }
 
 type GetFriendsPresenceResponse {
@@ -560,9 +552,8 @@ type BotGetConversationHistoryRequest {
 }
 
 type BotSenderInfo {
-	Name        string `json:"name"`
-	Email       string `json:"email"`
-	DisplayName string `json:"display_name,optional"`
+	Name  string `json:"name"`
+	Email string `json:"email"`
 }
 
 type BotMessageReadDetailItem {
@@ -572,7 +563,6 @@ type BotMessageReadDetailItem {
 	UpdatedAt         int64  `json:"updated_at"`
 	Email             string `json:"email"`
 	Avatar            string `json:"avatar"`
-	DisplayName       string `json:"display_name,optional"`
 }
 
 type BotMessageItem {
@@ -595,7 +585,7 @@ type BotReadStateItem {
 	UpdatedAt         int64  `json:"updated_at"`
 	Email             string `json:"email,optional"`
 	Avatar            string `json:"avatar,optional"`
-	DisplayName       string `json:"display_name,optional"`
+	Name              string `json:"name,optional"`
 }
 
 type BotGetConversationHistoryResponse {
@@ -611,12 +601,12 @@ type BotGetConversationMembersRequest {
 }
 
 type BotMemberDetailItem {
-	UserId      string `json:"user_id"`
-	Email       string `json:"email"`
-	Avatar      string `json:"avatar"`
-	Role        string `json:"role"`
-	JoinedAt    int64  `json:"joined_at"`
-	DisplayName string `json:"display_name,optional"`
+	UserId   string `json:"user_id"`
+	Email    string `json:"email"`
+	Avatar   string `json:"avatar"`
+	Role     string `json:"role"`
+	JoinedAt int64  `json:"joined_at"`
+	Name     string `json:"name,optional"`
 }
 
 type BotGetConversationMembersResponse {

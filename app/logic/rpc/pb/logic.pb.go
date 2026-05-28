@@ -921,7 +921,6 @@ type ConversationResponse struct {
 	Name             string                 `protobuf:"bytes,6,opt,name=name,proto3" json:"name,omitempty"`
 	Avatar           string                 `protobuf:"bytes,7,opt,name=avatar,proto3" json:"avatar,omitempty"`
 	CreatorId        int64                  `protobuf:"varint,8,opt,name=creator_id,json=creatorId,proto3" json:"creator_id,omitempty"`
-	DisplayName      string                 `protobuf:"bytes,9,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
@@ -1010,13 +1009,6 @@ func (x *ConversationResponse) GetCreatorId() int64 {
 		return x.CreatorId
 	}
 	return 0
-}
-
-func (x *ConversationResponse) GetDisplayName() string {
-	if x != nil {
-		return x.DisplayName
-	}
-	return ""
 }
 
 type CreateConversationResp struct {
@@ -2123,7 +2115,7 @@ type MemberDetailItem struct {
 	Avatar        string                 `protobuf:"bytes,3,opt,name=avatar,proto3" json:"avatar,omitempty"`
 	Role          string                 `protobuf:"bytes,4,opt,name=role,proto3" json:"role,omitempty"`
 	JoinedAt      int64                  `protobuf:"varint,5,opt,name=joined_at,json=joinedAt,proto3" json:"joined_at,omitempty"`
-	DisplayName   string                 `protobuf:"bytes,6,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
+	Name          string                 `protobuf:"bytes,6,opt,name=name,proto3" json:"name,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2193,9 +2185,9 @@ func (x *MemberDetailItem) GetJoinedAt() int64 {
 	return 0
 }
 
-func (x *MemberDetailItem) GetDisplayName() string {
+func (x *MemberDetailItem) GetName() string {
 	if x != nil {
-		return x.DisplayName
+		return x.Name
 	}
 	return ""
 }
@@ -2318,7 +2310,6 @@ type SenderInfo struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	Email         string                 `protobuf:"bytes,2,opt,name=email,proto3" json:"email,omitempty"`
-	DisplayName   string                 `protobuf:"bytes,3,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2367,13 +2358,6 @@ func (x *SenderInfo) GetEmail() string {
 	return ""
 }
 
-func (x *SenderInfo) GetDisplayName() string {
-	if x != nil {
-		return x.DisplayName
-	}
-	return ""
-}
-
 type MessageReadDetailItem struct {
 	state             protoimpl.MessageState `protogen:"open.v1"`
 	UserId            int64                  `protobuf:"varint,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
@@ -2383,7 +2367,6 @@ type MessageReadDetailItem struct {
 	Name              string                 `protobuf:"bytes,5,opt,name=name,proto3" json:"name,omitempty"`
 	Email             string                 `protobuf:"bytes,6,opt,name=email,proto3" json:"email,omitempty"`
 	Avatar            string                 `protobuf:"bytes,7,opt,name=avatar,proto3" json:"avatar,omitempty"`
-	DisplayName       string                 `protobuf:"bytes,8,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
@@ -2463,13 +2446,6 @@ func (x *MessageReadDetailItem) GetEmail() string {
 func (x *MessageReadDetailItem) GetAvatar() string {
 	if x != nil {
 		return x.Avatar
-	}
-	return ""
-}
-
-func (x *MessageReadDetailItem) GetDisplayName() string {
-	if x != nil {
-		return x.DisplayName
 	}
 	return ""
 }
@@ -2605,7 +2581,7 @@ type ReadStateItem struct {
 	UpdatedAt         int64                  `protobuf:"varint,3,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"` // unix milliseconds
 	Email             string                 `protobuf:"bytes,4,opt,name=email,proto3" json:"email,omitempty"`
 	Avatar            string                 `protobuf:"bytes,5,opt,name=avatar,proto3" json:"avatar,omitempty"`
-	DisplayName       string                 `protobuf:"bytes,6,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
+	Name              string                 `protobuf:"bytes,6,opt,name=name,proto3" json:"name,omitempty"`
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
@@ -2675,9 +2651,9 @@ func (x *ReadStateItem) GetAvatar() string {
 	return ""
 }
 
-func (x *ReadStateItem) GetDisplayName() string {
+func (x *ReadStateItem) GetName() string {
 	if x != nil {
-		return x.DisplayName
+		return x.Name
 	}
 	return ""
 }
@@ -4500,7 +4476,7 @@ const file_logic_proto_rawDesc = "" +
 	"\n" +
 	"member_ids\x18\x03 \x03(\x03R\tmemberIds\x12\x12\n" +
 	"\x04name\x18\x04 \x01(\tR\x04name\x12\x16\n" +
-	"\x06avatar\x18\x05 \x01(\tR\x06avatar\"\x9c\x02\n" +
+	"\x06avatar\x18\x05 \x01(\tR\x06avatar\"\xf9\x01\n" +
 	"\x14ConversationResponse\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12+\n" +
 	"\x11conversation_type\x18\x02 \x01(\tR\x10conversationType\x12\x1b\n" +
@@ -4512,8 +4488,7 @@ const file_logic_proto_rawDesc = "" +
 	"\x04name\x18\x06 \x01(\tR\x04name\x12\x16\n" +
 	"\x06avatar\x18\a \x01(\tR\x06avatar\x12\x1d\n" +
 	"\n" +
-	"creator_id\x18\b \x01(\x03R\tcreatorId\x12!\n" +
-	"\fdisplay_name\x18\t \x01(\tR\vdisplayName\"Y\n" +
+	"creator_id\x18\b \x01(\x03R\tcreatorId\"Y\n" +
 	"\x16CreateConversationResp\x12?\n" +
 	"\fconversation\x18\x01 \x01(\v2\x1b.logic.ConversationResponseR\fconversation\"D\n" +
 	"\x19GetConversationMembersReq\x12'\n" +
@@ -4585,26 +4560,25 @@ const file_logic_proto_rawDesc = "" +
 	"\x16TransferGroupOwnerResp\x12?\n" +
 	"\fconversation\x18\x01 \x01(\v2\x1b.logic.ConversationResponseR\fconversation\"J\n" +
 	"\x1fGetConversationMembersDetailReq\x12'\n" +
-	"\x0fconversation_id\x18\x01 \x01(\x03R\x0econversationId\"\xad\x01\n" +
+	"\x0fconversation_id\x18\x01 \x01(\x03R\x0econversationId\"\x9e\x01\n" +
 	"\x10MemberDetailItem\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\x03R\x06userId\x12\x14\n" +
 	"\x05email\x18\x02 \x01(\tR\x05email\x12\x16\n" +
 	"\x06avatar\x18\x03 \x01(\tR\x06avatar\x12\x12\n" +
 	"\x04role\x18\x04 \x01(\tR\x04role\x12\x1b\n" +
-	"\tjoined_at\x18\x05 \x01(\x03R\bjoinedAt\x12!\n" +
-	"\fdisplay_name\x18\x06 \x01(\tR\vdisplayName\"U\n" +
+	"\tjoined_at\x18\x05 \x01(\x03R\bjoinedAt\x12\x12\n" +
+	"\x04name\x18\x06 \x01(\tR\x04name\"U\n" +
 	" GetConversationMembersDetailResp\x121\n" +
 	"\amembers\x18\x01 \x03(\v2\x17.logic.MemberDetailItemR\amembers\"\xa3\x01\n" +
 	"\x19GetConversationHistoryReq\x12'\n" +
 	"\x0fconversation_id\x18\x01 \x01(\x03R\x0econversationId\x12*\n" +
 	"\x11cursor_created_at\x18\x02 \x01(\x03R\x0fcursorCreatedAt\x12\x1b\n" +
 	"\tcursor_id\x18\x03 \x01(\x03R\bcursorId\x12\x14\n" +
-	"\x05limit\x18\x04 \x01(\x05R\x05limit\"Y\n" +
+	"\x05limit\x18\x04 \x01(\x05R\x05limit\"6\n" +
 	"\n" +
 	"SenderInfo\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x14\n" +
-	"\x05email\x18\x02 \x01(\tR\x05email\x12!\n" +
-	"\fdisplay_name\x18\x03 \x01(\tR\vdisplayName\"\xfe\x01\n" +
+	"\x05email\x18\x02 \x01(\tR\x05email\"\xdb\x01\n" +
 	"\x15MessageReadDetailItem\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\x03R\x06userId\x12\x17\n" +
 	"\ais_read\x18\x02 \x01(\bR\x06isRead\x12/\n" +
@@ -4613,8 +4587,7 @@ const file_logic_proto_rawDesc = "" +
 	"updated_at\x18\x04 \x01(\x03R\tupdatedAt\x12\x12\n" +
 	"\x04name\x18\x05 \x01(\tR\x04name\x12\x14\n" +
 	"\x05email\x18\x06 \x01(\tR\x05email\x12\x16\n" +
-	"\x06avatar\x18\a \x01(\tR\x06avatar\x12!\n" +
-	"\fdisplay_name\x18\b \x01(\tR\vdisplayName\"\x91\x03\n" +
+	"\x06avatar\x18\a \x01(\tR\x06avatar\"\x91\x03\n" +
 	"\vMessageItem\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12'\n" +
 	"\x0fconversation_id\x18\x02 \x01(\x03R\x0econversationId\x12\x1b\n" +
@@ -4629,15 +4602,15 @@ const file_logic_proto_rawDesc = "" +
 	"\bmentions\x18\t \x03(\tR\bmentions\x12?\n" +
 	"\fread_details\x18\n" +
 	" \x03(\v2\x1c.logic.MessageReadDetailItemR\vreadDetails\x12\x1b\n" +
-	"\tis_system\x18\v \x01(\bR\bisSystem\"\xc9\x01\n" +
+	"\tis_system\x18\v \x01(\bR\bisSystem\"\xba\x01\n" +
 	"\rReadStateItem\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\x03R\x06userId\x12/\n" +
 	"\x14last_read_message_id\x18\x02 \x01(\x03R\x11lastReadMessageId\x12\x1d\n" +
 	"\n" +
 	"updated_at\x18\x03 \x01(\x03R\tupdatedAt\x12\x14\n" +
 	"\x05email\x18\x04 \x01(\tR\x05email\x12\x16\n" +
-	"\x06avatar\x18\x05 \x01(\tR\x06avatar\x12!\n" +
-	"\fdisplay_name\x18\x06 \x01(\tR\vdisplayName\"\xf9\x01\n" +
+	"\x06avatar\x18\x05 \x01(\tR\x06avatar\x12\x12\n" +
+	"\x04name\x18\x06 \x01(\tR\x04name\"\xf9\x01\n" +
 	"\x1aGetConversationHistoryResp\x12.\n" +
 	"\bmessages\x18\x01 \x03(\v2\x12.logic.MessageItemR\bmessages\x123\n" +
 	"\x16next_cursor_created_at\x18\x02 \x01(\x03R\x13nextCursorCreatedAt\x12$\n" +
@@ -4792,7 +4765,7 @@ const file_logic_proto_rawDesc = "" +
 	"\rGetBotWebhook\x12\x17.logic.GetBotWebhookReq\x1a\x18.logic.GetBotWebhookResp\x12B\n" +
 	"\rSetBotWebhook\x12\x17.logic.SetBotWebhookReq\x1a\x18.logic.SetBotWebhookResp\x12K\n" +
 	"\x10DeleteBotWebhook\x12\x1a.logic.DeleteBotWebhookReq\x1a\x1b.logic.DeleteBotWebhookResp\x12r\n" +
-	"\x1dResolveBotWebhookEventActions\x12'.logic.ResolveBotWebhookEventActionsReq\x1a(.logic.ResolveBotWebhookEventActionsRespB\x06Z\x04./pbb\x06proto3"
+	"\x1dResolveBotWebhookEventActions\x12'.logic.ResolveBotWebhookEventActionsReq\x1a(.logic.ResolveBotWebhookEventActionsRespB.Z,github.com/hellopoisonx/aim/app/logic/rpc/pbb\x06proto3"
 
 var (
 	file_logic_proto_rawDescOnce sync.Once

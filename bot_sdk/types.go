@@ -46,9 +46,8 @@ type SendMessageResponse struct {
 }
 
 type SenderInfo struct {
-	Name        string `json:"name"`
-	Email       string `json:"email"`
-	DisplayName string `json:"display_name,omitempty"`
+	Name  string `json:"name"`
+	Email string `json:"email"`
 }
 
 type MessageReadDetail struct {
@@ -58,7 +57,6 @@ type MessageReadDetail struct {
 	UpdatedAt         int64  `json:"updated_at"`
 	Email             string `json:"email"`
 	Avatar            string `json:"avatar"`
-	DisplayName       string `json:"display_name,omitempty"`
 }
 
 type Message struct {
@@ -81,7 +79,7 @@ type ReadState struct {
 	UpdatedAt         int64  `json:"updated_at"`
 	Email             string `json:"email,omitempty"`
 	Avatar            string `json:"avatar,omitempty"`
-	DisplayName       string `json:"display_name,omitempty"`
+	Name              string `json:"name,omitempty"`
 }
 
 type GetConversationHistoryRequest struct {
@@ -100,12 +98,12 @@ type GetConversationHistoryResponse struct {
 }
 
 type Member struct {
-	UserID      string `json:"user_id"`
-	Email       string `json:"email"`
-	Avatar      string `json:"avatar"`
-	Role        string `json:"role"`
-	JoinedAt    int64  `json:"joined_at"`
-	DisplayName string `json:"display_name,omitempty"`
+	UserID   string `json:"user_id"`
+	Email    string `json:"email"`
+	Avatar   string `json:"avatar"`
+	Role     string `json:"role"`
+	JoinedAt int64  `json:"joined_at"`
+	Name     string `json:"name,omitempty"`
 }
 
 type GetConversationMembersResponse struct {

@@ -74,7 +74,7 @@ SELECT EXISTS(
 );
 
 -- name: GetConversationMembersDetail :many
-SELECT cm.user_id, ui.email, ui.avatar, ui.nickname AS display_name, cm.role, cm.joined_at
+SELECT cm.user_id, ui.email, ui.avatar, ui.nickname AS name, cm.role, cm.joined_at
 FROM conversation_members cm
 JOIN user_info ui ON cm.user_id = ui.id
 WHERE cm.conversation_id = $1;

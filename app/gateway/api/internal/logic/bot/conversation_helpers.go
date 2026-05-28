@@ -78,7 +78,7 @@ func convertBotReadState(st *pb.ReadStateItem) types.BotReadStateItem {
 		UpdatedAt:         st.GetUpdatedAt(),
 		Email:             st.GetEmail(),
 		Avatar:            st.GetAvatar(),
-		DisplayName:       st.GetDisplayName(),
+		Name:             st.GetName(),
 	}
 }
 

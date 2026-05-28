@@ -153,7 +153,6 @@ message ConversationResponse {
   string name = 6;
   string avatar = 7;
   int64 creator_id = 8;
-  string display_name = 9;
 }
 
 message CreateConversationResp {
@@ -262,7 +261,7 @@ message MemberDetailItem {
   string avatar = 3;
   string role = 4;
   int64 joined_at = 5;
-  string display_name = 6;
+  string name = 6;
 }
 
 message GetConversationMembersDetailResp {
@@ -281,7 +280,6 @@ message GetConversationHistoryReq {
 message SenderInfo {
   string name = 1;
   string email = 2;
-  string display_name = 3;
 }
 
 message MessageReadDetailItem {
@@ -292,7 +290,6 @@ message MessageReadDetailItem {
   string name = 5;
   string email = 6;
   string avatar = 7;
-  string display_name = 8;
 }
 
 message MessageItem {
@@ -315,7 +312,7 @@ message ReadStateItem {
   int64 updated_at = 3; // unix milliseconds
   string email = 4;
   string avatar = 5;
-  string display_name = 6;
+  string name = 6;
 }
 
 message GetConversationHistoryResp {

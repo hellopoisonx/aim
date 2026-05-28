@@ -155,7 +155,7 @@ func TestBotGetConversationHistory(t *testing.T) {
 				Id:             99,
 				ConversationId: 7,
 				SenderId:       2002,
-				SenderInfo:     &pb.SenderInfo{Name: "alice", Email: "a@example.com", DisplayName: "Alice"},
+				SenderInfo:     &pb.SenderInfo{Name: "alice", Email: "a@example.com"},
 				MessageType:    "text",
 				Content:        "hi",
 				ClientMsgId:    "c1",
@@ -202,7 +202,7 @@ func TestBotGetConversationHistory_RequiresMembership(t *testing.T) {
 }
 
 func TestBotGetConversationMembers(t *testing.T) {
-	client := &fakeBotConversationClient{detailResp: &conversationservice.GetConversationMembersDetailResp{Members: []*pb.MemberDetailItem{{UserId: 1001, Email: "bot@example.com", Avatar: "avatar", Role: "member", JoinedAt: 1, DisplayName: "bot"}}}}
+	client := &fakeBotConversationClient{detailResp: &conversationservice.GetConversationMembersDetailResp{Members: []*pb.MemberDetailItem{{UserId: 1001, Email: "bot@example.com", Avatar: "avatar", Role: "member", JoinedAt: 1, Name: "bot"}}}}
 	logic := NewBotGetConversationMembersLogic(ctxWithBot(botperm.ActionConversationMembersRead), &svc.ServiceContext{LogicConversationClient: client})
 
 	resp, err := logic.BotGetConversationMembers(&types.BotGetConversationMembersRequest{Id: "7"})
@@ -210,7 +210,7 @@ func TestBotGetConversationMembers(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, int64(7), client.detailReq.ConversationId)
 	require.Equal(t, "1001", resp.Members[0].UserId)
-	require.Equal(t, "bot", resp.Members[0].DisplayName)
+	require.Equal(t, "bot", resp.Members[0].Name)
 }
 
 func TestBotListReadStates(t *testing.T) {

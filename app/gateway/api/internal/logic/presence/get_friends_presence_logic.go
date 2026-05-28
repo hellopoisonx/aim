@@ -92,7 +92,7 @@ func (l *GetFriendsPresenceLogic) GetFriendsPresence() (resp *types.GetFriendsPr
 	if l.svcCtx.LogicUserClient != nil {
 		for i := range presences {
 			if u, err := l.svcCtx.LogicUserClient.GetUserInfo(l.ctx, &userservice.GetUserInfoReq{Id: presences[i].UserId}); err == nil {
-				presences[i].DisplayName = u.GetUser().GetNickname()
+				presences[i].Name = u.GetUser().GetNickname()
 			}
 		}
 	}

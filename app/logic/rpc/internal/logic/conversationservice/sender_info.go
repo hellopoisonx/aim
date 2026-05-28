@@ -12,9 +12,8 @@ import (
 
 func systemSenderInfo() *pb.SenderInfo {
 	return &pb.SenderInfo{
-		Name:        sharedconversation.SystemSenderName,
-		Email:       sharedconversation.SystemSenderEmail,
-		DisplayName: sharedconversation.SystemSenderName,
+		Name:  sharedconversation.SystemSenderName,
+		Email: sharedconversation.SystemSenderEmail,
 	}
 }
 
@@ -37,8 +36,7 @@ func senderInfoForUser(ctx context.Context, svcCtx *svc.ServiceContext, userID i
 	}
 
 	return &pb.SenderInfo{
-		Name:        info.Nickname,
-		Email:       info.Email,
-		DisplayName: info.Nickname,
+		Name:  info.Nickname,
+		Email: info.Email,
 	}, nil
 }

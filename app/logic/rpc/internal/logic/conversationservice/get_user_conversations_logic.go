@@ -2,6 +2,7 @@ package conversationservicelogic
 
 import (
 	"context"
+	"strings"
 
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/service"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
@@ -42,6 +43,15 @@ func (l *GetUserConversationsLogic) GetUserConversations(in *pb.GetUserConversat
 	}
 
 	pbConversations := make([]*pb.ConversationResponse, 0, len(conversations))
+
+	// Pre-fetch the caller's nickname for use in computing direct conversation display names.
+	var callerNickname string
+	if l.svcCtx.UserInfoService != nil {
+		if callerInfo, err := l.svcCtx.UserInfoService.GetUserInfo(l.ctx, in.GetUserId()); err == nil {
+			callerNickname = callerInfo.Nickname
+		}
+	}
+
 	for _, conv := range conversations {
 		members, err := convSvc.GetConversationMembers(l.ctx, conv.ID)
 		if err != nil {
@@ -53,13 +63,25 @@ func (l *GetUserConversationsLogic) GetUserConversations(in *pb.GetUserConversat
 			memberIDs[i] = m.UserID
 		}
 
+		// For direct conversations, compute display name as the other member's nickname.
+		name := conv.Name
+		if conv.ConversationType == "direct" && callerNickname != "" {
+			if parts := strings.SplitN(conv.Name, " | ", 2); len(parts) == 2 {
+				if parts[0] == callerNickname {
+					name = parts[1]
+				} else {
+					name = parts[0]
+				}
+			}
+		}
+
 		pbConversations = append(pbConversations, &pb.ConversationResponse{
 			Id:               conv.ID,
 			ConversationType: conv.ConversationType,
 			IsActive:         conv.IsActive,
 			CreatedAt:        service.UnixFromPGTimestamptz(conv.CreatedAt),
 			MemberIds:        memberIDs,
-			Name:             conv.Name,
+			Name:             name,
 			Avatar:           conv.Avatar,
 			CreatorId:        conv.CreatorID,
 		})

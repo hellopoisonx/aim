@@ -51,7 +51,7 @@ func (l *GetConversationMembersLogic) GetConversationMembers(req *types.GetConve
 			Avatar:      m.GetAvatar(),
 			Role:        m.GetRole(),
 			JoinedAt:    m.GetJoinedAt(),
-			DisplayName: m.GetDisplayName(),
+			Name:      m.GetName(),
 		})
 	}
 

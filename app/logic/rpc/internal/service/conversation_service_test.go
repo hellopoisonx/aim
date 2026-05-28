@@ -479,9 +479,11 @@ func TestConversationService_CreateConversation_DirectAllowsEmptyName(t *testing
 	store := newFakeConversationStore()
 	svc := NewConversationService(store, testSnowflake, nil, nil)
 
-	conv, err := svc.CreateConversation(context.Background(), "direct", 1, []int64{2}, "   ", "")
+	// Direct conversation names are now computed by the logic RPC layer before calling the service.
+	// The service layer accepts whatever name is passed, including empty.
+	conv, err := svc.CreateConversation(context.Background(), "direct", 1, []int64{2}, "", "")
 	require.NoError(t, err)
-	assert.Equal(t, "direct-2-1", conv.Name)
+	assert.Equal(t, "", conv.Name)
 }
 
 func TestConversationService_CreateConversation_EmptyMembers(t *testing.T) {

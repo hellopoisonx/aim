@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\rgateway.proto\x12\x07gateway\"?\n\nSenderInfo\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\r\n\x05\x65mail\x18\x02 \x01(\t\x12\x14\n\x0c\x64isplay_name\x18\x03 \x01(\t\"\xbb\x02\n\x0ePushMessageReq\x12\x12\n\nmessage_id\x18\x01 \x01(\x03\x12\x17\n\x0f\x63onversation_id\x18\x02 \x01(\x03\x12\x19\n\x11\x63onversation_type\x18\x03 \x01(\t\x12\x14\n\x0cmessage_type\x18\x04 \x01(\t\x12\x0f\n\x07\x63ontent\x18\x05 \x01(\t\x12\x11\n\tsender_id\x18\x06 \x01(\x03\x12\x0f\n\x07sent_at\x18\x07 \x01(\x03\x12\x15\n\rclient_msg_id\x18\x08 \x01(\t\x12\x10\n\x08mentions\x18\t \x03(\t\x12\x16\n\x0etarget_user_id\x18\n \x01(\x03\x12\x11\n\tis_system\x18\x0b \x01(\x08\x12(\n\x0bsender_info\x18\x0c \x01(\x0b\x32\x13.gateway.SenderInfo\x12\x18\n\x10source_device_id\x18\r \x01(\t\"\"\n\x0fPushMessageResp\x12\x0f\n\x07success\x18\x01 \x01(\x08\"^\n\x0fPushPresenceReq\x12\x0f\n\x07user_id\x18\x01 \x01(\x03\x12\x0e\n\x06status\x18\x02 \x01(\t\x12\x12\n\nupdated_at\x18\x03 \x01(\x03\x12\x16\n\x0etarget_user_id\x18\x04 \x01(\x03\"#\n\x10PushPresenceResp\x12\x0f\n\x07success\x18\x01 \x01(\x08\"i\n\rPushTypingReq\x12\x16\n\x0etarget_user_id\x18\x01 \x01(\x03\x12\x14\n\x0c\x66rom_user_id\x18\x02 \x01(\x03\x12\x17\n\x0f\x63onversation_id\x18\x03 \x01(\x03\x12\x11\n\ttimestamp\x18\x04 \x01(\x03\"!\n\x0ePushTypingResp\x12\x0f\n\x07success\x18\x01 \x01(\x08\"\x8e\x01\n\x18PushFriendApplicationReq\x12\x16\n\x0etarget_user_id\x18\x01 \x01(\x03\x12\x0f\n\x07user_id\x18\x02 \x01(\x03\x12\x11\n\tfriend_id\x18\x03 \x01(\x03\x12\x0e\n\x06status\x18\x04 \x01(\t\x12\x12\n\ncreated_at\x18\x05 \x01(\x03\x12\x12\n\nupdated_at\x18\x06 \x01(\x03\",\n\x19PushFriendApplicationResp\x12\x0f\n\x07success\x18\x01 \x01(\x08\"\x8d\x01\n\x12PushReadReceiptReq\x12\x16\n\x0etarget_user_id\x18\x01 \x01(\x03\x12\x17\n\x0f\x63onversation_id\x18\x02 \x01(\x03\x12\x14\n\x0c\x66rom_user_id\x18\x03 \x01(\x03\x12\x1c\n\x14last_read_message_id\x18\x04 \x01(\x03\x12\x12\n\nupdated_at\x18\x05 \x01(\x03\"&\n\x13PushReadReceiptResp\x12\x0f\n\x07success\x18\x01 \x01(\x08\"y\n\x13PushNotificationReq\x12\x16\n\x0etarget_user_id\x18\x01 \x01(\x03\x12\x19\n\x11notification_type\x18\x02 \x01(\t\x12\r\n\x05title\x18\x03 \x01(\t\x12\x0c\n\x04\x62ody\x18\x04 \x01(\t\x12\x12\n\nrelated_id\x18\x05 \x01(\x03\"?\n\x14PushNotificationResp\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x16\n\x0e\x61\x66\x66\x65\x63ted_count\x18\x02 \x01(\x05\"A\n\x0bKickUserReq\x12\x0f\n\x07user_id\x18\x01 \x01(\x03\x12\x11\n\tdevice_id\x18\x02 \x01(\t\x12\x0e\n\x06reason\x18\x03 \x01(\t\"$\n\x0cKickUserResp\x12\x14\n\x0ckicked_count\x18\x01 \x01(\x05\"C\n\x0e\x44rainNotifyReq\x12\x18\n\x10\x64rain_timeout_ms\x18\x01 \x01(\x03\x12\x17\n\x0fgateway_node_id\x18\x02 \x01(\t\")\n\x0f\x44rainNotifyResp\x12\x16\n\x0e\x61\x66\x66\x65\x63ted_count\x18\x01 \x01(\x05\x32\xd0\x04\n\x0eGatewayService\x12@\n\x0bPushMessage\x12\x17.gateway.PushMessageReq\x1a\x18.gateway.PushMessageResp\x12\x43\n\x0cPushPresence\x12\x18.gateway.PushPresenceReq\x1a\x19.gateway.PushPresenceResp\x12=\n\nPushTyping\x12\x16.gateway.PushTypingReq\x1a\x17.gateway.PushTypingResp\x12^\n\x15PushFriendApplication\x12!.gateway.PushFriendApplicationReq\x1a\".gateway.PushFriendApplicationResp\x12L\n\x0fPushReadReceipt\x12\x1b.gateway.PushReadReceiptReq\x1a\x1c.gateway.PushReadReceiptResp\x12O\n\x10PushNotification\x12\x1c.gateway.PushNotificationReq\x1a\x1d.gateway.PushNotificationResp\x12\x37\n\x08KickUser\x12\x14.gateway.KickUserReq\x1a\x15.gateway.KickUserResp\x12@\n\x0b\x44rainNotify\x12\x17.gateway.DrainNotifyReq\x1a\x18.gateway.DrainNotifyRespB5Z3github.com/hellopoisonx/aim/shared/proto/gateway/pbb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\rgateway.proto\x12\x07gateway\")\n\nSenderInfo\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\r\n\x05\x65mail\x18\x02 \x01(\t\"\xbb\x02\n\x0ePushMessageReq\x12\x12\n\nmessage_id\x18\x01 \x01(\x03\x12\x17\n\x0f\x63onversation_id\x18\x02 \x01(\x03\x12\x19\n\x11\x63onversation_type\x18\x03 \x01(\t\x12\x14\n\x0cmessage_type\x18\x04 \x01(\t\x12\x0f\n\x07\x63ontent\x18\x05 \x01(\t\x12\x11\n\tsender_id\x18\x06 \x01(\x03\x12\x0f\n\x07sent_at\x18\x07 \x01(\x03\x12\x15\n\rclient_msg_id\x18\x08 \x01(\t\x12\x10\n\x08mentions\x18\t \x03(\t\x12\x16\n\x0etarget_user_id\x18\n \x01(\x03\x12\x11\n\tis_system\x18\x0b \x01(\x08\x12(\n\x0bsender_info\x18\x0c \x01(\x0b\x32\x13.gateway.SenderInfo\x12\x18\n\x10source_device_id\x18\r \x01(\t\"\"\n\x0fPushMessageResp\x12\x0f\n\x07success\x18\x01 \x01(\x08\"^\n\x0fPushPresenceReq\x12\x0f\n\x07user_id\x18\x01 \x01(\x03\x12\x0e\n\x06status\x18\x02 \x01(\t\x12\x12\n\nupdated_at\x18\x03 \x01(\x03\x12\x16\n\x0etarget_user_id\x18\x04 \x01(\x03\"#\n\x10PushPresenceResp\x12\x0f\n\x07success\x18\x01 \x01(\x08\"i\n\rPushTypingReq\x12\x16\n\x0etarget_user_id\x18\x01 \x01(\x03\x12\x14\n\x0c\x66rom_user_id\x18\x02 \x01(\x03\x12\x17\n\x0f\x63onversation_id\x18\x03 \x01(\x03\x12\x11\n\ttimestamp\x18\x04 \x01(\x03\"!\n\x0ePushTypingResp\x12\x0f\n\x07success\x18\x01 \x01(\x08\"\x8e\x01\n\x18PushFriendApplicationReq\x12\x16\n\x0etarget_user_id\x18\x01 \x01(\x03\x12\x0f\n\x07user_id\x18\x02 \x01(\x03\x12\x11\n\tfriend_id\x18\x03 \x01(\x03\x12\x0e\n\x06status\x18\x04 \x01(\t\x12\x12\n\ncreated_at\x18\x05 \x01(\x03\x12\x12\n\nupdated_at\x18\x06 \x01(\x03\",\n\x19PushFriendApplicationResp\x12\x0f\n\x07success\x18\x01 \x01(\x08\"\x8d\x01\n\x12PushReadReceiptReq\x12\x16\n\x0etarget_user_id\x18\x01 \x01(\x03\x12\x17\n\x0f\x63onversation_id\x18\x02 \x01(\x03\x12\x14\n\x0c\x66rom_user_id\x18\x03 \x01(\x03\x12\x1c\n\x14last_read_message_id\x18\x04 \x01(\x03\x12\x12\n\nupdated_at\x18\x05 \x01(\x03\"&\n\x13PushReadReceiptResp\x12\x0f\n\x07success\x18\x01 \x01(\x08\"y\n\x13PushNotificationReq\x12\x16\n\x0etarget_user_id\x18\x01 \x01(\x03\x12\x19\n\x11notification_type\x18\x02 \x01(\t\x12\r\n\x05title\x18\x03 \x01(\t\x12\x0c\n\x04\x62ody\x18\x04 \x01(\t\x12\x12\n\nrelated_id\x18\x05 \x01(\x03\"?\n\x14PushNotificationResp\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x16\n\x0e\x61\x66\x66\x65\x63ted_count\x18\x02 \x01(\x05\"A\n\x0bKickUserReq\x12\x0f\n\x07user_id\x18\x01 \x01(\x03\x12\x11\n\tdevice_id\x18\x02 \x01(\t\x12\x0e\n\x06reason\x18\x03 \x01(\t\"$\n\x0cKickUserResp\x12\x14\n\x0ckicked_count\x18\x01 \x01(\x05\"C\n\x0e\x44rainNotifyReq\x12\x18\n\x10\x64rain_timeout_ms\x18\x01 \x01(\x03\x12\x17\n\x0fgateway_node_id\x18\x02 \x01(\t\")\n\x0f\x44rainNotifyResp\x12\x16\n\x0e\x61\x66\x66\x65\x63ted_count\x18\x01 \x01(\x05\x32\xd0\x04\n\x0eGatewayService\x12@\n\x0bPushMessage\x12\x17.gateway.PushMessageReq\x1a\x18.gateway.PushMessageResp\x12\x43\n\x0cPushPresence\x12\x18.gateway.PushPresenceReq\x1a\x19.gateway.PushPresenceResp\x12=\n\nPushTyping\x12\x16.gateway.PushTypingReq\x1a\x17.gateway.PushTypingResp\x12^\n\x15PushFriendApplication\x12!.gateway.PushFriendApplicationReq\x1a\".gateway.PushFriendApplicationResp\x12L\n\x0fPushReadReceipt\x12\x1b.gateway.PushReadReceiptReq\x1a\x1c.gateway.PushReadReceiptResp\x12O\n\x10PushNotification\x12\x1c.gateway.PushNotificationReq\x1a\x1d.gateway.PushNotificationResp\x12\x37\n\x08KickUser\x12\x14.gateway.KickUserReq\x1a\x15.gateway.KickUserResp\x12@\n\x0b\x44rainNotify\x12\x17.gateway.DrainNotifyReq\x1a\x18.gateway.DrainNotifyRespB5Z3github.com/hellopoisonx/aim/shared/proto/gateway/pbb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -33,39 +33,39 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
   _globals['DESCRIPTOR']._serialized_options = b'Z3github.com/hellopoisonx/aim/shared/proto/gateway/pb'
   _globals['_SENDERINFO']._serialized_start=26
-  _globals['_SENDERINFO']._serialized_end=89
-  _globals['_PUSHMESSAGEREQ']._serialized_start=92
-  _globals['_PUSHMESSAGEREQ']._serialized_end=407
-  _globals['_PUSHMESSAGERESP']._serialized_start=409
-  _globals['_PUSHMESSAGERESP']._serialized_end=443
-  _globals['_PUSHPRESENCEREQ']._serialized_start=445
-  _globals['_PUSHPRESENCEREQ']._serialized_end=539
-  _globals['_PUSHPRESENCERESP']._serialized_start=541
-  _globals['_PUSHPRESENCERESP']._serialized_end=576
-  _globals['_PUSHTYPINGREQ']._serialized_start=578
-  _globals['_PUSHTYPINGREQ']._serialized_end=683
-  _globals['_PUSHTYPINGRESP']._serialized_start=685
-  _globals['_PUSHTYPINGRESP']._serialized_end=718
-  _globals['_PUSHFRIENDAPPLICATIONREQ']._serialized_start=721
-  _globals['_PUSHFRIENDAPPLICATIONREQ']._serialized_end=863
-  _globals['_PUSHFRIENDAPPLICATIONRESP']._serialized_start=865
-  _globals['_PUSHFRIENDAPPLICATIONRESP']._serialized_end=909
-  _globals['_PUSHREADRECEIPTREQ']._serialized_start=912
-  _globals['_PUSHREADRECEIPTREQ']._serialized_end=1053
-  _globals['_PUSHREADRECEIPTRESP']._serialized_start=1055
-  _globals['_PUSHREADRECEIPTRESP']._serialized_end=1093
-  _globals['_PUSHNOTIFICATIONREQ']._serialized_start=1095
-  _globals['_PUSHNOTIFICATIONREQ']._serialized_end=1216
-  _globals['_PUSHNOTIFICATIONRESP']._serialized_start=1218
-  _globals['_PUSHNOTIFICATIONRESP']._serialized_end=1281
-  _globals['_KICKUSERREQ']._serialized_start=1283
-  _globals['_KICKUSERREQ']._serialized_end=1348
-  _globals['_KICKUSERRESP']._serialized_start=1350
-  _globals['_KICKUSERRESP']._serialized_end=1386
-  _globals['_DRAINNOTIFYREQ']._serialized_start=1388
-  _globals['_DRAINNOTIFYREQ']._serialized_end=1455
-  _globals['_DRAINNOTIFYRESP']._serialized_start=1457
-  _globals['_DRAINNOTIFYRESP']._serialized_end=1498
-  _globals['_GATEWAYSERVICE']._serialized_start=1501
-  _globals['_GATEWAYSERVICE']._serialized_end=2093
+  _globals['_SENDERINFO']._serialized_end=67
+  _globals['_PUSHMESSAGEREQ']._serialized_start=70
+  _globals['_PUSHMESSAGEREQ']._serialized_end=385
+  _globals['_PUSHMESSAGERESP']._serialized_start=387
+  _globals['_PUSHMESSAGERESP']._serialized_end=421
+  _globals['_PUSHPRESENCEREQ']._serialized_start=423
+  _globals['_PUSHPRESENCEREQ']._serialized_end=517
+  _globals['_PUSHPRESENCERESP']._serialized_start=519
+  _globals['_PUSHPRESENCERESP']._serialized_end=554
+  _globals['_PUSHTYPINGREQ']._serialized_start=556
+  _globals['_PUSHTYPINGREQ']._serialized_end=661
+  _globals['_PUSHTYPINGRESP']._serialized_start=663
+  _globals['_PUSHTYPINGRESP']._serialized_end=696
+  _globals['_PUSHFRIENDAPPLICATIONREQ']._serialized_start=699
+  _globals['_PUSHFRIENDAPPLICATIONREQ']._serialized_end=841
+  _globals['_PUSHFRIENDAPPLICATIONRESP']._serialized_start=843
+  _globals['_PUSHFRIENDAPPLICATIONRESP']._serialized_end=887
+  _globals['_PUSHREADRECEIPTREQ']._serialized_start=890
+  _globals['_PUSHREADRECEIPTREQ']._serialized_end=1031
+  _globals['_PUSHREADRECEIPTRESP']._serialized_start=1033
+  _globals['_PUSHREADRECEIPTRESP']._serialized_end=1071
+  _globals['_PUSHNOTIFICATIONREQ']._serialized_start=1073
+  _globals['_PUSHNOTIFICATIONREQ']._serialized_end=1194
+  _globals['_PUSHNOTIFICATIONRESP']._serialized_start=1196
+  _globals['_PUSHNOTIFICATIONRESP']._serialized_end=1259
+  _globals['_KICKUSERREQ']._serialized_start=1261
+  _globals['_KICKUSERREQ']._serialized_end=1326
+  _globals['_KICKUSERRESP']._serialized_start=1328
+  _globals['_KICKUSERRESP']._serialized_end=1364
+  _globals['_DRAINNOTIFYREQ']._serialized_start=1366
+  _globals['_DRAINNOTIFYREQ']._serialized_end=1433
+  _globals['_DRAINNOTIFYRESP']._serialized_start=1435
+  _globals['_DRAINNOTIFYRESP']._serialized_end=1476
+  _globals['_GATEWAYSERVICE']._serialized_start=1479
+  _globals['_GATEWAYSERVICE']._serialized_end=2071
 # @@protoc_insertion_point(module_scope)
