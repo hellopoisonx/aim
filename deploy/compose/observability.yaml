@@ -53,6 +53,49 @@ services:
     networks:
       - aim-network
 
+  # ==================== Infrastructure Exporters ====================
+
+  postgres-exporter:
+    image: quay.io/prometheuscommunity/postgres-exporter:latest
+    container_name: aim-postgres-exporter
+    env_file: *aim-env-file
+    environment:
+      DATA_SOURCE_NAME: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/postgres?sslmode=disable"
+    expose:
+      - "9187"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - aim-network
+
+  redis-exporter:
+    image: oliver006/redis_exporter:latest
+    container_name: aim-redis-exporter
+    environment:
+      REDIS_ADDR: "redis://redis:6379"
+    expose:
+      - "9121"
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - aim-network
+
+  kafka-exporter:
+    image: danielqsj/kafka_exporter:latest
+    container_name: aim-kafka-exporter
+    command:
+      - --kafka.server=kafka:9092
+      - --web.listen-address=:9308
+    expose:
+      - "9308"
+    depends_on:
+      kafka:
+        condition: service_healthy
+    networks:
+      - aim-network
+
 volumes:
   prometheus_data:
   loki_data:

@@ -3,6 +3,7 @@ global:
   evaluation_interval: 15s
 
 scrape_configs:
+  # ────────────────── AIM Go Services ──────────────────
   - job_name: "aim-gateway"
     static_configs:
       - targets: ["aim-gateway:9191"]
@@ -27,6 +28,50 @@ scrape_configs:
     static_configs:
       - targets: ["aim-data-parsing:9196"]
 
+  # ────────────────── Data Stores ──────────────────
+  - job_name: "postgres"
+    static_configs:
+      - targets: ["aim-postgres-exporter:9187"]
+
+  - job_name: "redis"
+    static_configs:
+      - targets: ["aim-redis-exporter:9121"]
+
+  - job_name: "kafka"
+    static_configs:
+      - targets: ["aim-kafka-exporter:9308"]
+
+  # ────────────────── Service Discovery ──────────────────
+  - job_name: "nacos"
+    metrics_path: "/nacos/actuator/prometheus"
+    static_configs:
+      - targets: ["nacos:8848"]
+
+  # ────────────────── Object Storage ──────────────────
+  - job_name: "seaweed-master"
+    metrics_path: "/metrics"
+    static_configs:
+      - targets: ["seaweed-master:9333"]
+
+  - job_name: "seaweed-volume"
+    metrics_path: "/metrics"
+    static_configs:
+      - targets: ["seaweed-volume:8080"]
+
+  - job_name: "seaweed-filer"
+    metrics_path: "/metrics"
+    static_configs:
+      - targets: ["seaweed-filer:8888"]
+
+  # ────────────────── Observability Self-Monitoring ──────────────────
   - job_name: "tempo"
     static_configs:
       - targets: ["tempo:3200"]
+
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  - job_name: "loki"
+    static_configs:
+      - targets: ["loki:3100"]
