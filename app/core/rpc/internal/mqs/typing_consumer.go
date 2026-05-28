@@ -51,7 +51,7 @@ func (c *TypingConsumer) Consume(ctx context.Context, key string, value string) 
 
 	// Get conversation members.
 	if c.svcCtx.LogicConversationClient == nil {
-		logx.WithContext(ctx).Debug("no conversation client configured, skipping typing fan-out")
+		logx.WithContext(ctx).Debugf("no conversation client configured, skipping typing fan-out for conv=%d", event.ConversationID)
 		return nil
 	}
 

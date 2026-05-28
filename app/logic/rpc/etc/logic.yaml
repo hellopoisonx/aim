@@ -1,8 +1,12 @@
 Name: logic.rpc
 ListenOn: 0.0.0.0:8082
+Prometheus:
+  Host: 0.0.0.0
+  Port: 9194
+  Path: /metrics
 Telemetry:
   Name: logic.rpc
-  Endpoint: jaeger:4318
+  Endpoint: tempo:4318
   Sampler: 1.0
   Batcher: otlphttp
   OtlpHttpPath: /v1/traces

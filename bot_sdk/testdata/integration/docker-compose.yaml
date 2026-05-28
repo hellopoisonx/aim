@@ -43,7 +43,7 @@ services:
         condition: service_completed_successfully
       nacos:
         condition: service_healthy
-      jaeger:
+      tempo:
         condition: service_started
     networks:
       - aim-network
@@ -92,7 +92,7 @@ services:
         condition: service_completed_successfully
       nacos:
         condition: service_healthy
-      jaeger:
+      tempo:
         condition: service_started
       aim-attachment:
         condition: service_started
@@ -119,7 +119,7 @@ services:
         condition: service_completed_successfully
       nacos:
         condition: service_healthy
-      jaeger:
+      tempo:
         condition: service_started
     networks:
       - aim-network
@@ -174,7 +174,7 @@ services:
         condition: service_completed_successfully
       nacos:
         condition: service_healthy
-      jaeger:
+      tempo:
         condition: service_started
       aim-logic:
         condition: service_started
@@ -201,7 +201,7 @@ services:
         condition: service_completed_successfully
       seaweed-s3:
         condition: service_started
-      jaeger:
+      tempo:
         condition: service_started
     networks:
       - aim-network
@@ -223,7 +223,7 @@ services:
         condition: service_completed_successfully
       seaweed-s3:
         condition: service_started
-      jaeger:
+      tempo:
         condition: service_started
     networks:
       - aim-network
@@ -430,16 +430,17 @@ services:
 
   # ==================== Observability ====================
 
-  jaeger:
-    image: jaegertracing/all-in-one:latest
-    container_name: aim-it-jaeger
+  tempo:
+    image: grafana/tempo:latest
+    container_name: aim-it-tempo
+    command: ["-target=all", "-config.file=/etc/tempo.yaml"]
     ports:
-      - "19686:16686"    # Jaeger UI
-      - "7317:4317"      # OTLP gRPC receiver
-      - "7318:4318"      # OTLP HTTP receiver
-    environment:
-      - COLLECTOR_OTLP_ENABLED=true
-      - SPAN_STORAGE_TYPE=memory
+      - "6200:3200"      # Tempo HTTP API (+3000)
+      - "7317:4317"      # OTLP gRPC receiver (+3000)
+      - "7318:4318"      # OTLP HTTP receiver (+3000)
+    volumes:
+      - ../../../deploy/tempo/tempo.yaml:/etc/tempo.yaml:ro
+      - tempo_data:/var/tempo
     networks:
       - aim-network
 
@@ -462,3 +463,4 @@ volumes:
   seaweed_master_data:
   seaweed_volume_data:
   seaweed_filer_data:
+  tempo_data:

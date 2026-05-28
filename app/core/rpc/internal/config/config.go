@@ -39,7 +39,7 @@ type KqPusherConf struct {
 
 type GatewayRpcConf struct {
 	ServiceName string              `json:",default=gateway.rpc"`
-	Target      string              `json:",default=127.0.0.1:9090"`
+	Target      string              `json:",default=127.0.0.1:9091"`
 	Nodes       []GatewayNodeTarget `json:",optional"`
 }
 

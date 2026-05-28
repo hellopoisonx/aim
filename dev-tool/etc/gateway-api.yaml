@@ -1,9 +1,13 @@
 Name: gateway-api
 Host: 0.0.0.0
 Port: 8888
+Prometheus:
+  Host: 0.0.0.0
+  Port: 19191
+  Path: /metrics
 Telemetry:
   Name: gateway-api
-  Endpoint: bench-jaeger:4318
+  Endpoint: bench-tempo:4318
   Sampler: 1.0
   Batcher: otlphttp
   OtlpHttpPath: /v1/traces
@@ -80,9 +84,13 @@ Kafka:
 GatewayRpc:
   Name: gateway.rpc
   ListenOn: 0.0.0.0:9090
+  Prometheus:
+    Host: 0.0.0.0
+    Port: 19191
+    Path: /metrics
   Telemetry:
     Name: gateway.rpc
-    Endpoint: bench-jaeger:4318
+    Endpoint: bench-tempo:4318
     Sampler: 1.0
     Batcher: otlphttp
     OtlpHttpPath: /v1/traces

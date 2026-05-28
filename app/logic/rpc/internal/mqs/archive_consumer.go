@@ -38,7 +38,7 @@ func NewArchiveConsumer(ctx context.Context, svcCtx *svc.ServiceContext) *Archiv
 // Consume implements the kq.ConsumeHandler interface.
 func (c *ArchiveConsumer) Consume(ctx context.Context, key string, value string) error {
 	if c.svcCtx.DB == nil {
-		logx.WithContext(ctx).Debug("no database configured, skipping archive")
+		logx.WithContext(ctx).Debugf("no database configured, skipping archive (topic=archive)")
 		return nil
 	}
 

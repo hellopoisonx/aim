@@ -23,9 +23,9 @@
 | Nacos HTTP | 8848 | 11848 |
 | Nacos client gRPC | 9848 | 12848 |
 | Nacos server gRPC | 9849 | 12849 |
-| Jaeger UI | 16686 | 19686 |
-| Jaeger OTLP gRPC | 4317 | 7317 |
-| Jaeger OTLP HTTP | 4318 | 7318 |
+| Tempo HTTP API | 3200 | 6200 |
+| Tempo OTLP gRPC | 4317 | 7317 |
+| Tempo OTLP HTTP | 4318 | 7318 |
 
 ## 使用方式
 

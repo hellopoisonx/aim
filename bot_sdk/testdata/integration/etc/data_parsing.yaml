@@ -1,7 +1,7 @@
 Name: data_parsing
 Telemetry:
   Name: data_parsing
-  Endpoint: jaeger:4318
+  Endpoint: tempo:4318
   Sampler: 1.0
   Batcher: otlphttp
   OtlpHttpPath: /v1/traces

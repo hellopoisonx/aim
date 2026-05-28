@@ -18,11 +18,15 @@ func TestConfigLoadsAuthYAML(t *testing.T) {
 	require.Equal(t, "aim-dev-access-secret", c.Token.AccessSecret)
 	require.Equal(t, "nacos:8848", c.Nacos.ServerAddr)
 	require.Equal(t, "auth.rpc", c.Telemetry.Name)
-	require.Equal(t, "jaeger:4318", c.Telemetry.Endpoint)
+	require.Equal(t, "tempo:4318", c.Telemetry.Endpoint)
 	require.InEpsilon(t, 1.0, c.Telemetry.Sampler, 0.0001)
 	require.Equal(t, "otlphttp", c.Telemetry.Batcher)
 	require.Equal(t, "/v1/traces", c.Telemetry.OtlpHttpPath)
+	require.Equal(t, "0.0.0.0", c.Prometheus.Host)
+	require.Equal(t, 9192, c.Prometheus.Port)
+	require.Equal(t, "/metrics", c.Prometheus.Path)
 }
+
 
 func TestConfigKqPusherConf(t *testing.T) {
 	t.Parallel()

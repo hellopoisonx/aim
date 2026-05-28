@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 
+	"context"
 	"github.com/hellopoisonx/aim/app/auth/rpc/internal/config"
 	"github.com/hellopoisonx/aim/app/auth/rpc/internal/server"
 	"github.com/hellopoisonx/aim/app/auth/rpc/internal/svc"
@@ -35,7 +36,7 @@ func main() {
 	defer namingClient.CloseClient()
 	defer func() {
 		if err := aimnacos.DeregisterInstance(namingClient, c.Nacos); err != nil {
-			logx.Error(err)
+			logx.WithContext(context.Background()).Errorf("nacos deregister instance failed: %v", err)
 		}
 	}()
 

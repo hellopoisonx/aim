@@ -1,0 +1,336 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 0},
+      "id": 100,
+      "title": "概览",
+      "type": "row"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [],
+          "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}]},
+          "unit": "none"
+        }
+      },
+      "gridPos": {"h": 6, "w": 6, "x": 0, "y": 1},
+      "id": 1,
+      "options": {
+        "reduceOptions": {"values": false, "calcs": ["lastNotNull"], "fields": ""},
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true,
+        "text": {}
+      },
+      "pluginVersion": "10.0.0",
+      "targets": [
+        {"expr": "count(up{job=~\"aim-.*\"})", "legendFormat": ""}
+      ],
+      "title": "可用服务数",
+      "type": "stat"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {"mappings": [], "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}]}, "unit": "short"}
+      },
+      "gridPos": {"h": 6, "w": 6, "x": 6, "y": 1},
+      "id": 2,
+      "options": {"reduceOptions": {"values": false, "calcs": ["lastNotNull"], "fields": ""}, "showThresholdLabels": false, "showThresholdMarkers": true, "text": {}},
+      "pluginVersion": "10.0.0",
+      "targets": [{"expr": "sum(go_goroutines{job=~\"aim-.*\"})", "legendFormat": ""}],
+      "title": "Goroutine 总数",
+      "type": "stat"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {"mappings": [], "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}]}, "unit": "bytes"}
+      },
+      "gridPos": {"h": 6, "w": 6, "x": 12, "y": 1},
+      "id": 3,
+      "options": {"reduceOptions": {"values": false, "calcs": ["lastNotNull"], "fields": ""}, "showThresholdLabels": false, "showThresholdMarkers": true, "text": {}},
+      "pluginVersion": "10.0.0",
+      "targets": [{"expr": "sum(go_memstats_alloc_bytes{job=~\"aim-.*\"})", "legendFormat": ""}],
+      "title": "总内存分配",
+      "type": "stat"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {"mappings": [], "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}]}, "unit": "reqps"}
+      },
+      "gridPos": {"h": 6, "w": 6, "x": 18, "y": 1},
+      "id": 4,
+      "options": {"reduceOptions": {"values": false, "calcs": ["lastNotNull"], "fields": ""}, "showThresholdLabels": false, "showThresholdMarkers": true, "text": {}},
+      "pluginVersion": "10.0.0",
+      "targets": [{"expr": "sum(rate(go_zero_http_server_requests_total[1m])) + sum(rate(go_zero_rpc_server_requests_total[1m]))", "legendFormat": ""}],
+      "title": "总 QPS",
+      "type": "stat"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 7},
+      "id": 101,
+      "title": "HTTP / REST 服务",
+      "type": "row"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {"unit": "reqps"}
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+      "id": 10,
+      "options": {"legend": {"displayMode": "table", "placement": "bottom"}},
+      "targets": [
+        {"expr": "sum(rate(go_zero_http_server_requests_total{job=~\"aim-.*\"}[1m])) by (method, path)", "legendFormat": "{{method}} {{path}}"}
+      ],
+      "title": "HTTP 请求速率 (QPS)",
+      "type": "timeseries"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {"unit": "ms"}
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+      "id": 11,
+      "options": {"legend": {"displayMode": "table", "placement": "bottom"}},
+      "targets": [
+        {"expr": "histogram_quantile(0.99, sum(rate(go_zero_http_server_requests_duration_ms_bucket{job=~\"aim-.*\"}[1m])) by (le, path))", "legendFormat": "P99 {{path}}"}
+      ],
+      "title": "HTTP 延迟 P99 (ms)",
+      "type": "timeseries"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {"unit": "short"}
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16},
+      "id": 12,
+      "options": {"legend": {"displayMode": "table", "placement": "bottom"}},
+      "targets": [
+        {"expr": "sum(rate(go_zero_http_server_requests_code_total{job=~\"aim-.*\",code=~\"5..\"}[1m])) by (job, path)", "legendFormat": "{{job}} {{path}}"}
+      ],
+      "title": "HTTP 5xx 错误速率",
+      "type": "timeseries"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {"unit": "short"}
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16},
+      "id": 13,
+      "options": {"legend": {"displayMode": "table", "placement": "bottom"}},
+      "targets": [
+        {"expr": "sum(rate(go_zero_http_server_requests_code_total{job=~\"aim-.*\",code=~\"4..\"}[1m])) by (job, path)", "legendFormat": "{{job}} {{path}}"}
+      ],
+      "title": "HTTP 4xx 错误速率",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 24},
+      "id": 102,
+      "title": "gRPC 服务",
+      "type": "row"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {"unit": "reqps"}
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 25},
+      "id": 20,
+      "options": {"legend": {"displayMode": "table", "placement": "bottom"}},
+      "targets": [
+        {"expr": "sum(rate(go_zero_rpc_server_requests_total{job=~\"aim-.*\"}[1m])) by (method)", "legendFormat": "{{method}}"}
+      ],
+      "title": "RPC 请求速率 (QPS)",
+      "type": "timeseries"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {"unit": "ms"}
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 25},
+      "id": 21,
+      "options": {"legend": {"displayMode": "table", "placement": "bottom"}},
+      "targets": [
+        {"expr": "histogram_quantile(0.99, sum(rate(go_zero_rpc_server_requests_duration_ms_bucket{job=~\"aim-.*\"}[1m])) by (le, method))", "legendFormat": "P99 {{method}}"}
+      ],
+      "title": "RPC 延迟 P99 (ms)",
+      "type": "timeseries"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {"unit": "short"}
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 33},
+      "id": 22,
+      "options": {"legend": {"displayMode": "table", "placement": "bottom"}},
+      "targets": [
+        {"expr": "sum(rate(go_zero_rpc_server_requests_code_total{job=~\"aim-.*\",code=~\"5..\"}[1m])) by (job, method)", "legendFormat": "{{job}} {{method}}"}
+      ],
+      "title": "RPC 5xx 错误速率",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 41},
+      "id": 103,
+      "title": "Go 运行时",
+      "type": "row"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {"unit": "short"}
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 42},
+      "id": 30,
+      "options": {"legend": {"displayMode": "table", "placement": "bottom"}},
+      "targets": [
+        {"expr": "go_goroutines{job=~\"aim-.*\"}", "legendFormat": "{{job}}"}
+      ],
+      "title": "Goroutine 数量",
+      "type": "timeseries"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {"unit": "bytes"}
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 42},
+      "id": 31,
+      "options": {"legend": {"displayMode": "table", "placement": "bottom"}},
+      "targets": [
+        {"expr": "go_memstats_alloc_bytes{job=~\"aim-.*\"}", "legendFormat": "{{job}}"}
+      ],
+      "title": "内存分配 (Alloc)",
+      "type": "timeseries"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {"unit": "s"}
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 50},
+      "id": 32,
+      "options": {"legend": {"displayMode": "table", "placement": "bottom"}},
+      "targets": [
+        {"expr": "rate(go_gc_duration_seconds_sum{job=~\"aim-.*\"}[1m])", "legendFormat": "{{job}}"}
+      ],
+      "title": "GC 暂停时间速率 (s/s)",
+      "type": "timeseries"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {"unit": "ops"}
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 50},
+      "id": 33,
+      "options": {"legend": {"displayMode": "table", "placement": "bottom"}},
+      "targets": [
+        {"expr": "rate(go_gc_duration_seconds_count{job=~\"aim-.*\"}[1m])", "legendFormat": "{{job}}"}
+      ],
+      "title": "GC 频率",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 58},
+      "id": 104,
+      "title": "数据库连接池 (sqlx)",
+      "type": "row"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {"unit": "short"}
+      },
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 59},
+      "id": 40,
+      "options": {"legend": {"displayMode": "table", "placement": "bottom"}},
+      "targets": [
+        {"expr": "go_zero_sqlx_open_connections{job=~\"aim-.*\"}", "legendFormat": "{{job}} {{db_name}}"}
+      ],
+      "title": "数据库打开连接数",
+      "type": "timeseries"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {"unit": "short"}
+      },
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 59},
+      "id": 41,
+      "options": {"legend": {"displayMode": "table", "placement": "bottom"}},
+      "targets": [
+        {"expr": "go_zero_sqlx_in_use_connections{job=~\"aim-.*\"}", "legendFormat": "{{job}} {{db_name}}"}
+      ],
+      "title": "数据库使用中连接数",
+      "type": "timeseries"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {"unit": "short"}
+      },
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 59},
+      "id": 42,
+      "options": {"legend": {"displayMode": "table", "placement": "bottom"}},
+      "targets": [
+        {"expr": "go_zero_sqlx_idle_connections{job=~\"aim-.*\"}", "legendFormat": "{{job}} {{db_name}}"}
+      ],
+      "title": "数据库空闲连接数",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 67},
+      "id": 105,
+      "title": "Redis 连接池",
+      "type": "row"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {"unit": "short"}
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 68},
+      "id": 50,
+      "options": {"legend": {"displayMode": "table", "placement": "bottom"}},
+      "targets": [
+        {"expr": "go_zero_redis_pool_conn_total_current{job=~\"aim-.*\"}", "legendFormat": "{{job}}"}
+      ],
+      "title": "Redis 总连接数",
+      "type": "timeseries"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {"unit": "short"}
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 68},
+      "id": 51,
+      "options": {"legend": {"displayMode": "table", "placement": "bottom"}},
+      "targets": [
+        {"expr": "go_zero_redis_pool_conn_idle_current{job=~\"aim-.*\"}", "legendFormat": "{{job}}"}
+      ],
+      "title": "Redis 空闲连接数",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 38,
+  "tags": ["aim", "go-zero"],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-15m",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Go-Zero 运行时指标",
+  "uid": "aim-go-zero-runtime",
+  "version": 1
+}

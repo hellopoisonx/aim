@@ -47,8 +47,8 @@ func ExtractTraceContext(ctx context.Context, fields TraceContextFields) context
 // Use this for long-lived transports (for example, a WebSocket session after the
 // HTTP upgrade is complete) before creating short-lived per-message spans. This
 // avoids exporting spans whose parent is the still-open upgrade/request span;
-// Jaeger cannot perform clock-skew adjustment for those traces until the parent
-// has ended and logs "invalid parent span IDs=...; skipping clock skew adjustment".
+// some tracing backends delay or warn about children whose parent has not been
+// exported yet.
 func DetachSpanContext(ctx context.Context) context.Context {
 	return trace.ContextWithSpanContext(ctx, trace.SpanContext{})
 }

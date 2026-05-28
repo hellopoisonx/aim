@@ -2,7 +2,7 @@ Name: attachment.rpc
 ListenOn: 0.0.0.0:8091
 Telemetry:
   Name: attachment.rpc
-  Endpoint: jaeger:4318
+  Endpoint: tempo:4318
   Sampler: 1.0
   Batcher: otlphttp
   OtlpHttpPath: /v1/traces

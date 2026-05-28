@@ -1,7 +1,11 @@
 Name: data_parsing
+Prometheus:
+  Host: 0.0.0.0
+  Port: 9196
+  Path: /metrics
 Telemetry:
   Name: data_parsing
-  Endpoint: jaeger:4318
+  Endpoint: tempo:4318
   Sampler: 1.0
   Batcher: otlphttp
   OtlpHttpPath: /v1/traces

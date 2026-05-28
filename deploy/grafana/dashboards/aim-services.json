@@ -1,0 +1,198 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 0},
+      "id": 100,
+      "title": "服务健康",
+      "type": "row"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [{"options": {"0": {"color": "red", "text": "DOWN"}, "1": {"color": "green", "text": "UP"}}, "type": "value"}],
+          "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 1}]}
+        }
+      },
+      "gridPos": {"h": 6, "w": 24, "x": 0, "y": 1},
+      "id": 1,
+      "options": {"orientation": "horizontal", "reduceOptions": {"values": false, "calcs": ["lastNotNull"], "fields": "/^job$/"}, "showThresholdLabels": false, "showThresholdMarkers": true, "text": {}},
+      "pluginVersion": "10.0.0",
+      "targets": [
+        {"expr": "up{job=~\"aim-gateway|aim-auth|aim-core|aim-logic|aim-attachment|aim-data-parsing\"}", "legendFormat": "{{job}}"}
+      ],
+      "title": "服务存活状态",
+      "type": "stat"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 7},
+      "id": 101,
+      "title": "Gateway 服务",
+      "type": "row"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {"unit": "reqps"}
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+      "id": 10,
+      "options": {"legend": {"displayMode": "table", "placement": "bottom"}},
+      "targets": [
+        {"expr": "sum(rate(go_zero_http_server_requests_total{job=\"aim-gateway\"}[1m])) by (path)", "legendFormat": "{{path}}"}
+      ],
+      "title": "Gateway REST QPS",
+      "type": "timeseries"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {"unit": "ms"}
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+      "id": 11,
+      "options": {"legend": {"displayMode": "table", "placement": "bottom"}},
+      "targets": [
+        {"expr": "histogram_quantile(0.95, sum(rate(go_zero_http_server_requests_duration_ms_bucket{job=\"aim-gateway\"}[1m])) by (le, path))", "legendFormat": "P95 {{path}}"},
+        {"expr": "histogram_quantile(0.99, sum(rate(go_zero_http_server_requests_duration_ms_bucket{job=\"aim-gateway\"}[1m])) by (le, path))", "legendFormat": "P99 {{path}}"}
+      ],
+      "title": "Gateway REST 延迟",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 16},
+      "id": 102,
+      "title": "gRPC 内部服务",
+      "type": "row"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {"unit": "reqps"}
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 17},
+      "id": 20,
+      "options": {"legend": {"displayMode": "table", "placement": "bottom"}},
+      "targets": [
+        {"expr": "sum(rate(go_zero_rpc_server_requests_total{job=~\"aim-auth|aim-core|aim-logic|aim-attachment\"}[1m])) by (job, method)", "legendFormat": "{{job}} {{method}}"}
+      ],
+      "title": "gRPC 服务 QPS",
+      "type": "timeseries"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {"unit": "ms"}
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 17},
+      "id": 21,
+      "options": {"legend": {"displayMode": "table", "placement": "bottom"}},
+      "targets": [
+        {"expr": "histogram_quantile(0.99, sum(rate(go_zero_rpc_server_requests_duration_ms_bucket{job=~\"aim-auth|aim-core|aim-logic|aim-attachment\"}[1m])) by (le, job))", "legendFormat": "P99 {{job}}"}
+      ],
+      "title": "gRPC 服务延迟 P99",
+      "type": "timeseries"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {"unit": "short"}
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 25},
+      "id": 22,
+      "options": {"legend": {"displayMode": "table", "placement": "bottom"}},
+      "targets": [
+        {"expr": "sum(rate(go_zero_rpc_server_requests_code_total{job=~\"aim-auth|aim-core|aim-logic|aim-attachment\",code=~\"5..\"}[1m])) by (job)", "legendFormat": "{{job}}"},
+        {"expr": "sum(rate(go_zero_rpc_server_requests_code_total{job=~\"aim-auth|aim-core|aim-logic|aim-attachment\",code=~\"4..\"}[1m])) by (job)", "legendFormat": "{{job}}(4xx)"}
+      ],
+      "title": "gRPC 错误速率",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 33},
+      "id": 103,
+      "title": "Core 消息投递",
+      "type": "row"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {"unit": "reqps"}
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 34},
+      "id": 30,
+      "options": {"legend": {"displayMode": "table", "placement": "bottom"}},
+      "targets": [
+        {"expr": "sum(rate(go_zero_rpc_server_requests_total{job=\"aim-core\",method=~\".*Transfer.*\"}[1m]))", "legendFormat": "Transfer"}
+      ],
+      "title": "消息投递 QPS",
+      "type": "timeseries"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {"unit": "ms"}
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 34},
+      "id": 31,
+      "options": {"legend": {"displayMode": "table", "placement": "bottom"}},
+      "targets": [
+        {"expr": "histogram_quantile(0.99, sum(rate(go_zero_rpc_server_requests_duration_ms_bucket{job=\"aim-core\",method=~\".*Transfer.*\"}[1m])) by (le))", "legendFormat": "P99 Transfer"}
+      ],
+      "title": "消息投递延迟 P99",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 42},
+      "id": 104,
+      "title": "运行时资源",
+      "type": "row"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {"unit": "short"}
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 43},
+      "id": 40,
+      "options": {"legend": {"displayMode": "table", "placement": "bottom"}},
+      "targets": [
+        {"expr": "go_goroutines{job=~\"aim-.*\"}", "legendFormat": "{{job}}"}
+      ],
+      "title": "Goroutine 数量",
+      "type": "timeseries"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {"unit": "bytes"}
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 43},
+      "id": 41,
+      "options": {"legend": {"displayMode": "table", "placement": "bottom"}},
+      "targets": [
+        {"expr": "go_memstats_heap_inuse_bytes{job=~\"aim-.*\"}", "legendFormat": "{{job}}"}
+      ],
+      "title": "堆内存使用",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 38,
+  "tags": ["aim", "services"],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-15m",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "AIM 服务概览",
+  "uid": "aim-services",
+  "version": 1
+}

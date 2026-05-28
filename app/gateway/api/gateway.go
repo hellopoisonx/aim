@@ -67,7 +67,7 @@ func main() {
 			DrainTimeoutMs: drainTimeout.Milliseconds(),
 			GatewayNodeId:  c.GatewayNodeID,
 		}); err != nil {
-			logx.Errorf("drain notify failed: %v", err)
+			logx.WithContext(drainCtx).Errorf("drain notify failed: %v", err)
 		}
 	})
 

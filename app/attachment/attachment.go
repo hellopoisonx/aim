@@ -39,13 +39,13 @@ func main() {
 	defer namingClient.CloseClient()
 	defer func() {
 		if err := aimnacos.DeregisterInstance(namingClient, c.Nacos); err != nil {
-			logx.Error(err)
+			logx.WithContext(context.Background()).Errorf("nacos deregister instance failed: %v", err)
 		}
 	}()
 
 	ctx := context.Background()
 	if err := runMigrations(ctx, c.Postgres.DataSource, "app/attachment/model/migrations"); err != nil {
-		logx.Errorf("attachment migration failed: %v", err)
+		logx.WithContext(ctx).Errorf("attachment migration failed: %v", err)
 	}
 
 	svc, err := attachmentservice.New(ctx, c)

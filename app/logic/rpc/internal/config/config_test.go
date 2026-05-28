@@ -20,11 +20,15 @@ func TestConfigLoadsLogicYAML(t *testing.T) {
 	require.Equal(t, "postgres://user:password@postgres:5432/aim_logic?sslmode=disable", c.Postgres.DataSource)
 	require.Equal(t, "redis:6379", c.CacheRedis.Addr)
 	require.Equal(t, "logic.rpc", c.Telemetry.Name)
-	require.Equal(t, "jaeger:4318", c.Telemetry.Endpoint)
+	require.Equal(t, "tempo:4318", c.Telemetry.Endpoint)
 	require.InEpsilon(t, 1.0, c.Telemetry.Sampler, 0.0001)
 	require.Equal(t, "otlphttp", c.Telemetry.Batcher)
 	require.Equal(t, "/v1/traces", c.Telemetry.OtlpHttpPath)
+	require.Equal(t, "0.0.0.0", c.Prometheus.Host)
+	require.Equal(t, 9194, c.Prometheus.Port)
+	require.Equal(t, "/metrics", c.Prometheus.Path)
 }
+
 
 func TestConfigUserCreatedConsumerConf(t *testing.T) {
 	t.Parallel()

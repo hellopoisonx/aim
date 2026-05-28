@@ -80,7 +80,7 @@ protoc --python_out=../../../dev-tool gateway.proto
 | 服务 | 端口 | 协议 |
 |------|------|------|
 | bench-gateway | `18888` | HTTP REST |
-| bench-gateway | `19090` | gRPC（内部） |
+| bench-gateway | `19091` | gRPC（内部） |
 | bench-auth | `18989` | gRPC |
 | bench-core | `18081` | gRPC |
 | bench-logic | — | gRPC（内部） |
@@ -88,7 +88,7 @@ protoc --python_out=../../../dev-tool gateway.proto
 | bench-redis | `16379` | Redis |
 | bench-kafka | `19092` | Kafka |
 | bench-nacos | `18848` | Nacos HTTP |
-| bench-jaeger | `26686` | Jaeger UI |
+| bench-tempo | `13200` | Tempo HTTP API（Grafana 数据源） |
 
 压测环境配置文件：`dev-tool/etc/{auth,core,gateway-api,logic}.yaml`
 

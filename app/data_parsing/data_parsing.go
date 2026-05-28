@@ -20,11 +20,13 @@ func main() {
 	var c config.Config
 	conf.MustLoad(*configFile, &c)
 	applyDefaults(&c)
-	zservice.ServiceConf{Name: c.Name, Telemetry: c.Telemetry}.MustSetUp()
+	zservice.ServiceConf{Name: c.Name, Prometheus: c.Prometheus, Telemetry: c.Telemetry}.MustSetUp()
 
 	ctx := context.Background()
 	w, err := worker.New(ctx, c)
-	logx.Must(err)
+	if err != nil {
+		logx.Must(fmt.Errorf("failed to create worker: %w", err))
+	}
 	defer w.Close()
 
 	group := zservice.NewServiceGroup()

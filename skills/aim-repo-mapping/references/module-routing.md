@@ -23,3 +23,11 @@
 
 - Kafka topic 创建、consumer group 诊断、#PARTITIONS=0 排查：参考 `references/kafka-ops.md`
 - Docker 构建约定：参考 `references/docker-build.md`
+
+## 可观测性
+
+- **Prometheus**：每个 AIM 服务通过 go-zero 内置 agent 暴露 `/metrics` 端点，端口 9191-9196
+- **Grafana**：预置仪表盘 `deploy/grafana/dashboards/`，包含 go-zero 运行时指标 + AIM 服务 KPI
+- **Loki + Promtail**：通过 Docker socket 采集各容器 stdout JSON 日志，Grafana Loki datasource 可查询
+- **Prometheus 配置**：`deploy/prometheus/prometheus.yml` 定义 scrape targets
+- **Grafana Tempo**：OpenTelemetry 链路追踪后端；OTLP HTTP `tempo:4318`，Grafana 通过 Tempo datasource 查询 trace

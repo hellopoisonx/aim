@@ -1,0 +1,24 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: "bench-gateway"
+    static_configs:
+      - targets: ["bench-gateway:19191"]
+
+  - job_name: "bench-auth"
+    static_configs:
+      - targets: ["bench-auth:19192"]
+
+  - job_name: "bench-core"
+    static_configs:
+      - targets: ["bench-core:19193"]
+
+  - job_name: "bench-logic"
+    static_configs:
+      - targets: ["bench-logic:19194"]
+
+  - job_name: "tempo"
+    static_configs:
+      - targets: ["bench-tempo:3200"]

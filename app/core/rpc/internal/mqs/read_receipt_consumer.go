@@ -54,7 +54,7 @@ func (c *ReadReceiptConsumer) Consume(ctx context.Context, key string, value str
 		event.FromUserID, event.ConversationID, event.LastReadMessageID)
 
 	if c.svcCtx.LogicConversationClient == nil {
-		logx.WithContext(ctx).Debug("no conversation client configured, skipping read receipt fan-out")
+		logx.WithContext(ctx).Debugf("no conversation client configured, skipping read receipt fan-out for conv=%d", event.ConversationID)
 		return nil
 	}
 

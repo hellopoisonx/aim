@@ -38,13 +38,13 @@ type ServiceContext struct {
 func (s *ServiceContext) Close() {
 	if s.RedisClient != nil {
 		if err := s.RedisClient.Close(); err != nil {
-			logx.Errorf("failed to close Redis client: %v", err)
+			logx.WithContext(context.Background()).Errorf("failed to close Redis client: %v", err)
 		}
 	}
 
 	if closer, ok := s.GatewayClient.(interface{ Close() error }); ok {
 		if err := closer.Close(); err != nil {
-			logx.Errorf("failed to close gateway client: %v", err)
+			logx.WithContext(context.Background()).Errorf("failed to close gateway client: %v", err)
 		}
 	}
 
@@ -65,9 +65,9 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		DB:       c.CacheRedis.DB,
 	})
 	if err := redisClient.Ping(context.Background()).Err(); err != nil {
-		logx.Errorf("failed to ping Redis at %s: %v", c.CacheRedis.Addr, err)
+		logx.WithContext(context.Background()).Errorf("failed to ping Redis at %s: %v", c.CacheRedis.Addr, err)
 	} else {
-		logx.Infof("Redis connected at %s", c.CacheRedis.Addr)
+		logx.WithContext(context.Background()).Infof("Redis connected at %s", c.CacheRedis.Addr)
 	}
 
 	// Snowflake ID generator (fatal - without it, Transfer can't generate message IDs)
@@ -78,7 +78,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	var kqPusher *kq.Pusher
 
 	if len(c.KqPusherConf.Brokers) > 0 && c.KqPusherConf.Topic != "" {
-		logx.Infof("initializing Kafka pusher with brokers: %v, topic: %s (balancer: murmur2)", c.KqPusherConf.Brokers, c.KqPusherConf.Topic)
+		logx.WithContext(context.Background()).Infof("initializing Kafka pusher with brokers: %v, topic: %s (balancer: murmur2)", c.KqPusherConf.Brokers, c.KqPusherConf.Topic)
 		kqPusher = kq.NewPusher(c.KqPusherConf.Brokers, c.KqPusherConf.Topic, kq.WithBalancer(&kafka.Murmur2Balancer{}))
 	}
 
@@ -93,17 +93,17 @@ func NewServiceContext(c config.Config) *ServiceContext {
 
 	if c.LogicRpc.ServiceName != "" {
 		if err := c.LogicRpc.ApplyDefaults("logic.rpc", "127.0.0.1:8082"); err != nil {
-			logx.Errorf("failed to apply LogicRpc defaults: %v", err)
+			logx.WithContext(context.Background()).Errorf("failed to apply LogicRpc defaults: %v", err)
 		} else {
 			namingClient, err = nacos.NewNamingClient(c.LogicRpc)
 			if err != nil {
-				logx.Errorf("failed to create NamingClient for LogicRpc: %v", err)
+				logx.WithContext(context.Background()).Errorf("failed to create NamingClient for LogicRpc: %v", err)
 			} else {
 				nacos.RegisterResolver(namingClient, c.LogicRpc)
 
 				client, err := zrpc.NewClientWithTarget("nacos:///" + c.LogicRpc.ServiceName)
 				if err != nil {
-					logx.Errorf("failed to create RPC client for LogicRpc: %v", err)
+					logx.WithContext(context.Background()).Errorf("failed to create RPC client for LogicRpc: %v", err)
 				} else {
 					logicClient = logicpb.NewPermissionServiceClient(client.Conn())
 					logicConversationClient = logicpb.NewConversationServiceClient(client.Conn())
@@ -118,16 +118,16 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	var attachmentNamingClient nacos.NamingClient
 	if c.AttachmentRpc.ServiceName != "" {
 		if err := c.AttachmentRpc.ApplyDefaults("attachment.rpc", "127.0.0.1:8091"); err != nil {
-			logx.Errorf("failed to apply AttachmentRpc defaults: %v", err)
+			logx.WithContext(context.Background()).Errorf("failed to apply AttachmentRpc defaults: %v", err)
 		} else {
 			attachmentNamingClient, err = nacos.NewNamingClient(c.AttachmentRpc)
 			if err != nil {
-				logx.Errorf("failed to create NamingClient for AttachmentRpc: %v", err)
+				logx.WithContext(context.Background()).Errorf("failed to create NamingClient for AttachmentRpc: %v", err)
 			} else {
 				nacos.RegisterResolver(attachmentNamingClient, c.AttachmentRpc)
 				client, err := zrpc.NewClientWithTarget("nacos:///" + c.AttachmentRpc.ServiceName)
 				if err != nil {
-					logx.Errorf("failed to create RPC client for AttachmentRpc: %v", err)
+					logx.WithContext(context.Background()).Errorf("failed to create RPC client for AttachmentRpc: %v", err)
 				} else {
 					attachmentClient = attachmentpb.NewAttachmentServiceClient(client.Conn())
 				}
@@ -149,7 +149,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 			window = 10
 		}
 		transferQuota = cache.NewQuotaStore(redisClient, window, c.TransferQuota.MaxRequests)
-		logx.Infof("transfer quota enabled: %d req/%ds", c.TransferQuota.MaxRequests, window)
+		logx.WithContext(context.Background()).Infof("transfer quota enabled: %d req/%ds", c.TransferQuota.MaxRequests, window)
 	}
 
 	// Gateway RPC client (nil if not configured).
@@ -161,15 +161,15 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		if c.GatewayRpc.Target != "" {
 			gw := rpc.NewGatewayClient(c.GatewayRpc.Target)
 			router.RegisterNode("", gw)
-			logx.Infof("gateway client initialized with default target %s", c.GatewayRpc.Target)
+			logx.WithContext(context.Background()).Infof("gateway client initialized with default target %s", c.GatewayRpc.Target)
 		}
 		for _, node := range c.GatewayRpc.Nodes {
 			if node.NodeID == "" || node.Target == "" {
-				logx.Errorf("invalid gateway node config: node_id=%q target=%q", node.NodeID, node.Target)
+				logx.WithContext(context.Background()).Errorf("invalid gateway node config: node_id=%q target=%q", node.NodeID, node.Target)
 				continue
 			}
 			router.RegisterNode(node.NodeID, rpc.NewGatewayClient(node.Target))
-			logx.Infof("gateway node %s registered at %s", node.NodeID, node.Target)
+			logx.WithContext(context.Background()).Infof("gateway node %s registered at %s", node.NodeID, node.Target)
 		}
 		gatewayClient = router
 	}

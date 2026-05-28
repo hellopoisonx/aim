@@ -1,6 +1,7 @@
 package nacos
 
 import (
+	"context"
 	"fmt"
 	"math/rand"
 	"sync"
@@ -10,6 +11,7 @@ import (
 	"github.com/zeromicro/go-zero/core/logx"
 	"google.golang.org/grpc/resolver"
 )
+
 
 // Scheme is the resolver scheme for Nacos-based gRPC service discovery.
 const Scheme = "nacos"
@@ -45,7 +47,7 @@ func (b *ResolverBuilder) Build(target resolver.Target, cc resolver.ClientConn, 
 		Clusters:    []string{b.Config.Cluster},
 		SubscribeCallback: func(instances []model.Instance, err error) {
 			if err != nil {
-				logx.Errorf("nacos subscribe callback error for %q: %v", serviceName, err)
+				logx.WithContext(context.Background()).Errorf("nacos subscribe callback error for %q: %v", serviceName, err)
 				return
 			}
 
@@ -69,7 +71,7 @@ func (b *ResolverBuilder) Build(target resolver.Target, cc resolver.ClientConn, 
 		HealthyOnly: true,
 	})
 	if err != nil {
-		logx.Errorf("nacos initial SelectInstances for %q: %v", serviceName, err)
+		logx.WithContext(context.Background()).Errorf("nacos initial SelectInstances for %q: %v", serviceName, err)
 	} else {
 		r.updateAddrs(instances)
 	}
@@ -110,7 +112,7 @@ func (r *nacosResolver) updateAddrs(instances []model.Instance) {
 	}
 
 	if err := r.cc.UpdateState(resolver.State{Addresses: addrs}); err != nil {
-		logx.Errorf("nacos resolver UpdateState: %v", err)
+		logx.WithContext(context.Background()).Errorf("nacos resolver UpdateState: %v", err)
 	}
 }
 

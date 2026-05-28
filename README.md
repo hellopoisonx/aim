@@ -6,7 +6,7 @@
 
 ```bash
 # 启动基础设施
-docker compose up -d postgres redis kafka nacos jaeger
+docker compose up -d postgres redis kafka nacos tempo grafana
 
 # 构建
 go mod tidy
@@ -63,7 +63,9 @@ cd app/logic/rpc && go run logic.go
 | 持久化 | PostgreSQL + pgvector |
 | 文件存储 | SeaweedFS |
 | 注册中心 | Nacos |
-| 链路追踪 | OpenTelemetry → Jaeger |
+| 链路追踪 | OpenTelemetry → Grafana Tempo（Grafana Explore 查询） |
+| 指标采集 | Prometheus（go-zero 内置） → Grafana 仪表盘 |
+| 日志聚合 | Loki + Promtail（Docker stdout JSON） → Grafana |
 | 数据模型 | sqlc |
 
 ## 模块

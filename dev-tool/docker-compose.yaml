@@ -38,7 +38,7 @@ services:
         condition: service_completed_successfully
       bench-nacos:
         condition: service_healthy
-      bench-jaeger:
+      bench-tempo:
         condition: service_started
     networks:
       - bench-network
@@ -70,7 +70,7 @@ services:
     container_name: bench-gateway
     ports:
       - "18888:8888"   # REST API (+10000)
-      - "19090:9090"   # gRPC   (+10000)
+      - "19091:9090"   # gRPC   (+10001, avoids bench Prometheus 19090)
     environment:
       AIM_GATEWAY_NODE_ID: 0
     volumes:
@@ -87,7 +87,7 @@ services:
         condition: service_completed_successfully
       bench-nacos:
         condition: service_healthy
-      bench-jaeger:
+      bench-tempo:
         condition: service_started
     networks:
       - bench-network
@@ -97,6 +97,8 @@ services:
       context: ..
       dockerfile: app/logic/rpc/Dockerfile
     container_name: bench-logic
+    expose:
+      - "19194"  # Prometheus metrics
     volumes:
       - ./etc/logic.yaml:/app/etc/logic.yaml:ro
       - bench_logic_log:/app/log
@@ -111,7 +113,7 @@ services:
         condition: service_completed_successfully
       bench-nacos:
         condition: service_healthy
-      bench-jaeger:
+      bench-tempo:
         condition: service_started
     networks:
       - bench-network
@@ -151,6 +153,8 @@ services:
     container_name: bench-core
     ports:
       - "18081:8080"
+    expose:
+      - "19193"  # Prometheus metrics
     volumes:
       - ./etc/core.yaml:/app/etc/core.yaml:ro
       - bench_core_log:/app/log
@@ -165,7 +169,7 @@ services:
         condition: service_completed_successfully
       bench-nacos:
         condition: service_healthy
-      bench-jaeger:
+      bench-tempo:
         condition: service_started
       bench-logic:
         condition: service_started
@@ -295,16 +299,77 @@ services:
 
   # ==================== Observability ====================
 
-  bench-jaeger:
-    image: jaegertracing/all-in-one:latest
-    container_name: bench-jaeger
+  bench-tempo:
+    image: grafana/tempo:latest
+    container_name: bench-tempo
+    command: ["-target=all", "-config.file=/etc/tempo.yaml"]
     ports:
-      - "26686:16686"    # Jaeger UI (+10000, avoids local dev Jaeger conflict)
-      - "14317:4317"     # OTLP gRPC
-      - "14318:4318"     # OTLP HTTP
+      - "13200:3200"     # Tempo HTTP API / Grafana datasource (+10000)
+      - "14317:4317"     # OTLP gRPC (+10000)
+      - "14318:4318"     # OTLP HTTP (+10000)
+    volumes:
+      - ../deploy/tempo/tempo.yaml:/etc/tempo.yaml:ro
+      - bench_tempo_data:/var/tempo
+    networks:
+      bench-network:
+        aliases:
+          - tempo
+
+  bench-prometheus:
+    image: prom/prometheus:latest
+    container_name: bench-prometheus
+    ports:
+      - "19090:9090"
+    volumes:
+      - ./deploy/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - bench_prometheus_data:/prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=7d
+    networks:
+      bench-network:
+        aliases:
+          - prometheus
+
+  bench-loki:
+    image: grafana/loki:latest
+    container_name: bench-loki
+    ports:
+      - "13100:3100"
+    volumes:
+      - ../deploy/loki/loki.yml:/etc/loki/local-config.yaml:ro
+      - bench_loki_data:/loki
+    command: -config.file=/etc/loki/local-config.yaml
+    networks:
+      bench-network:
+        aliases:
+          - loki
+
+  bench-promtail:
+    image: grafana/promtail:latest
+    container_name: bench-promtail
+    volumes:
+      - ../deploy/promtail/promtail.yml:/etc/promtail/promtail.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    command: -config.file=/etc/promtail/promtail.yml
+    networks:
+      - bench-network
+
+  bench-grafana:
+    image: grafana/grafana:latest
+    container_name: bench-grafana
+    ports:
+      - "13000:3000"
     environment:
-      - COLLECTOR_OTLP_ENABLED=true
-      - SPAN_STORAGE_TYPE=memory
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - ../deploy/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+      - ../deploy/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ../deploy/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - bench_grafana_data:/var/lib/grafana
     networks:
       - bench-network
 
@@ -322,3 +387,7 @@ volumes:
   bench_auth_log:
   bench_logic_log:
   bench_core_log:
+  bench_prometheus_data:
+  bench_loki_data:
+  bench_grafana_data:
+  bench_tempo_data:

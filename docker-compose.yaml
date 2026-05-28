@@ -8,6 +8,8 @@ services:
     container_name: aim-auth
     ports:
       - "8989:8989"
+    expose:
+      - "9192"  # Prometheus metrics
     volumes:
       - ./app/auth/rpc/etc/auth.yaml:/app/etc/auth.yaml:ro
       - auth_log:/app/log
@@ -24,7 +26,7 @@ services:
         condition: service_completed_successfully
       nacos:
         condition: service_healthy
-      jaeger:
+      tempo:
         condition: service_started
     networks:
       - aim-network
@@ -56,7 +58,9 @@ services:
     container_name: aim-gateway
     ports:
       - "8888:8888"  # REST API
-      - "9090:9090"  # gRPC
+      - "9091:9091"  # gRPC
+    expose:
+      - "9191"  # Prometheus metrics
     environment:
       AIM_GATEWAY_NODE_ID: 0
     volumes:
@@ -73,7 +77,7 @@ services:
         condition: service_completed_successfully
       nacos:
         condition: service_healthy
-      jaeger:
+      tempo:
         condition: service_started
       aim-attachment:
         condition: service_started
@@ -86,8 +90,9 @@ services:
       context: .
       dockerfile: app/logic/rpc/Dockerfile
     container_name: aim-logic
+    expose:
+      - "9194"  # Prometheus metrics
     volumes:
-      - ./app/logic/rpc/etc/logic.yaml:/app/etc/logic.yaml:ro
       - logic_log:/app/log
     depends_on:
       logic-migrate:
@@ -100,7 +105,7 @@ services:
         condition: service_completed_successfully
       nacos:
         condition: service_healthy
-      jaeger:
+      tempo:
         condition: service_started
     networks:
       - aim-network
@@ -141,6 +146,8 @@ services:
     container_name: aim-core
     ports:
       - "8081:8080"
+    expose:
+      - "9193"  # Prometheus metrics
     volumes:
       - ./app/core/rpc/etc/core.yaml:/app/etc/core.yaml:ro
       - core_log:/app/log
@@ -155,7 +162,7 @@ services:
         condition: service_completed_successfully
       nacos:
         condition: service_healthy
-      jaeger:
+      tempo:
         condition: service_started
       aim-logic:
         condition: service_started
@@ -170,7 +177,8 @@ services:
       dockerfile: app/attachment/Dockerfile
     container_name: aim-attachment
     expose:
-      - "8091"  # internal-only gRPC: gateway/core call attachment.rpc; do not publish to host
+      - "8091"  # internal-only gRPC
+      - "9195"  # Prometheus metrics
     volumes:
       - ./app/attachment/rpc/etc/attachment.yaml:/app/etc/attachment.yaml:ro
     depends_on:
@@ -182,7 +190,7 @@ services:
         condition: service_completed_successfully
       seaweed-s3:
         condition: service_started
-      jaeger:
+      tempo:
         condition: service_started
     networks:
       - aim-network
@@ -193,6 +201,8 @@ services:
       context: .
       dockerfile: app/data_parsing/Dockerfile
     container_name: aim-data-parsing
+    expose:
+      - "9196"  # Prometheus metrics
     volumes:
       - ./app/data_parsing/etc/data_parsing.yaml:/app/etc/data_parsing.yaml:ro
     depends_on:
@@ -204,7 +214,7 @@ services:
         condition: service_completed_successfully
       seaweed-s3:
         condition: service_started
-      jaeger:
+      tempo:
         condition: service_started
     networks:
       - aim-network
@@ -410,16 +420,71 @@ services:
 
   # ==================== Observability ====================
 
-  jaeger:
-    image: jaegertracing/all-in-one:latest
-    container_name: jaeger
+  tempo:
+    image: grafana/tempo:latest
+    container_name: aim-tempo
+    command: ["-target=all", "-config.file=/etc/tempo.yaml"]
     ports:
-      - "16686:16686"    # Jaeger UI
+      - "3200:3200"      # Tempo HTTP API / Grafana datasource
       - "4317:4317"      # OTLP gRPC receiver
       - "4318:4318"      # OTLP HTTP receiver
+    volumes:
+      - ./deploy/tempo/tempo.yaml:/etc/tempo.yaml:ro
+      - tempo_data:/var/tempo
+    networks:
+      - aim-network
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: aim-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./deploy/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
+    networks:
+      - aim-network
+
+  loki:
+    image: grafana/loki:latest
+    container_name: aim-loki
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./deploy/loki/loki.yml:/etc/loki/local-config.yaml:ro
+      - loki_data:/loki
+    command: -config.file=/etc/loki/local-config.yaml
+    networks:
+      - aim-network
+
+  promtail:
+    image: grafana/promtail:latest
+    container_name: aim-promtail
+    volumes:
+      - ./deploy/promtail/promtail.yml:/etc/promtail/promtail.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    command: -config.file=/etc/promtail/promtail.yml
+    networks:
+      - aim-network
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: aim-grafana
+    ports:
+      - "3000:3000"
     environment:
-      - COLLECTOR_OTLP_ENABLED=true
-      - SPAN_STORAGE_TYPE=memory
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - ./deploy/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./deploy/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./deploy/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
     networks:
       - aim-network
 
@@ -442,3 +507,7 @@ volumes:
   seaweed_master_data:
   seaweed_volume_data:
   seaweed_filer_data:
+  prometheus_data:
+  loki_data:
+  grafana_data:
+  tempo_data:

@@ -42,7 +42,7 @@ func (r *PresenceReaper) Run(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			logx.WithContext(ctx).Info("presence reaper stopped")
+			logx.WithContext(ctx).Infof("presence reaper stopped (was interval=%v)", r.tickInterval)
 			return
 		case <-ticker.C:
 			r.scan(ctx)

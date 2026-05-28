@@ -253,9 +253,9 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	})
 	// Verify Redis connectivity.
 	if err := redisClient.Ping(context.Background()).Err(); err != nil {
-		logx.Errorf("failed to ping Redis at %s: %v", c.Redis.Addr, err)
+		logx.WithContext(context.Background()).Errorf("failed to ping Redis at %s: %v", c.Redis.Addr, err)
 	} else {
-		logx.Infof("Redis connected at %s", c.Redis.Addr)
+		logx.WithContext(context.Background()).Infof("Redis connected at %s", c.Redis.Addr)
 	}
 
 	// Create WebSocket connection manager shared by HTTP handler and gRPC server.
@@ -303,7 +303,7 @@ func (s *ServiceContext) StartPresenceReaper() context.CancelFunc {
 // newPresencePub creates a PresencePublisher (Kafka if brokers are configured, otherwise noop).
 func newPresencePub(c config.Config, redisClient *redis.Client) PresencePublisher {
 	if len(c.Kafka.Brokers) > 0 && c.Kafka.PresenceTopic != "" && redisClient != nil {
-		logx.Infof("presence publisher: Kafka topic=%s (balancer: murmur2)", c.Kafka.PresenceTopic)
+		logx.WithContext(context.Background()).Infof("presence publisher: Kafka topic=%s (balancer: murmur2)", c.Kafka.PresenceTopic)
 		return &kafkaPresencePublisher{
 			pusher: kq.NewPusher(c.Kafka.Brokers, c.Kafka.PresenceTopic, kq.WithBalancer(&kafka.Murmur2Balancer{})),
 			nodeID: c.GatewayNodeID,
@@ -315,7 +315,7 @@ func newPresencePub(c config.Config, redisClient *redis.Client) PresencePublishe
 // newTypingPub creates a TypingPublisher (Kafka if brokers are configured, otherwise noop).
 func newTypingPub(c config.Config, redisClient *redis.Client) TypingPublisher {
 	if len(c.Kafka.Brokers) > 0 && c.Kafka.TypingTopic != "" && redisClient != nil {
-		logx.Infof("typing publisher: Kafka topic=%s (balancer: murmur2)", c.Kafka.TypingTopic)
+		logx.WithContext(context.Background()).Infof("typing publisher: Kafka topic=%s (balancer: murmur2)", c.Kafka.TypingTopic)
 		return &kafkaTypingPublisher{pusher: kq.NewPusher(c.Kafka.Brokers, c.Kafka.TypingTopic, kq.WithBalancer(&kafka.Murmur2Balancer{})), nodeID: c.GatewayNodeID}
 	}
 	return &noopPublisher{}
@@ -324,7 +324,7 @@ func newTypingPub(c config.Config, redisClient *redis.Client) TypingPublisher {
 // newReadReceiptPub creates a ReadReceiptPublisher (Kafka if brokers are configured, otherwise noop).
 func newReadReceiptPub(c config.Config, redisClient *redis.Client) ReadReceiptPublisher {
 	if len(c.Kafka.Brokers) > 0 && c.Kafka.ReadReceiptTopic != "" && redisClient != nil {
-		logx.Infof("read receipt publisher: Kafka topic=%s (balancer: murmur2)", c.Kafka.ReadReceiptTopic)
+		logx.WithContext(context.Background()).Infof("read receipt publisher: Kafka topic=%s (balancer: murmur2)", c.Kafka.ReadReceiptTopic)
 		return &kafkaReadReceiptPublisher{pusher: kq.NewPusher(c.Kafka.Brokers, c.Kafka.ReadReceiptTopic, kq.WithBalancer(&kafka.Murmur2Balancer{})), nodeID: c.GatewayNodeID}
 	}
 	return &noopPublisher{}
@@ -354,7 +354,7 @@ func (s *ServiceContext) Close() {
 
 	if s.RedisClient != nil {
 		if err := s.RedisClient.Close(); err != nil {
-			logx.Errorf("failed to close Redis client: %v", err)
+			logx.WithContext(context.Background()).Errorf("failed to close Redis client: %v", err)
 		}
 	}
 }

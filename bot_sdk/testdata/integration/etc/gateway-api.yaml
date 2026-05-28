@@ -3,7 +3,7 @@ Host: 0.0.0.0
 Port: 8888
 Telemetry:
   Name: gateway-api
-  Endpoint: jaeger:4318
+  Endpoint: tempo:4318
   Sampler: 1.0
   Batcher: otlphttp
   OtlpHttpPath: /v1/traces
@@ -98,7 +98,7 @@ GatewayRpc:
   ListenOn: 0.0.0.0:9090
   Telemetry:
     Name: gateway.rpc
-    Endpoint: jaeger:4318
+    Endpoint: tempo:4318
     Sampler: 1.0
     Batcher: otlphttp
     OtlpHttpPath: /v1/traces

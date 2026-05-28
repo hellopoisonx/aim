@@ -55,7 +55,7 @@ func (c *PresenceConsumer) Consume(ctx context.Context, key string, value string
 
 	// Get friends of the user whose presence changed.
 	if c.svcCtx.LogicFriendshipClient == nil {
-		logx.WithContext(ctx).Debug("no friendship client configured, skipping presence fan-out")
+		logx.WithContext(ctx).Debugf("no friendship client configured, skipping presence fan-out for user=%d", event.UserID)
 		return nil
 	}
 

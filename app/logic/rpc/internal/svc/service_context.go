@@ -37,7 +37,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 
 	snowflake, err := tools.NewSnowflake(c.MachineID)
 	if err != nil {
-		logx.Errorf("failed to create Snowflake generator with machineID=%d: %v", c.MachineID, err)
+		logx.WithContext(context.Background()).Errorf("failed to create Snowflake generator with machineID=%d: %v", c.MachineID, err)
 		return svcCtx
 	}
 
@@ -46,10 +46,10 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	if c.Postgres.DataSource != "" {
 		pool, err := pgxpool.New(context.Background(), c.Postgres.DataSource)
 		if err != nil {
-			logx.Errorf("failed to create Postgres pool: %v, falling back to DenyAll", err)
+			logx.WithContext(context.Background()).Errorf("failed to create Postgres pool: %v, falling back to DenyAll", err)
 		} else {
 			if err := pool.Ping(context.Background()); err != nil {
-				logx.Errorf("failed to ping Postgres: %v, falling back to DenyAll", err)
+				logx.WithContext(context.Background()).Errorf("failed to ping Postgres: %v, falling back to DenyAll", err)
 				pool.Close()
 
 				return svcCtx
@@ -69,15 +69,15 @@ func NewServiceContext(c config.Config) *ServiceContext {
 			var conversationEventPusher *kq.Pusher
 			if len(c.ConversationEventProducerConf.Brokers) > 0 && c.ConversationEventProducerConf.Topic != "" {
 				conversationEventPusher = kq.NewPusher(c.ConversationEventProducerConf.Brokers, c.ConversationEventProducerConf.Topic, kq.WithBalancer(&kafka.Murmur2Balancer{}))
-				logx.Infof("conversation event producer initialized: topic=%s (balancer: murmur2)", c.ConversationEventProducerConf.Topic)
+				logx.WithContext(context.Background()).Infof("conversation event producer initialized: topic=%s (balancer: murmur2)", c.ConversationEventProducerConf.Topic)
 			}
 
 			svcCtx.ConversationService = service.NewConversationService(queries, snowflake, pool, conversationEventPusher)
 
 			if limit != service.DefaultTemporaryConversationMessageLimit {
-				logx.Infof("Postgres connected, using DatabasePermissionChecker (temporary conversation message limit=%d), UserInfoService and ConversationService", limit)
+				logx.WithContext(context.Background()).Infof("Postgres connected, using DatabasePermissionChecker (temporary conversation message limit=%d), UserInfoService and ConversationService", limit)
 			} else {
-				logx.Infof("Postgres connected, using DatabasePermissionChecker, UserInfoService and ConversationService")
+				logx.WithContext(context.Background()).Infof("Postgres connected, using DatabasePermissionChecker, UserInfoService and ConversationService")
 			}
 		}
 	}
@@ -90,7 +90,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		})
 		svcCtx.QuotaStore = cache.NewQuotaStore(client, c.Quota.WindowSeconds, c.Quota.MaxRequests)
 
-		logx.Infof("Redis connected for quota store")
+		logx.WithContext(context.Background()).Infof("Redis connected for quota store")
 	}
 
 	return svcCtx

@@ -37,7 +37,7 @@ func main() {
 	defer namingClient.CloseClient()
 	defer func() {
 		if err := aimnacos.DeregisterInstance(namingClient, c.Nacos); err != nil {
-			logx.Error(err)
+			logx.WithContext(context.Background()).Errorf("nacos deregister instance failed: %v", err)
 		}
 	}()
 

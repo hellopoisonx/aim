@@ -74,9 +74,8 @@ func (h *WsHandler) ServeWS(w http.ResponseWriter, r *http.Request) {
 	// 3. Create per-connection context with cancellation.
 	// Detach it from the short-lived HTTP upgrade span: the WebSocket connection
 	// can stay open for a long time, while per-frame spans and downstream RPC/Kafka
-	// spans complete quickly. Keeping the upgrade span as their parent makes Jaeger
-	// see children whose parent span has not been exported yet and emit
-	// "invalid parent span IDs=...; skipping clock skew adjustment" warnings.
+	// spans complete quickly. Keeping the upgrade span as their parent can make
+	// tracing backends see children whose parent span has not been exported yet.
 	ctx, cancel := context.WithCancel(sharedtracing.DetachSpanContext(r.Context()))
 	defer cancel()
 
@@ -144,7 +143,7 @@ func (h *WsHandler) ServeWS(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			if errors.Is(err, context.Canceled) {
 				// Normal disconnect via context cancellation
-				logx.WithContext(ctx).Info("ws connection closed by client")
+				logx.WithContext(ctx).Infof("ws connection closed by client")
 			} else {
 				// Check for WebSocket close
 				closeErr := &websocket.CloseError{}

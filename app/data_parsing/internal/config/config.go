@@ -4,12 +4,14 @@ package config
 
 import (
 	"github.com/zeromicro/go-queue/kq"
+	"github.com/zeromicro/go-zero/core/prometheus"
 	"github.com/zeromicro/go-zero/core/trace"
 )
 
 type Config struct {
-	Name              string       `json:",default=data_parsing"`
-	Telemetry         trace.Config `json:",optional"`
+	Name              string            `json:",default=data_parsing"`
+	Prometheus        prometheus.Config `json:",optional"`
+	Telemetry         trace.Config      `json:",optional"`
 	Postgres          PostgresConf
 	Seaweed           SeaweedConf
 	UploadedConsumer  kq.KqConf    `json:",optional"`
