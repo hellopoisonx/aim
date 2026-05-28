@@ -1216,7 +1216,6 @@ components:
         status: { type: integer, format: int32 }
         nickname: { type: string }
         avatar: { type: string }
-        display_name: { type: string, description: 显示名快照，可能来自昵称。 }
         created_at: { type: integer, format: int64, description: Unix milliseconds。 }
         updated_at: { type: integer, format: int64, description: Unix milliseconds。 }
     UserListItem:
@@ -1227,7 +1226,6 @@ components:
         nickname: { type: string }
         email: { type: string, format: email }
         avatar: { type: string }
-        display_name: { type: string }
     GetUserByIdResponse:
       type: object
       required: [user]
@@ -1263,7 +1261,7 @@ components:
         status: { type: string, description: 好友关系状态，例如 pending / accepted / rejected。 }
         created_at: { type: integer, format: int64, description: Unix milliseconds。 }
         updated_at: { type: integer, format: int64, description: Unix milliseconds。 }
-        display_name: { type: string }
+        name: { type: string }
         email: { type: string, nullable: true, format: email }
         avatar: { type: string, nullable: true }
     FriendshipResponse:
@@ -1357,7 +1355,6 @@ components:
         name: { type: string }
         avatar: { type: string }
         creator_id: { type: integer, format: int64 }
-        display_name: { type: string }
     ConversationResponse:
       allOf:
         - $ref: '#/components/schemas/ConversationItem'
@@ -1388,7 +1385,6 @@ components:
       properties:
         name: { type: string }
         email: { type: string, format: email }
-        display_name: { type: string }
     MessageReadDetailItem:
       type: object
       required: [user_id, is_read, last_read_message_id, updated_at, email, avatar]
@@ -1399,7 +1395,7 @@ components:
         updated_at: { type: integer, format: int64, description: Unix milliseconds。 }
         email: { type: string, format: email }
         avatar: { type: string }
-        display_name: { type: string }
+        name: { type: string }
     MessageItem:
       type: object
       required: [id, conversation_id, sender_id, sender_info, message_type, content, client_msg_id, created_at, read_details]
@@ -1429,7 +1425,7 @@ components:
         updated_at: { type: integer, format: int64, description: Unix milliseconds。 }
         email: { type: string, nullable: true, format: email }
         avatar: { type: string, nullable: true }
-        display_name: { type: string }
+        name: { type: string }
     GetConversationHistoryResponse:
       type: object
       required: [messages, next_cursor_created_at, next_cursor_id, has_more, read_states]
@@ -1495,7 +1491,7 @@ components:
         avatar: { type: string }
         role: { type: string, enum: [owner, admin, member] }
         joined_at: { type: integer, format: int64, description: Unix milliseconds。 }
-        display_name: { type: string }
+        name: { type: string }
     GetConversationMembersResponse:
       type: object
       required: [members]
@@ -1517,7 +1513,7 @@ components:
         user_id: { type: integer, format: int64 }
         status: { type: string, enum: [online, offline] }
         updated_at: { type: integer, format: int64, description: 当前快照接口保留为 0。 }
-        display_name: { type: string }
+        name: { type: string }
     GetFriendsPresenceResponse:
       type: object
       required: [presences]
@@ -1701,7 +1697,6 @@ components:
       properties:
         name: { type: string }
         email: { type: string }
-        display_name: { type: string, nullable: true }
     BotMessageReadDetailItem:
       type: object
       properties:
@@ -1711,7 +1706,6 @@ components:
         updated_at: { type: integer, format: int64 }
         email: { type: string }
         avatar: { type: string }
-        display_name: { type: string, nullable: true }
     BotMessageItem:
       type: object
       properties:
@@ -1738,7 +1732,7 @@ components:
         updated_at: { type: integer, format: int64 }
         email: { type: string, nullable: true }
         avatar: { type: string, nullable: true }
-        display_name: { type: string, nullable: true }
+        name: { type: string, nullable: true }
     BotGetConversationHistoryResponse:
       type: object
       properties:
@@ -1766,7 +1760,7 @@ components:
         avatar: { type: string }
         role: { type: string }
         joined_at: { type: integer, format: int64 }
-        display_name: { type: string, nullable: true }
+        name: { type: string, nullable: true }
     BotGetConversationMembersResponse:
       type: object
       properties:

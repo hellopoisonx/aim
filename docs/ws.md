@@ -164,7 +164,6 @@ message ClientAckPayload {
 message SenderInfo {
   string name = 1;
   string email = 2;
-  string display_name = 3;
 }
 
 message PushMessagePayload {

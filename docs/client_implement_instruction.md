@@ -222,10 +222,9 @@ GET /api/conversations
         "is_active": true,
         "created_at": 1700000000000,
         "member_ids": [123, 456],
-        "name": "",                          // 单聊通常为空
+        "name": "Alice",                      // 单聊时为对方昵称；群聊时为群名
         "avatar": "",
-        "creator_id": 123,
-        "display_name": "Alice"              // 单聊时对方的昵称
+        "creator_id": 123
       }
     ]
   }
@@ -254,8 +253,7 @@ GET /api/conversations/history/:conversation_id
         "sender_id": 123,
         "sender_info": {
           "name": "alice",
-          "email": "alice@example.com",
-          "display_name": "Alice"
+          "email": "alice@example.com"
         },
         "message_type": "text",
         "content": "你好",
@@ -270,8 +268,7 @@ GET /api/conversations/history/:conversation_id
             "last_read_message_id": 10005,
             "updated_at": 1700000100000,
             "email": "bob@example.com",
-            "avatar": "https://...",
-            "display_name": "Bob"
+            "avatar": "https://..."
           }
         ]
       }
@@ -286,7 +283,7 @@ GET /api/conversations/history/:conversation_id
         "updated_at": 1700000100000,
         "email": "bob@example.com",
         "avatar": "https://...",
-        "display_name": "Bob"
+        "name": "Bob"
       }
     ]
   }
@@ -509,9 +506,8 @@ message PushMessagePayload {
 }
 
 message SenderInfo {
-  string name = 1;                // 用户名
+  string name = 1;                // 用户名（昵称）
   string email = 2;               // 邮箱
-  string display_name = 3;        // 显示名
 }
 ```
 
@@ -641,7 +637,6 @@ CREATE TABLE local_messages (
     conversation_id INTEGER NOT NULL,
     sender_id INTEGER NOT NULL,
     sender_name TEXT,
-    sender_display_name TEXT,
     sender_email TEXT,
     message_type TEXT NOT NULL,
     content TEXT NOT NULL,
