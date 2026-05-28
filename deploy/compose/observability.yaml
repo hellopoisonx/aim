@@ -83,7 +83,7 @@ services:
       - aim-network
 
   kafka-exporter:
-    image: danielqsj/kafka_exporter:latest
+    image: danielqsj/kafka-exporter:latest
     container_name: aim-kafka-exporter
     command:
       - --kafka.server=kafka:9092
