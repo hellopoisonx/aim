@@ -52,7 +52,7 @@
 - `GET /api/users/by-id/:id` 通过 `LogicRpc` 连接 `aim-logic`，调用 `UserService.GetUserInfo` 查询单个用户详情。
 - `POST /api/users/friends/:id` 通过 `LogicRpc` 连接 `aim-logic`，调用 `FriendshipService.AddFriend`，将认证用户 `user_id` 与路径参数 `id` 建立好友关系请求；认证用户来自 `ws.IdentityFromContext(l.ctx)`，路径 `id` 必须为正数。
 - `LogicRpc` 配置位于 `app/gateway/api/etc/gateway-api.yaml`，配置结构为 `app/gateway/api/internal/config/config.go` 的 `LogicRpc aimnacos.Config`。
-- `app/gateway/api/internal/svc/service_context.go` 通过 Nacos resolver 使用 `nacos:///logic.rpc` 创建 `userservice.UserService`、`friendshipservice.FriendshipService` 客户端。
+- `app/gateway/api/internal/svc/service_context.go` 通过 AIM Nacos resolver 使用 `aimnacos.BuildTarget("logic.rpc")`（目标形如 `aimnacos:///logic.rpc`）创建 `userservice.UserService`、`friendshipservice.FriendshipService` 客户端。
 - 用户端点均受 `Auth` 中间件保护，需要有效的 Bearer JWT token。
 
 | Method | Path | Auth | Handler |
@@ -281,7 +281,7 @@ type CoreRpcConf struct {
 }
 ```
 
-目标地址通过 Nacos resolver 发现（scheme `nacos:///core.rpc`），需在配置中指定 Nacos 注册中心地址（与 AuthRpc 配置方式一致）。
+目标地址通过 AIM Nacos resolver 发现（目标形如 `aimnacos:///core.rpc`），需在配置中指定 Nacos 注册中心地址（与 AuthRpc 配置方式一致）。
 
 调用示例：`app/gateway/rpc/internal/svc/service_context.go` 注入 `CoreRpc` 到 ServiceContext，供 `Transfer` logic 使用。
 

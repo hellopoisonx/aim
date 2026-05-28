@@ -33,7 +33,14 @@ func TestResolverBuilder_Scheme(t *testing.T) {
 	t.Parallel()
 
 	b := &ResolverBuilder{}
-	assert.Equal(t, "nacos", b.Scheme())
+	assert.Equal(t, "aimnacos", b.Scheme())
+	assert.NotEqual(t, "nacos", b.Scheme())
+}
+
+func TestBuildTarget(t *testing.T) {
+	t.Parallel()
+
+	assert.Equal(t, "aimnacos:///logic.rpc", BuildTarget("logic.rpc"))
 }
 
 func TestResolverBuilder_Build_EmptyInstances(t *testing.T) {
@@ -51,7 +58,7 @@ func TestResolverBuilder_Build_EmptyInstances(t *testing.T) {
 	// No instances yet - report the resolver error without pushing an empty address list.
 	assert.Empty(t, cc.state.Addresses)
 	assert.Zero(t, cc.updateCount)
-	assert.Error(t, cc.err)
+	require.Error(t, cc.err)
 
 	// Verify subscription was started.
 	require.NotNil(t, client.subscribeCB)
@@ -163,7 +170,7 @@ func TestRegisterResolver(t *testing.T) {
 
 	RegisterResolver(client, cfg)
 
-	rb := resolver.Get("nacos")
-	require.NotNil(t, rb, "nacos resolver should be registered")
-	assert.Equal(t, "nacos", rb.Scheme())
+	rb := resolver.Get(Scheme)
+	require.NotNil(t, rb, "AIM Nacos resolver should be registered")
+	assert.Equal(t, Scheme, rb.Scheme())
 }

@@ -29,14 +29,14 @@
 - Kafka producer 应先创建 producer span，再调用 `tracing.InjectTraceContext(ctx)` 写入事件 payload，确保消费侧 span 以 producer span 为父级。
 - Nacos resolver 注册是进程级全局动作；`RegisterResolver` 内部使用 `sync.Once`，**只首次调用生效**。
   后续 `RegisterResolver` 调用被忽略，仅第一个 namingClient 被使用。
-  因此第一个注册的 naming client 必须能 Nacos 查到所有后续 `nacos:///<service>` target 对应的服务。
-  gateway 中 auth/core/logic 三个 `NewClientWithTarget("nacos:///" + serviceName)` 均使用相同的 resolver 实例。
+  因此第一个注册的 naming client 必须能 Nacos 查到所有后续 `aimnacos:///<service>` target 对应的服务。
+  gateway 中 auth/core/logic/attachment 多个 `NewClientWithTarget(nacos.BuildTarget(serviceName))` 均使用相同的 resolver 实例。
   如需每个 resolver 使用独立的 naming client，需重构 `registerOnce` 逻辑（如按 naming client 分 scheme 名）。
-- **Nacos resolver 启动时日志报错不影响主链路**。gateway 启动后常见日志：
-  `nacos initial SelectInstances for "9848": instance list is empty!`
-  该日志来自 `internal/resolver.go:72`，是 resolver 在 Nacos 服务注册完成前的初始化阶段发出的非致命错误。
-  此时 HTTP REST（8888）端口已正常监听，gRPC 客户端在 Nacos 订阅回调生效后自动获取健康实例。
-  **判定主链路正常的方法**：`curl http://127.0.0.1:8888/api/auth/register` 返回 405（方法论不允许）而非连接拒绝，即说明 gateway 正常。
+- AIM 自定义 Nacos gRPC resolver 的 scheme 必须使用 `aimnacos`，不要使用 `nacos`。
+  Nacos SDK 会在内部直连 `nacos:9848`；如果自定义 resolver 抢占全局 `nacos` scheme，grpc-go 会把 `9848` 当成服务名反复触发
+  `nacos initial SelectInstances for "9848": instance list is empty!`。
+  看到该日志持续重复时，优先确认镜像是否仍运行旧代码并重建相关服务。
+  服务真实空实例日志应显示业务服务名（如 `auth.rpc`、`logic.rpc`），并只代表启动期订阅尚未收到健康实例。
 
 ## 修改检查
 

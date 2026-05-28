@@ -177,10 +177,9 @@ docker compose up -d --force-recreate aim-auth aim-core aim-gateway aim-logic
 
 ### Gateway 日志大量 Nacos resolver 报错
 
-gateway 启动后常见日志：`nacos initial SelectInstances for "9848": instance list is empty!`
-这是 resolver 在 Nacos 服务注册完成前的非致命错误，**不影响主链路通信**。
-判定方法：`curl http://127.0.0.1:8888/api/auth/register` 返回 405（非连接拒绝）即 gateway HTTP 正常。
-详见 `aim-shared-domain` 中 Nacos resolver 规则。
+如果 gateway/core 持续重复：`nacos initial SelectInstances for "9848": instance list is empty!`，说明运行中的镜像仍使用旧版 `nacos` resolver scheme，抢占了 Nacos SDK 内部 `nacos:9848` 直连目标。
+需重建并重启相关服务；新版 AIM 自定义 resolver 使用 `aimnacos:///<service>`，真实启动期空实例日志应显示业务服务名（如 `auth.rpc`、`logic.rpc`），而不是 `9848`。
+判定 gateway HTTP 是否正常：`curl http://127.0.0.1:8888/api/auth/register` 返回 405（非连接拒绝）即 gateway HTTP 正常。
 
 ### 接口层测试编译失败（fake/querier 不满足接口）
 

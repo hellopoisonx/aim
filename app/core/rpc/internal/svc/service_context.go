@@ -101,7 +101,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 			} else {
 				nacos.RegisterResolver(namingClient, c.LogicRpc)
 
-				client, err := zrpc.NewClientWithTarget("nacos:///" + c.LogicRpc.ServiceName)
+				client, err := zrpc.NewClientWithTarget(nacos.BuildTarget(c.LogicRpc.ServiceName))
 				if err != nil {
 					logx.WithContext(context.Background()).Errorf("failed to create RPC client for LogicRpc: %v", err)
 				} else {
@@ -125,7 +125,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 				logx.WithContext(context.Background()).Errorf("failed to create NamingClient for AttachmentRpc: %v", err)
 			} else {
 				nacos.RegisterResolver(attachmentNamingClient, c.AttachmentRpc)
-				client, err := zrpc.NewClientWithTarget("nacos:///" + c.AttachmentRpc.ServiceName)
+				client, err := zrpc.NewClientWithTarget(nacos.BuildTarget(c.AttachmentRpc.ServiceName))
 				if err != nil {
 					logx.WithContext(context.Background()).Errorf("failed to create RPC client for AttachmentRpc: %v", err)
 				} else {

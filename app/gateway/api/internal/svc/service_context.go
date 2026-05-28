@@ -207,11 +207,11 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	namingClient, err := aimnacos.NewNamingClient(c.AuthRpc)
 	logx.Must(err)
 
-	// Register Nacos-backed gRPC resolver so auth instances are discovered dynamically.
+	// Register AIM's Nacos-backed gRPC resolver so auth instances are discovered dynamically.
 	// With this, the gateway no longer panics when auth starts after it.
 	aimnacos.RegisterResolver(namingClient, c.AuthRpc)
 
-	client, err := zrpc.NewClientWithTarget("nacos:///" + c.AuthRpc.ServiceName)
+	client, err := zrpc.NewClientWithTarget(aimnacos.BuildTarget(c.AuthRpc.ServiceName))
 	logx.Must(err)
 
 	// Core RPC client setup
@@ -222,7 +222,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 
 	aimnacos.RegisterResolver(coreNamingClient, c.CoreRpc)
 
-	coreClient, err := zrpc.NewClientWithTarget("nacos:///" + c.CoreRpc.ServiceName)
+	coreClient, err := zrpc.NewClientWithTarget(aimnacos.BuildTarget(c.CoreRpc.ServiceName))
 	logx.Must(err)
 
 	logx.Must(c.LogicRpc.ApplyDefaults("logic.rpc", "127.0.0.1:8082"))
@@ -232,7 +232,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 
 	aimnacos.RegisterResolver(logicNamingClient, c.LogicRpc)
 
-	logicClient, err := zrpc.NewClientWithTarget("nacos:///" + c.LogicRpc.ServiceName)
+	logicClient, err := zrpc.NewClientWithTarget(aimnacos.BuildTarget(c.LogicRpc.ServiceName))
 	logx.Must(err)
 
 	logx.Must(c.AttachmentRpc.ApplyDefaults("attachment.rpc", "127.0.0.1:8091"))
@@ -242,7 +242,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 
 	aimnacos.RegisterResolver(attachmentNamingClient, c.AttachmentRpc)
 
-	attachmentClient, err := zrpc.NewClientWithTarget("nacos:///" + c.AttachmentRpc.ServiceName)
+	attachmentClient, err := zrpc.NewClientWithTarget(aimnacos.BuildTarget(c.AttachmentRpc.ServiceName))
 	logx.Must(err)
 
 	// Create Redis client for presence heartbeat state management.

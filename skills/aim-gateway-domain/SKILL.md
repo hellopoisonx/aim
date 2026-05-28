@@ -24,6 +24,7 @@ description: aim 的网关域。对应 `gateway` 模块。
 
 ## 最近变更
 
+- 2026-05-28: Gateway/Core 的 Nacos gRPC client 目标改为 `aimnacos.BuildTarget(serviceName)`，避免自定义 resolver 使用 `nacos` scheme 抢占 Nacos SDK 内部 `nacos:9848` 连接并反复刷空实例错误。
 - 2026-05-25: 明确外部接口边界：只有 gateway 可对客户端/公网暴露 REST API 与 WebSocket；非 gateway 模块的 HTTP/REST 只能作为服务间内部接口，Docker Compose 不得 publish 内部 REST/WS 端口。
 - 2026-05-25: attachment 服务由内部 HTTP 改为 `AttachmentService` gRPC；gateway `/api/attachments` 和 core 附件引用校验统一通过 `AttachmentRpc`/Nacos 调用，不再使用 `/v1/attachments/*` 内部 HTTP。
 - 2026-05-25: Gateway 新增 `/api/attachments` 端点：`init`、`complete`、`download`、`get` 均受 Auth 中间件保护，通过 `AttachmentRpc` 调用 `aim-attachment`，客户端仍只面向 gateway 获取 SeaweedFS 直传/下载授权。

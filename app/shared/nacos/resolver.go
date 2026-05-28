@@ -12,12 +12,20 @@ import (
 	"google.golang.org/grpc/resolver"
 )
 
-
-// Scheme is the resolver scheme for Nacos-based gRPC service discovery.
-const Scheme = "nacos"
+// Scheme is the resolver scheme for AIM's Nacos-backed gRPC service discovery.
+// Keep it distinct from "nacos": the Nacos SDK dials server endpoints like
+// "nacos:9848" internally, and gRPC resolver schemes are process-global.
+// Reusing "nacos" would intercept those SDK dials and resolve "9848" as a
+// service name, causing repeated empty SelectInstances logs.
+const Scheme = "aimnacos"
 
 // maxSubsetSize caps the number of addresses passed to gRPC load balancing.
 const maxSubsetSize = 32
+
+// BuildTarget returns a gRPC target for the AIM Nacos resolver.
+func BuildTarget(serviceName string) string {
+	return fmt.Sprintf("%s:///%s", Scheme, serviceName)
+}
 
 var registerOnce sync.Once
 

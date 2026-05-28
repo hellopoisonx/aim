@@ -18,6 +18,7 @@ description: aim 的核心域。对应 `core` 模块。
 
 ## 最近变更
 
+- 2026-05-28: Core 的 LogicRpc/AttachmentRpc client 目标改为 `nacos.BuildTarget(serviceName)`（`aimnacos:///<service>`），避免自定义 resolver 抢占 Nacos SDK 内部 `nacos:9848` 连接。
 - 2026-05-28: `app/core/rpc/etc/core.yaml` 已启用 `ConversationEventConsumerConf`，消费 `aim.conversation.events` 并将群管理系统消息推送到目标用户所在 Gateway。
 - 2026-05-25: Core 附件引用校验改为调用 `AttachmentService.ValidateReference` gRPC，保留 `core.attachment.validate_reference` client span；配置改为 `AttachmentRpc` Nacos 服务发现。
 - 2026-05-25: Transfer 热路径新增附件消息校验：`image`/`video`/`audio`/`file` 的 `content` 必须符合 `aim.attachment.v1` JSON schema，并通过 attachment 服务校验上传完成、发送者、会话归属和类型匹配；配置新增 `AttachmentRpc`。
