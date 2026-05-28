@@ -204,7 +204,19 @@ class RESTClient:
     def _path(self, path: str) -> str:
         return f"{self.base_url}{path}"
 
+    def _safe_json(self, r) -> dict:
+        text = r.text.strip()
+        if not text:
+            return {}
+        return r.json()
+
     def _get(self, path: str, **kwargs) -> dict:
+        h = {**self.token.auth_header(), **kwargs.pop("headers", {})}
+        r = self.session.get(self._path(path), headers=h, **kwargs)
+        data = self._safe_json(r)
+        if data.get("code", 0) != 0:
+            raise APIError(data["code"], data.get("msg", "unknown error"))
+        return data.get("body", {})
         h = {**self.token.auth_header(), **kwargs.pop("headers", {})}
         r = self.session.get(self._path(path), headers=h, **kwargs)
         data = r.json()
@@ -213,6 +225,12 @@ class RESTClient:
         return data.get("body", {})
 
     def _post(self, path: str, body=None, **kwargs) -> dict:
+        h = {**self.token.auth_header(), **kwargs.pop("headers", {})}
+        r = self.session.post(self._path(path), json=body, headers=h, **kwargs)
+        data = self._safe_json(r)
+        if data.get("code", 0) != 0:
+            raise APIError(data["code"], data.get("msg", "unknown error"))
+        return data.get("body", {})
         h = {**self.token.auth_header(), **kwargs.pop("headers", {})}
         r = self.session.post(self._path(path), json=body, headers=h, **kwargs)
         data = r.json()
@@ -335,12 +353,24 @@ class RESTClient:
     def _delete(self, path: str, **kwargs) -> dict:
         h = {**self.token.auth_header(), **kwargs.pop("headers", {})}
         r = self.session.delete(self._path(path), headers=h, **kwargs)
+        data = self._safe_json(r)
+        if data.get("code", 0) != 0:
+            raise APIError(data["code"], data.get("msg", "unknown error"))
+        return data.get("body", {})
+        h = {**self.token.auth_header(), **kwargs.pop("headers", {})}
+        r = self.session.delete(self._path(path), headers=h, **kwargs)
         data = r.json()
         if data.get("code", 0) != 0:
             raise APIError(data["code"], data.get("msg", "unknown error"))
         return data.get("body", {})
 
     def _put(self, path: str, body=None, **kwargs) -> dict:
+        h = {**self.token.auth_header(), **kwargs.pop("headers", {})}
+        r = self.session.put(self._path(path), json=body, headers=h, **kwargs)
+        data = self._safe_json(r)
+        if data.get("code", 0) != 0:
+            raise APIError(data["code"], data.get("msg", "unknown error"))
+        return data.get("body", {})
         h = {**self.token.auth_header(), **kwargs.pop("headers", {})}
         r = self.session.put(self._path(path), json=body, headers=h, **kwargs)
         data = r.json()
