@@ -16,6 +16,7 @@ description: aim 的逻辑域。对应 `logic` 模块。
 
 ## 最近变更
 
+- 2026-05-28: logic 接入共享两级缓存：权限检查热路径缓存会话、成员、好友关系和 user_type；UserInfo/BotToken/ConversationService 接入缓存并在用户、好友、会话写操作后主动失效，`logic.yaml` 新增 `Cache` 配置块。
 - 2026-05-28: `app/logic/rpc/etc/logic.yaml` 已启用 `ConversationEventProducerConf`，logic 在群管理事务提交后会将系统消息事件发布到 `aim.conversation.events`，由 core 的 `ConversationEventConsumer` 推送到 Gateway。
 - 2026-05-27: `DatabasePermissionChecker` 对 direct 会话新增 Bot 识别：当发送者或对端 `user_info.user_type='bot'` 时，非好友关系仍保留 block 拦截但跳过临时会话累计消息上限，避免 user ↔ echo-bot 对话达到 10 条后被误判为临时会话限额耗尽。
 - 2026-05-25: ArchiveConsumer 修正 `messages.content` JSONB 写入：附件消息等合法 JSON 内容按 JSON object 保存，普通文本消息仍按 JSON string 保存，避免附件 `aim.attachment.v1` 被二次编码。

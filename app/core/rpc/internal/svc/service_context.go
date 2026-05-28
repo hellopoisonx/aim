@@ -15,6 +15,7 @@ import (
 	"github.com/segmentio/kafka-go"
 	"github.com/zeromicro/go-queue/kq"
 	"github.com/zeromicro/go-zero/core/logx"
+	gzredis "github.com/zeromicro/go-zero/core/stores/redis"
 	"github.com/zeromicro/go-zero/zrpc"
 )
 
@@ -28,7 +29,7 @@ type ServiceContext struct {
 	LogicFriendshipClient   logicpb.FriendshipServiceClient
 	LogicUserClient         logicpb.UserServiceClient
 	GatewayClient           rpc.GatewayPusher
-	PresenceStore           *cache.PresenceStore
+	PresenceStore           cache.PresenceDirectory
 	TransferQuota           *cache.QuotaStore
 	AttachmentClient        attachmentpb.AttachmentServiceClient
 	namingClient            nacos.NamingClient
@@ -136,9 +137,16 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	}
 
 	// Presence store (nil if not configured)
-	var presenceStore *cache.PresenceStore
+	var presenceStore cache.PresenceDirectory
 	if c.Presence.TTLSeconds > 0 {
-		presenceStore = cache.NewPresenceStore(redisClient, c.Presence.TTLSeconds)
+		rds, err := gzredis.NewRedis(gzredis.RedisConf{Host: c.CacheRedis.Addr, Type: gzredis.NodeType, Pass: c.CacheRedis.Password})
+		if err != nil {
+			logx.WithContext(context.Background()).Errorf("failed to create go-zero Redis presence client: %v", err)
+		} else if store, err := cache.NewCachedPresenceStore(rds, c.Presence.TTLSeconds); err != nil {
+			logx.WithContext(context.Background()).Errorf("failed to create cached presence store: %v", err)
+		} else {
+			presenceStore = store
+		}
 	}
 
 	// Transfer quota (nil when MaxRequests <= 0).

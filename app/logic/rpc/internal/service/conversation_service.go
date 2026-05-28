@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/hellopoisonx/aim/app/logic/rpc/model"
+	sharedcache "github.com/hellopoisonx/aim/app/shared/cache"
 	sharedconversation "github.com/hellopoisonx/aim/app/shared/conversation"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 	"github.com/hellopoisonx/aim/app/shared/tools"
@@ -28,6 +29,15 @@ const (
 	CodeNotGroupConversation = 40011
 	CodeNotOwner             = 40311
 	CodeNotAdmin             = 40312
+)
+
+const (
+	ConversationTypeDirect = "direct"
+	ConversationTypeGroup  = "group"
+
+	RoleMember = "member"
+	RoleAdmin  = "admin"
+	RoleOwner  = "owner"
 )
 
 var (
@@ -120,14 +130,32 @@ type conversationEventPayload struct {
 }
 
 type ConversationService struct {
-	store  ConversationStore
-	idGen  *tools.Snowflake
-	pool   *pgxpool.Pool
-	pusher *kq.Pusher
+	store        ConversationStore
+	idGen        *tools.Snowflake
+	pool         *pgxpool.Pool
+	pusher       *kq.Pusher
+	convCache    *sharedcache.TypedCache[model.GetConversationRow]
+	membersCache *sharedcache.TypedCache[[]model.GetConversationMembersRow]
 }
 
-func NewConversationService(store ConversationStore, idGen *tools.Snowflake, pool *pgxpool.Pool, pusher *kq.Pusher) *ConversationService {
-	return &ConversationService{store: store, idGen: idGen, pool: pool, pusher: pusher}
+type ConversationServiceOption func(*ConversationService)
+
+func WithConversationCaches(convCache *sharedcache.TypedCache[model.GetConversationRow], membersCache *sharedcache.TypedCache[[]model.GetConversationMembersRow]) ConversationServiceOption {
+	return func(s *ConversationService) {
+		s.convCache = convCache
+		s.membersCache = membersCache
+	}
+}
+
+func NewConversationService(store ConversationStore, idGen *tools.Snowflake, pool *pgxpool.Pool, pusher *kq.Pusher, opts ...ConversationServiceOption) *ConversationService {
+	svc := &ConversationService{store: store, idGen: idGen, pool: pool, pusher: pusher}
+	for _, opt := range opts {
+		if opt != nil {
+			opt(svc)
+		}
+	}
+
+	return svc
 }
 
 func (s *ConversationService) InTx(ctx context.Context, fn func(txQueries *model.Queries) error) error {
@@ -138,7 +166,7 @@ func (s *ConversationService) InTx(ctx context.Context, fn func(txQueries *model
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	if err := fn(model.New(tx)); err != nil {
 		return err
 	}
@@ -164,6 +192,43 @@ func (s *ConversationService) publishConversationEvent(ctx context.Context, even
 	}
 }
 
+func (s *ConversationService) getConversationRow(ctx context.Context, id int64) (model.GetConversationRow, error) {
+	if s.convCache == nil {
+		return s.store.GetConversation(ctx, id)
+	}
+
+	return s.convCache.Take(ctx, sharedcache.ConvKey(id), func() (model.GetConversationRow, error) {
+		return s.store.GetConversation(ctx, id)
+	})
+}
+
+func (s *ConversationService) getConversationMemberRows(ctx context.Context, conversationID int64) ([]model.GetConversationMembersRow, error) {
+	if s.membersCache == nil {
+		return s.store.GetConversationMembers(ctx, conversationID)
+	}
+
+	return s.membersCache.Take(ctx, sharedcache.ConvMembersKey(conversationID), func() ([]model.GetConversationMembersRow, error) {
+		return s.store.GetConversationMembers(ctx, conversationID)
+	})
+}
+
+func (s *ConversationService) invalidateConversation(ctx context.Context, conversationID int64) {
+	if s.convCache != nil {
+		_ = s.convCache.Del(ctx, sharedcache.ConvKey(conversationID))
+	}
+}
+
+func (s *ConversationService) invalidateConversationMembers(ctx context.Context, conversationID int64) {
+	if s.membersCache != nil {
+		_ = s.membersCache.Del(ctx, sharedcache.ConvMembersKey(conversationID))
+	}
+}
+
+func (s *ConversationService) invalidateConversationAll(ctx context.Context, conversationID int64) {
+	s.invalidateConversation(ctx, conversationID)
+	s.invalidateConversationMembers(ctx, conversationID)
+}
+
 func (s *ConversationService) buildSystemMessage(event string, operatorID int64, operatorName string, targetIDs []int64) []byte {
 	content := systemMessageContent{
 		Event:        event,
@@ -182,14 +247,14 @@ func (s ConversationService) memberRole(ctx context.Context, conversationID, use
 	if userID <= 0 {
 		return "", errorx.NewCodeError(errorx.CodeBadInput, "user_id is required and must be positive")
 	}
-	members, err := s.store.GetConversationMembers(ctx, conversationID)
+	members, err := s.getConversationMemberRows(ctx, conversationID)
 	if err != nil {
 		return "", err
 	}
 	for _, m := range members {
 		if m.UserID == userID {
 			if m.Role == "" {
-				return "member", nil
+				return RoleMember, nil
 			}
 			return m.Role, nil
 		}
@@ -202,7 +267,7 @@ func (s ConversationService) isOwner(ctx context.Context, conversationID, userID
 	if err != nil {
 		return false, err
 	}
-	return role == "owner", nil
+	return role == RoleOwner, nil
 }
 
 func (s ConversationService) isAdminOrOwner(ctx context.Context, conversationID, userID int64) (bool, error) {
@@ -210,7 +275,7 @@ func (s ConversationService) isAdminOrOwner(ctx context.Context, conversationID,
 	if err != nil {
 		return false, err
 	}
-	return role == "owner" || role == "admin", nil
+	return role == RoleOwner || role == RoleAdmin, nil
 }
 
 func (s ConversationService) CreateConversation(ctx context.Context, conversationType string, creatorID int64, memberIDs []int64, name string, avatar string) (model.Conversation, error) {
@@ -218,14 +283,14 @@ func (s ConversationService) CreateConversation(ctx context.Context, conversatio
 		return model.Conversation{}, errorx.NewCodeError(errorx.CodeBadInput, "creator_id is required and must be positive")
 	}
 
-	if conversationType != "direct" && conversationType != "group" {
+	if conversationType != ConversationTypeDirect && conversationType != ConversationTypeGroup {
 		return model.Conversation{}, errorx.NewCodeError(errorx.CodeBadInput, "conversation_type must be 'direct' or 'group'")
 	}
 
 	name = strings.TrimSpace(name)
 
 	nameWasEmpty := name == ""
-	if nameWasEmpty && conversationType == "group" {
+	if nameWasEmpty && conversationType == ConversationTypeGroup {
 		return model.Conversation{}, errorx.NewCodeError(errorx.CodeBadInput, "name is required")
 	}
 
@@ -238,7 +303,7 @@ func (s ConversationService) CreateConversation(ctx context.Context, conversatio
 		return model.Conversation{}, errorx.NewCodeError(errorx.CodeBadInput, "member_ids must not be empty")
 	}
 
-	if conversationType == "direct" && len(memberIDs) != 1 {
+	if conversationType == ConversationTypeDirect && len(memberIDs) != 1 {
 		return model.Conversation{}, errorx.NewCodeError(errorx.CodeBadInput, "direct conversation member_ids must contain exactly one peer user id")
 	}
 
@@ -269,15 +334,15 @@ func (s ConversationService) CreateConversation(ctx context.Context, conversatio
 
 	memberIDs = deduped
 
-	if conversationType == "direct" && len(memberIDs) != 2 {
+	if conversationType == ConversationTypeDirect && len(memberIDs) != 2 {
 		return model.Conversation{}, errorx.NewCodeError(errorx.CodeBadInput, "direct conversation must have exactly 2 members")
 	}
 
-	if conversationType == "direct" && nameWasEmpty {
+	if conversationType == ConversationTypeDirect && nameWasEmpty {
 		name = fmt.Sprintf("direct-%d-%d", memberIDs[0], memberIDs[1])
 	}
 
-	if conversationType == "direct" {
+	if conversationType == ConversationTypeDirect {
 		existing, err := s.store.GetDirectConversationByMembers(ctx, model.GetDirectConversationByMembersParams{
 			UserID:   memberIDs[0],
 			UserID_2: memberIDs[1],
@@ -324,9 +389,9 @@ func (s ConversationService) CreateConversation(ctx context.Context, conversatio
 	}
 
 	for _, memberID := range memberIDs {
-		role := "member"
+		role := RoleMember
 		if memberID == creatorID {
-			role = "owner"
+			role = RoleOwner
 		}
 		_, err := s.store.AddConversationMemberWithRole(ctx, model.AddConversationMemberWithRoleParams{
 			ConversationID: conv.ID,
@@ -338,11 +403,13 @@ func (s ConversationService) CreateConversation(ctx context.Context, conversatio
 		}
 	}
 
+	s.invalidateConversationAll(ctx, conv.ID)
+
 	return conv, nil
 }
 
 func (s ConversationService) GetConversationByID(ctx context.Context, id int64) (model.Conversation, error) {
-	row, err := s.store.GetConversation(ctx, id)
+	row, err := s.getConversationRow(ctx, id)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return model.Conversation{}, ErrConversationNotFound
@@ -369,7 +436,7 @@ func (s ConversationService) GetConversationHistory(ctx context.Context, convers
 		return s.GetConversationHistoryInitial(ctx, conversationID, limit)
 	}
 
-	_, err := s.store.GetConversation(ctx, conversationID)
+	_, err := s.getConversationRow(ctx, conversationID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrConversationNotFound
@@ -395,7 +462,7 @@ func (s ConversationService) GetConversationHistoryInitial(ctx context.Context, 
 		limit = 50
 	}
 
-	_, err := s.store.GetConversation(ctx, conversationID)
+	_, err := s.getConversationRow(ctx, conversationID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrConversationNotFound
@@ -415,7 +482,7 @@ func (s ConversationService) GetConversationHistoryInitial(ctx context.Context, 
 }
 
 func (s ConversationService) GetConversationMembers(ctx context.Context, conversationID int64) ([]model.ConversationMember, error) {
-	_, err := s.store.GetConversation(ctx, conversationID)
+	_, err := s.getConversationRow(ctx, conversationID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrConversationNotFound
@@ -423,7 +490,7 @@ func (s ConversationService) GetConversationMembers(ctx context.Context, convers
 		return nil, err
 	}
 
-	rows, err := s.store.GetConversationMembers(ctx, conversationID)
+	rows, err := s.getConversationMemberRows(ctx, conversationID)
 	if err != nil {
 		return nil, err
 	}
@@ -487,7 +554,7 @@ func (s ConversationService) AddGroupMembers(ctx context.Context, conversationID
 		return model.Conversation{}, err
 	}
 
-	if conv.ConversationType != "group" {
+	if conv.ConversationType != ConversationTypeGroup {
 		return model.Conversation{}, ErrNotGroupConversation
 	}
 	ok, err := s.isAdminOrOwner(ctx, conversationID, operatorID)
@@ -522,7 +589,7 @@ func (s ConversationService) AddGroupMembers(ctx context.Context, conversationID
 			_, err := tx.AddConversationMemberWithRole(ctx, model.AddConversationMemberWithRoleParams{
 				ConversationID: conversationID,
 				UserID:         mid,
-				Role:           "member",
+				Role:           RoleMember,
 			})
 			if err != nil {
 				return err
@@ -567,6 +634,7 @@ func (s ConversationService) AddGroupMembers(ctx context.Context, conversationID
 		Timestamp:      time.Now().UnixMilli(),
 	})
 
+	s.invalidateConversationMembers(ctx, conversationID)
 	conv, _ = s.GetConversationByID(ctx, conversationID)
 	return conv, nil
 }
@@ -577,14 +645,14 @@ func (s ConversationService) RemoveGroupMembers(ctx context.Context, conversatio
 		return err
 	}
 
-	if conv.ConversationType != "group" {
+	if conv.ConversationType != ConversationTypeGroup {
 		return ErrNotGroupConversation
 	}
 	operatorRole, err := s.memberRole(ctx, conversationID, operatorID)
 	if err != nil {
 		return err
 	}
-	if operatorRole != "owner" && operatorRole != "admin" {
+	if operatorRole != RoleOwner && operatorRole != RoleAdmin {
 		return ErrNotAdmin
 	}
 	for _, uid := range removeMemberIDs {
@@ -595,10 +663,10 @@ func (s ConversationService) RemoveGroupMembers(ctx context.Context, conversatio
 		if err != nil {
 			return err
 		}
-		if role == "owner" || uid == operatorID {
+		if role == RoleOwner || uid == operatorID {
 			return ErrNotOwner
 		}
-		if operatorRole == "admin" && role != "member" {
+		if operatorRole == RoleAdmin && role != RoleMember {
 			return ErrNotAdmin
 		}
 	}
@@ -644,6 +712,7 @@ func (s ConversationService) RemoveGroupMembers(ctx context.Context, conversatio
 		return err
 	}
 
+	s.invalidateConversationMembers(ctx, conversationID)
 	s.publishConversationEvent(ctx, conversationEventPayload{
 		MessageID:      messageID,
 		ConversationID: conversationID,
@@ -663,7 +732,7 @@ func (s ConversationService) LeaveGroup(ctx context.Context, conversationID, use
 		return err
 	}
 
-	if conv.ConversationType != "group" {
+	if conv.ConversationType != ConversationTypeGroup {
 		return ErrNotGroupConversation
 	}
 	if userID == conv.CreatorID {
@@ -711,6 +780,7 @@ func (s ConversationService) LeaveGroup(ctx context.Context, conversationID, use
 		return err
 	}
 
+	s.invalidateConversationMembers(ctx, conversationID)
 	s.publishConversationEvent(ctx, conversationEventPayload{
 		MessageID:      messageID,
 		ConversationID: conversationID,
@@ -730,7 +800,7 @@ func (s ConversationService) DismissGroup(ctx context.Context, conversationID, o
 		return err
 	}
 
-	if conv.ConversationType != "group" {
+	if conv.ConversationType != ConversationTypeGroup {
 		return ErrNotGroupConversation
 	}
 	if operatorID != conv.CreatorID {
@@ -774,6 +844,7 @@ func (s ConversationService) DismissGroup(ctx context.Context, conversationID, o
 		return err
 	}
 
+	s.invalidateConversationAll(ctx, conversationID)
 	s.publishConversationEvent(ctx, conversationEventPayload{
 		MessageID:      messageID,
 		ConversationID: conversationID,
@@ -793,7 +864,7 @@ func (s ConversationService) UpdateGroupInfo(ctx context.Context, conversationID
 		return model.Conversation{}, err
 	}
 
-	if conv.ConversationType != "group" {
+	if conv.ConversationType != ConversationTypeGroup {
 		return model.Conversation{}, ErrNotGroupConversation
 	}
 	ok, err := s.isAdminOrOwner(ctx, conversationID, operatorID)
@@ -869,6 +940,7 @@ func (s ConversationService) UpdateGroupInfo(ctx context.Context, conversationID
 		return model.Conversation{}, err
 	}
 
+	s.invalidateConversation(ctx, conversationID)
 	s.publishConversationEvent(ctx, conversationEventPayload{
 		MessageID:      messageID,
 		ConversationID: conversationID,
@@ -888,7 +960,7 @@ func (s ConversationService) GrantGroupAdmin(ctx context.Context, conversationID
 	if err != nil {
 		return err
 	}
-	if conv.ConversationType != "group" {
+	if conv.ConversationType != ConversationTypeGroup {
 		return ErrNotGroupConversation
 	}
 	ok, err := s.isOwner(ctx, conversationID, operatorID)
@@ -905,22 +977,23 @@ func (s ConversationService) GrantGroupAdmin(ctx context.Context, conversationID
 	if err != nil {
 		return err
 	}
-	if targetRole == "owner" {
+	if targetRole == RoleOwner {
 		return ErrNotOwner
 	}
-	if targetRole == "admin" {
+	if targetRole == RoleAdmin {
 		return nil
 	}
-	if targetRole != "member" {
+	if targetRole != RoleMember {
 		return ErrNotMember
 	}
-	rows, err := s.store.UpdateConversationMemberRole(ctx, model.UpdateConversationMemberRoleParams{ConversationID: conversationID, UserID: targetUserID, Role: "admin"})
+	rows, err := s.store.UpdateConversationMemberRole(ctx, model.UpdateConversationMemberRoleParams{ConversationID: conversationID, UserID: targetUserID, Role: RoleAdmin})
 	if err != nil {
 		return err
 	}
 	if rows == 0 {
 		return ErrNotMember
 	}
+	s.invalidateConversationMembers(ctx, conversationID)
 	return nil
 }
 
@@ -929,7 +1002,7 @@ func (s ConversationService) RevokeGroupAdmin(ctx context.Context, conversationI
 	if err != nil {
 		return err
 	}
-	if conv.ConversationType != "group" {
+	if conv.ConversationType != ConversationTypeGroup {
 		return ErrNotGroupConversation
 	}
 	ok, err := s.isOwner(ctx, conversationID, operatorID)
@@ -946,22 +1019,23 @@ func (s ConversationService) RevokeGroupAdmin(ctx context.Context, conversationI
 	if err != nil {
 		return err
 	}
-	if targetRole == "owner" {
+	if targetRole == RoleOwner {
 		return ErrNotOwner
 	}
-	if targetRole == "member" {
+	if targetRole == RoleMember {
 		return nil
 	}
-	if targetRole != "admin" {
+	if targetRole != RoleAdmin {
 		return ErrNotMember
 	}
-	rows, err := s.store.UpdateConversationMemberRole(ctx, model.UpdateConversationMemberRoleParams{ConversationID: conversationID, UserID: targetUserID, Role: "member"})
+	rows, err := s.store.UpdateConversationMemberRole(ctx, model.UpdateConversationMemberRoleParams{ConversationID: conversationID, UserID: targetUserID, Role: RoleMember})
 	if err != nil {
 		return err
 	}
 	if rows == 0 {
 		return ErrNotMember
 	}
+	s.invalidateConversationMembers(ctx, conversationID)
 	return nil
 }
 
@@ -970,7 +1044,7 @@ func (s ConversationService) TransferGroupOwner(ctx context.Context, conversatio
 	if err != nil {
 		return model.Conversation{}, err
 	}
-	if conv.ConversationType != "group" {
+	if conv.ConversationType != ConversationTypeGroup {
 		return model.Conversation{}, ErrNotGroupConversation
 	}
 	ok, err := s.isOwner(ctx, conversationID, operatorID)
@@ -987,21 +1061,21 @@ func (s ConversationService) TransferGroupOwner(ctx context.Context, conversatio
 	if err != nil {
 		return model.Conversation{}, err
 	}
-	if targetRole == "owner" {
+	if targetRole == RoleOwner {
 		return model.Conversation{}, ErrNotOwner
 	}
-	if targetRole != "member" && targetRole != "admin" {
+	if targetRole != RoleMember && targetRole != RoleAdmin {
 		return model.Conversation{}, ErrNotMember
 	}
 
 	if s.pool != nil {
 		err = s.InTx(ctx, func(tx *model.Queries) error {
-			if rows, err := tx.UpdateConversationMemberRole(ctx, model.UpdateConversationMemberRoleParams{ConversationID: conversationID, UserID: operatorID, Role: "admin"}); err != nil {
+			if rows, err := tx.UpdateConversationMemberRole(ctx, model.UpdateConversationMemberRoleParams{ConversationID: conversationID, UserID: operatorID, Role: RoleAdmin}); err != nil {
 				return err
 			} else if rows == 0 {
 				return ErrNotMember
 			}
-			if rows, err := tx.UpdateConversationMemberRole(ctx, model.UpdateConversationMemberRoleParams{ConversationID: conversationID, UserID: targetUserID, Role: "owner"}); err != nil {
+			if rows, err := tx.UpdateConversationMemberRole(ctx, model.UpdateConversationMemberRoleParams{ConversationID: conversationID, UserID: targetUserID, Role: RoleOwner}); err != nil {
 				return err
 			} else if rows == 0 {
 				return ErrNotMember
@@ -1009,12 +1083,12 @@ func (s ConversationService) TransferGroupOwner(ctx context.Context, conversatio
 			return tx.UpdateConversationCreator(ctx, model.UpdateConversationCreatorParams{ID: conversationID, CreatorID: targetUserID})
 		})
 	} else {
-		if rows, err := s.store.UpdateConversationMemberRole(ctx, model.UpdateConversationMemberRoleParams{ConversationID: conversationID, UserID: operatorID, Role: "admin"}); err != nil {
+		if rows, err := s.store.UpdateConversationMemberRole(ctx, model.UpdateConversationMemberRoleParams{ConversationID: conversationID, UserID: operatorID, Role: RoleAdmin}); err != nil {
 			return model.Conversation{}, err
 		} else if rows == 0 {
 			return model.Conversation{}, ErrNotMember
 		}
-		if rows, err := s.store.UpdateConversationMemberRole(ctx, model.UpdateConversationMemberRoleParams{ConversationID: conversationID, UserID: targetUserID, Role: "owner"}); err != nil {
+		if rows, err := s.store.UpdateConversationMemberRole(ctx, model.UpdateConversationMemberRoleParams{ConversationID: conversationID, UserID: targetUserID, Role: RoleOwner}); err != nil {
 			return model.Conversation{}, err
 		} else if rows == 0 {
 			return model.Conversation{}, ErrNotMember
@@ -1024,6 +1098,8 @@ func (s ConversationService) TransferGroupOwner(ctx context.Context, conversatio
 	if err != nil {
 		return model.Conversation{}, err
 	}
+	s.invalidateConversationAll(ctx, conversationID)
+
 	return s.GetConversationByID(ctx, conversationID)
 }
 

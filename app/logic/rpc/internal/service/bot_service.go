@@ -8,6 +8,7 @@ import (
 	"github.com/hellopoisonx/aim/app/logic/rpc/model"
 	"github.com/hellopoisonx/aim/app/shared/botperm"
 	"github.com/hellopoisonx/aim/app/shared/bottoken"
+	sharedcache "github.com/hellopoisonx/aim/app/shared/cache"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 
 	"github.com/zeromicro/go-zero/core/logx"
@@ -61,12 +62,28 @@ type BotQuerier interface {
 
 // BotService implements BotService RPC business logic.
 type BotService struct {
-	queries BotQuerier
+	queries       BotQuerier
+	botTokenCache *sharedcache.TypedCache[model.GetBotTokenByHashRow]
+}
+
+type BotServiceOption func(*BotService)
+
+func WithBotTokenCache(cache *sharedcache.TypedCache[model.GetBotTokenByHashRow]) BotServiceOption {
+	return func(s *BotService) {
+		s.botTokenCache = cache
+	}
 }
 
 // NewBotService constructs a BotService backed by sqlc Querier.
-func NewBotService(queries BotQuerier) *BotService {
-	return &BotService{queries: queries}
+func NewBotService(queries BotQuerier, opts ...BotServiceOption) *BotService {
+	svc := &BotService{queries: queries}
+	for _, opt := range opts {
+		if opt != nil {
+			opt(svc)
+		}
+	}
+
+	return svc
 }
 
 // ValidateBotToken loads the row matching the plaintext token's SHA-256
@@ -83,7 +100,7 @@ func (s *BotService) ValidateBotToken(ctx context.Context, plaintext string) (Bo
 		return BotIdentity{}, errorx.NewCodeError(errorx.CodeBotTokenInvalid, "invalid bot token")
 	}
 
-	row, err := s.queries.GetBotTokenByHash(ctx, bottoken.Hash(parsed))
+	row, err := s.getBotTokenByHash(ctx, bottoken.Hash(parsed))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return BotIdentity{}, errorx.NewCodeError(errorx.CodeBotTokenInvalid, "invalid bot token")
@@ -132,6 +149,16 @@ func (s *BotService) ValidateBotToken(ctx context.Context, plaintext string) (Bo
 		Avatar:     row.Avatar,
 		UserStatus: row.UserStatus,
 	}, nil
+}
+
+func (s *BotService) getBotTokenByHash(ctx context.Context, tokenHash string) (model.GetBotTokenByHashRow, error) {
+	if s.botTokenCache == nil {
+		return s.queries.GetBotTokenByHash(ctx, tokenHash)
+	}
+
+	return s.botTokenCache.Take(ctx, sharedcache.BotTokenKey(tokenHash), func() (model.GetBotTokenByHashRow, error) {
+		return s.queries.GetBotTokenByHash(ctx, tokenHash)
+	})
 }
 
 // GetBotProfile loads the bot's user_info row and rejects when the row is

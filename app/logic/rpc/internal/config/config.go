@@ -3,6 +3,7 @@ package config
 //lint:file-ignore SA5008 go-zero conf uses json tag options for defaults.
 
 import (
+	sharedcache "github.com/hellopoisonx/aim/app/shared/cache"
 	"github.com/hellopoisonx/aim/app/shared/nacos"
 	"github.com/zeromicro/go-queue/kq"
 	"github.com/zeromicro/go-zero/zrpc"
@@ -10,16 +11,17 @@ import (
 
 type Config struct {
 	zrpc.RpcServerConf
-	Nacos                         nacos.Config `json:",optional"`
-	Postgres                      PostgresConf `json:",optional"`
-	KqConsumerConf                kq.KqConf    `json:",optional"`
-	UserCreatedConsumerConf       kq.KqConf    `json:",optional"`
-	BotWebhookConsumerConf        kq.KqConf    `json:",optional"`
-	ConversationEventProducerConf KqPusherConf `json:",optional"`
-	CacheRedis                    RedisConf    `json:",optional"`
-	Quota                         QuotaConf    `json:",optional"`
-	Dev                           DevConf      `json:",optional"`
-	MachineID                     int64        `json:",default=1"`
+	Nacos                         nacos.Config       `json:",optional"`
+	Postgres                      PostgresConf       `json:",optional"`
+	KqConsumerConf                kq.KqConf          `json:",optional"`
+	UserCreatedConsumerConf       kq.KqConf          `json:",optional"`
+	BotWebhookConsumerConf        kq.KqConf          `json:",optional"`
+	ConversationEventProducerConf KqPusherConf       `json:",optional"`
+	CacheRedis                    RedisConf          `json:",optional"`
+	Cache                         sharedcache.Config `json:",optional"`
+	Quota                         QuotaConf          `json:",optional"`
+	Dev                           DevConf            `json:",optional"`
+	MachineID                     int64              `json:",default=1"`
 }
 
 type KqPusherConf struct {

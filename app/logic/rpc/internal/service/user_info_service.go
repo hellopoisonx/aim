@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"github.com/hellopoisonx/aim/app/logic/rpc/model"
+	sharedcache "github.com/hellopoisonx/aim/app/shared/cache"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -52,17 +53,40 @@ func normalizeAvatar(avatar string) string {
 
 // UserInfoService handles user profile operations.
 type UserInfoService struct {
-	queries UserInfoStore
+	queries       UserInfoStore
+	userCache     *sharedcache.TypedCache[model.UserInfo]
+	userTypeCache *sharedcache.TypedCache[string]
+}
+
+type UserInfoServiceOption func(*UserInfoService)
+
+func WithUserInfoCache(cache *sharedcache.TypedCache[model.UserInfo]) UserInfoServiceOption {
+	return func(s *UserInfoService) {
+		s.userCache = cache
+	}
+}
+
+func WithUserTypeCache(cache *sharedcache.TypedCache[string]) UserInfoServiceOption {
+	return func(s *UserInfoService) {
+		s.userTypeCache = cache
+	}
 }
 
 // NewUserInfoService creates a new UserInfoService.
-func NewUserInfoService(queries UserInfoStore) *UserInfoService {
-	return &UserInfoService{queries: queries}
+func NewUserInfoService(queries UserInfoStore, opts ...UserInfoServiceOption) *UserInfoService {
+	svc := &UserInfoService{queries: queries}
+	for _, opt := range opts {
+		if opt != nil {
+			opt(svc)
+		}
+	}
+
+	return svc
 }
 
 // GetUserInfo retrieves a user by ID.
 func (s UserInfoService) GetUserInfo(ctx context.Context, id int64) (model.UserInfo, error) {
-	info, err := s.queries.GetUserInfoByID(ctx, id)
+	info, err := s.getUserInfoByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return model.UserInfo{}, ErrUserNotFound
@@ -76,7 +100,7 @@ func (s UserInfoService) GetUserInfo(ctx context.Context, id int64) (model.UserI
 
 // GetUserInfoByEmail retrieves a user by email.
 func (s UserInfoService) GetUserInfoByEmail(ctx context.Context, email string) (model.UserInfo, error) {
-	info, err := s.queries.GetUserInfoByEmail(ctx, email)
+	info, err := s.getUserInfoByEmailCached(ctx, email)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return model.UserInfo{}, ErrUserNotFound
@@ -119,6 +143,8 @@ func (s UserInfoService) CreateUserInfo(ctx context.Context, id int64, email, ni
 		return model.UserInfo{}, err
 	}
 
+	_ = s.delUserInfoCache(ctx, info)
+
 	return info, nil
 }
 
@@ -137,6 +163,8 @@ func (s UserInfoService) UpdateUserInfoProfile(ctx context.Context, id int64, ni
 		return model.UserInfo{}, err
 	}
 
+	_ = s.delUserInfoCache(ctx, info)
+
 	return info, nil
 }
 
@@ -154,6 +182,8 @@ func (s UserInfoService) UpdateUserInfoStatus(ctx context.Context, id int64, sta
 		return model.UserInfo{}, err
 	}
 
+	_ = s.delUserInfoCache(ctx, info)
+
 	return info, nil
 }
 
@@ -163,6 +193,39 @@ func (s UserInfoService) SearchUserInfoByNickname(ctx context.Context, nickname 
 		Search:  &nickname,
 		MaxRows: limit,
 	})
+}
+
+func (s UserInfoService) getUserInfoByID(ctx context.Context, id int64) (model.UserInfo, error) {
+	if s.userCache == nil {
+		return s.queries.GetUserInfoByID(ctx, id)
+	}
+
+	return s.userCache.Take(ctx, sharedcache.UserKey(id), func() (model.UserInfo, error) {
+		return s.queries.GetUserInfoByID(ctx, id)
+	})
+}
+
+func (s UserInfoService) getUserInfoByEmailCached(ctx context.Context, email string) (model.UserInfo, error) {
+	if s.userCache == nil {
+		return s.queries.GetUserInfoByEmail(ctx, email)
+	}
+
+	return s.userCache.Take(ctx, sharedcache.UserEmailKey(email), func() (model.UserInfo, error) {
+		return s.queries.GetUserInfoByEmail(ctx, email)
+	})
+}
+
+func (s UserInfoService) delUserInfoCache(ctx context.Context, info model.UserInfo) error {
+	if s.userCache != nil {
+		if err := s.userCache.Del(ctx, sharedcache.UserKey(info.ID), sharedcache.UserEmailKey(info.Email)); err != nil {
+			return err
+		}
+	}
+	if s.userTypeCache != nil {
+		return s.userTypeCache.Del(ctx, sharedcache.UserTypeKey(info.ID))
+	}
+
+	return nil
 }
 
 // ToGRPCError converts domain errors to gRPC status errors.

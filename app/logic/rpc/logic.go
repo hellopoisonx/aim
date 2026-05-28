@@ -8,10 +8,10 @@ import (
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/config"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/mqs"
 	serverbotservice "github.com/hellopoisonx/aim/app/logic/rpc/internal/server/botservice"
-	serverpermissionservice "github.com/hellopoisonx/aim/app/logic/rpc/internal/server/permissionservice"
 	serverconversationservice "github.com/hellopoisonx/aim/app/logic/rpc/internal/server/conversationservice"
-	serveruserservice "github.com/hellopoisonx/aim/app/logic/rpc/internal/server/userservice"
 	serverfriendshipservice "github.com/hellopoisonx/aim/app/logic/rpc/internal/server/friendshipservice"
+	serverpermissionservice "github.com/hellopoisonx/aim/app/logic/rpc/internal/server/permissionservice"
+	serveruserservice "github.com/hellopoisonx/aim/app/logic/rpc/internal/server/userservice"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	aimnacos "github.com/hellopoisonx/aim/app/shared/nacos"
@@ -46,6 +46,7 @@ func main() {
 	}()
 
 	ctx := svc.NewServiceContext(c)
+	defer ctx.Close()
 
 	s := zrpc.MustNewServer(c.RpcServerConf, func(grpcServer *grpc.Server) {
 		pb.RegisterPermissionServiceServer(grpcServer, serverpermissionservice.NewPermissionServiceServer(ctx))

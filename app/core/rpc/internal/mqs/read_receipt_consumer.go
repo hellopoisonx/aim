@@ -106,12 +106,11 @@ func (c *ReadReceiptConsumer) Consume(ctx context.Context, key string, value str
 
 // getGatewayNodes returns the set of gateway node IDs where a user is connected.
 func (c *ReadReceiptConsumer) getGatewayNodes(ctx context.Context, userID int64) ([]string, error) {
-	if c.svcCtx.RedisClient == nil {
-		return nil, fmt.Errorf("redis client not available")
-	}
-
 	if c.svcCtx.PresenceStore != nil {
 		return c.svcCtx.PresenceStore.GetUserGatewayNodes(ctx, userID)
+	}
+	if c.svcCtx.RedisClient == nil {
+		return nil, fmt.Errorf("redis client not available")
 	}
 
 	key := fmt.Sprintf("%s%d", userGatewayKeyPrefix, userID)

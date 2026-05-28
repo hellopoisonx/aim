@@ -32,6 +32,11 @@ CacheRedis:
   Addr: redis:6379
   Password: ""
   DB: 0
+Cache:
+  L1Capacity: 1000
+  L1TTLSeconds: 30
+  L2TTLSeconds: 300
+  InvalidateStream: "aim:cache:invalidate"
 KqConsumerConf:
   Name: logic-archive-consumer
   Brokers:

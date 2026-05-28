@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 
-	"github.com/hellopoisonx/aim/app/logic/rpc/model"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/service"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
+	"github.com/hellopoisonx/aim/app/logic/rpc/model"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 	"github.com/jackc/pgx/v5"
@@ -88,6 +88,7 @@ func (l *AcceptFriendLogic) AcceptFriend(in *pb.AcceptFriendReq) (*pb.AcceptFrie
 	if err != nil {
 		return nil, FriendshipToGRPCError(err)
 	}
+	l.svcCtx.InvalidateFriendship(l.ctx, userID, friendID)
 
 	return &pb.AcceptFriendResp{
 		Friendship: &pb.FriendshipResponse{

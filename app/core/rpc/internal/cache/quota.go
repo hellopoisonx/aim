@@ -62,10 +62,7 @@ func (s *QuotaStore) CheckQuota(ctx context.Context, senderID int64, deviceID st
 	if count >= s.maxRequests {
 		return false, 0, nil
 	}
-	remaining := s.maxRequests - count - 1
-	if remaining < 0 {
-		remaining = 0
-	}
+	remaining := max(s.maxRequests-count-1, 0)
 	return true, remaining, nil
 }
 

@@ -18,6 +18,7 @@ description: aim 的核心域。对应 `core` 模块。
 
 ## 最近变更
 
+- 2026-05-28: Core PresenceStore 增加 L1 内存缓存包装 `CachedPresenceStore`，使用 go-zero Redis `Sadd/Smembers/Scard/Expire` 维护 Redis presence Set，并以 5s L1 TTL 降低投递/typing/read-receipt 查目录延迟。
 - 2026-05-28: Core 的 LogicRpc/AttachmentRpc client 目标改为 `nacos.BuildTarget(serviceName)`（`aimnacos:///<service>`），避免自定义 resolver 抢占 Nacos SDK 内部 `nacos:9848` 连接。
 - 2026-05-28: `app/core/rpc/etc/core.yaml` 已启用 `ConversationEventConsumerConf`，消费 `aim.conversation.events` 并将群管理系统消息推送到目标用户所在 Gateway。
 - 2026-05-25: Core 附件引用校验改为调用 `AttachmentService.ValidateReference` gRPC，保留 `core.attachment.validate_reference` client span；配置改为 `AttachmentRpc` Nacos 服务发现。
