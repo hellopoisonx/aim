@@ -97,6 +97,7 @@ description: aim 的 Bot OpenAPI 域。覆盖第三方 Bot 接入、token 鉴权
 
 ## 最近变更
 
+- 2026-05-28: `bot_sdk/testdata/integration/docker-compose.yaml` 的 Tempo 镜像固定为 `grafana/tempo:2.8.1`，避免 `latest` 拉到不兼容的 v3 RC schema；集成测试 `etc/logic.yaml`/`etc/core.yaml` 已启用 `aim.conversation.events` 群管理系统消息链路。
 - 2026-05-27: `bot_sdk.AsyncProcessor` 新增 `UpdateSecret` 方法，支持运行时 webhook 密钥轮换无需重启；`ServeHTTP` 中 `p.secret` 读取加锁防止 data race。
 - 2026-05-27: `bot_sdk/testdata/integration/` 新增真实服务栈 Docker Compose 环境，所有宿主机发布端口相对主环境 `+3000` 偏移。
 - 2026-05-27: `bot_sdk` 新增 `integration` build tag 集成测试环境，使用内存 Gateway 覆盖 REST Client、APIError、Webhook 投递到 `AsyncProcessor` 的端到端流程。

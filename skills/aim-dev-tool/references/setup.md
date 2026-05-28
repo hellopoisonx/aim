@@ -90,6 +90,9 @@ protoc --python_out=../../../dev-tool gateway.proto
 | bench-nacos | `18848` | Nacos HTTP |
 | bench-tempo | `13200` | Tempo HTTP API（Grafana 数据源） |
 
+
+> `bench-tempo` 镜像固定为 `grafana/tempo:2.8.1`，与仓库共用 `deploy/tempo/tempo.yaml` 兼容；不要使用 `latest`。
+
 压测环境配置文件：`dev-tool/etc/{auth,core,gateway-api,logic}.yaml`
 
 启动/停止：

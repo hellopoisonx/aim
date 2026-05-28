@@ -16,6 +16,7 @@ description: aim 的逻辑域。对应 `logic` 模块。
 
 ## 最近变更
 
+- 2026-05-28: `app/logic/rpc/etc/logic.yaml` 已启用 `ConversationEventProducerConf`，logic 在群管理事务提交后会将系统消息事件发布到 `aim.conversation.events`，由 core 的 `ConversationEventConsumer` 推送到 Gateway。
 - 2026-05-27: `DatabasePermissionChecker` 对 direct 会话新增 Bot 识别：当发送者或对端 `user_info.user_type='bot'` 时，非好友关系仍保留 block 拦截但跳过临时会话累计消息上限，避免 user ↔ echo-bot 对话达到 10 条后被误判为临时会话限额耗尽。
 - 2026-05-25: ArchiveConsumer 修正 `messages.content` JSONB 写入：附件消息等合法 JSON 内容按 JSON object 保存，普通文本消息仍按 JSON string 保存，避免附件 `aim.attachment.v1` 被二次编码。
 - 2026-05-25: 修复 direct 会话好友权限校验误用 `conversation_id` 作为好友 `friend_id` 的问题。`DatabasePermissionChecker` 现在先从 `conversation_members` 解析发送者与对端成员，再用对端用户 ID 查询 `GetFriendshipBidirectional`，避免已成为好友后仍被判定为临时会话；同时拒绝非成员或成员数异常的 direct 会话发送。

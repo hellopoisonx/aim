@@ -97,6 +97,8 @@ AttachmentRpc:
   LogDir: /app/log/nacos
   CacheDir: /tmp/nacos/cache
   LogLevel: info
+# Gateway 进程同时启动 REST 与内部 GatewayRpc。go-zero Prometheus agent
+# 在同一进程内通过 sync.Once 只启动一次，因此 REST/GatewayRpc 共用 9191。
 GatewayRpc:
   Name: gateway.rpc
   ListenOn: 0.0.0.0:9091

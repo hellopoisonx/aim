@@ -27,6 +27,8 @@
 | Tempo OTLP gRPC | 4317 | 7317 |
 | Tempo OTLP HTTP | 4318 | 7318 |
 
+Tempo 镜像固定为 `grafana/tempo:2.8.1`，与仓库共用的 `deploy/tempo/tempo.yaml` 配置 schema 匹配；不要改回 `latest`，避免拉到不兼容的 RC 版本。
+
 ## 使用方式
 
 在仓库根目录执行：

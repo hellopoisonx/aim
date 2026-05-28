@@ -128,7 +128,19 @@ type Config struct {
 
 `app/core/rpc/internal/mqs/consumers.go` 条件注册：仅当 `ConversationEventConsumerConf` 配置了 Brokers 和 Topic 时才启动 consumer。
 
-core.yaml 需添加对应的 Kafka consumer 配置块。
+`app/core/rpc/etc/core.yaml` 需添加对应 Kafka consumer 配置块；当前 docker compose 配置已启用：
+
+```yaml
+ConversationEventConsumerConf:
+  Name: core-conversation-event-consumer
+  Brokers:
+    - kafka:9092
+  Group: aim-core-conversation-events
+  Topic: aim.conversation.events
+  Offset: first
+  Consumers: 1
+  Processors: 1
+```
 
 ### 关键设计决策
 

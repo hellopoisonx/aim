@@ -93,6 +93,7 @@ services:
     expose:
       - "9194"  # Prometheus metrics
     volumes:
+      - ./app/logic/rpc/etc/logic.yaml:/app/etc/logic.yaml:ro
       - logic_log:/app/log
     depends_on:
       logic-migrate:
@@ -421,7 +422,7 @@ services:
   # ==================== Observability ====================
 
   tempo:
-    image: grafana/tempo:latest
+    image: grafana/tempo:2.8.1
     container_name: aim-tempo
     command: ["-target=all", "-config.file=/etc/tempo.yaml"]
     ports:

@@ -431,7 +431,7 @@ services:
   # ==================== Observability ====================
 
   tempo:
-    image: grafana/tempo:latest
+    image: grafana/tempo:2.8.1
     container_name: aim-it-tempo
     command: ["-target=all", "-config.file=/etc/tempo.yaml"]
     ports:

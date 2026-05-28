@@ -233,6 +233,22 @@ aim_kafka({ action: "consume", topic: "aim.read_receipt.events", fromBeginning: 
 aim_redis({ action: "scan", pattern: "*presence*" })
 ```
 
+### 群管理系统消息异常
+
+相关 topic 与 consumer group：
+
+- topic：`aim.conversation.events`
+- producer：logic `ConversationEventProducerConf`
+- consumer group：`aim-core-conversation-events`
+
+推荐工具顺序：
+
+```text
+aim_kafka({ action: "describe_topic", topic: "aim.conversation.events" })
+aim_kafka({ action: "consume", topic: "aim.conversation.events", fromBeginning: true, maxMessages: 10 })
+aim_kafka({ action: "describe_group", group: "aim-core-conversation-events" })
+```
+
 ## 输出原则
 
 - 工具调用后，用中文总结观察结果。

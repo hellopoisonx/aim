@@ -300,7 +300,7 @@ services:
   # ==================== Observability ====================
 
   bench-tempo:
-    image: grafana/tempo:latest
+    image: grafana/tempo:2.8.1
     container_name: bench-tempo
     command: ["-target=all", "-config.file=/etc/tempo.yaml"]
     ports:

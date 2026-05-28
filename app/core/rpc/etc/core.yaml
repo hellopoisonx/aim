@@ -87,6 +87,16 @@ ReadReceiptConsumerConf:
   Offset: first
   Consumers: 1
   Processors: 1
+# 群管理系统消息消费者：消费 logic 发布的群变更事件并推送到目标用户所在 Gateway。
+ConversationEventConsumerConf:
+  Name: core-conversation-event-consumer
+  Brokers:
+    - kafka:9092
+  Group: aim-core-conversation-events
+  Topic: aim.conversation.events
+  Offset: first
+  Consumers: 1
+  Processors: 1
 GatewayRpc:
   ServiceName: gateway.rpc
   Target: aim-gateway:9091

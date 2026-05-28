@@ -249,6 +249,7 @@ python generate_fixtures.py --count 5000   # 自定义数量
 
 ## 最近变更
 
+- 2026-05-28: 压测 compose 的 `bench-tempo` 镜像固定为 `grafana/tempo:2.8.1`，避免 `latest` 拉到 Tempo v3 RC 后无法解析仓库共用的 `deploy/tempo/tempo.yaml`；压测 `etc/logic.yaml`/`etc/core.yaml` 已启用 `aim.conversation.events` 群管理系统消息链路。
 - 2026-05-24: 重新生成 `ws_pb2.py`/`gateway_pb2.py`，同步 `PUSH_READ_RECEIPT`、`PushReadReceiptPayload`、`PushMessagePayload.sender_info/is_system/mentions`、`GatewayService.PushReadReceipt` 等协议字段；`aim_test.py` 的帧名称表和解码表新增 `PUSH_READ_RECEIPT`，`ws-send` 支持 `--mentions`，会话创建未传 `name` 时自动生成默认名；`benchmark.py` 修复并发建会话索引竞争，并将非 ACCEPTED 的 `SERVER_ACK` 直接计入错误；压测 compose 的 tracing 后端已改为 Grafana Tempo，HTTP API 暴露在 `13200`；压测 `logic.yaml` 将 `TemporaryConversationMessageLimit` 改为 `-1`，避免 `0` 被服务上下文归一化为默认 10。
 - 2026-05-23: 交互模式改用 `prompt_toolkit.patch_stdout` 包裹输入循环，后台 WS 推送/接收打印会显示在 prompt 上方并保留当前输入；新增 `presence-friends` REST 命令、`ws-read-receipt`/`ws-ack` WS 命令；`run-all` 覆盖好友在线状态接口；`benchmark.py` 新增 `presence` 场景，`mixed` REST 负载补充 presence 查询。
 - 2026-05-22: 新增 `group-create` CLI 命令和交互命令，调用 `POST /api/conversations/group` 专用创建群聊端点。`RESTClient` 新增 `create_group()` 方法（支持 `name`/`avatar` 可选参数）。详见 `references/commands.md`。

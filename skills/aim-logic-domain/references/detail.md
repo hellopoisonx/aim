@@ -118,7 +118,14 @@ type Config struct {
 }
 ```
 
-`ServiceContext` 新增 `ConversationEventPusher *kq.Pusher`。logic.yaml 需添加对应 Kafka 配置块。
+`ServiceContext` 新增 `ConversationEventPusher *kq.Pusher`。`app/logic/rpc/etc/logic.yaml` 需添加对应 Kafka 配置块；当前 docker compose 配置已启用：
+
+```yaml
+ConversationEventProducerConf:
+  Brokers:
+    - kafka:9092
+  Topic: aim.conversation.events
+```
 
 ## 边界
 

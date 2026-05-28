@@ -57,6 +57,11 @@ BotWebhookConsumerConf:
   Offset: last
   Consumers: 1
   Processors: 1
+# 群管理系统消息生产者：群成员/群信息变更后发布系统消息事件，由 core 消费并推送到 Gateway。
+ConversationEventProducerConf:
+  Brokers:
+    - kafka:9092
+  Topic: aim.conversation.events
 Quota:
   WindowSeconds: 60
   MaxRequests: 100

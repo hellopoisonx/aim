@@ -30,4 +30,4 @@
 - **Grafana**：预置仪表盘 `deploy/grafana/dashboards/`，包含 go-zero 运行时指标 + AIM 服务 KPI
 - **Loki + Promtail**：通过 Docker socket 采集各容器 stdout JSON 日志，Grafana Loki datasource 可查询
 - **Prometheus 配置**：`deploy/prometheus/prometheus.yml` 定义 scrape targets
-- **Grafana Tempo**：OpenTelemetry 链路追踪后端；OTLP HTTP `tempo:4318`，Grafana 通过 Tempo datasource 查询 trace
+- **Grafana Tempo**：OpenTelemetry 链路追踪后端；OTLP HTTP `tempo:4318`，Grafana 通过 Tempo datasource 查询 trace；docker compose 固定 `grafana/tempo:2.8.1`，避免 `latest` 拉到不兼容的 RC schema

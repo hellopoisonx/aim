@@ -34,3 +34,22 @@ docker compose up -d --force-recreate aim-auth aim-core aim-gateway aim-logic
 ```
 
 > 常见触发场景：新增 API 路由、proto 变更、配置结构体变更、业务逻辑修改。
+
+## 配置文件变更
+
+本地 docker-compose 中服务配置文件应通过 bind mount 注入容器，避免修改 `app/*/etc/*.yaml` 后必须重建镜像才能生效。当前需保持以下配置文件挂载：
+
+- `app/auth/rpc/etc/auth.yaml -> /app/etc/auth.yaml`
+- `app/gateway/api/etc/gateway-api.yaml -> /app/etc/gateway-api.yaml`
+- `app/core/rpc/etc/core.yaml -> /app/etc/core.yaml`
+- `app/logic/rpc/etc/logic.yaml -> /app/etc/logic.yaml`
+- `app/attachment/rpc/etc/attachment.yaml -> /app/etc/attachment.yaml`
+- `app/data_parsing/etc/data_parsing.yaml -> /app/etc/data_parsing.yaml`
+
+纯配置变更后通常只需：
+
+```bash
+docker compose up -d --force-recreate <service>
+```
+
+无需 `docker compose build`，除非 Go 源码、Dockerfile、生成文件或依赖发生变化。
