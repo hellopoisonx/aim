@@ -18,7 +18,7 @@ description: AIM 的附件解析域。涉及 `app/data_parsing`、`aim.attachmen
 - `app/data_parsing/internal/config/`：配置结构。
 - `app/data_parsing/internal/worker/`：消费 `aim.attachment.uploaded`、拉取对象、解析、写库、发布 `aim.attachment.parsed` 的主流程。
 - `app/data_parsing/internal/parser/`：解析器接口与默认实现。
-- `app/data_parsing/etc/data_parsing.yaml`：本地/Compose 运行配置。
+- `app/data_parsing/etc/data_parsing.yaml`：本地 `go run` / 单服务调试默认配置；Docker Compose 部署挂载 `deploy/config/<env>/data_parsing.yaml` 到 `/app/etc/data_parsing.yaml`。
 - 相关共享事件：`app/shared/events/attachment.go`。
 
 ## 变更规则

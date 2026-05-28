@@ -38,4 +38,4 @@ cd ../../..
 go test ./app/auth/rpc/...
 ```
 
-Docker Compose 的 `auth-migrate` 会按 migrations 文件显式顺序执行；新增迁移后同步更新 `docker-compose.yaml` 中的命令。
+Docker Compose 的 `auth-migrate` 调用 `deploy/scripts/migrate-postgres.sh`，按 `migrations/*.sql` 字典序执行；新增迁移只需使用正确的 `NNN_` 前缀，无需手工更新 Compose command。

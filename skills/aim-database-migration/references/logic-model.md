@@ -56,7 +56,7 @@ ALTER TABLE conversation_members ADD COLUMN IF NOT EXISTS role VARCHAR(16) NOT N
 
 sqlc 查询变更：所有涉及 conversations 和 conversation_members 的 SELECT/INSERT/RETURNING 已包含新列。新增 9 个查询：AddConversationMemberWithRole, RemoveConversationMembers, UpdateConversation, DeactivateConversation, GetConversationCreator, IsConversationMember, GetConversationMembersDetail 等。
 
-Docker Compose 的 `logic-migrate` 已追加 `004_group_management.sql`；Kafka `kafka-init` 已新增 `aim.conversation.events` topic。
+Docker Compose 的 `logic-migrate` 调用 `deploy/scripts/migrate-postgres.sh`，会按 `migrations/*.sql` 字典序执行 `004_group_management.sql` 等所有迁移；Kafka topic 由 `deploy/scripts/init-kafka-topics.sh` 统一创建，包含 `aim.conversation.events`。
 
 ## 查询规则
 
@@ -74,4 +74,4 @@ cd ../../..
 go test ./app/logic/rpc/...
 ```
 
-Docker Compose 的 `logic-migrate` 会按 migrations 文件显式顺序执行；新增迁移后同步更新 `docker-compose.yaml` 中的命令。
+Docker Compose 的 `logic-migrate` 通过 `deploy/scripts/migrate-postgres.sh` 自动按 `NNN_` 前缀顺序执行迁移；新增迁移无需手工更新 Compose command。

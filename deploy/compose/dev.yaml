@@ -1,0 +1,58 @@
+services:
+  aim-auth:
+    ports:
+      - "127.0.0.1:8989:8989"
+
+  aim-gateway:
+    ports:
+      - "127.0.0.1:8888:8888"
+      - "127.0.0.1:9091:9091"
+
+  aim-core:
+    ports:
+      - "127.0.0.1:8081:8080"
+
+  postgres:
+    ports:
+      - "127.0.0.1:5432:5432"
+
+  redis:
+    ports:
+      - "127.0.0.1:6379:6379"
+
+  kafka:
+    environment:
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,EXTERNAL://0.0.0.0:19092,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,EXTERNAL://127.0.0.1:9092
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
+    ports:
+      - "127.0.0.1:9092:19092"
+
+  nacos:
+    ports:
+      - "127.0.0.1:8848:8848"
+      - "127.0.0.1:9848:9848"
+      - "127.0.0.1:9849:9849"
+
+  seaweed-master:
+    ports:
+      - "127.0.0.1:9333:9333"
+
+  seaweed-volume:
+    ports:
+      - "127.0.0.1:8088:8080"
+
+  seaweed-filer:
+    ports:
+      - "127.0.0.1:8889:8888"
+
+  seaweed-s3:
+    ports:
+      - "127.0.0.1:8333:8333"
+
+  tempo:
+    ports:
+      - "127.0.0.1:3200:3200"
+      - "127.0.0.1:4317:4317"
+      - "127.0.0.1:4318:4318"

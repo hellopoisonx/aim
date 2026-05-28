@@ -21,13 +21,13 @@ Nacos:
   Ephemeral: true
   Weight: 1
   TimeoutMs: 5000
-  Username: ""
-  Password: ""
+  Username: "nacos"
+  Password: "CHANGE_ME_NACOS_PASSWORD"
   LogDir: /app/log/nacos
   CacheDir: /tmp/nacos/cache
   LogLevel: info
 Postgres:
-  DataSource: postgres://user:password@postgres:5432/aim_logic?sslmode=disable
+  DataSource: postgres://aim_user:CHANGE_ME_POSTGRES_PASSWORD@postgres:5432/aim_logic?sslmode=disable
 CacheRedis:
   Addr: redis:6379
   Password: ""

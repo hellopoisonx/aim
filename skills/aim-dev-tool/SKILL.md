@@ -204,7 +204,7 @@ func (f *fakeQuerier) ListFriends(ctx context.Context, userID int64) ([]model.Fr
 | 服务 | 压测端口 | 开发端口 | 偏移 |
 |------|---------|---------|------|
 | gateway REST | 18888 | 8888 | +10000 |
-| gateway gRPC | 19091 | 9090 | +10001（避开 Prometheus 19090） |
+| gateway gRPC | 19091 | 9091 | +10000 |
 | auth gRPC | 18989 | 8989 | +10000 |
 | core gRPC | 18081 | 8080 | +10000 |
 | PostgreSQL | 15432 | 5432 | +10000 |
@@ -248,6 +248,7 @@ python generate_fixtures.py --count 5000   # 自定义数量
 
 ## 最近变更
 
+- 2026-05-28: 压测配置统一 GatewayRpc 监听 `9091`（宿主机 `19091`），修复 `dev-tool/etc/core.yaml` 中重复 `Consumers` 与误缩进的 `Presence.TTLSeconds`；压测 Compose 迁移/Kafka topic 初始化改用 `deploy/scripts/`，避免遗漏新 migration 或 topic。
 - 2026-05-28: 压测 compose 的 `bench-tempo` 镜像固定为 `grafana/tempo:2.8.1`，避免 `latest` 拉到 Tempo v3 RC 后无法解析仓库共用的 `deploy/tempo/tempo.yaml`；压测 `etc/logic.yaml`/`etc/core.yaml` 已启用 `aim.conversation.events` 群管理系统消息链路。
 - 2026-05-24: 重新生成 `ws_pb2.py`/`gateway_pb2.py`，同步 `PUSH_READ_RECEIPT`、`PushReadReceiptPayload`、`PushMessagePayload.sender_info/is_system/mentions`、`GatewayService.PushReadReceipt` 等协议字段；`aim_test.py` 的帧名称表和解码表新增 `PUSH_READ_RECEIPT`，`ws-send` 支持 `--mentions`，会话创建未传 `name` 时自动生成默认名；`benchmark.py` 修复并发建会话索引竞争，并将非 ACCEPTED 的 `SERVER_ACK` 直接计入错误；压测 compose 的 tracing 后端已改为 Grafana Tempo，HTTP API 暴露在 `13200`；压测 `logic.yaml` 将 `TemporaryConversationMessageLimit` 改为 `-1`，避免 `0` 被服务上下文归一化为默认 10。
 - 2026-05-23: 交互模式改用 `prompt_toolkit.patch_stdout` 包裹输入循环，后台 WS 推送/接收打印会显示在 prompt 上方并保留当前输入；新增 `presence-friends` REST 命令、`ws-read-receipt`/`ws-ack` WS 命令；`run-all` 覆盖好友在线状态接口；`benchmark.py` 新增 `presence` 场景，`mixed` REST 负载补充 presence 查询。

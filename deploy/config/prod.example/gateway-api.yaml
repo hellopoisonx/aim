@@ -22,8 +22,8 @@ AuthRpc:
   Ephemeral: true
   Weight: 1
   TimeoutMs: 5000
-  Username: ""
-  Password: ""
+  Username: "nacos"
+  Password: "CHANGE_ME_NACOS_PASSWORD"
   LogDir: /app/log/nacos
   CacheDir: /tmp/nacos/cache
   LogLevel: info
@@ -38,8 +38,8 @@ CoreRpc:
   Ephemeral: true
   Weight: 1
   TimeoutMs: 5000
-  Username: ""
-  Password: ""
+  Username: "nacos"
+  Password: "CHANGE_ME_NACOS_PASSWORD"
   LogDir: /app/log/nacos
   CacheDir: /tmp/nacos/cache
   LogLevel: info
@@ -54,13 +54,13 @@ LogicRpc:
   Ephemeral: true
   Weight: 1
   TimeoutMs: 5000
-  Username: ""
-  Password: ""
+  Username: "nacos"
+  Password: "CHANGE_ME_NACOS_PASSWORD"
   LogDir: /app/log/nacos
   CacheDir: /tmp/nacos/cache
   LogLevel: info
 Auth:
-  AccessSecret: aim-dev-access-secret
+  AccessSecret: CHANGE_ME_RANDOM_48_BYTES
 WebSocket:
   OriginPatterns: []
   ReadLimit: 32768
@@ -92,8 +92,8 @@ AttachmentRpc:
   Ephemeral: true
   Weight: 1
   TimeoutMs: 5000
-  Username: ""
-  Password: ""
+  Username: "nacos"
+  Password: "CHANGE_ME_NACOS_PASSWORD"
   LogDir: /app/log/nacos
   CacheDir: /tmp/nacos/cache
   LogLevel: info

@@ -10,12 +10,12 @@ Telemetry:
   Batcher: otlphttp
   OtlpHttpPath: /v1/traces
 Postgres:
-  DataSource: postgres://user:password@postgres:5432/aim_logic?sslmode=disable
+  DataSource: postgres://aim_user:CHANGE_ME_POSTGRES_PASSWORD@postgres:5432/aim_logic?sslmode=disable
 Seaweed:
   Endpoint: http://seaweed-s3:8333
   Bucket: aim-attachments
-  AccessKey: aim
-  SecretKey: aim-secret
+  AccessKey: aim-prod
+  SecretKey: CHANGE_ME_SEAWEED_SECRET_KEY
 UploadedConsumer:
   Name: data-parsing-uploaded-consumer
   Brokers:

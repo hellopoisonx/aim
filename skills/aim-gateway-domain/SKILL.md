@@ -24,6 +24,7 @@ description: aim 的网关域。对应 `gateway` 模块。
 
 ## 最近变更
 
+- 2026-05-28: Docker/压测/Bot SDK 集成配置统一 GatewayRpc 监听端口为 `9091`；根 Compose 拆分为 `deploy/compose/base|dev|prod|observability|tools.yaml`，生产只通过反向代理发布 REST/WS。
 - 2026-05-28: Gateway/Core 的 Nacos gRPC client 目标改为 `aimnacos.BuildTarget(serviceName)`，避免自定义 resolver 使用 `nacos` scheme 抢占 Nacos SDK 内部 `nacos:9848` 连接并反复刷空实例错误。
 - 2026-05-25: 明确外部接口边界：只有 gateway 可对客户端/公网暴露 REST API 与 WebSocket；非 gateway 模块的 HTTP/REST 只能作为服务间内部接口，Docker Compose 不得 publish 内部 REST/WS 端口。
 - 2026-05-25: attachment 服务由内部 HTTP 改为 `AttachmentService` gRPC；gateway `/api/attachments` 和 core 附件引用校验统一通过 `AttachmentRpc`/Nacos 调用，不再使用 `/v1/attachments/*` 内部 HTTP。
@@ -38,5 +39,5 @@ description: aim 的网关域。对应 `gateway` 模块。
 - 2026-05-22: 修复 `PushPresence` 推送寻址 Bug：`PushPresenceReq` 改用 `TargetUserId` 查找目标用户连接，兼容 `TargetUserId == 0` 时回退到 `UserId`。新增 `TestGatewayServerPushPresenceFallbackToUserId` 测试覆盖回退兼容路径。参见 `references/ws-internals.md` §PushPresence。
 - 2026-05-22: 打通 presence/typing 推送链路：新增 `PushTyping` gRPC、`GET /api/presence/friends` 快照接口；Manager 维护 Redis Set 聚合多设备状态；用 kq.Pusher 真发 `aim.presence.events` 和 `aim.typing.events`；PresenceTTL 默认 45s，客户端心跳 20s。
 - 2026-05-21: 新增 `GET /api/conversations` 端点，返回当前用户参与的所有会话列表（包含会话基本信息和成员列表）；该端点受 `Auth` 中间件保护，调用 `LogicConversationClient.GetUserConversations` 获取数据。
-- 2026-05-19: gateway RPC 容器监听改为 `0.0.0.0:9090`；Nacos resolver 在服务列表为空时不上报空地址列表，避免启动期空服务列表失败。
+- 2026-05-19: gateway RPC 容器曾监听 `0.0.0.0:9090`（现已统一为 `0.0.0.0:9091`）；Nacos resolver 在服务列表为空时不上报空地址列表，避免启动期空服务列表失败。
 - 2026-05-19: 补齐 gateway 生产 WS 路由注册与 WS ACK 409 映射；接入 RPC 统一 unary 错误拦截器。

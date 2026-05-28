@@ -50,16 +50,16 @@ services:
       bench-postgres:
         condition: service_healthy
     environment:
-      PGPASSWORD: benchpassword
+      POSTGRES_HOST: bench-postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: benchuser
+      POSTGRES_PASSWORD: benchpassword
+      AIM_DATABASE: aim_auth
+      AIM_MIGRATIONS_DIR: /migrations
     volumes:
       - ../app/auth/rpc/model/migrations:/migrations:ro
-    command:
-      - sh
-      - -c
-      - |
-        psql -h bench-postgres -U benchuser -d postgres -tc "SELECT 1 FROM pg_database WHERE datname = 'aim_auth'" | grep -q 1 || psql -h bench-postgres -U benchuser -d postgres -c "CREATE DATABASE aim_auth"
-        psql -h bench-postgres -U benchuser -d aim_auth -f /migrations/000_init.sql
-        psql -h bench-postgres -U benchuser -d aim_auth -f /migrations/001_require_user_name.sql
+      - ../deploy/scripts/migrate-postgres.sh:/scripts/migrate-postgres.sh:ro
+    command: ["/bin/sh", "/scripts/migrate-postgres.sh"]
     networks:
       - bench-network
 
@@ -70,7 +70,7 @@ services:
     container_name: bench-gateway
     ports:
       - "18888:8888"   # REST API (+10000)
-      - "19091:9090"   # gRPC   (+10001, avoids bench Prometheus 19090)
+      - "19091:9091"   # gRPC   (+10000)
     environment:
       AIM_GATEWAY_NODE_ID: 0
     volumes:
@@ -125,25 +125,17 @@ services:
       bench-postgres:
         condition: service_healthy
     environment:
-      PGPASSWORD: benchpassword
+      POSTGRES_HOST: bench-postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: benchuser
+      POSTGRES_PASSWORD: benchpassword
+      AIM_DATABASE: aim_logic
+      AIM_MIGRATIONS_DIR: /migrations
     volumes:
       - ../app/logic/rpc/model/migrations:/migrations:ro
-    command:
-      - sh
-      - -c
-      - |
-        psql -h bench-postgres -U benchuser -d postgres -tc "SELECT 1 FROM pg_database WHERE datname = 'aim_logic'" | grep -q 1 || psql -h bench-postgres -U benchuser -d postgres -c "CREATE DATABASE aim_logic"
-        psql -h bench-postgres -U benchuser -d aim_logic -f /migrations/000_extensions.sql
-        psql -h bench-postgres -U benchuser -d aim_logic -f /migrations/001_initial_permission.sql
-        psql -h bench-postgres -U benchuser -d aim_logic -f /migrations/002_messages.sql
-        psql -h bench-postgres -U benchuser -d aim_logic -f /migrations/003_user_info.sql
-        psql -h bench-postgres -U benchuser -d aim_logic -f /migrations/004_group_management.sql
-        psql -h bench-postgres -U benchuser -d aim_logic -f /migrations/005_conversation_read_states.sql
-        psql -h bench-postgres -U benchuser -d aim_logic -f /migrations/006_user_type.sql
-        psql -h bench-postgres -U benchuser -d aim_logic -f /migrations/007_bot_tokens.sql
-        psql -h bench-postgres -U benchuser -d aim_logic -f /migrations/008_bot_webhooks.sql
-        psql -h bench-postgres -U benchuser -d aim_logic -f /migrations/009_bot_actions.sql
-        psql -h bench-postgres -U benchuser -d aim_logic -f /migrations/010_bot_attachment_actions.sql
+      - ../deploy/scripts/migrate-postgres.sh:/scripts/migrate-postgres.sh:ro
+    command: ["/bin/sh", "/scripts/migrate-postgres.sh"]
+    networks:
       - bench-network
 
   bench-core:
@@ -184,13 +176,13 @@ services:
     environment:
       POSTGRES_USER: benchuser
       POSTGRES_PASSWORD: benchpassword
-      POSTGRES_DB: aim_auth
+      POSTGRES_DB: postgres
     ports:
       - "15432:5432"
     volumes:
       - bench_postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U benchuser -d aim_auth"]
+      test: ["CMD-SHELL", "pg_isready -U benchuser -d postgres"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -263,16 +255,13 @@ services:
     depends_on:
       bench-kafka:
         condition: service_healthy
-    command:
-      - sh
-      - -c
-      - |
-        /opt/kafka/bin/kafka-topics.sh --bootstrap-server bench-kafka:9092 --create --if-not-exists --topic aim.user.events --partitions 3 --replication-factor 1
-        /opt/kafka/bin/kafka-topics.sh --bootstrap-server bench-kafka:9092 --create --if-not-exists --topic aim-message-transfer --partitions 3 --replication-factor 1
-        /opt/kafka/bin/kafka-topics.sh --bootstrap-server bench-kafka:9092 --create --if-not-exists --topic aim.conversation.events --partitions 3 --replication-factor 1
-        /opt/kafka/bin/kafka-topics.sh --bootstrap-server bench-kafka:9092 --create --if-not-exists --topic aim.presence.events --partitions 3 --replication-factor 1
-        /opt/kafka/bin/kafka-topics.sh --bootstrap-server bench-kafka:9092 --create --if-not-exists --topic aim.typing.events --partitions 3 --replication-factor 1
-        /opt/kafka/bin/kafka-topics.sh --bootstrap-server bench-kafka:9092 --create --if-not-exists --topic aim.read_receipt.events --partitions 3 --replication-factor 1
+    environment:
+      KAFKA_BOOTSTRAP: bench-kafka:9092
+      KAFKA_PARTITIONS: 3
+      KAFKA_REPLICATION_FACTOR: 1
+    volumes:
+      - ../deploy/scripts/init-kafka-topics.sh:/scripts/init-kafka-topics.sh:ro
+    command: ["/bin/sh", "/scripts/init-kafka-topics.sh"]
     networks:
       - bench-network
 

@@ -273,17 +273,11 @@ message PushFriendApplicationResp {
 
 ## CoreRpc 配置
 
-配置路径：`app/gateway/rpc/etc/gateway-rpc.yaml`，配置结构定义：`app/gateway/rpc/internal/config/config.go`。
+配置路径：Docker Compose 使用 `deploy/config/<env>/gateway-api.yaml`（容器内 `/app/etc/gateway-api.yaml`），本地 `go run` / 单服务调试使用 `app/gateway/api/etc/gateway-api.yaml`。配置结构定义在 `app/gateway/api/internal/config/config.go` 的 `CoreRpc aimnacos.Config` 字段。
 
-```go
-type CoreRpcConf struct {
-    zrpc.RpcClientConf // 包含 Target / App / Timeout 等字段
-}
-```
+目标地址通过 AIM Nacos resolver 发现（目标形如 `aimnacos:///core.rpc`），需在 `CoreRpc` 配置块中指定 Nacos 注册中心地址、服务名 `core.rpc` 等发现参数（与 AuthRpc 配置方式一致）。
 
-目标地址通过 AIM Nacos resolver 发现（目标形如 `aimnacos:///core.rpc`），需在配置中指定 Nacos 注册中心地址（与 AuthRpc 配置方式一致）。
-
-调用示例：`app/gateway/rpc/internal/svc/service_context.go` 注入 `CoreRpc` 到 ServiceContext，供 `Transfer` logic 使用。
+调用示例：`app/gateway/api/internal/svc/service_context.go` 使用 `zrpc.NewClientWithTarget(aimnacos.BuildTarget(c.CoreRpc.ServiceName))` 创建 core client，供 `Transfer` logic 使用。
 
 ## `ws` 通信
 ```protobuf

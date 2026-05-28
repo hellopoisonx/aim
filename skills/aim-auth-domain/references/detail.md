@@ -32,7 +32,7 @@
 - 数据访问：`app/auth/rpc/model`，由 `sqlc` 根据 `model/migrations/` 和 `model/queries/` 生成。
 - 网关调用客户端：`app/auth/rpc/authservice`。
 - 服务注册：`app/auth/rpc/auth.go` 启动时通过 `app/shared/nacos` 使用 `github.com/nacos-group/nacos-sdk-go/v2` 注册 Nacos v2 临时实例；`app/auth/rpc/etc/auth.yaml` 的 `Nacos` 块维护 `ServerAddr`、`Group`、`Cluster`、`ServiceName`、`AdvertiseIP`、`AdvertisePort` 等注册参数，不再使用 go-zero 默认 `Etcd` 注册。
-- Docker Compose 配置：`app/auth/rpc/etc/auth.yaml` 面向 `docker-compose.yaml` 内部网络，`ListenOn` 为 `0.0.0.0:8989`，`Nacos.ServerAddr` 为 `nacos:8848`，`Nacos.AdvertiseIP` 为 `aim-auth`，PostgreSQL 使用 `postgres:5432`，Redis 使用 `redis:6379`。
+- Docker Compose 配置：分层 Compose 通过 `${AIM_CONFIG_DIR:-../config/local}/auth.yaml` 挂载到 `/app/etc/auth.yaml`，本地默认配置副本位于 `deploy/config/local/auth.yaml`；`app/auth/rpc/etc/auth.yaml` 保留给本地 `go run` / 单服务调试。Compose 内 `ListenOn` 为 `0.0.0.0:8989`，`Nacos.ServerAddr` 为 `nacos:8848`，`Nacos.AdvertiseIP` 为 `aim-auth`，PostgreSQL 使用 `postgres:5432`，Redis 使用 `redis:6379`。
 - go-zero OTel/Tempo：`app/auth/rpc/etc/auth.yaml` 的 `Telemetry` 块使用 `Name: auth.rpc`、`Batcher: otlphttp`、`Endpoint: tempo:4318`、`OtlpHttpPath: /v1/traces`，由 `zrpc.RpcServerConf` 自动接入 RPC tracing。
 
 ### 行为

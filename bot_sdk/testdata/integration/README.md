@@ -9,7 +9,7 @@
 | 服务 | 主环境宿主端口 | 集成测试宿主端口 |
 |---|---:|---:|
 | gateway REST | 8888 | 11888 |
-| gateway gRPC | 9090 | 12090 |
+| gateway gRPC | 9091 | 12091 |
 | auth RPC | 8989 | 11989 |
 | core RPC | 8081 | 11081 |
 | PostgreSQL | 5432 | 8432 |

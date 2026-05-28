@@ -1,0 +1,18 @@
+services:
+  kafbat-ui:
+    image: ghcr.io/kafbat/kafka-ui:latest
+    container_name: kafbat-ui
+    profiles:
+      - tools
+    ports:
+      - "127.0.0.1:8000:8080"
+    environment:
+      DYNAMIC_CONFIG_ENABLED: "true"
+      SWAGGER_UI_ENABLED: "true"
+    depends_on:
+      kafka:
+        condition: service_healthy
+    volumes:
+      - ../../kui/config.yaml:/etc/kafkaui/dynamic_config.yaml:ro
+    networks:
+      - aim-network

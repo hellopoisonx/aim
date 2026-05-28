@@ -7,7 +7,7 @@ description: AIM 数据库迁移规范与 Docker Compose 集成。当修改 migr
 
 ## 背景
 
-AIM 使用 PostgreSQL + sqlc 栈，迁移文件在 `app/{auth,logic}/rpc/model/migrations/` 下，由 Docker Compose 的 `*-migrate` init 容器执行。当前实现存在若干问题，本文档记录经验教训和规范。
+AIM 使用 PostgreSQL + sqlc 栈，迁移文件在 `app/{auth,logic}/rpc/model/migrations/` 下，由 Docker Compose 的 `*-migrate` init 容器调用 `deploy/scripts/migrate-postgres.sh` 执行。脚本会显式创建数据库，并按 `NNN_*.sql` 字典序执行目录内所有 SQL，避免在 Compose command 中硬编码迁移文件列表。
 
 ## 域特定参考
 
@@ -66,7 +66,7 @@ NNN_description.sql
 新增迁移文件后必须同步：
 
 1. ✅ 创建 `NNN_xxx.sql` 文件（幂等 DDL）
-2. ✅ 更新 `docker-compose.yaml` 中对应 `*-migrate` 服务的 `command`，追加新文件
+2. ✅ 确认文件名使用 `NNN_` 前缀；Compose 通过 `deploy/scripts/migrate-postgres.sh` 自动按序执行，无需手工追加 command
 3. ✅ 运行 `sqlc generate` 重新生成 model 代码
 4. ✅ 运行 `go test ./app/{module}/rpc/...` 验证
 
@@ -75,83 +75,35 @@ NNN_description.sql
 ### 当前架构
 
 ```
-auth-migrate  → psql -f /migrations/000_init.sql
-logic-migrate → CREATE DATABASE aim_logic && psql -f 000 && psql -f 001 && ...
+auth-migrate  → deploy/scripts/migrate-postgres.sh → app/auth/rpc/model/migrations/*.sql
+logic-migrate → deploy/scripts/migrate-postgres.sh → app/logic/rpc/model/migrations/*.sql
 ```
 
-### 已知问题与修复方向
+`migrate-postgres.sh` 的关键约定：
 
-#### 问题 1：Shell 运算符优先级（logic-migrate）
+- 通过 `AIM_DATABASE` 指定目标库（如 `aim_auth` / `aim_logic`）。
+- 使用 `POSTGRES_HOST` / `POSTGRES_PORT` / `POSTGRES_USER` / `POSTGRES_PASSWORD` 连接 PostgreSQL。
+- 先显式检查并创建目标数据库，不依赖 `POSTGRES_DB` 初始化副作用。
+- 使用 shell glob 按字典序执行 `$AIM_MIGRATIONS_DIR/*.sql`，`NNN_` 前缀保证执行顺序。
+- 每个 SQL 使用 `psql -v ON_ERROR_STOP=1`，任一迁移失败即退出。
 
-**现状：**
-```bash
-psql -c "SELECT 1 FROM pg_database WHERE datname = 'aim_logic'" | grep -q 1 \
-  || psql -c "CREATE DATABASE aim_logic" \
-  && psql -f /migrations/000_extensions.sql \
-  && psql -f /migrations/001_initial_permission.sql \
-  && ...
-```
+### 已解决的问题
 
-**风险：** 如果 `CREATE DATABASE` 失败，`&&` 仍会尝试执行后续 psql -f，对不存在的库执行 SQL，产生误导性错误信息。
+- ✅ shell 运算符优先级风险：不再在 Compose command 中使用长 `||`/`&&` 链。
+- ✅ 数据库创建不一致：auth / logic 都由迁移脚本显式创建。
+- ✅ 迁移文件列表硬编码：新增 `011_xxx.sql` 等文件后不需要修改 Compose command。
 
-**修复方案：** 用显式 `if/then` 代替 `||`/`&&` 链：
-```bash
-if ! psql -h postgres -U user -d postgres -c "SELECT 1 FROM pg_database WHERE datname = 'aim_logic'" | grep -q 1; then
-  psql -h postgres -U user -d postgres -c "CREATE DATABASE aim_logic" || exit 1
-fi
-psql -h postgres -U user -d aim_logic -f /migrations/000_extensions.sql || exit 1
-psql -h postgres -U user -d aim_logic -f /migrations/001_initial_permission.sql || exit 1
-# ... 后续迁移
-```
+### 仍需注意
 
-#### 问题 2：数据库创建不一致
-
-- `auth-migrate`：依赖 postgres 服务的 `POSTGRES_DB: aim_auth` 隐式创建
-- `logic-migrate`：显式 `CREATE DATABASE aim_logic`
-
-**规范：** 所有数据库应显式创建，不依赖 `POSTGRES_DB` 环境变量。`POSTGRES_DB` 仅用于 postgres 初始化时的默认库，不应作为迁移依赖。
-
-#### 问题 3：迁移文件列表硬编码
-
-每次新增迁移都要手动更新 docker-compose.yaml 的 command 字符串。
-
-**可选改进方案：**
-
-- **方案 A（推荐 - 最小改动）：** 保持当前显式列举方式，但在 AGENTS.md 中设置 checklist 提醒
-- **方案 B：** 使用 shell glob 按序执行：
-  ```bash
-  for f in /migrations/*.sql; do psql -h postgres -U user -d aim_logic -f "$f" || exit 1; done
-  ```
-  注意：需要确保文件名排序正确（`NNN_` 前缀保证字典序 = 执行序）
-- **方案 C：** 引入迁移工具（golang-migrate、goose），自带追踪和幂等执行
-
-#### 问题 4：无迁移追踪
-
-当前没有 `schema_migrations` 表，无法判断哪些迁移已执行。
-
-**影响：**
-- 无法安全地回滚/重跑
-- 部分失败后无法确定恢复点
-- 幂等 SQL 是"穷人的追踪"，仅能防止重复建表，不能防止数据迁移重复执行
-
-**方案 C（迁移工具）可彻底解决此问题。**
-
-### auth-migrate 与 logic-migrate 的差异
-
-| 维度 | auth-migrate | logic-migrate |
-|------|-------------|---------------|
-| 数据库创建 | 隐式（POSTGRES_DB） | 显式（CREATE DATABASE） |
-| 迁移文件数 | 1 个 | 4 个 |
-| SQL 幂等性 | ❌ 缺少 IF NOT EXISTS | ✅ 表有 IF NOT EXISTS，❌ 部分索引缺少 |
-| Shell 安全性 | ✅ 简单命令 | ❌ 运算符优先级风险 |
+当前脚本仍没有 `schema_migrations` 表，依赖 SQL 自身幂等来支持重复执行。后续如引入 goose / golang-migrate，需要同步更新本 Skill 和 `deploy/scripts/`。
 
 ## 检查清单
 
 修改迁移相关内容时，逐项确认：
 
 - [ ] SQL 使用 `IF NOT EXISTS`（CREATE TABLE / CREATE INDEX / CREATE EXTENSION）
-- [ ] 新增迁移文件后同步更新 docker-compose.yaml 的 command
-- [ ] logic-migrate 的 shell 命令使用 `if/then` 而非 `||`/`&&` 链
+- [ ] 新增迁移文件名使用 `NNN_` 前缀，确保 glob 排序正确
+- [ ] `deploy/scripts/migrate-postgres.sh` 仍使用显式数据库创建逻辑，未退回 Compose 内联 shell
 - [ ] 数据库创建显式化，不依赖 POSTGRES_DB
 - [ ] `sqlc generate` 已重新执行
 - [ ] `go test` 通过

@@ -21,7 +21,7 @@ description: AIM 的附件域。涉及 `app/attachment`、AttachmentService gRPC
 - `app/attachment/internal/server/`：gRPC server 适配层，负责 pb 与业务 service DTO 转换、错误映射。
 - `app/attachment/internal/service/`：附件核心业务、SeaweedFS/S3 预签名与对象校验。
 - `app/attachment/model/migrations/`：附件表结构。
-- `app/attachment/rpc/etc/attachment.yaml`：本地/Compose 运行配置。
+- `app/attachment/rpc/etc/attachment.yaml`：本地 `go run` / 单服务调试默认配置；Docker Compose 部署挂载 `deploy/config/<env>/attachment.yaml` 到 `/app/etc/attachment.yaml`。
 
 ## 变更规则
 

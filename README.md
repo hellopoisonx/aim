@@ -5,19 +5,31 @@
 ## 快速开始
 
 ```bash
-# 启动基础设施
-docker compose up -d postgres redis kafka nacos tempo grafana
+# 启动本地 Docker 环境（核心服务 + 基础设施，端口仅绑定 127.0.0.1）
+docker compose --env-file deploy/env/local.env \
+  -f deploy/compose/base.yaml \
+  -f deploy/compose/dev.yaml \
+  up -d --build
+
+# 可选：启动 Prometheus / Loki / Promtail / Grafana
+docker compose --env-file deploy/env/local.env \
+  -f deploy/compose/base.yaml \
+  -f deploy/compose/dev.yaml \
+  -f deploy/compose/observability.yaml \
+  up -d
 
 # 构建
 go mod tidy
 go build ./...
 
-# 按需启动服务
+# 按需本地 go run 单服务（app/*/etc/*.yaml 保留为单服务默认配置）
 cd app/gateway/api && go run gateway.go
 cd app/auth/rpc && go run auth.go
 cd app/core/rpc && go run core.go
 cd app/logic/rpc && go run logic.go
 ```
+
+部署拆分说明见 `deploy/README.md`。根目录 `docker-compose.yaml` 仅作为本地兼容入口保留。
 
 ## 架构
 

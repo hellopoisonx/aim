@@ -68,7 +68,7 @@ protoc --python_out=../../../dev-tool gateway.proto
 | 服务 | 端口 | 协议 |
 |------|------|------|
 | aim-gateway | `8888` | HTTP REST |
-| aim-gateway | `9090` | gRPC（内部） |
+| aim-gateway | `9091` | gRPC（内部） |
 | aim-auth | `8989` | gRPC |
 | aim-core | `8080` | gRPC |
 | aim-logic | `8082` | gRPC |
@@ -125,8 +125,14 @@ PYTHONIOENCODING=utf-8 python aim_test.py interactive
 当后端 Go 代码变更后，Docker 容器运行的是旧镜像，需重建并重启：
 
 ```bash
-docker compose build --no-cache
-docker compose up -d --force-recreate aim-auth aim-core aim-gateway aim-logic
+docker compose --env-file deploy/env/local.env \
+  -f deploy/compose/base.yaml \
+  -f deploy/compose/dev.yaml \
+  build --no-cache
+docker compose --env-file deploy/env/local.env \
+  -f deploy/compose/base.yaml \
+  -f deploy/compose/dev.yaml \
+  up -d --force-recreate aim-auth aim-core aim-gateway aim-logic
 ```
 
 > 提示：dev-tool 测试网关心路由（如新增 `/api/friends/me`），若接口 404 但 API 定义和 routes.go 已注册，先检查 Docker 镜像是否最新。

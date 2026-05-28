@@ -21,18 +21,18 @@ Nacos:
   Ephemeral: true
   Weight: 1
   TimeoutMs: 5000
-  Username: ""
-  Password: ""
+  Username: "nacos"
+  Password: "CHANGE_ME_NACOS_PASSWORD"
   LogDir: /app/log/nacos
   CacheDir: /tmp/nacos/cache
   LogLevel: info
 Postgres:
-  DataSource: postgres://user:password@postgres:5432/aim_auth?sslmode=disable
+  DataSource: postgres://aim_user:CHANGE_ME_POSTGRES_PASSWORD@postgres:5432/aim_auth?sslmode=disable
 SessionRedis:
   Host: redis:6379
   Pass: ""
 Token:
-  AccessSecret: aim-dev-access-secret
+  AccessSecret: CHANGE_ME_RANDOM_48_BYTES
   AccessTTL: 5m
   RefreshTTL: 168h
   SnowflakeMachineID: 1

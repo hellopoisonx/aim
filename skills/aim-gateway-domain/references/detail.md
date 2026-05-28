@@ -21,7 +21,7 @@
 - Auth RPC 客户端注入：`app/gateway/api/internal/svc/service_context.go`。
 - Auth RPC 服务发现：`app/gateway/api/internal/svc/service_context.go` 通过 `app/shared/nacos` 注册 Nacos 适配的 gRPC resolver（scheme `aimnacos`），创建 `zrpc` 客户端使用 `aimnacos.BuildTarget("auth.rpc")`（目标形如 `aimnacos:///auth.rpc`）。Resolver 订阅 Nacos 实例变更，auth 后启动不会导致 gateway panic，实例上线后自动发现；`app/gateway/api/etc/gateway-api.yaml` 的 `AuthRpc` 块是 Nacos 配置，不再使用 `AuthRpc.Etcd`。
 - Nacos gRPC resolver（scheme `aimnacos`）实现：`app/shared/nacos/resolver.go`，通过 `NamingClient.Subscribe` 监听服务实例变更并更新 gRPC address list；同一进程内只注册一次全局 scheme，但每个 `aimnacos:///<serviceName>` 客户端必须按 target endpoint 独立订阅对应服务名，避免 `auth.rpc`、`core.rpc`、`logic.rpc` 串线；scheme 不得使用 `nacos`，避免抢占 Nacos SDK 内部 `nacos:9848` 直连目标；支持空初始实例（auth 后启动不 panic）、实例上线动态添加、下线动态移除。
-- Docker Compose 配置：`docker-compose.yaml` 将 `app/gateway/api/etc/gateway-api.yaml` 挂载到容器内 `/app/etc/gateway-api.yaml`，与 `app/gateway/api/gateway.go` 默认 `-f etc/gateway-api.yaml` 保持一致；`AuthRpc.ServerAddr` 在 Compose 网络内使用 `nacos:8848`。
+- Docker Compose 配置：分层 Compose 通过 `${AIM_CONFIG_DIR:-../config/local}/gateway-api.yaml` 挂载到容器内 `/app/etc/gateway-api.yaml`，本地默认配置副本位于 `deploy/config/local/gateway-api.yaml`；`app/gateway/api/etc/gateway-api.yaml` 保留给本地 `go run` / 单服务调试。`AuthRpc.ServerAddr` 在 Compose 网络内使用 `nacos:8848`。
 - JWT 本地验签：`app/shared/jwt`。
 - `Authorization` header 上下文传递：`app/gateway/api/internal/authctx`。
 - REST Auth 中间件：`app/gateway/api/internal/middleware/auth_middleware.go`，对 `/api/conversations` 和 `/api/users` 路由组生效。中间件通过 `wsauth.ExtractAndValidate` 验签 Bearer token，成功后将 `ws.Identity{UserID, DeviceID}` 注入 `ws.WithIdentity` 上下文。失败返回 401 JSON `{code, msg}`。
@@ -141,19 +141,13 @@ Proto 定义：`shared/proto/gateway/gateway.proto`，生成的 pb 代码在 `sh
 
 ## 已实现 CoreRpc 客户端
 
-实现位置：`app/gateway/rpc`（gRPC client，调用 aim-core）。
+实现位置：`app/gateway/api/internal/svc/service_context.go`（gateway API 进程内的 gRPC client，调用 aim-core）。
 
 ### CoreRpc 配置
 
-配置定义：`app/gateway/rpc/internal/config/config.go` 的 `CoreRpcConf`。
+配置定义：`app/gateway/api/internal/config/config.go` 的 `CoreRpc aimnacos.Config` 字段。Docker Compose 部署使用 `deploy/config/<env>/gateway-api.yaml`（容器内 `/app/etc/gateway-api.yaml`），本地 `go run` / 单服务调试使用 `app/gateway/api/etc/gateway-api.yaml`。
 
-```go
-type CoreRpcConf struct {
-    zrpc.RpcClientConf
-}
-```
-
-目标地址通过 AIM Nacos resolver 发现（目标形如 `aimnacos:///core.rpc`），`app/gateway/rpc/etc/gateway-rpc.yaml` 的 `CoreRpc` 块配置 Nacos 注册中心地址。
+目标地址通过 AIM Nacos resolver 发现（目标形如 `aimnacos:///core.rpc`），`gateway-api.yaml` 的 `CoreRpc` 块配置 Nacos 注册中心地址、服务名 `core.rpc` 等发现参数。
 
 ### Transfer 调用流程
 

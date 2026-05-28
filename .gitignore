@@ -21,3 +21,6 @@ coverage*
 /.opencode
 /.trae
 /.cursor
+/deploy/config/prod/
+/deploy/env/prod.env
+/deploy/env/*.secret.env

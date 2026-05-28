@@ -1,0 +1,24 @@
+services:
+  caddy:
+    image: caddy:2
+    container_name: aim-caddy
+    environment:
+      AIM_ENV_FILE: ${AIM_ENV_FILE:?set AIM_ENV_FILE to the production env file path, e.g. /etc/aim/aim.env}
+      AIM_CONFIG_DIR: ${AIM_CONFIG_DIR:?set AIM_CONFIG_DIR to the production config directory, e.g. /etc/aim/config}
+      AIM_API_HOST: ${AIM_API_HOST:?set AIM_API_HOST to the public API host}
+      AIM_FILES_HOST: ${AIM_FILES_HOST:-files.example.com}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ../proxy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - aim-gateway
+    networks:
+      - aim-network
+
+volumes:
+  caddy_data:
+  caddy_config:

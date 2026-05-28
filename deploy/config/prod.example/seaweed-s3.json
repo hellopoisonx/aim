@@ -1,0 +1,14 @@
+{
+  "identities": [
+    {
+      "name": "aim-prod",
+      "credentials": [
+        {
+          "accessKey": "aim-prod",
+          "secretKey": "CHANGE_ME_SEAWEED_SECRET_KEY"
+        }
+      ],
+      "actions": ["Admin", "Read", "Write", "List"]
+    }
+  ]
+}

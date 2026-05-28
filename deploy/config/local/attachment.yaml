@@ -30,7 +30,7 @@ Postgres:
   DataSource: postgres://user:password@postgres:5432/aim_logic?sslmode=disable
 Seaweed:
   Endpoint: http://seaweed-s3:8333
-  PublicEndpoint: http://localhost:11333
+  PublicEndpoint: http://localhost:8333
   Region: us-east-1
   Bucket: aim-attachments
   AccessKey: aim

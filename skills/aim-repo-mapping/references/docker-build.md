@@ -25,31 +25,49 @@ Go 源码变更后，Docker 容器运行的是旧二进制，必须重建镜像�
 
 ```bash
 # 全量重建（建议首次或依赖变更时）
-docker compose build --no-cache
-docker compose up -d --force-recreate aim-auth aim-core aim-gateway aim-logic
+docker compose --env-file deploy/env/local.env \
+  -f deploy/compose/base.yaml \
+  -f deploy/compose/dev.yaml \
+  build --no-cache
+docker compose --env-file deploy/env/local.env \
+  -f deploy/compose/base.yaml \
+  -f deploy/compose/dev.yaml \
+  up -d --force-recreate aim-auth aim-core aim-gateway aim-logic
 
 # 增量重建（仅代码变更时，利用缓存更快）
-docker compose build
-docker compose up -d --force-recreate aim-auth aim-core aim-gateway aim-logic
+docker compose --env-file deploy/env/local.env \
+  -f deploy/compose/base.yaml \
+  -f deploy/compose/dev.yaml \
+  build
+docker compose --env-file deploy/env/local.env \
+  -f deploy/compose/base.yaml \
+  -f deploy/compose/dev.yaml \
+  up -d --force-recreate aim-auth aim-core aim-gateway aim-logic
 ```
 
 > 常见触发场景：新增 API 路由、proto 变更、配置结构体变更、业务逻辑修改。
 
 ## 配置文件变更
 
-本地 docker-compose 中服务配置文件应通过 bind mount 注入容器，避免修改 `app/*/etc/*.yaml` 后必须重建镜像才能生效。当前需保持以下配置文件挂载：
+Docker Compose 中服务配置文件应通过 bind mount 注入容器，避免修改配置后必须重建镜像才能生效。分层部署统一从 `deploy/config/<env>/` 挂载，默认本地环境为：
 
-- `app/auth/rpc/etc/auth.yaml -> /app/etc/auth.yaml`
-- `app/gateway/api/etc/gateway-api.yaml -> /app/etc/gateway-api.yaml`
-- `app/core/rpc/etc/core.yaml -> /app/etc/core.yaml`
-- `app/logic/rpc/etc/logic.yaml -> /app/etc/logic.yaml`
-- `app/attachment/rpc/etc/attachment.yaml -> /app/etc/attachment.yaml`
-- `app/data_parsing/etc/data_parsing.yaml -> /app/etc/data_parsing.yaml`
+- `deploy/config/local/auth.yaml -> /app/etc/auth.yaml`
+- `deploy/config/local/gateway-api.yaml -> /app/etc/gateway-api.yaml`
+- `deploy/config/local/core.yaml -> /app/etc/core.yaml`
+- `deploy/config/local/logic.yaml -> /app/etc/logic.yaml`
+- `deploy/config/local/attachment.yaml -> /app/etc/attachment.yaml`
+- `deploy/config/local/data_parsing.yaml -> /app/etc/data_parsing.yaml`
+- `deploy/config/local/seaweed-s3.json -> /etc/seaweedfs/s3.json`
+
+`app/*/etc/*.yaml` 保留为本地 `go run` / 单服务调试默认配置，不再作为 Docker 部署配置源。
 
 纯配置变更后通常只需：
 
 ```bash
-docker compose up -d --force-recreate <service>
+docker compose --env-file deploy/env/local.env \
+  -f deploy/compose/base.yaml \
+  -f deploy/compose/dev.yaml \
+  up -d --force-recreate <service>
 ```
 
 无需 `docker compose build`，除非 Go 源码、Dockerfile、生成文件或依赖发生变化。

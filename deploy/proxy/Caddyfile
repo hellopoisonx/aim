@@ -1,0 +1,11 @@
+{$AIM_API_HOST:api.example.com} {
+    encode zstd gzip
+    reverse_proxy aim-gateway:8888
+}
+
+# 内置 SeaweedFS/S3 文件域名。生产启用前必须确认鉴权、网络策略和密钥强度。
+# 如改用外部对象存储/CDN，请删除此站点并同步 attachment.yaml 的 Seaweed.PublicEndpoint。
+{$AIM_FILES_HOST:files.example.com} {
+    encode zstd gzip
+    reverse_proxy seaweed-s3:8333
+}
