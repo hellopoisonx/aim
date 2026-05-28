@@ -552,6 +552,79 @@ message SenderInfo {
 
 ---
 
+## 6.4 多设备同步注意事项
+
+当用户同时登录多个设备（如手机 + 桌面）时，消息同步机制如下：
+
+### 6.4.1 发信设备的推送行为
+
+```
+用户 A 在手机发送消息
+  ├─ 手机收到 SERVER_ACK（上行确认）                    ← ✅ 正常
+  ├─ 手机收不到 PUSH_MESSAGE（被 source_device_id 跳过） ← ✅ 不会重复
+  ├─ A 的桌面端收到 PUSH_MESSAGE                         ← ✅ 实时同步
+  └─ B 的所有设备收到 PUSH_MESSAGE                       ← ✅ 正常投递
+```
+
+服务端通过 `source_device_id` 跳过发信设备，避免一条消息被推回给发信的连接。
+
+### 6.4.2 推送消息去重
+
+所有设备收到 `PUSH_MESSAGE` 后统一以 **`message_id`** 为主键去重：
+
+| 场景 | 去重方式 |
+|------|---------|
+| 收到别人发的消息 | `message_id` 去重 |
+| 本设备发了消息 -> 收到自己的 `PUSH_MESSAGE` | `client_msg_id` 匹配本地 pending 记录，然后用 `message_id` 去重 |
+| 其他设备发了消息 -> 本设备收到 `PUSH_MESSAGE` | 本地不存在该 `client_msg_id` → 正常追加，`status=received` |
+| 历史拉取 + 在线推送的交集 | `message_id` 去重 |
+
+### 6.4.3 client_msg_id 跨设备说明
+
+`client_msg_id` 由**发信设备**在本地生成，其他设备不会匹配到该 `client_msg_id`：
+
+- **发信设备**：本地有 `client_msg_id` 的 pending 记录 → 匹配后更新 `status=sent`
+- **非发信设备**：本地不存在该 `client_msg_id` → 将消息作为新收到的消息插入本地，`status=received`
+- 重连后拉历史时，`client_msg_id` 同步到所有设备的历史记录中，但不影响去重逻辑
+
+### 6.4.4 已读回执跨设备共享
+
+已读游标以 **`user_id`（而非 `device_id`）** 为维度，跨设备共享：
+
+- 设备 A 读了一条消息 → 服务端更新该用户的已读游标
+- 设备 B 实时收到 `PUSH_READ_RECEIPT`（含最新的 `last_read_message_id`）
+- 设备 B 重连后拉历史时，`read_states` 直接反映最新游标
+- 服务端使用 `GREATEST(existing, new)` 防倒退，不同设备并发读不会覆盖进度
+
+### 6.4.5 在线状态跨设备
+
+在线状态（presence）以 **`user_id`** 为维度：
+
+- 任一设备在线 → 该用户标记为 `online`
+- 设备 A 心跳正常、设备 B 断线 → 用户仍为 `online`
+- 所有设备都离线后才标记 `offline`
+- `FRAME_TYPE_PUSH_PRESENCE` 仅在 online↔offline 切换时推送
+
+### 6.4.6 Token 过期影响
+
+Token 过期是 per-connection 的，不影响其他设备：
+
+- 设备 A 的 token 过期 → 收到 `FRAME_TYPE_TOKEN_EXPIRED` → 断开重连
+- 设备 B 不受影响，继续正常收发
+- 服务端 `KickUser{device_id="specific"}` 只踢指定设备，不影响其他连接
+
+### 6.4.7 本地消息缓存要点
+
+多设备场景下本地缓存需要额外注意：
+
+| 字段 | 建议 |
+|------|------|
+| `created_locally` | 标记是否本设备创建，帮助 UI 区分来源
+| `local_status` | 本设备创建的才有 `sending→sent→failed`；其他设备来的直接为 `received`
+| `message_id` | 所有设备统一作为主键，不接受客户端生成
+
+---
+
 ## 7. 客户端本地缓存策略
 
 ### 7.1 数据模型
@@ -712,6 +785,7 @@ type SeqTracker struct {
 2. **已读状态**：`conversation_read_states` 以 `user_id` 为维度，是服务端权威数据。B 重连后拉取历史时会附带 `read_states`
 3. **已读回执推送**：A 读了某消息后，B 会通过 WS `PUSH_READ_RECEIPT` 收到实时更新
 
+> **多设备场景的客户端细节请参考 §6.4 多设备同步注意事项**。
 ---
 
 ## 9. 已读回执
