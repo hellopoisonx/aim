@@ -10,9 +10,10 @@
 2. 用 `idempotency:transfer:{sender_id}:{device_id}:{client_msg_id}` 查 Redis 幂等键。
 3. 调 logic `PermissionService.CheckMessagePermission`；gRPC 业务错误用 `errorx.FromGRPCError` 保留。
 4. 用 shared Snowflake 生成 `message_id`。
-5. 构造 Kafka JSON payload，必须包含 `traceparent`/`tracestate`。
+5. 构造 Kafka JSON payload，必须包含 `traceparent`/`tracestate`，并携带 `device_id` 供下游做多端同步源设备过滤。
 6. `PushWithKey(ctx, conversation_id, payload)`，保证同会话有序。
 7. Kafka 成功后 best-effort 写幂等键，失败只记日志，不回滚已发布消息。
+8. `DeliveryConsumer` 查询会话成员后对成员全量 fan-out（包含发送者用户）；向 gateway `PushMessageReq.source_device_id` 透传发送设备，由 gateway 跳过原始发送设备并推送给发送者其他在线设备。
 
 ## 本地规则
 

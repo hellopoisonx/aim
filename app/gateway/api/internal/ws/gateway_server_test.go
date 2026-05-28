@@ -638,3 +638,92 @@ func TestGatewayServerPushMessageMultiDevice(t *testing.T) {
 	assert.Equal(t, pushMsg1.GetContent(), pushMsg2.GetContent())
 	assert.Equal(t, int64(777), pushMsg1.GetMessageId())
 }
+
+func TestGatewayServerPushMessageSkipsSourceDeviceForSender(t *testing.T) {
+	t.Parallel()
+
+	env := setupGatewayTest(t)
+	t.Cleanup(env.cleanup)
+
+	userID := int64(12352)
+
+	wsServer1 := newWSTestServer(t, env.manager, userID, "source-device")
+	wsServer2 := newWSTestServer(t, env.manager, userID, "sync-device")
+	t.Cleanup(func() { wsServer1.close(); wsServer2.close() })
+
+	conn1, err := wsServer1.dialWebSocket("test-token")
+	require.NoError(t, err)
+	conn2, err := wsServer2.dialWebSocket("test-token")
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		_ = conn1.Close(websocket.StatusNormalClosure, "test done")
+		_ = conn2.Close(websocket.StatusNormalClosure, "test done")
+	})
+
+	require.NoError(t, waitForRegistrationCount(env.manager, userID, 2, 500*time.Millisecond))
+
+	ctx := context.Background()
+	resp, err := env.client.PushMessage(ctx, &pb.PushMessageReq{
+		MessageId:        778,
+		ConversationId:   301,
+		ConversationType: "direct",
+		MessageType:      "text",
+		Content:          "sync to other devices",
+		SenderId:         userID,
+		SentAt:           time.Now().UnixMilli(),
+		ClientMsgId:      "skip-source-msg",
+		TargetUserId:     userID,
+		SourceDeviceId:   "source-device",
+	})
+	require.NoError(t, err)
+	require.True(t, resp.Success)
+
+	frame2, err := readFrame(ctx, conn2)
+	require.NoError(t, err)
+	require.Equal(t, wspb.FrameType_FRAME_TYPE_PUSH_MESSAGE, frame2.GetType())
+
+	readCtx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	_, err = readFrame(readCtx, conn1)
+	require.Error(t, err)
+}
+
+func TestGatewayServerPushMessageDoesNotSkipSameDeviceIDForOtherUser(t *testing.T) {
+	t.Parallel()
+
+	env := setupGatewayTest(t)
+	t.Cleanup(env.cleanup)
+
+	senderID := int64(12353)
+	targetUserID := int64(12354)
+	sharedDeviceID := "same-device-id"
+
+	wsServer := newWSTestServer(t, env.manager, targetUserID, sharedDeviceID)
+	t.Cleanup(wsServer.close)
+
+	conn, err := wsServer.dialWebSocket("test-token")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = conn.Close(websocket.StatusNormalClosure, "test done") })
+
+	require.NoError(t, waitForRegistration(env.manager, targetUserID, 500*time.Millisecond))
+
+	ctx := context.Background()
+	resp, err := env.client.PushMessage(ctx, &pb.PushMessageReq{
+		MessageId:        779,
+		ConversationId:   302,
+		ConversationType: "direct",
+		MessageType:      "text",
+		Content:          "deliver to other user same device id",
+		SenderId:         senderID,
+		SentAt:           time.Now().UnixMilli(),
+		ClientMsgId:      "same-device-other-user",
+		TargetUserId:     targetUserID,
+		SourceDeviceId:   sharedDeviceID,
+	})
+	require.NoError(t, err)
+	require.True(t, resp.Success)
+
+	frame, err := readFrame(ctx, conn)
+	require.NoError(t, err)
+	require.Equal(t, wspb.FrameType_FRAME_TYPE_PUSH_MESSAGE, frame.GetType())
+}

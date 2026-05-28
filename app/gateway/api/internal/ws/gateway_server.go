@@ -67,10 +67,19 @@ func (s *GatewayServer) PushMessage(ctx context.Context, req *pb.PushMessageReq)
 		return &pb.PushMessageResp{Success: true}, nil
 	}
 
-	// Push to all connections concurrently.
+	// Push to all eligible connections. When core fans out a message back to the
+	// sender for multi-device sync, skip only the original source device; other
+	// devices of the same user should still receive the message.
 	var pushErr error
 
 	for _, conn := range connections {
+		if req.TargetUserId == req.SenderId && req.GetSourceDeviceId() != "" && conn.Identity.DeviceID == req.GetSourceDeviceId() {
+			logx.WithContext(ctx).Debugf("PushMessage: skipped source device user_id=%d device_id=%s",
+				conn.Identity.UserID, conn.Identity.DeviceID)
+
+			continue
+		}
+
 		if err := conn.WriteFrame(ctx, wspb.FrameType_FRAME_TYPE_PUSH_MESSAGE, payload); err != nil {
 			logx.WithContext(ctx).Errorf("PushMessage: failed to write to user_id=%d device_id=%s: %v",
 				conn.Identity.UserID, conn.Identity.DeviceID, err)

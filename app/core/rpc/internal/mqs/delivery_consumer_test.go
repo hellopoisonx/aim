@@ -198,6 +198,7 @@ func TestDeliveryConsumer_Consume_Success(t *testing.T) {
 	require.Equal(t, int64(100), fakeGw.pushes[0].req.TargetUserId)
 	require.Equal(t, "text", fakeGw.pushes[0].req.MessageType)
 	require.Equal(t, "hello world", fakeGw.pushes[0].req.Content)
+	require.Equal(t, "device-1", fakeGw.pushes[0].req.SourceDeviceId)
 }
 
 func TestDeliveryConsumer_Consume_PropagatesTraceContext(t *testing.T) {
@@ -313,6 +314,7 @@ func TestDeliveryConsumer_Consume_AllFields(t *testing.T) {
 	require.Equal(t, "msg-xyz", push.ClientMsgId)
 	require.Equal(t, []string{"alice"}, push.Mentions)
 	require.Equal(t, int64(1700000000000), push.SentAt)
+	require.Equal(t, "dev-x", push.SourceDeviceId)
 }
 
 func TestDeliveryConsumer_Consume_EmptyContent(t *testing.T) {
@@ -397,6 +399,7 @@ func TestDeliveryConsumer_Consume_FanoutToConversationMembers(t *testing.T) {
 	event := transferEvent{
 		MessageID:      12345,
 		SenderID:       100,
+		DeviceID:       "sender-device",
 		ConversationID: 200,
 		MessageType:    "text",
 		Content:        "hello world",
@@ -408,8 +411,11 @@ func TestDeliveryConsumer_Consume_FanoutToConversationMembers(t *testing.T) {
 
 	err = consumer.Consume(context.Background(), "200", string(value))
 	require.NoError(t, err)
-	require.Len(t, fakeGw.pushes, 1)
-	require.Equal(t, int64(200), fakeGw.pushes[0].req.TargetUserId)
+	require.Len(t, fakeGw.pushes, 2)
+	require.Equal(t, int64(100), fakeGw.pushes[0].req.TargetUserId)
+	require.Equal(t, int64(200), fakeGw.pushes[1].req.TargetUserId)
+	require.Equal(t, "sender-device", fakeGw.pushes[0].req.SourceDeviceId)
+	require.Equal(t, "sender-device", fakeGw.pushes[1].req.SourceDeviceId)
 }
 
 func TestDeliveryConsumer_Consume_MemberLookupFailure(t *testing.T) {

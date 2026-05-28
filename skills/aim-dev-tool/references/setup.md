@@ -16,7 +16,7 @@ pip install -r requirements.txt
 依赖列表（`requirements.txt`）：
 
 ```
-protobuf>=4.0
+protobuf>=7.34.1
 websocket-client>=1.8
 requests>=2.28
 ```

@@ -107,9 +107,10 @@ Proto 定义：`shared/proto/gateway/gateway.proto`，生成的 pb 代码在 `sh
 
 ### PushMessage
 
-- 请求：`PushMessageReq`（message_id, conversation_id, conversation_type, message_type, content, sender_id, sent_at, client_msg_id, mentions）
+- 请求：`PushMessageReq`（message_id, conversation_id, conversation_type, message_type, content, sender_id, sent_at, client_msg_id, mentions, target_user_id, is_system, sender_info, source_device_id）
 - 响应：`PushMessageResp`（success）
-- 内部实现：查找 `user_id + device_id` 对应的本地 WebSocket 连接，写入 `FRAME_TYPE_PUSH_MESSAGE` 帧
+- 内部实现：查找 `target_user_id` 对应的本地 WebSocket 连接，写入 `FRAME_TYPE_PUSH_MESSAGE` 帧
+- 多端同步：普通消息的 core fan-out 会包含发送者用户；当 `target_user_id == sender_id` 且连接 `device_id == source_device_id` 时，gateway 跳过原始发送设备，仍推送给发送者其他设备
 - 投递成功（用户在线）返回 `success=true`；用户不在线也返回 `success=true`（消息已在投递链路中处理）
 
 ### PushPresence

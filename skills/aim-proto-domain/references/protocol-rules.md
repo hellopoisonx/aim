@@ -16,6 +16,20 @@ shared/proto/
 
 ### 字段约定
 
+- `PushMessageReq` 字段号：
+  - `1` = `message_id`
+  - `2` = `conversation_id`
+  - `3` = `conversation_type`
+  - `4` = `message_type`
+  - `5` = `content`
+  - `6` = `sender_id`
+  - `7` = `sent_at`
+  - `8` = `client_msg_id`
+  - `9` = `mentions`
+  - `10` = `target_user_id`（接收推送的目标用户）
+  - `11` = `is_system`
+  - `12` = `sender_info`
+  - `13` = `source_device_id`（普通消息原始发送设备 ID，仅用于 gateway 跳过发送端设备，不透传 WS）
 - `PushPresenceReq` 字段号：
   - `1` = `user_id`（状态变更者）
   - `2` = `status`（online/offline）

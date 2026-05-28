@@ -89,6 +89,7 @@ func (c *DeliveryConsumer) Consume(ctx context.Context, key string, value string
 				Mentions:         event.Mentions,
 				TargetUserId:     targetUserID,
 				SenderInfo:       senderInfo,
+				SourceDeviceId:   event.DeviceID,
 			}
 
 			resp, err := pushMessageToNode(ctx, c.svcCtx.GatewayClient, nodeID, req)
@@ -127,7 +128,9 @@ func (c *DeliveryConsumer) userGatewayNodes(ctx context.Context, userID int64) [
 	return []string{""}
 }
 
-// resolveConversation looks up the recipient list and conversation type via logic.
+// resolveConversation looks up the full recipient list and conversation type via logic.
+// The sender is intentionally included so the sender's other devices can receive
+// the message for multi-device sync; gateway skips only the original source device.
 // Falls back to delivering only to the sender when logic is unreachable so that
 // single-instance dev setups still echo messages back to the originator.
 func (c *DeliveryConsumer) resolveConversation(ctx context.Context, event transferEvent) ([]int64, string, error) {
@@ -151,7 +154,7 @@ func (c *DeliveryConsumer) resolveConversation(ctx context.Context, event transf
 	seen := make(map[int64]struct{}, len(memberIDs))
 	targets := make([]int64, 0, len(memberIDs))
 	for _, memberID := range memberIDs {
-		if memberID <= 0 || memberID == event.SenderID {
+		if memberID <= 0 {
 			continue
 		}
 		if _, ok := seen[memberID]; ok {

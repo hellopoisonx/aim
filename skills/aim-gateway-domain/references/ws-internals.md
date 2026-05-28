@@ -31,6 +31,22 @@ go test -run 'Test.*WebSocket|Test.*Gateway|Test.*Manager' ./app/gateway/api/...
 
 并发、timer、goroutine 相关修改必须保留 `goleak` 覆盖；新增 manager 行为优先加同包白盒测试。
 
+## PushMessage
+
+向目标用户推送聊天消息（`FRAME_TYPE_PUSH_MESSAGE`）。
+
+输入 `PushMessageReq`：
+- `target_user_id`：接收推送的目标用户 ID（用于寻址连接）
+- `sender_id`：发送者用户 ID（用于判断是否为发送者多端同步）
+- `source_device_id`：普通消息的原始发送设备 ID；仅用于过滤，不写入 WS payload
+- 其他消息字段：构造 `PushMessagePayload` 后透传给客户端
+
+关键逻辑：
+1. 用 `target_user_id` 通过 `manager.GetByUserID` 获取该用户在本节点上的所有连接
+2. 普通消息多端同步时，core 会将发送者用户也作为 target；若 `target_user_id == sender_id` 且连接 `device_id == source_device_id`，跳过原始发送设备，避免发送端收到 ACK 后又收到同一条 PUSH_MESSAGE
+3. 发送者其他设备、其他会话成员设备继续接收 `FRAME_TYPE_PUSH_MESSAGE`
+
+
 ## PushPresence
 
 向目标用户推送在线状态变更（`FRAME_TYPE_PUSH_PRESENCE`）。
