@@ -97,6 +97,17 @@ ConversationEventConsumerConf:
   Offset: first
   Consumers: 1
   Processors: 1
+# 附件解析完成消费者：消费 data_parsing 发布的 aim.attachment.parsed 事件，
+# 将解析结果（缩略图、尺寸等）以系统消息推送至会话成员。
+AttachmentParsedConsumerConf:
+  Name: core-attachment-parsed-consumer
+  Brokers:
+    - bench-kafka:9092
+  Group: aim-core-attachment-parsed
+  Topic: aim.attachment.parsed
+  Offset: first
+  Consumers: 1
+  Processors: 1
 GatewayRpc:
   ServiceName: gateway.rpc
   Target: bench-gateway:9091

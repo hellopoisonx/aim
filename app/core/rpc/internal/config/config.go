@@ -16,7 +16,8 @@ type Config struct {
 	PresenceConsumerConf          kq.KqConf         `json:",optional"`
 	TypingConsumerConf            kq.KqConf         `json:",optional"`
 	ReadReceiptConsumerConf       kq.KqConf         `json:",optional"`
-	ConversationEventConsumerConf kq.KqConf         `json:",optional"`
+	ConversationEventConsumerConf    kq.KqConf         `json:",optional"`
+	AttachmentParsedConsumerConf     kq.KqConf         `json:",optional"`
 	LogicRpc                      nacos.Config      `json:",optional"`
 	GatewayRpc                    GatewayRpcConf    `json:",optional"`
 	AttachmentRpc                 nacos.Config      `json:",optional"`

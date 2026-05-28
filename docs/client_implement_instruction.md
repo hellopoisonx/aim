@@ -365,8 +365,7 @@ message WsFrame {
 
 | 类型 | 编号 | Payload | 说明 |
 |------|------|---------|------|
-| `FRAME_TYPE_PUSH_MESSAGE` | 101 | `PushMessagePayload` | 推送聊天消息 |
-| `FRAME_TYPE_PUSH_PRESENCE` | 102 | `PushPresencePayload` | 好友在线状态变更 |
+| `FRAME_TYPE_PUSH_MESSAGE` | 101 | `PushMessagePayload` | 推送聊天消息 / 附件解析更新 |
 | `FRAME_TYPE_PUSH_NOTIFICATION` | 103 | `PushNotificationPayload` | 系统通知 |
 | `FRAME_TYPE_PUSH_TYPING` | 104 | `PushTypingPayload` | 输入状态 |
 | `FRAME_TYPE_RECONNECT` | 105 | `ReconnectPayload` | 服务端要求重连 |
@@ -528,6 +527,9 @@ message SenderInfo {
   ├─ 判断是否为系统消息
   │     is_system=true && sender_id=0 && message_type="system"
   │     → 按系统消息渲染（群变更通知）
+  │
+  │     is_system=true && sender_id=0 && message_type in (image/video/audio)
+  │     → 附件解析更新：按 file_id 匹配本地消息并原地更新（详见 §11.4）
   │
   ├─ 按 client_msg_id 匹配本地 pending
   │     命中 → 将本地 sending → sent，保存 message_id
@@ -954,8 +956,76 @@ GET /api/attachments/:file_id/download
 ```
 
 返回 `{ url, headers, expires_at }`，客户端直接用 `url` 下载二进制。
+### 11.3 附件下载
 
----
+获取预签名下载 URL：
+
+```
+GET /api/attachments/:file_id/download
+```
+
+返回 `{ url, headers, expires_at }`，客户端直接用 `url` 下载二进制。
+
+### 11.4 附件解析状态更新推送
+
+附件上传后，服务端异步解析媒体文件（图片生成缩略图、提取尺寸；视频/音频当前为占位解析）。
+
+解析完成后，服务端通过 **`PUSH_MESSAGE` 帧** 主动推送更新后的附件内容到会话所有成员。
+
+**帧特征**：
+
+| 字段 | 值 | 说明 |
+|------|------|------|
+| `message_type` | `"image"` / `"video"` / `"audio"` | 与原始附件消息类型一致 |
+| `is_system` | `true` | 标识为系统推送（非用户发送） |
+| `sender_id` | `0` | 系统消息发送者 |
+| `content` | 附件 JSON | 更新后的 `aim.attachment.v1` 内容 |
+| `sender_info` | `{name:"system",...}` | 系统发送者信息 |
+
+**content 示例（解析完成）**：
+
+```json
+{
+  "schema": "aim.attachment.v1",
+  "file_id": "att_abc123",
+  "kind": "image",
+  "original": {
+    "name": "photo.jpg",
+    "mime": "image/jpeg",
+    "size": 2048576,
+    "sha256": "a1b2c3..."
+  },
+  "thumbnail_file_id": "attachments/derived/att_abc123/thumbnail.png",
+  "parse_status": "ready",
+  "width": 1920,
+  "height": 1080,
+  "duration_ms": 0,
+  "metadata": {"format": "png"}
+}
+```
+
+**客户端处理**：
+
+```
+收到 PUSH_MESSAGE（message_type=image/video/audio, is_system=true）
+  │
+  ├─ 1. 解析 content 为 attachment JSON
+  ├─ 2. 提取 file_id
+  └─ 3. 在当前会话的本地消息缓存中查找相同 file_id 的附件消息
+         │
+         ├─ 找到 → 原地更新该消息的 content（替换为最新的 JSON）
+         │         └─ UI 刷新：显示缩略图、尺寸等
+         │
+         └─ 未找到 → 忽略（附件可能在其他会话，或消息尚未拉取到本地）
+```
+
+**关键要点**：
+
+- 附件解析更新以 `file_id` 为匹配键，不是 `message_id`
+- 更新是幂等的：相同 `file_id` 多次推送，直接覆盖即可
+- `parse_status` 可能为 `"ready"`（成功）或 `"failed"`（失败）；失败状态暂不推送，客户端可通过 `GET /api/attachments/:id` 轮询
+- 如果 `parse_status=ready` 但 `thumbnail_file_id` 为空、`width`/`height` 为 0，表示解析生成了占位缩略图（不可解码格式或非图片媒体）
+- 缩略图下载：使用 `thumbnail_file_id` 作为 object_key，格式固定为 PNG（最长边 512px）
 
 ## 12. 群聊与系统消息
 
@@ -974,6 +1044,8 @@ POST /api/conversations/group
 ### 12.2 群管理系统消息
 
 当群发生变更时，服务端推送系统消息（`is_system=true`, `sender_id=0`, `message_type="system"`）。
+
+> **注意**：`PUSH_MESSAGE`（`is_system=true`）还用于附件解析状态更新（`message_type=image/video/audio`），详见 §11.4。
 
 `content` 为 JSON 字符串，含事件类型：
 

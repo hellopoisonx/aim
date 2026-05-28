@@ -38,5 +38,11 @@ func Consumers(ctx context.Context, svcCtx *svc.ServiceContext) []service.Servic
 		logx.WithContext(ctx).Infof("conversation event consumer registered: topic=%s", svcCtx.Config.ConversationEventConsumerConf.Topic)
 	}
 
+	// Attachment parsed consumer (optional).
+	if len(svcCtx.Config.AttachmentParsedConsumerConf.Brokers) > 0 && svcCtx.Config.AttachmentParsedConsumerConf.Topic != "" {
+		svcs = append(svcs, kq.MustNewQueue(svcCtx.Config.AttachmentParsedConsumerConf, NewAttachmentParsedConsumer(ctx, svcCtx)))
+		logx.WithContext(ctx).Infof("attachment parsed consumer registered: topic=%s", svcCtx.Config.AttachmentParsedConsumerConf.Topic)
+	}
+
 	return svcs
 }

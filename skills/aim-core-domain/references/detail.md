@@ -147,3 +147,75 @@ ConversationEventConsumerConf:
 - logic 在事务内预先计算 `target_user_ids`，core 无需再次查询成员列表，避免二次 DB 查询
 - `sender_id=0`、`message_type=system` 标识系统消息，前端可据此区分展示
 - 推送失败不重试，依赖客户端拉取历史时可见（消息已持久化到 DB）
+
+## AttachmentParsedConsumer
+
+### 概述
+
+`AttachmentParsedConsumer` 消费 `aim.attachment.parsed` topic，将 data_parsing 解析完成的附件更新（缩略图、尺寸、时长等）以系统消息形式推送给会话所有成员。
+
+实现位置：`app/core/rpc/internal/mqs/attachment_parsed_consumer.go`。
+
+### 事件格式
+
+```json
+{
+  "traceparent": "00-...",
+  "tracestate": "",
+  "file_id": "uuid",
+  "kind": "image",
+  "parse_status": "ready",
+  "thumbnail_object_key": "attachments/derived/{file_id}/thumbnail.png",
+  "thumbnail_file_id": "",
+  "duration_ms": 0,
+  "width": 1920,
+  "height": 1080,
+  "metadata": {"format": "png"},
+  "error": "",
+  "parsed_at": 1234567890
+}
+```
+
+### 处理流程
+
+1. 反序列化 Kafka value，恢复 W3C trace context
+2. 仅处理 `parse_status=ready` 的事件（失败事件暂不推送）
+3. 调用 `AttachmentClient.GetFile` 获取完整文件信息（含 `conversation_id`、原始名称、mime 等）
+4. 构建更新后的 `Content` JSON（schema=aim.attachment.v1，含缩略图、尺寸等）
+5. 通过 `LogicConversationClient.GetConversationMembers` 查询会话所有成员
+6. 生成 Snowflake 系统消息 ID
+7. 遍历成员 → 查网关节点 → 通过 `GatewayClient.PushMessage` 推送（`is_system=true`）
+8. 推送失败记录 span error 并返回错误（依赖 Kafka 重试）
+
+### 配置
+
+`app/core/rpc/internal/config/config.go` 新增：
+
+```go
+type Config struct {
+    // ... 现有字段 ...
+    AttachmentParsedConsumerConf kq.KqConf `json:",optional"`
+}
+```
+
+`app/core/rpc/etc/core.yaml`：
+
+```yaml
+AttachmentParsedConsumerConf:
+  Name: core-attachment-parsed-consumer
+  Brokers:
+    - kafka:9092
+  Group: aim-core-attachment-parsed
+  Topic: aim.attachment.parsed
+  Offset: first
+  Consumers: 1
+  Processors: 1
+```
+
+### 关键设计决策
+
+- 消费端通过 `AttachmentClient.GetFile(user_id=0)` 获取文件元数据（利用 `OR f.status='uploaded'` 条件），避免在事件 payload 中冗余携带原始文件信息
+- `message_type=event.Kind`（`image`/`video`/`audio`）使客户端能直接匹配到对应的附件消息类型
+- `is_system=true` 标识为系统消息，客户端可据此与用户发送的原始消息区分展示
+- 仅推送 `parse_status=ready` 的事件；失败事件依赖客户端通过 `GET /api/attachments/{id}` 轮询感知
+- 推送消息中 `file_id` 保持不变，客户端可通过 `file_id` 匹配并原地更新已有附件消息的展示（缩略图、尺寸等）
