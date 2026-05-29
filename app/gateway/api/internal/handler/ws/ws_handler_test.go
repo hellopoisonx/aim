@@ -262,6 +262,16 @@ func TestServeWSDetachesFrameSpansFromUpgradeSpan(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, pb.FrameType_FRAME_TYPE_SERVER_ACK, ackFrame.GetType())
 
+	require.Eventually(t, func() bool {
+		for _, span := range spans.Ended() {
+			if strings.HasPrefix(span.Name(), "ws.") {
+				return true
+			}
+		}
+
+		return false
+	}, time.Second, 10*time.Millisecond)
+
 	var wsSpanNames []string
 
 	for _, span := range spans.Ended() {

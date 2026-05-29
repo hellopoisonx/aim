@@ -11,6 +11,7 @@ import (
 	serverconversationservice "github.com/hellopoisonx/aim/app/logic/rpc/internal/server/conversationservice"
 	serverfriendshipservice "github.com/hellopoisonx/aim/app/logic/rpc/internal/server/friendshipservice"
 	serverpermissionservice "github.com/hellopoisonx/aim/app/logic/rpc/internal/server/permissionservice"
+	serversearchservice "github.com/hellopoisonx/aim/app/logic/rpc/internal/server/searchservice"
 	serveruserservice "github.com/hellopoisonx/aim/app/logic/rpc/internal/server/userservice"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
@@ -49,15 +50,7 @@ func main() {
 	defer ctx.Close()
 
 	s := zrpc.MustNewServer(c.RpcServerConf, func(grpcServer *grpc.Server) {
-		pb.RegisterPermissionServiceServer(grpcServer, serverpermissionservice.NewPermissionServiceServer(ctx))
-		pb.RegisterUserServiceServer(grpcServer, serveruserservice.NewUserServiceServer(ctx))
-		pb.RegisterConversationServiceServer(grpcServer, serverconversationservice.NewConversationServiceServer(ctx))
-		pb.RegisterFriendshipServiceServer(grpcServer, serverfriendshipservice.NewFriendshipServiceServer(ctx))
-		pb.RegisterBotServiceServer(grpcServer, serverbotservice.NewBotServiceServer(ctx))
-
-		if c.Mode == service.DevMode || c.Mode == service.TestMode {
-			reflection.Register(grpcServer)
-		}
+		registerLogicServers(grpcServer, ctx, c.Mode)
 	})
 	s.AddUnaryInterceptors(rpcutil.UnaryErrorInterceptor())
 	defer s.Stop()
@@ -74,4 +67,17 @@ func main() {
 
 	fmt.Printf("Starting rpc server at %s...\n", c.ListenOn)
 	group.Start()
+}
+
+func registerLogicServers(grpcServer *grpc.Server, ctx *svc.ServiceContext, mode string) {
+	pb.RegisterPermissionServiceServer(grpcServer, serverpermissionservice.NewPermissionServiceServer(ctx))
+	pb.RegisterUserServiceServer(grpcServer, serveruserservice.NewUserServiceServer(ctx))
+	pb.RegisterConversationServiceServer(grpcServer, serverconversationservice.NewConversationServiceServer(ctx))
+	pb.RegisterFriendshipServiceServer(grpcServer, serverfriendshipservice.NewFriendshipServiceServer(ctx))
+	pb.RegisterSearchServiceServer(grpcServer, serversearchservice.NewSearchServiceServer(ctx))
+	pb.RegisterBotServiceServer(grpcServer, serverbotservice.NewBotServiceServer(ctx))
+
+	if mode == service.DevMode || mode == service.TestMode {
+		reflection.Register(grpcServer)
+	}
 }
