@@ -1033,7 +1033,7 @@ func TestHandleHeartbeatWritesPresenceToRedis(t *testing.T) {
 
 	// Verify presence Set key (aim:presence:{uid} with device as member).
 	presenceKey := fmt.Sprintf("aim:presence:%d", userID)
-	members, err := mr.SMembers(presenceKey)
+	members, err := sc.RedisClient.SMembers(ctx, presenceKey).Result()
 	require.NoError(t, err)
 	require.Contains(t, members, deviceID)
 
@@ -1102,7 +1102,7 @@ func TestServeWSDisconnectWritesOfflinePresence(t *testing.T) {
 	t.Parallel()
 
 	presencePub := &mockPresencePublisher{}
-	sc, mr := newTestServiceContextWithRedis(t, presencePub)
+	sc, _ := newTestServiceContextWithRedis(t, presencePub)
 	nodeID := "test-node-1"
 	mgr := wsmanager.NewManagerWithPresence(sc.RedisClient, nodeID, 45)
 	handler := NewWsHandler(sc, mgr)
@@ -1132,7 +1132,7 @@ func TestServeWSDisconnectWritesOfflinePresence(t *testing.T) {
 
 	// Verify presence Set has the device
 	presenceKey := fmt.Sprintf("aim:presence:%d", userID)
-	members, err := mr.SMembers(presenceKey)
+	members, err := sc.RedisClient.SMembers(ctx, presenceKey).Result()
 	require.NoError(t, err)
 	require.Contains(t, members, deviceID)
 
@@ -1142,17 +1142,16 @@ func TestServeWSDisconnectWritesOfflinePresence(t *testing.T) {
 	// Close connection - triggers defer block which unregisters and publishes offline.
 	_ = conn.Close(websocket.StatusNormalClosure, "test complete")
 
-	// Give server time to process close and execute defer block
-	time.Sleep(100 * time.Millisecond)
+	// Wait for server to process close and execute defer block.
+	require.Eventually(t, func() bool {
+		members, err := sc.RedisClient.SMembers(ctx, presenceKey).Result()
+		if err != nil {
+			t.Logf("SMembers error: %v", err)
+			return false
+		}
+		return len(members) == 0
+	}, 5*time.Second, 10*time.Millisecond, "presence Set should be empty after disconnect")
 
-	// Verify presence Set is now empty (device removed).
-	// miniredis may return error for SMEMBERS on non-existent key; treat as empty.
-	members, err = mr.SMembers(presenceKey)
-	if err == nil {
-		require.Empty(t, members)
-	}
-
-	// Verify presence publisher called with offline
 	calls := presencePub.getCalls()
 	require.Len(t, calls, 1)
 	require.Equal(t, userID, calls[0].UserID)
@@ -1184,7 +1183,9 @@ func TestHandleHeartbeatPublishesPresenceEvent(t *testing.T) {
 	t.Cleanup(func() { _ = conn.Close(websocket.StatusNormalClosure, "test complete") })
 
 	// Give server goroutine time to complete Register and publish.
-	time.Sleep(20 * time.Millisecond)
+	require.Eventually(t, func() bool {
+		return len(presencePub.getCalls()) >= 1
+	}, 5*time.Second, 5*time.Millisecond, "expected presence online event after register")
 
 	// Register publishes "online" once. Clear to check heartbeat doesn't publish.
 	require.Len(t, presencePub.getCalls(), 1)
@@ -1336,10 +1337,10 @@ func TestTokenExpiryCleansUpOnDisconnect(t *testing.T) {
 	// Immediately disconnect - timer should be cleaned up
 	_ = conn.Close(websocket.StatusNormalClosure, "test complete")
 
-	// Wait a bit to ensure timer would have fired if not stopped
-	time.Sleep(100 * time.Millisecond)
-
-	// Verify the connection is gone from manager
-	_, err = manager.Get(wsmanager.Identity{UserID: userID, DeviceID: deviceID})
+	// Wait for server to process close and execute defer block.
+	require.Eventually(t, func() bool {
+		_, err = manager.Get(wsmanager.Identity{UserID: userID, DeviceID: deviceID})
+		return err != nil
+	}, 5*time.Second, 10*time.Millisecond, "connection should be gone after disconnect")
 	require.Error(t, err) // connection should not exist
 }

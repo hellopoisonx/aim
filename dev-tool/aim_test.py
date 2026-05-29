@@ -439,6 +439,44 @@ class RESTClient:
         qs = "?" + "&".join(params)
         return self._get(f"/api/search{qs}")
 
+    # ── Attachments ──
+
+    def init_attachment_upload(self, conversation_id: int, kind: str, original_name: str,
+                                 mime: str, size: int, sha256: str = "") -> dict:
+        body = {
+            "conversation_id": conversation_id,
+            "kind": kind,
+            "original_name": original_name,
+            "mime": mime,
+            "size": size,
+        }
+        if sha256:
+            body["sha256"] = sha256
+        return self._post("/api/attachments/init", body)
+
+    def get_attachment(self, file_id: str) -> dict:
+        return self._get(f"/api/attachments/{file_id}")
+
+    def complete_attachment_upload(self, file_id: str, sha256: str = "") -> dict:
+        body = {}
+        if sha256:
+            body["sha256"] = sha256
+        return self._post(f"/api/attachments/{file_id}/complete", body)
+
+    def download_attachment(self, file_id: str) -> dict:
+        return self._get(f"/api/attachments/{file_id}/download")
+
+    # ── Group Admin ──
+
+    def grant_group_admin(self, conversation_id: int, user_id: int) -> dict:
+        return self._post(f"/api/conversations/{conversation_id}/members/{user_id}/admin")
+
+    def revoke_group_admin(self, conversation_id: int, user_id: int) -> dict:
+        return self._delete(f"/api/conversations/{conversation_id}/members/{user_id}/admin")
+
+    def transfer_group_owner(self, conversation_id: int, user_id: int) -> dict:
+        return self._post(f"/api/conversations/{conversation_id}/owner",
+                           {"user_id": user_id})
 
 # ── WebSocket Client ────────────────────────────────────────────────────────────
 
@@ -985,6 +1023,22 @@ def cmd_create_group(args):
         print(f"✗ Create group failed: {e}")
 
 
+def cmd_create_conversation(args):
+    client = RESTClient()
+    try:
+        if args.member_ids:
+            member_ids = [int(m.strip()) for m in args.member_ids.split(",")]
+        elif args.member_id:
+            member_ids = [args.member_id]
+        else:
+            print("✗ --member-id or --member-ids required")
+            return
+        conv = client.create_conversation(member_ids, args.name)
+        print(f"✓ Conversation created: #{conv.get('id', 'unknown')}")
+        print_json(conv)
+    except APIError as e:
+        print(f"✗ Create conversation failed: {e}")
+
 def cmd_list_conversations(args):
     client = RESTClient()
     try:
@@ -1216,6 +1270,122 @@ def _print_help():
 │  help | quit | exit | status                      │
 └───────────────────────────────────────────────────┘""")
 
+
+
+# ── Attachment commands ──
+
+def cmd_attachment_init(args):
+    client = RESTClient()
+    try:
+        resp = client.init_attachment_upload(
+            args.conversation_id, args.kind, args.original_name,
+            args.mime, args.size, args.sha256)
+        print(f"✓ Attachment upload initialized: file_id={resp.get('file_id', 'unknown')}")
+        print_json(resp)
+    except APIError as e:
+        print(f"✗ Attachment init failed: {e}")
+
+def cmd_attachment_get(args):
+    client = RESTClient()
+    try:
+        resp = client.get_attachment(args.file_id)
+        print(f"✓ Attachment #{args.file_id}:")
+        print_json(resp)
+    except APIError as e:
+        print(f"✗ Attachment get failed: {e}")
+
+def cmd_attachment_complete(args):
+    client = RESTClient()
+    try:
+        resp = client.complete_attachment_upload(args.file_id, args.sha256)
+        print(f"✓ Attachment #{args.file_id} completed (status={resp.get('status', 'unknown')})")
+        print_json(resp)
+    except APIError as e:
+        print(f"✗ Attachment complete failed: {e}")
+
+def cmd_attachment_download(args):
+    client = RESTClient()
+    try:
+        resp = client.download_attachment(args.file_id)
+        print(f"✓ Download URL for attachment #{args.file_id}:")
+        print_json(resp)
+    except APIError as e:
+        print(f"✗ Attachment download failed: {e}")
+
+
+# ── Group Admin commands ──
+
+def cmd_grant_group_admin(args):
+    client = RESTClient()
+    try:
+        resp = client.grant_group_admin(args.conversation_id, args.user_id)
+        print(f"✓ User #{args.user_id} granted admin in conversation #{args.conversation_id}")
+        print_json(resp)
+    except APIError as e:
+        print(f"✗ Grant admin failed: {e}")
+
+def cmd_revoke_group_admin(args):
+    client = RESTClient()
+    try:
+        resp = client.revoke_group_admin(args.conversation_id, args.user_id)
+        print(f"✓ User #{args.user_id} revoked admin in conversation #{args.conversation_id}")
+        print_json(resp)
+    except APIError as e:
+        print(f"✗ Revoke admin failed: {e}")
+
+def cmd_transfer_group_owner(args):
+    client = RESTClient()
+    try:
+        resp = client.transfer_group_owner(args.conversation_id, args.user_id)
+        print(f"✓ Group #{args.conversation_id} owner transferred to user #{args.user_id}")
+        print_json(resp)
+    except APIError as e:
+        print(f"✗ Transfer owner failed: {e}")
+
+
+# ── Bot extended commands ──
+
+def cmd_bot_conv_history(args):
+    token = _bot_token_for(args)
+    params = []
+    if args.cursor_created_at:
+        params.append(f"cursor_created_at={args.cursor_created_at}")
+    if args.cursor_id:
+        params.append(f"cursor_id={args.cursor_id}")
+    if args.limit:
+        params.append(f"limit={args.limit}")
+    qs = "?" + "&".join(params) if params else ""
+    body = _bot_request("GET", f"/api/bot/v1/conversations/{args.conversation_id}/history{qs}", token)
+    msgs = body.get("messages", [])
+    print(f"✓ {len(msgs)} message(s) in conversation {args.conversation_id}")
+    print_json(body)
+
+def cmd_bot_conv_members(args):
+    token = _bot_token_for(args)
+    body = _bot_request("GET", f"/api/bot/v1/conversations/{args.conversation_id}/members", token)
+    members = body.get("members", [])
+    print(f"✓ {len(members)} member(s) in conversation {args.conversation_id}")
+    print_json(members)
+
+def cmd_bot_mark_read(args):
+    token = _bot_token_for(args)
+    body = _bot_request("POST", f"/api/bot/v1/conversations/{args.conversation_id}/read-receipt", token,
+                        {"last_read_message_id": args.last_read_message_id})
+    print(f"✓ Marked read in conversation {args.conversation_id}")
+    print_json(body)
+
+def cmd_bot_list_read_states(args):
+    token = _bot_token_for(args)
+    body = _bot_request("GET", f"/api/bot/v1/conversations/{args.conversation_id}/read-states", token)
+    states = body.get("read_states", [])
+    print(f"✓ {len(states)} read state(s) in conversation {args.conversation_id}")
+    print_json(states)
+
+def cmd_bot_download_attachment(args):
+    token = _bot_token_for(args)
+    body = _bot_request("GET", f"/api/bot/v1/attachments/{args.file_id}/download", token)
+    print(f"✓ Download URL for bot attachment #{args.file_id}:")
+    print_json(body)
 
 def _bot_token_for(args) -> str:
     """Resolve the Bot OpenAPI token from --token flag or AIM_BOT_TOKEN env."""
@@ -1913,6 +2083,63 @@ Examples:
     p = sub.add_parser("bot-webhook-delete", help="DELETE /api/bot/v1/webhook")
     p.add_argument("--token", default="", help=bot_token_help)
 
+    # Attachments
+    p = sub.add_parser("attachment-init", help="POST /api/attachments/init")
+    p.add_argument("--conversation-id", type=int, required=True)
+    p.add_argument("--kind", required=True, choices=["image", "video", "audio", "file"])
+    p.add_argument("--original-name", required=True)
+    p.add_argument("--mime", required=True)
+    p.add_argument("--size", type=int, required=True)
+    p.add_argument("--sha256", default="")
+
+    p = sub.add_parser("attachment-get", help="GET /api/attachments/:id")
+    p.add_argument("--file-id", required=True)
+
+    p = sub.add_parser("attachment-complete", help="POST /api/attachments/:id/complete")
+    p.add_argument("--file-id", required=True)
+    p.add_argument("--sha256", default="")
+
+    p = sub.add_parser("attachment-download", help="GET /api/attachments/:id/download")
+    p.add_argument("--file-id", required=True)
+
+    # Group Admin
+    p = sub.add_parser("group-grant-admin", help="POST /api/conversations/:id/members/:uid/admin")
+    p.add_argument("--conversation-id", type=int, required=True)
+    p.add_argument("--user-id", type=int, required=True)
+
+    p = sub.add_parser("group-revoke-admin", help="DELETE /api/conversations/:id/members/:uid/admin")
+    p.add_argument("--conversation-id", type=int, required=True)
+    p.add_argument("--user-id", type=int, required=True)
+
+    p = sub.add_parser("group-transfer-owner", help="POST /api/conversations/:id/owner")
+    p.add_argument("--conversation-id", type=int, required=True)
+    p.add_argument("--user-id", type=int, required=True)
+
+    # Bot extended
+    p = sub.add_parser("bot-history", help="GET /api/bot/v1/conversations/:id/history")
+    p.add_argument("--token", default="", help=bot_token_help)
+    p.add_argument("--conversation-id", required=True)
+    p.add_argument("--cursor-created-at", type=int)
+    p.add_argument("--cursor-id", default="")
+    p.add_argument("--limit", type=int, default=50)
+
+    p = sub.add_parser("bot-members", help="GET /api/bot/v1/conversations/:id/members")
+    p.add_argument("--token", default="", help=bot_token_help)
+    p.add_argument("--conversation-id", required=True)
+
+    p = sub.add_parser("bot-mark-read", help="POST /api/bot/v1/conversations/:id/read-receipt")
+    p.add_argument("--token", default="", help=bot_token_help)
+    p.add_argument("--conversation-id", required=True)
+    p.add_argument("--last-read-message-id", required=True)
+
+    p = sub.add_parser("bot-read-states", help="GET /api/bot/v1/conversations/:id/read-states")
+    p.add_argument("--token", default="", help=bot_token_help)
+    p.add_argument("--conversation-id", required=True)
+
+    p = sub.add_parser("bot-download-attachment", help="GET /api/bot/v1/attachments/:id/download")
+    p.add_argument("--token", default="", help=bot_token_help)
+    p.add_argument("--file-id", required=True)
+
     # Meta
     sub.add_parser("interactive", help="Interactive mode")
     sub.add_parser("run-all", help="Run full integration test flow")
@@ -1965,6 +2192,18 @@ Examples:
         "bot-webhook-get": cmd_bot_webhook_get,
         "bot-webhook-set": cmd_bot_webhook_set,
         "bot-webhook-delete": cmd_bot_webhook_delete,
+        "bot-history": cmd_bot_conv_history,
+        "bot-members": cmd_bot_conv_members,
+        "bot-mark-read": cmd_bot_mark_read,
+        "bot-read-states": cmd_bot_list_read_states,
+        "bot-download-attachment": cmd_bot_download_attachment,
+        "attachment-init": cmd_attachment_init,
+        "attachment-get": cmd_attachment_get,
+        "attachment-complete": cmd_attachment_complete,
+        "attachment-download": cmd_attachment_download,
+        "group-grant-admin": cmd_grant_group_admin,
+        "group-revoke-admin": cmd_revoke_group_admin,
+        "group-transfer-owner": cmd_transfer_group_owner,
         "interactive": cmd_interactive,
         "run-all": cmd_run_all,
     }
