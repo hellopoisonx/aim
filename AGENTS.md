@@ -9,13 +9,13 @@
 
 ## 概览
 
-AIM 是多人在线即时通讯系统，内置可自部署 AI 助手。后端为 go-zero 微服务（gateway/auth/core/logic），基础设施包含 Kafka、Redis/Redis Stack、PostgreSQL/pgvector、Nacos、Grafana Tempo。
+AIM 是多人在线即时通讯系统，内置可自部署 AI 助手。后端为 go-zero 微服务（gateway/auth/core/logic），基础设施包含 Kafka、Redis/Redis Stack、PostgreSQL、Nacos、Grafana Tempo。
 
 ## 工作流
 
 - 代码更改后必须执行测试、覆盖率测试、lint
 - 任务完成后及时更新相关文档 (`skills/`)
-- 总结工作区改动并 `git commit`
+- 总结工作区改动并 `git commit`, prompt 必须符合 [conventional](https://www.conventionalcommits.org/en/v1.0.0/) 规范
 
 ## 结构
 
@@ -64,7 +64,6 @@ aim/
 - 不要编辑 `*.pb.go`、sqlc 生成文件、goctl 生成的 routes/types/server/client 文件，除非重新生成。
 - 不要把内容审核拆成独立微服务；它是 `app/shared/moderation` 进程内共享库。
 - 不要用 PostgreSQL 做实时配额拦截；热路径使用 Redis 滑动窗口。
-- 不要引入独立向量数据库；RAG/向量检索规划使用 PostgreSQL `pgvector`。
 - 不要假设 Redis/RedisBloom 返回类型固定；RESP2/RESP3 可能不同，必须类型分支并加回归测试。
 - 不要新增循环依赖；特别是 `app/logic` 不能导入 `app/core`。
 - 任务完成后必须清理临时文件（如覆盖率输出 `coverage.out`、`coverage.html`、`*.tmp`、`*.bak` 等），不要将它们留在工作目录或提交到版本控制。
