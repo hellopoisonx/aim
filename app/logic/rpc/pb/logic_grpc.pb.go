@@ -2,7 +2,7 @@
 // versions:
 // - protoc-gen-go-grpc v1.5.1
 // - protoc             v7.34.1
-// source: logic.proto
+// source: app/logic/rpc/logic.proto
 
 package pb
 
@@ -121,7 +121,7 @@ var PermissionService_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "logic.proto",
+	Metadata: "app/logic/rpc/logic.proto",
 }
 
 const (
@@ -465,7 +465,7 @@ var UserService_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "logic.proto",
+	Metadata: "app/logic/rpc/logic.proto",
 }
 
 const (
@@ -1105,7 +1105,7 @@ var ConversationService_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "logic.proto",
+	Metadata: "app/logic/rpc/logic.proto",
 }
 
 const (
@@ -1114,6 +1114,12 @@ const (
 	FriendshipService_AcceptFriend_FullMethodName           = "/logic.FriendshipService/AcceptFriend"
 	FriendshipService_RejectFriend_FullMethodName           = "/logic.FriendshipService/RejectFriend"
 	FriendshipService_ListFriends_FullMethodName            = "/logic.FriendshipService/ListFriends"
+	FriendshipService_CreateFriendTag_FullMethodName        = "/logic.FriendshipService/CreateFriendTag"
+	FriendshipService_RenameFriendTag_FullMethodName        = "/logic.FriendshipService/RenameFriendTag"
+	FriendshipService_DeleteFriendTag_FullMethodName        = "/logic.FriendshipService/DeleteFriendTag"
+	FriendshipService_ListFriendTags_FullMethodName         = "/logic.FriendshipService/ListFriendTags"
+	FriendshipService_SetFriendTags_FullMethodName          = "/logic.FriendshipService/SetFriendTags"
+	FriendshipService_RemoveFriendTag_FullMethodName        = "/logic.FriendshipService/RemoveFriendTag"
 )
 
 // FriendshipServiceClient is the client API for FriendshipService service.
@@ -1134,6 +1140,12 @@ type FriendshipServiceClient interface {
 	RejectFriend(ctx context.Context, in *RejectFriendReq, opts ...grpc.CallOption) (*RejectFriendResp, error)
 	// ListFriends lists all accepted friends of the user.
 	ListFriends(ctx context.Context, in *ListFriendsReq, opts ...grpc.CallOption) (*ListFriendsResp, error)
+	CreateFriendTag(ctx context.Context, in *CreateFriendTagReq, opts ...grpc.CallOption) (*CreateFriendTagResp, error)
+	RenameFriendTag(ctx context.Context, in *RenameFriendTagReq, opts ...grpc.CallOption) (*RenameFriendTagResp, error)
+	DeleteFriendTag(ctx context.Context, in *DeleteFriendTagReq, opts ...grpc.CallOption) (*DeleteFriendTagResp, error)
+	ListFriendTags(ctx context.Context, in *ListFriendTagsReq, opts ...grpc.CallOption) (*ListFriendTagsResp, error)
+	SetFriendTags(ctx context.Context, in *SetFriendTagsReq, opts ...grpc.CallOption) (*SetFriendTagsResp, error)
+	RemoveFriendTag(ctx context.Context, in *RemoveFriendTagReq, opts ...grpc.CallOption) (*RemoveFriendTagResp, error)
 }
 
 type friendshipServiceClient struct {
@@ -1194,6 +1206,66 @@ func (c *friendshipServiceClient) ListFriends(ctx context.Context, in *ListFrien
 	return out, nil
 }
 
+func (c *friendshipServiceClient) CreateFriendTag(ctx context.Context, in *CreateFriendTagReq, opts ...grpc.CallOption) (*CreateFriendTagResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateFriendTagResp)
+	err := c.cc.Invoke(ctx, FriendshipService_CreateFriendTag_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *friendshipServiceClient) RenameFriendTag(ctx context.Context, in *RenameFriendTagReq, opts ...grpc.CallOption) (*RenameFriendTagResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RenameFriendTagResp)
+	err := c.cc.Invoke(ctx, FriendshipService_RenameFriendTag_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *friendshipServiceClient) DeleteFriendTag(ctx context.Context, in *DeleteFriendTagReq, opts ...grpc.CallOption) (*DeleteFriendTagResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteFriendTagResp)
+	err := c.cc.Invoke(ctx, FriendshipService_DeleteFriendTag_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *friendshipServiceClient) ListFriendTags(ctx context.Context, in *ListFriendTagsReq, opts ...grpc.CallOption) (*ListFriendTagsResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListFriendTagsResp)
+	err := c.cc.Invoke(ctx, FriendshipService_ListFriendTags_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *friendshipServiceClient) SetFriendTags(ctx context.Context, in *SetFriendTagsReq, opts ...grpc.CallOption) (*SetFriendTagsResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetFriendTagsResp)
+	err := c.cc.Invoke(ctx, FriendshipService_SetFriendTags_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *friendshipServiceClient) RemoveFriendTag(ctx context.Context, in *RemoveFriendTagReq, opts ...grpc.CallOption) (*RemoveFriendTagResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RemoveFriendTagResp)
+	err := c.cc.Invoke(ctx, FriendshipService_RemoveFriendTag_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // FriendshipServiceServer is the server API for FriendshipService service.
 // All implementations must embed UnimplementedFriendshipServiceServer
 // for forward compatibility.
@@ -1212,6 +1284,12 @@ type FriendshipServiceServer interface {
 	RejectFriend(context.Context, *RejectFriendReq) (*RejectFriendResp, error)
 	// ListFriends lists all accepted friends of the user.
 	ListFriends(context.Context, *ListFriendsReq) (*ListFriendsResp, error)
+	CreateFriendTag(context.Context, *CreateFriendTagReq) (*CreateFriendTagResp, error)
+	RenameFriendTag(context.Context, *RenameFriendTagReq) (*RenameFriendTagResp, error)
+	DeleteFriendTag(context.Context, *DeleteFriendTagReq) (*DeleteFriendTagResp, error)
+	ListFriendTags(context.Context, *ListFriendTagsReq) (*ListFriendTagsResp, error)
+	SetFriendTags(context.Context, *SetFriendTagsReq) (*SetFriendTagsResp, error)
+	RemoveFriendTag(context.Context, *RemoveFriendTagReq) (*RemoveFriendTagResp, error)
 	mustEmbedUnimplementedFriendshipServiceServer()
 }
 
@@ -1236,6 +1314,24 @@ func (UnimplementedFriendshipServiceServer) RejectFriend(context.Context, *Rejec
 }
 func (UnimplementedFriendshipServiceServer) ListFriends(context.Context, *ListFriendsReq) (*ListFriendsResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListFriends not implemented")
+}
+func (UnimplementedFriendshipServiceServer) CreateFriendTag(context.Context, *CreateFriendTagReq) (*CreateFriendTagResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CreateFriendTag not implemented")
+}
+func (UnimplementedFriendshipServiceServer) RenameFriendTag(context.Context, *RenameFriendTagReq) (*RenameFriendTagResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RenameFriendTag not implemented")
+}
+func (UnimplementedFriendshipServiceServer) DeleteFriendTag(context.Context, *DeleteFriendTagReq) (*DeleteFriendTagResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DeleteFriendTag not implemented")
+}
+func (UnimplementedFriendshipServiceServer) ListFriendTags(context.Context, *ListFriendTagsReq) (*ListFriendTagsResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListFriendTags not implemented")
+}
+func (UnimplementedFriendshipServiceServer) SetFriendTags(context.Context, *SetFriendTagsReq) (*SetFriendTagsResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetFriendTags not implemented")
+}
+func (UnimplementedFriendshipServiceServer) RemoveFriendTag(context.Context, *RemoveFriendTagReq) (*RemoveFriendTagResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RemoveFriendTag not implemented")
 }
 func (UnimplementedFriendshipServiceServer) mustEmbedUnimplementedFriendshipServiceServer() {}
 func (UnimplementedFriendshipServiceServer) testEmbeddedByValue()                           {}
@@ -1348,6 +1444,114 @@ func _FriendshipService_ListFriends_Handler(srv interface{}, ctx context.Context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _FriendshipService_CreateFriendTag_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateFriendTagReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FriendshipServiceServer).CreateFriendTag(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: FriendshipService_CreateFriendTag_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FriendshipServiceServer).CreateFriendTag(ctx, req.(*CreateFriendTagReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _FriendshipService_RenameFriendTag_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RenameFriendTagReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FriendshipServiceServer).RenameFriendTag(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: FriendshipService_RenameFriendTag_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FriendshipServiceServer).RenameFriendTag(ctx, req.(*RenameFriendTagReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _FriendshipService_DeleteFriendTag_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteFriendTagReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FriendshipServiceServer).DeleteFriendTag(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: FriendshipService_DeleteFriendTag_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FriendshipServiceServer).DeleteFriendTag(ctx, req.(*DeleteFriendTagReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _FriendshipService_ListFriendTags_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListFriendTagsReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FriendshipServiceServer).ListFriendTags(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: FriendshipService_ListFriendTags_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FriendshipServiceServer).ListFriendTags(ctx, req.(*ListFriendTagsReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _FriendshipService_SetFriendTags_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetFriendTagsReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FriendshipServiceServer).SetFriendTags(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: FriendshipService_SetFriendTags_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FriendshipServiceServer).SetFriendTags(ctx, req.(*SetFriendTagsReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _FriendshipService_RemoveFriendTag_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RemoveFriendTagReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FriendshipServiceServer).RemoveFriendTag(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: FriendshipService_RemoveFriendTag_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FriendshipServiceServer).RemoveFriendTag(ctx, req.(*RemoveFriendTagReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // FriendshipService_ServiceDesc is the grpc.ServiceDesc for FriendshipService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1375,9 +1579,135 @@ var FriendshipService_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "ListFriends",
 			Handler:    _FriendshipService_ListFriends_Handler,
 		},
+		{
+			MethodName: "CreateFriendTag",
+			Handler:    _FriendshipService_CreateFriendTag_Handler,
+		},
+		{
+			MethodName: "RenameFriendTag",
+			Handler:    _FriendshipService_RenameFriendTag_Handler,
+		},
+		{
+			MethodName: "DeleteFriendTag",
+			Handler:    _FriendshipService_DeleteFriendTag_Handler,
+		},
+		{
+			MethodName: "ListFriendTags",
+			Handler:    _FriendshipService_ListFriendTags_Handler,
+		},
+		{
+			MethodName: "SetFriendTags",
+			Handler:    _FriendshipService_SetFriendTags_Handler,
+		},
+		{
+			MethodName: "RemoveFriendTag",
+			Handler:    _FriendshipService_RemoveFriendTag_Handler,
+		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "logic.proto",
+	Metadata: "app/logic/rpc/logic.proto",
+}
+
+const (
+	SearchService_UnifiedSearch_FullMethodName = "/logic.SearchService/UnifiedSearch"
+)
+
+// SearchServiceClient is the client API for SearchService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+type SearchServiceClient interface {
+	UnifiedSearch(ctx context.Context, in *UnifiedSearchReq, opts ...grpc.CallOption) (*UnifiedSearchResp, error)
+}
+
+type searchServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewSearchServiceClient(cc grpc.ClientConnInterface) SearchServiceClient {
+	return &searchServiceClient{cc}
+}
+
+func (c *searchServiceClient) UnifiedSearch(ctx context.Context, in *UnifiedSearchReq, opts ...grpc.CallOption) (*UnifiedSearchResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UnifiedSearchResp)
+	err := c.cc.Invoke(ctx, SearchService_UnifiedSearch_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// SearchServiceServer is the server API for SearchService service.
+// All implementations must embed UnimplementedSearchServiceServer
+// for forward compatibility.
+type SearchServiceServer interface {
+	UnifiedSearch(context.Context, *UnifiedSearchReq) (*UnifiedSearchResp, error)
+	mustEmbedUnimplementedSearchServiceServer()
+}
+
+// UnimplementedSearchServiceServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedSearchServiceServer struct{}
+
+func (UnimplementedSearchServiceServer) UnifiedSearch(context.Context, *UnifiedSearchReq) (*UnifiedSearchResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UnifiedSearch not implemented")
+}
+func (UnimplementedSearchServiceServer) mustEmbedUnimplementedSearchServiceServer() {}
+func (UnimplementedSearchServiceServer) testEmbeddedByValue()                       {}
+
+// UnsafeSearchServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to SearchServiceServer will
+// result in compilation errors.
+type UnsafeSearchServiceServer interface {
+	mustEmbedUnimplementedSearchServiceServer()
+}
+
+func RegisterSearchServiceServer(s grpc.ServiceRegistrar, srv SearchServiceServer) {
+	// If the following call pancis, it indicates UnimplementedSearchServiceServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&SearchService_ServiceDesc, srv)
+}
+
+func _SearchService_UnifiedSearch_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UnifiedSearchReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SearchServiceServer).UnifiedSearch(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SearchService_UnifiedSearch_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SearchServiceServer).UnifiedSearch(ctx, req.(*UnifiedSearchReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// SearchService_ServiceDesc is the grpc.ServiceDesc for SearchService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var SearchService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "logic.SearchService",
+	HandlerType: (*SearchServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "UnifiedSearch",
+			Handler:    _SearchService_UnifiedSearch_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "app/logic/rpc/logic.proto",
 }
 
 const (
@@ -1743,5 +2073,5 @@ var BotService_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "logic.proto",
+	Metadata: "app/logic/rpc/logic.proto",
 }

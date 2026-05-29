@@ -141,3 +141,154 @@ func (q *Queries) ListMessagesByConversationInitial(ctx context.Context, arg Lis
 	}
 	return items, nil
 }
+
+const searchMessagesGlobal = `-- name: SearchMessagesGlobal :many
+SELECT m.id, m.conversation_id, m.sender_id, m.message_type, m.content, m.client_msg_id, m.mentions, m.created_at,
+       ts_headline('simple', m.content #>> '{}', plainto_tsquery('simple', $2::text), 'StartSel=<mark>, StopSel=</mark>, MaxWords=18, MinWords=3, ShortWord=1') AS snippet
+FROM messages m
+JOIN conversation_members cm ON cm.conversation_id = m.conversation_id AND cm.user_id = $1
+WHERE (
+        to_tsvector('simple', m.content #>> '{}') @@ plainto_tsquery('simple', $2::text)
+        OR (m.content #>> '{}') ILIKE '%' || $2::text || '%'
+      )
+  AND (
+        $3::timestamptz IS NULL
+        OR m.created_at < $3::timestamptz
+        OR (m.created_at = $3::timestamptz AND m.id < $4::bigint)
+      )
+ORDER BY m.created_at DESC, m.id DESC
+LIMIT $5
+`
+
+type SearchMessagesGlobalParams struct {
+	UserID          int64              `json:"user_id"`
+	Search          string             `json:"search"`
+	CursorCreatedAt pgtype.Timestamptz `json:"cursor_created_at"`
+	CursorID        int64              `json:"cursor_id"`
+	MaxRows         int32              `json:"max_rows"`
+}
+
+type SearchMessagesGlobalRow struct {
+	ID             int64              `json:"id"`
+	ConversationID int64              `json:"conversation_id"`
+	SenderID       int64              `json:"sender_id"`
+	MessageType    string             `json:"message_type"`
+	Content        []byte             `json:"content"`
+	ClientMsgID    *string            `json:"client_msg_id"`
+	Mentions       []byte             `json:"mentions"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	Snippet        []byte             `json:"snippet"`
+}
+
+func (q *Queries) SearchMessagesGlobal(ctx context.Context, arg SearchMessagesGlobalParams) ([]SearchMessagesGlobalRow, error) {
+	rows, err := q.db.Query(ctx, searchMessagesGlobal,
+		arg.UserID,
+		arg.Search,
+		arg.CursorCreatedAt,
+		arg.CursorID,
+		arg.MaxRows,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SearchMessagesGlobalRow{}
+	for rows.Next() {
+		var i SearchMessagesGlobalRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ConversationID,
+			&i.SenderID,
+			&i.MessageType,
+			&i.Content,
+			&i.ClientMsgID,
+			&i.Mentions,
+			&i.CreatedAt,
+			&i.Snippet,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const searchMessagesInConversation = `-- name: SearchMessagesInConversation :many
+SELECT m.id, m.conversation_id, m.sender_id, m.message_type, m.content, m.client_msg_id, m.mentions, m.created_at,
+       ts_headline('simple', m.content #>> '{}', plainto_tsquery('simple', $3::text), 'StartSel=<mark>, StopSel=</mark>, MaxWords=18, MinWords=3, ShortWord=1') AS snippet
+FROM messages m
+JOIN conversation_members cm ON cm.conversation_id = m.conversation_id AND cm.user_id = $1
+WHERE m.conversation_id = $2
+  AND (
+        to_tsvector('simple', m.content #>> '{}') @@ plainto_tsquery('simple', $3::text)
+        OR (m.content #>> '{}') ILIKE '%' || $3::text || '%'
+      )
+  AND (
+        $4::timestamptz IS NULL
+        OR m.created_at < $4::timestamptz
+        OR (m.created_at = $4::timestamptz AND m.id < $5::bigint)
+      )
+ORDER BY m.created_at DESC, m.id DESC
+LIMIT $6
+`
+
+type SearchMessagesInConversationParams struct {
+	UserID          int64              `json:"user_id"`
+	ConversationID  int64              `json:"conversation_id"`
+	Search          string             `json:"search"`
+	CursorCreatedAt pgtype.Timestamptz `json:"cursor_created_at"`
+	CursorID        int64              `json:"cursor_id"`
+	MaxRows         int32              `json:"max_rows"`
+}
+
+type SearchMessagesInConversationRow struct {
+	ID             int64              `json:"id"`
+	ConversationID int64              `json:"conversation_id"`
+	SenderID       int64              `json:"sender_id"`
+	MessageType    string             `json:"message_type"`
+	Content        []byte             `json:"content"`
+	ClientMsgID    *string            `json:"client_msg_id"`
+	Mentions       []byte             `json:"mentions"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	Snippet        []byte             `json:"snippet"`
+}
+
+func (q *Queries) SearchMessagesInConversation(ctx context.Context, arg SearchMessagesInConversationParams) ([]SearchMessagesInConversationRow, error) {
+	rows, err := q.db.Query(ctx, searchMessagesInConversation,
+		arg.UserID,
+		arg.ConversationID,
+		arg.Search,
+		arg.CursorCreatedAt,
+		arg.CursorID,
+		arg.MaxRows,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SearchMessagesInConversationRow{}
+	for rows.Next() {
+		var i SearchMessagesInConversationRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ConversationID,
+			&i.SenderID,
+			&i.MessageType,
+			&i.Content,
+			&i.ClientMsgID,
+			&i.Mentions,
+			&i.CreatedAt,
+			&i.Snippet,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

@@ -36,20 +36,79 @@ func (l *ListFriendsLogic) ListFriends(in *pb.ListFriendsReq) (*pb.ListFriendsRe
 	if l.svcCtx.DB == nil {
 		return nil, errorx.NewCodeError(errorx.CodeInternal, "database is not configured")
 	}
+	queries := model.New(l.svcCtx.DB)
 
-	records, err := model.New(l.svcCtx.DB).ListFriends(l.ctx, userID)
-	if err != nil {
-		return nil, FriendshipToGRPCError(err)
+	var records []model.ListFriendsRow
+	var err error
+
+	switch {
+	case in.GetTagId() > 0:
+		byTagRows, tagErr := queries.ListFriendsByTagID(l.ctx, model.ListFriendsByTagIDParams{
+			Column1: userID,
+			TagID:   in.GetTagId(),
+		})
+		if tagErr != nil {
+			return nil, FriendshipToGRPCError(tagErr)
+		}
+		for _, r := range byTagRows {
+			records = append(records, model.ListFriendsRow{
+				UserID:    r.UserID,
+				FriendID:  r.FriendID,
+				Status:    r.Status,
+				CreatedAt: r.CreatedAt,
+				UpdatedAt: r.UpdatedAt,
+			})
+		}
+	case in.GetTagName() != "":
+		byTagNameRows, tagNameErr := queries.ListFriendsByTagName(l.ctx, model.ListFriendsByTagNameParams{
+			Column1: userID,
+			Name:    in.GetTagName(),
+		})
+		if tagNameErr != nil {
+			return nil, FriendshipToGRPCError(tagNameErr)
+		}
+		for _, r := range byTagNameRows {
+			records = append(records, model.ListFriendsRow{
+				UserID:    r.UserID,
+				FriendID:  r.FriendID,
+				Status:    r.Status,
+				CreatedAt: r.CreatedAt,
+				UpdatedAt: r.UpdatedAt,
+			})
+		}
+	default:
+		records, err = queries.ListFriends(l.ctx, userID)
+		if err != nil {
+			return nil, FriendshipToGRPCError(err)
+		}
 	}
 
 	friends := make([]*pb.FriendshipResponse, 0, len(records))
 	for _, record := range records {
+		var friendID int64
+		switch v := record.FriendID.(type) {
+		case int64:
+			friendID = v
+		case float64:
+			friendID = int64(v)
+		}
+
+		var pbTags []*pb.FriendTagResponse
+		if l.svcCtx.FriendTagService != nil {
+			tags, _ := l.svcCtx.FriendTagService.GetFriendTags(l.ctx, userID, friendID)
+			pbTags = make([]*pb.FriendTagResponse, 0, len(tags))
+			for _, tag := range tags {
+				pbTags = append(pbTags, friendTagToProto(tag))
+			}
+		}
+
 		friends = append(friends, &pb.FriendshipResponse{
 			UserId:    record.UserID,
-			FriendId:  record.FriendID,
+			FriendId:  friendID,
 			Status:    record.Status,
 			CreatedAt: service.UnixFromPGTimestamptz(record.CreatedAt),
 			UpdatedAt: service.UnixFromPGTimestamptz(record.UpdatedAt),
+			Tags:      pbTags,
 		})
 	}
 

@@ -42,3 +42,13 @@ SELECT user_type FROM user_info WHERE id = $1;
 
 -- name: UpdateUserInfoType :execrows
 UPDATE user_info SET user_type = $2, updated_at = NOW() WHERE id = $1;
+
+-- name: SearchUserInfoByQuery :many
+SELECT id, email, status, nickname, avatar, created_at, updated_at, user_type,
+       similarity(nickname || ' ' || email, sqlc.arg(search)::text) AS rank,
+       ts_headline('simple', nickname || ' ' || email, plainto_tsquery('simple', sqlc.arg(search)::text), 'StartSel=<mark>, StopSel=</mark>, MaxWords=12, MinWords=1, ShortWord=1') AS snippet
+FROM user_info
+WHERE nickname ILIKE '%' || sqlc.arg(search)::text || '%'
+   OR email ILIKE '%' || sqlc.arg(search)::text || '%'
+ORDER BY rank DESC, created_at DESC, id ASC
+LIMIT sqlc.arg(max_rows);

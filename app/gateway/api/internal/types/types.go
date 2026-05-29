@@ -252,10 +252,26 @@ type CreateConversationResponse struct {
 	CreatorId        int64   `json:"creator_id"`
 }
 
+type CreateFriendTagRequest struct {
+	Name string `json:"name" validate:"required"`
+}
+
+type CreateFriendTagResponse struct {
+	Tag FriendTagItem `json:"tag"`
+}
+
 type CreateGroupRequest struct {
 	MemberIds []int64 `json:"member_ids" validate:"required,min=1"`
 	Name      string  `json:"name" validate:"required"`
 	Avatar    string  `json:"avatar,optional"`
+}
+
+type DeleteFriendTagRequest struct {
+	Id int64 `path:"id" validate:"required"`
+}
+
+type DeleteFriendTagResponse struct {
+	Deleted bool `json:"deleted"`
 }
 
 type DismissGroupRequest struct {
@@ -272,15 +288,24 @@ type DownloadAttachmentResponse struct {
 	ExpiresAt int64             `json:"expires_at"`
 }
 
-type FriendshipItem struct {
+type FriendTagItem struct {
+	Id        int64  `json:"id"`
 	UserId    int64  `json:"user_id"`
-	FriendId  int64  `json:"friend_id"`
-	Status    string `json:"status"`
+	Name      string `json:"name"`
 	CreatedAt int64  `json:"created_at"`
 	UpdatedAt int64  `json:"updated_at"`
-	Name      string `json:"name,optional"`
-	Email     string `json:"email,optional"`
-	Avatar    string `json:"avatar,optional"`
+}
+
+type FriendshipItem struct {
+	UserId    int64           `json:"user_id"`
+	FriendId  int64           `json:"friend_id"`
+	Status    string          `json:"status"`
+	CreatedAt int64           `json:"created_at"`
+	UpdatedAt int64           `json:"updated_at"`
+	Name      string          `json:"name,optional"`
+	Email     string          `json:"email,optional"`
+	Avatar    string          `json:"avatar,optional"`
+	Tags      []FriendTagItem `json:"tags,optional"`
 }
 
 type GetAttachmentRequest struct {
@@ -364,6 +389,10 @@ type ListConversationsResponse struct {
 
 type ListFriendApplicationsResponse struct {
 	Applications []FriendshipItem `json:"applications"`
+}
+
+type ListFriendTagsResponse struct {
+	Tags []FriendTagItem `json:"tags"`
 }
 
 type ListFriendsResponse struct {
@@ -465,9 +494,27 @@ type RejectFriendResponse struct {
 	Friendship FriendshipItem `json:"friendship"`
 }
 
+type RemoveFriendTagRequest struct {
+	Id    int64 `path:"id" validate:"required"`
+	TagId int64 `path:"tag_id" validate:"required"`
+}
+
+type RemoveFriendTagResponse struct {
+	Friendship FriendshipItem `json:"friendship"`
+}
+
 type RemoveGroupMemberRequest struct {
 	Id  int64 `path:"id" validate:"required"`
 	Uid int64 `path:"uid" validate:"required"`
+}
+
+type RenameFriendTagRequest struct {
+	Id   int64  `path:"id" validate:"required"`
+	Name string `json:"name" validate:"required"`
+}
+
+type RenameFriendTagResponse struct {
+	Tag FriendTagItem `json:"tag"`
 }
 
 type RevokeGroupAdminRequest struct {
@@ -475,9 +522,58 @@ type RevokeGroupAdminRequest struct {
 	Uid int64 `path:"uid" validate:"required"`
 }
 
+type SearchConversationResultItem struct {
+	Conversation ConversationItem `json:"conversation"`
+	Snippet      string           `json:"snippet"`
+}
+
+type SearchFriendResultItem struct {
+	Friendship FriendshipItem `json:"friendship"`
+	User       UserInfo       `json:"user"`
+	Snippet    string         `json:"snippet"`
+}
+
+type SearchMessageResultItem struct {
+	Message MessageItem `json:"message"`
+	Snippet string      `json:"snippet"`
+}
+
+type SearchRequest struct {
+	Query           string `form:"q" validate:"required"`
+	Scope           string `form:"scope,optional"`
+	ConversationId  int64  `form:"conversation_id,optional"`
+	CursorCreatedAt int64  `form:"cursor_created_at,optional"`
+	CursorId        int64  `form:"cursor_id,optional"`
+	Limit           int32  `form:"limit,default=20,optional"`
+}
+
+type SearchResponse struct {
+	Users               []SearchUserResultItem         `json:"users"`
+	Friends             []SearchFriendResultItem       `json:"friends"`
+	Conversations       []SearchConversationResultItem `json:"conversations"`
+	Messages            []SearchMessageResultItem      `json:"messages"`
+	NextCursorCreatedAt int64                          `json:"next_cursor_created_at"`
+	NextCursorId        int64                          `json:"next_cursor_id"`
+	HasMore             bool                           `json:"has_more"`
+}
+
+type SearchUserResultItem struct {
+	User    UserInfo `json:"user"`
+	Snippet string   `json:"snippet"`
+}
+
 type SenderInfo struct {
 	Name  string `json:"name"`
 	Email string `json:"email"`
+}
+
+type SetFriendTagsRequest struct {
+	Id     int64   `path:"id" validate:"required"`
+	TagIds []int64 `json:"tag_ids"`
+}
+
+type SetFriendTagsResponse struct {
+	Friendship FriendshipItem `json:"friendship"`
 }
 
 type TransferGroupOwnerRequest struct {

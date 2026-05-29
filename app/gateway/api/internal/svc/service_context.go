@@ -21,6 +21,7 @@ import (
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/conversationservice"
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/friendshipservice"
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/userservice"
+	"github.com/hellopoisonx/aim/app/logic/rpc/client/searchservice"
 	aimnacos "github.com/hellopoisonx/aim/app/shared/nacos"
 	"github.com/hellopoisonx/aim/app/shared/tracing"
 
@@ -174,6 +175,7 @@ type ServiceContext struct {
 	LogicConversationClient conversationservice.ConversationService
 	LogicFriendshipClient   friendshipservice.FriendshipService
 	LogicBotClient          botservice.BotService
+	LogicSearchClient       searchservice.SearchService
 	AttachmentClient        attachmentpb.AttachmentServiceClient
 	Auth                    rest.Middleware
 	BotAuth                 rest.Middleware
@@ -272,6 +274,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		LogicConversationClient: conversationservice.NewConversationService(logicClient),
 		LogicFriendshipClient:   friendshipservice.NewFriendshipService(logicClient),
 		LogicBotClient:          logicBotClient,
+		LogicSearchClient:       searchservice.NewSearchService(logicClient),
 		AttachmentClient:        attachmentpb.NewAttachmentServiceClient(attachmentClient.Conn()),
 		Auth:                    middleware.NewAuthMiddleware(c.Auth.AccessSecret).Handle,
 		BotAuth:                 middleware.NewBotAuthMiddleware(logicBotClient).Handle,

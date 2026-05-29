@@ -7,7 +7,114 @@ package model
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
+
+const createFriendTag = `-- name: CreateFriendTag :one
+INSERT INTO friend_tags (id, user_id, name, created_at, updated_at)
+VALUES ($1, $2, $3, NOW(), NOW())
+RETURNING id, user_id, name, created_at, updated_at
+`
+
+type CreateFriendTagParams struct {
+	ID     int64  `json:"id"`
+	UserID int64  `json:"user_id"`
+	Name   string `json:"name"`
+}
+
+func (q *Queries) CreateFriendTag(ctx context.Context, arg CreateFriendTagParams) (FriendTag, error) {
+	row := q.db.QueryRow(ctx, createFriendTag, arg.ID, arg.UserID, arg.Name)
+	var i FriendTag
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Name,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const deleteFriendTag = `-- name: DeleteFriendTag :execrows
+DELETE FROM friend_tags
+WHERE user_id = $1 AND id = $2
+`
+
+type DeleteFriendTagParams struct {
+	UserID int64 `json:"user_id"`
+	ID     int64 `json:"id"`
+}
+
+func (q *Queries) DeleteFriendTag(ctx context.Context, arg DeleteFriendTagParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteFriendTag, arg.UserID, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const getFriendTagByID = `-- name: GetFriendTagByID :one
+SELECT id, user_id, name, created_at, updated_at
+FROM friend_tags
+WHERE user_id = $1 AND id = $2
+`
+
+type GetFriendTagByIDParams struct {
+	UserID int64 `json:"user_id"`
+	ID     int64 `json:"id"`
+}
+
+func (q *Queries) GetFriendTagByID(ctx context.Context, arg GetFriendTagByIDParams) (FriendTag, error) {
+	row := q.db.QueryRow(ctx, getFriendTagByID, arg.UserID, arg.ID)
+	var i FriendTag
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Name,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getFriendTagsByIDs = `-- name: GetFriendTagsByIDs :many
+SELECT id, user_id, name, created_at, updated_at
+FROM friend_tags
+WHERE user_id = $1 AND id = ANY($2::bigint[])
+ORDER BY name ASC, id ASC
+`
+
+type GetFriendTagsByIDsParams struct {
+	UserID  int64   `json:"user_id"`
+	Column2 []int64 `json:"column_2"`
+}
+
+func (q *Queries) GetFriendTagsByIDs(ctx context.Context, arg GetFriendTagsByIDsParams) ([]FriendTag, error) {
+	rows, err := q.db.Query(ctx, getFriendTagsByIDs, arg.UserID, arg.Column2)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []FriendTag{}
+	for rows.Next() {
+		var i FriendTag
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.Name,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
 
 const getFriendship = `-- name: GetFriendship :one
 SELECT user_id, friend_id, status
@@ -94,6 +201,122 @@ func (q *Queries) GetFriendshipByPair(ctx context.Context, arg GetFriendshipByPa
 	return i, err
 }
 
+const listFriendTagAssignmentsForUser = `-- name: ListFriendTagAssignmentsForUser :many
+SELECT fta.friend_id, ft.id, ft.user_id, ft.name, ft.created_at, ft.updated_at
+FROM friend_tag_assignments fta
+JOIN friend_tags ft ON ft.id = fta.tag_id AND ft.user_id = fta.user_id
+WHERE fta.user_id = $1
+ORDER BY fta.friend_id ASC, ft.name ASC, ft.id ASC
+`
+
+type ListFriendTagAssignmentsForUserRow struct {
+	FriendID  int64              `json:"friend_id"`
+	ID        int64              `json:"id"`
+	UserID    int64              `json:"user_id"`
+	Name      string             `json:"name"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) ListFriendTagAssignmentsForUser(ctx context.Context, userID int64) ([]ListFriendTagAssignmentsForUserRow, error) {
+	rows, err := q.db.Query(ctx, listFriendTagAssignmentsForUser, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListFriendTagAssignmentsForUserRow{}
+	for rows.Next() {
+		var i ListFriendTagAssignmentsForUserRow
+		if err := rows.Scan(
+			&i.FriendID,
+			&i.ID,
+			&i.UserID,
+			&i.Name,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listFriendTags = `-- name: ListFriendTags :many
+SELECT id, user_id, name, created_at, updated_at
+FROM friend_tags
+WHERE user_id = $1
+ORDER BY updated_at DESC, name ASC, id ASC
+`
+
+func (q *Queries) ListFriendTags(ctx context.Context, userID int64) ([]FriendTag, error) {
+	rows, err := q.db.Query(ctx, listFriendTags, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []FriendTag{}
+	for rows.Next() {
+		var i FriendTag
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.Name,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listFriendTagsForFriend = `-- name: ListFriendTagsForFriend :many
+SELECT ft.id, ft.user_id, ft.name, ft.created_at, ft.updated_at
+FROM friend_tag_assignments fta
+JOIN friend_tags ft ON ft.id = fta.tag_id AND ft.user_id = fta.user_id
+WHERE fta.user_id = $1 AND fta.friend_id = $2
+ORDER BY ft.name ASC, ft.id ASC
+`
+
+type ListFriendTagsForFriendParams struct {
+	UserID   int64 `json:"user_id"`
+	FriendID int64 `json:"friend_id"`
+}
+
+func (q *Queries) ListFriendTagsForFriend(ctx context.Context, arg ListFriendTagsForFriendParams) ([]FriendTag, error) {
+	rows, err := q.db.Query(ctx, listFriendTagsForFriend, arg.UserID, arg.FriendID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []FriendTag{}
+	for rows.Next() {
+		var i FriendTag
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.Name,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listFriends = `-- name: ListFriends :many
 SELECT user_id, friend_id, status, created_at, updated_at
 FROM (
@@ -117,15 +340,153 @@ FROM (
 ORDER BY updated_at DESC
 `
 
-func (q *Queries) ListFriends(ctx context.Context, userID int64) ([]Friendship, error) {
-	rows, err := q.db.Query(ctx, listFriends, userID)
+type ListFriendsRow struct {
+	UserID    int64              `json:"user_id"`
+	FriendID  interface{}        `json:"friend_id"`
+	Status    string             `json:"status"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) ListFriends(ctx context.Context, dollar_1 int64) ([]ListFriendsRow, error) {
+	rows, err := q.db.Query(ctx, listFriends, dollar_1)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []Friendship{}
+	items := []ListFriendsRow{}
 	for rows.Next() {
-		var i Friendship
+		var i ListFriendsRow
+		if err := rows.Scan(
+			&i.UserID,
+			&i.FriendID,
+			&i.Status,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listFriendsByTagID = `-- name: ListFriendsByTagID :many
+SELECT user_id, friend_id, status, created_at, updated_at
+FROM (
+    SELECT DISTINCT ON (normalized.peer_id)
+        $1::bigint AS user_id,
+        normalized.peer_id AS friend_id,
+        normalized.status,
+        normalized.created_at,
+        normalized.updated_at
+    FROM (
+        SELECT
+            CASE WHEN fs.user_id = $1 THEN fs.friend_id ELSE fs.user_id END AS peer_id,
+            fs.status,
+            fs.created_at,
+            fs.updated_at
+        FROM friendships fs
+        WHERE fs.status = 'accepted' AND (fs.user_id = $1 OR fs.friend_id = $1)
+    ) normalized
+    JOIN friend_tag_assignments fta
+      ON fta.user_id = $1 AND fta.friend_id = normalized.peer_id AND fta.tag_id = $2
+    ORDER BY normalized.peer_id, normalized.updated_at DESC
+) deduped
+ORDER BY deduped.updated_at DESC
+`
+
+type ListFriendsByTagIDParams struct {
+	Column1 int64 `json:"column_1"`
+	TagID   int64 `json:"tag_id"`
+}
+
+type ListFriendsByTagIDRow struct {
+	UserID    int64              `json:"user_id"`
+	FriendID  interface{}        `json:"friend_id"`
+	Status    string             `json:"status"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) ListFriendsByTagID(ctx context.Context, arg ListFriendsByTagIDParams) ([]ListFriendsByTagIDRow, error) {
+	rows, err := q.db.Query(ctx, listFriendsByTagID, arg.Column1, arg.TagID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListFriendsByTagIDRow{}
+	for rows.Next() {
+		var i ListFriendsByTagIDRow
+		if err := rows.Scan(
+			&i.UserID,
+			&i.FriendID,
+			&i.Status,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listFriendsByTagName = `-- name: ListFriendsByTagName :many
+SELECT user_id, friend_id, status, created_at, updated_at
+FROM (
+    SELECT DISTINCT ON (normalized.peer_id)
+        $1::bigint AS user_id,
+        normalized.peer_id AS friend_id,
+        normalized.status,
+        normalized.created_at,
+        normalized.updated_at
+    FROM (
+        SELECT
+            CASE WHEN fs.user_id = $1 THEN fs.friend_id ELSE fs.user_id END AS peer_id,
+            fs.status,
+            fs.created_at,
+            fs.updated_at
+        FROM friendships fs
+        WHERE fs.status = 'accepted' AND (fs.user_id = $1 OR fs.friend_id = $1)
+    ) normalized
+    JOIN friend_tag_assignments fta
+      ON fta.user_id = $1 AND fta.friend_id = normalized.peer_id
+    JOIN friend_tags ft
+      ON ft.id = fta.tag_id AND ft.user_id = fta.user_id AND ft.name = $2
+    ORDER BY normalized.peer_id, normalized.updated_at DESC
+) deduped
+ORDER BY deduped.updated_at DESC
+`
+
+type ListFriendsByTagNameParams struct {
+	Column1 int64  `json:"column_1"`
+	Name    string `json:"name"`
+}
+
+type ListFriendsByTagNameRow struct {
+	UserID    int64              `json:"user_id"`
+	FriendID  interface{}        `json:"friend_id"`
+	Status    string             `json:"status"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) ListFriendsByTagName(ctx context.Context, arg ListFriendsByTagNameParams) ([]ListFriendsByTagNameRow, error) {
+	rows, err := q.db.Query(ctx, listFriendsByTagName, arg.Column1, arg.Name)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListFriendsByTagNameRow{}
+	for rows.Next() {
+		var i ListFriendsByTagNameRow
 		if err := rows.Scan(
 			&i.UserID,
 			&i.FriendID,
@@ -165,6 +526,151 @@ func (q *Queries) ListPendingFriendApplications(ctx context.Context, friendID in
 			&i.Status,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const removeFriendTagAssignment = `-- name: RemoveFriendTagAssignment :execrows
+DELETE FROM friend_tag_assignments
+WHERE user_id = $1 AND friend_id = $2 AND tag_id = $3
+`
+
+type RemoveFriendTagAssignmentParams struct {
+	UserID   int64 `json:"user_id"`
+	FriendID int64 `json:"friend_id"`
+	TagID    int64 `json:"tag_id"`
+}
+
+func (q *Queries) RemoveFriendTagAssignment(ctx context.Context, arg RemoveFriendTagAssignmentParams) (int64, error) {
+	result, err := q.db.Exec(ctx, removeFriendTagAssignment, arg.UserID, arg.FriendID, arg.TagID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const renameFriendTag = `-- name: RenameFriendTag :one
+UPDATE friend_tags
+SET name = $3, updated_at = NOW()
+WHERE user_id = $1 AND id = $2
+RETURNING id, user_id, name, created_at, updated_at
+`
+
+type RenameFriendTagParams struct {
+	UserID int64  `json:"user_id"`
+	ID     int64  `json:"id"`
+	Name   string `json:"name"`
+}
+
+func (q *Queries) RenameFriendTag(ctx context.Context, arg RenameFriendTagParams) (FriendTag, error) {
+	row := q.db.QueryRow(ctx, renameFriendTag, arg.UserID, arg.ID, arg.Name)
+	var i FriendTag
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Name,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const replaceFriendTags = `-- name: ReplaceFriendTags :exec
+WITH deleted AS (
+    DELETE FROM friend_tag_assignments fta
+    WHERE fta.user_id = $1 AND fta.friend_id = $2
+), inserted AS (
+    INSERT INTO friend_tag_assignments (user_id, friend_id, tag_id, created_at)
+    SELECT $1::bigint, $2::bigint, unnest($3::bigint[]), NOW()
+    ON CONFLICT (user_id, friend_id, tag_id) DO NOTHING
+    RETURNING 1
+)
+SELECT 1
+`
+
+type ReplaceFriendTagsParams struct {
+	UserID   int64   `json:"user_id"`
+	FriendID int64   `json:"friend_id"`
+	Column3  []int64 `json:"column_3"`
+}
+
+func (q *Queries) ReplaceFriendTags(ctx context.Context, arg ReplaceFriendTagsParams) error {
+	_, err := q.db.Exec(ctx, replaceFriendTags, arg.UserID, arg.FriendID, arg.Column3)
+	return err
+}
+
+const searchFriendsByQuery = `-- name: SearchFriendsByQuery :many
+SELECT DISTINCT ON (peer_id)
+    $1::bigint AS user_id,
+    peer_id AS friend_id,
+    ui.email,
+    ui.nickname,
+    ui.avatar,
+    similarity(ui.nickname || ' ' || ui.email, $2::text) AS rank,
+    ts_headline('simple', ui.nickname || ' ' || ui.email, plainto_tsquery('simple', $2::text), 'StartSel=<mark>, StopSel=</mark>, MaxWords=12, MinWords=1, ShortWord=1') AS snippet
+FROM (
+    SELECT CASE WHEN user_id = $1 THEN friend_id ELSE user_id END AS peer_id
+    FROM friendships
+    WHERE status = 'accepted' AND (user_id = $1 OR friend_id = $1)
+    UNION
+    SELECT fta.friend_id AS peer_id
+    FROM friend_tag_assignments fta
+    JOIN friend_tags ft ON ft.id = fta.tag_id AND ft.user_id = fta.user_id
+    WHERE fta.user_id = $1 AND ft.name ILIKE '%' || $2::text || '%'
+ ) peers
+JOIN user_info ui ON ui.id = peer_id
+WHERE ui.nickname ILIKE '%' || $2::text || '%'
+   OR ui.email ILIKE '%' || $2::text || '%'
+   OR EXISTS (
+       SELECT 1
+       FROM friend_tag_assignments fta
+       JOIN friend_tags ft ON ft.id = fta.tag_id AND ft.user_id = fta.user_id
+       WHERE fta.user_id = $1 AND fta.friend_id = peer_id AND ft.name ILIKE '%' || $2::text || '%'
+   )
+ORDER BY peer_id, rank DESC, ui.id ASC
+LIMIT $3
+`
+
+type SearchFriendsByQueryParams struct {
+	Column1 int64  `json:"column_1"`
+	Search  string `json:"search"`
+	MaxRows int32  `json:"max_rows"`
+}
+
+type SearchFriendsByQueryRow struct {
+	UserID   int64       `json:"user_id"`
+	FriendID interface{} `json:"friend_id"`
+	Email    string      `json:"email"`
+	Nickname string      `json:"nickname"`
+	Avatar   string      `json:"avatar"`
+	Rank     float32     `json:"rank"`
+	Snippet  []byte      `json:"snippet"`
+}
+
+func (q *Queries) SearchFriendsByQuery(ctx context.Context, arg SearchFriendsByQueryParams) ([]SearchFriendsByQueryRow, error) {
+	rows, err := q.db.Query(ctx, searchFriendsByQuery, arg.Column1, arg.Search, arg.MaxRows)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SearchFriendsByQueryRow{}
+	for rows.Next() {
+		var i SearchFriendsByQueryRow
+		if err := rows.Scan(
+			&i.UserID,
+			&i.FriendID,
+			&i.Email,
+			&i.Nickname,
+			&i.Avatar,
+			&i.Rank,
+			&i.Snippet,
 		); err != nil {
 			return nil, err
 		}

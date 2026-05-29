@@ -54,6 +54,11 @@ func (l *ListFriendsLogic) ListFriends() (resp *types.ListFriendsResponse, err e
 			CreatedAt: f.GetCreatedAt(),
 			UpdatedAt: f.GetUpdatedAt(),
 		}
+		tags := make([]types.FriendTagItem, 0, len(f.GetTags()))
+		for _, t := range f.GetTags() {
+			tags = append(tags, friendTagToType(t))
+		}
+		item.Tags = tags
 		// Enrich peer name snapshot.
 		peerID := item.FriendId
 		if peerID <= 0 {

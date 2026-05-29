@@ -358,6 +358,12 @@ service FriendshipService {
   rpc RejectFriend(RejectFriendReq) returns (RejectFriendResp);
   // ListFriends lists all accepted friends of the user.
   rpc ListFriends(ListFriendsReq) returns (ListFriendsResp);
+  rpc CreateFriendTag(CreateFriendTagReq) returns (CreateFriendTagResp);
+  rpc RenameFriendTag(RenameFriendTagReq) returns (RenameFriendTagResp);
+  rpc DeleteFriendTag(DeleteFriendTagReq) returns (DeleteFriendTagResp);
+  rpc ListFriendTags(ListFriendTagsReq) returns (ListFriendTagsResp);
+  rpc SetFriendTags(SetFriendTagsReq) returns (SetFriendTagsResp);
+  rpc RemoveFriendTag(RemoveFriendTagReq) returns (RemoveFriendTagResp);
 }
 
 message AddFriendReq {
@@ -371,6 +377,7 @@ message FriendshipResponse {
   string status = 3; // "pending", "accepted", "blocked"
   int64 created_at = 4; // unix timestamp in milliseconds
   int64 updated_at = 5; // unix timestamp in milliseconds
+  repeated FriendTagResponse tags = 6;
 }
 
 message AddFriendResp {
@@ -405,10 +412,123 @@ message RejectFriendResp {
 
 message ListFriendsReq {
   int64 user_id = 1;
+  int64 tag_id = 2;
+  string tag_name = 3;
 }
 
 message ListFriendsResp {
   repeated FriendshipResponse friends = 1;
+}
+
+message FriendTagResponse {
+  int64 id = 1;
+  int64 user_id = 2;
+  string name = 3;
+  int64 created_at = 4;
+  int64 updated_at = 5;
+}
+
+message CreateFriendTagReq {
+  int64 user_id = 1;
+  string name = 2;
+}
+
+message CreateFriendTagResp {
+  FriendTagResponse tag = 1;
+}
+
+message RenameFriendTagReq {
+  int64 user_id = 1;
+  int64 tag_id = 2;
+  string name = 3;
+}
+
+message RenameFriendTagResp {
+  FriendTagResponse tag = 1;
+}
+
+message DeleteFriendTagReq {
+  int64 user_id = 1;
+  int64 tag_id = 2;
+}
+
+message DeleteFriendTagResp {
+  bool deleted = 1;
+}
+
+message ListFriendTagsReq {
+  int64 user_id = 1;
+}
+
+message ListFriendTagsResp {
+  repeated FriendTagResponse tags = 1;
+}
+
+message SetFriendTagsReq {
+  int64 user_id = 1;
+  int64 friend_id = 2;
+  repeated int64 tag_ids = 3;
+}
+
+message SetFriendTagsResp {
+  FriendshipResponse friendship = 1;
+}
+
+message RemoveFriendTagReq {
+  int64 user_id = 1;
+  int64 friend_id = 2;
+  int64 tag_id = 3;
+}
+
+message RemoveFriendTagResp {
+  FriendshipResponse friendship = 1;
+}
+
+// SearchService messages
+
+service SearchService {
+  rpc UnifiedSearch(UnifiedSearchReq) returns (UnifiedSearchResp);
+}
+
+message UnifiedSearchReq {
+  int64 user_id = 1;
+  string query = 2;
+  repeated string scopes = 3;
+  int64 conversation_id = 4;
+  int64 cursor_created_at = 5;
+  int64 cursor_id = 6;
+  int32 limit = 7;
+}
+
+message SearchUserResult {
+  UserInfoResponse user = 1;
+  string snippet = 2;
+}
+
+message SearchFriendResult {
+  FriendshipResponse friendship = 1;
+  UserInfoResponse user = 2;
+  string snippet = 3;
+}
+
+message SearchConversationResult {
+  ConversationResponse conversation = 1;
+  string snippet = 2;
+}
+
+message SearchMessageResult {
+  MessageItem message = 1;
+  string snippet = 2;
+}
+
+message UnifiedSearchResp {
+  repeated SearchUserResult users = 1;
+  repeated SearchFriendResult friends = 2;
+  repeated SearchConversationResult conversations = 3;
+  repeated SearchMessageResult messages = 4;
+  int64 next_cursor_created_at = 5;
+  int64 next_cursor_id = 6;
+  bool has_more = 7;
 }
 
 // BotService manages OpenAPI bots: token validation, profile lookup,

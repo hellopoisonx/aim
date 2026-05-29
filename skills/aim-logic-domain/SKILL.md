@@ -16,6 +16,8 @@ description: aim 的逻辑域。对应 `logic` 模块。
 
 ## 最近变更
 
+- 2026-05-29: 好友多标签管理。新增 `friend_tags` / `friend_tag_assignments` 表（迁移 `012_friend_tags_and_search.sql`）；`FriendshipService` 新增 `CreateFriendTag/RenameFriendTag/DeleteFriendTag/ListFriendTags/SetFriendTags/RemoveFriendTag` 六个 RPC；`ListFriends` 查询支持按 `tag_id/tag_name` 过滤，响应新增 `tags` 字段。详见 `references/api.md` §好友标签 RPC。
+- 2026-05-29: 统一搜索落地。新增 `SearchService` 及 `UnifiedSearch` RPC，支持按用户/好友/会话/消息多 scope 搜索，消息按游标分页、返回高亮 snippet；搜索通过 SQL `pg_trgm`/`tsvector` 与 `ILIKE` 兜底上实现中文短词匹配。消息搜索通过 JOIN `conversation_members` 做访问控制。详见 `references/api.md` §搜索服务。
 - 2026-05-28: logic 接入共享两级缓存：权限检查热路径缓存会话、成员、好友关系和 user_type；UserInfo/BotToken/ConversationService 接入缓存并在用户、好友、会话写操作后主动失效，`logic.yaml` 新增 `Cache` 配置块。
 - 2026-05-28: `app/logic/rpc/etc/logic.yaml` 已启用 `ConversationEventProducerConf`，logic 在群管理事务提交后会将系统消息事件发布到 `aim.conversation.events`，由 core 的 `ConversationEventConsumer` 推送到 Gateway。
 - 2026-05-27: `DatabasePermissionChecker` 对 direct 会话新增 Bot 识别：当发送者或对端 `user_info.user_type='bot'` 时，非好友关系仍保留 block 拦截但跳过临时会话累计消息上限，避免 user ↔ echo-bot 对话达到 10 条后被误判为临时会话限额耗尽。

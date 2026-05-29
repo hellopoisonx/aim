@@ -25,6 +25,8 @@ type ServiceContext struct {
 	UserInfoService         service.UserInfoQuerier
 	ConversationService     service.ConversationQuerier
 	BotService              *service.BotService
+	FriendTagService        *service.FriendshipTagService
+	SearchService           *service.SearchService
 	DB                      model.DBTX
 	Pool                    *pgxpool.Pool
 	ConversationEventPusher *kq.Pusher
@@ -37,8 +39,8 @@ type ServiceContext struct {
 	UserTypeCache           *sharedcache.TypedCache[string]
 	FriendshipCache         *sharedcache.TypedCache[[]model.GetFriendshipBidirectionalRow]
 	BotTokenCache           *sharedcache.TypedCache[model.GetBotTokenByHashRow]
+	queries                 *model.Queries
 }
-
 func NewServiceContext(c config.Config) *ServiceContext {
 	svcCtx := &ServiceContext{
 		Config:            c,
@@ -81,6 +83,9 @@ func NewServiceContext(c config.Config) *ServiceContext {
 			})
 			svcCtx.UserInfoService = service.NewUserInfoService(queries, service.WithUserInfoCache(svcCtx.UserCache), service.WithUserTypeCache(svcCtx.UserTypeCache))
 			svcCtx.BotService = service.NewBotService(queries, service.WithBotTokenCache(svcCtx.BotTokenCache))
+			svcCtx.queries = queries
+			svcCtx.FriendTagService = service.NewFriendshipTagService(queries, snowflake)
+			svcCtx.SearchService = service.NewSearchService(queries)
 
 			var conversationEventPusher *kq.Pusher
 			if len(c.ConversationEventProducerConf.Brokers) > 0 && c.ConversationEventProducerConf.Topic != "" {

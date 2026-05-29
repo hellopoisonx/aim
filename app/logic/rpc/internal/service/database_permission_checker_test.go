@@ -157,7 +157,7 @@ func (f *fakeQuerier) ListPendingFriendApplications(ctx context.Context, friendI
 	return nil, nil
 }
 
-func (f *fakeQuerier) ListFriends(ctx context.Context, userID int64) ([]model.Friendship, error) {
+func (f *fakeQuerier) ListFriends(ctx context.Context, userID int64) ([]model.ListFriendsRow, error) {
 	return nil, nil
 }
 
@@ -294,6 +294,59 @@ func (f *fakeQuerier) GetDirectConversationByMembers(ctx context.Context, arg mo
 	}
 
 	return model.GetDirectConversationByMembersRow{}, pgx.ErrNoRows
+}
+
+// --- stub methods for new sqlc queries (friend tags + search) ---
+func (f *fakeQuerier) CreateFriendTag(ctx context.Context, arg model.CreateFriendTagParams) (model.FriendTag, error) {
+	return model.FriendTag{}, nil
+}
+func (f *fakeQuerier) GetFriendTagByID(ctx context.Context, arg model.GetFriendTagByIDParams) (model.FriendTag, error) {
+	return model.FriendTag{}, pgx.ErrNoRows
+}
+func (f *fakeQuerier) GetFriendTagsByIDs(ctx context.Context, arg model.GetFriendTagsByIDsParams) ([]model.FriendTag, error) {
+	return nil, nil
+}
+func (f *fakeQuerier) ListFriendTags(ctx context.Context, userID int64) ([]model.FriendTag, error) {
+	return nil, nil
+}
+func (f *fakeQuerier) ListFriendTagsForFriend(ctx context.Context, arg model.ListFriendTagsForFriendParams) ([]model.FriendTag, error) {
+	return nil, nil
+}
+func (f *fakeQuerier) RenameFriendTag(ctx context.Context, arg model.RenameFriendTagParams) (model.FriendTag, error) {
+	return model.FriendTag{}, nil
+}
+func (f *fakeQuerier) DeleteFriendTag(ctx context.Context, arg model.DeleteFriendTagParams) (int64, error) {
+	return 1, nil
+}
+func (f *fakeQuerier) ReplaceFriendTags(ctx context.Context, arg model.ReplaceFriendTagsParams) error {
+	return nil
+}
+func (f *fakeQuerier) RemoveFriendTagAssignment(ctx context.Context, arg model.RemoveFriendTagAssignmentParams) (int64, error) {
+	return 1, nil
+}
+func (f *fakeQuerier) ListFriendsByTagID(ctx context.Context, arg model.ListFriendsByTagIDParams) ([]model.ListFriendsByTagIDRow, error) {
+	return nil, nil
+}
+func (f *fakeQuerier) ListFriendsByTagName(ctx context.Context, arg model.ListFriendsByTagNameParams) ([]model.ListFriendsByTagNameRow, error) {
+	return nil, nil
+}
+func (f *fakeQuerier) SearchFriendsByQuery(ctx context.Context, arg model.SearchFriendsByQueryParams) ([]model.SearchFriendsByQueryRow, error) {
+	return nil, nil
+}
+func (f *fakeQuerier) SearchUserInfoByQuery(ctx context.Context, arg model.SearchUserInfoByQueryParams) ([]model.SearchUserInfoByQueryRow, error) {
+	return nil, nil
+}
+func (f *fakeQuerier) SearchConversationsByName(ctx context.Context, arg model.SearchConversationsByNameParams) ([]model.SearchConversationsByNameRow, error) {
+	return nil, nil
+}
+func (f *fakeQuerier) SearchMessagesGlobal(ctx context.Context, arg model.SearchMessagesGlobalParams) ([]model.SearchMessagesGlobalRow, error) {
+	return nil, nil
+}
+func (f *fakeQuerier) SearchMessagesInConversation(ctx context.Context, arg model.SearchMessagesInConversationParams) ([]model.SearchMessagesInConversationRow, error) {
+	return nil, nil
+}
+func (f *fakeQuerier) ListFriendTagAssignmentsForUser(ctx context.Context, userID int64) ([]model.ListFriendTagAssignmentsForUserRow, error) {
+	return nil, nil
 }
 
 func convUserKey(convID, userID int64) string {

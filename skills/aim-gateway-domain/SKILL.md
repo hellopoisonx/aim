@@ -24,6 +24,8 @@ description: aim 的网关域。对应 `gateway` 模块。
 
 ## 最近变更
 
+- 2026-05-29: 好友标签 REST。新增 `GET /api/friends/tags`（列出标签）、`POST /api/friends/tags`（创建标签）、`PUT /api/friends/tags/:id`（重命名）、`DELETE /api/friends/tags/:id`（删除标签）、`PUT /api/friends/:id/tags`（设置好友标签）、`DELETE /api/friends/:id/tags/:tag_id`（删除单个标签）。`FriendshipItem` 新增 `tags` 字段透出好友分组。
+- 2026-05-29: 统一搜索 REST。新增 `GET /api/search?q=&scope=&conversation_id=&cursor_created_at=&cursor_id=&limit=` 端点，scope 可组合 `users/friends/conversations/messages`，返回 snippet 高亮片段与游标分页；通过 `LogicSearchClient.UnifiedSearch` 调用 logic `SearchService`。
 - 2026-05-28: Docker/压测/Bot SDK 集成配置统一 GatewayRpc 监听端口为 `9091`；根 Compose 拆分为 `deploy/compose/base|dev|prod|observability|tools.yaml`，生产只通过反向代理发布 REST/WS。
 - 2026-05-28: Gateway/Core 的 Nacos gRPC client 目标改为 `aimnacos.BuildTarget(serviceName)`，避免自定义 resolver 使用 `nacos` scheme 抢占 Nacos SDK 内部 `nacos:9848` 连接并反复刷空实例错误。
 - 2026-05-25: 明确外部接口边界：只有 gateway 可对客户端/公网暴露 REST API 与 WebSocket；非 gateway 模块的 HTTP/REST 只能作为服务间内部接口，Docker Compose 不得 publish 内部 REST/WS 端口。

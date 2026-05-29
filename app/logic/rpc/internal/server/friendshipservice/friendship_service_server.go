@@ -52,3 +52,33 @@ func (s *FriendshipServiceServer) ListFriends(ctx context.Context, in *pb.ListFr
 	l := friendshipservicelogic.NewListFriendsLogic(ctx, s.svcCtx)
 	return l.ListFriends(in)
 }
+
+func (s *FriendshipServiceServer) CreateFriendTag(ctx context.Context, in *pb.CreateFriendTagReq) (*pb.CreateFriendTagResp, error) {
+	l := friendshipservicelogic.NewCreateFriendTagLogic(ctx, s.svcCtx)
+	return l.CreateFriendTag(in)
+}
+
+func (s *FriendshipServiceServer) RenameFriendTag(ctx context.Context, in *pb.RenameFriendTagReq) (*pb.RenameFriendTagResp, error) {
+	l := friendshipservicelogic.NewRenameFriendTagLogic(ctx, s.svcCtx)
+	return l.RenameFriendTag(in)
+}
+
+func (s *FriendshipServiceServer) DeleteFriendTag(ctx context.Context, in *pb.DeleteFriendTagReq) (*pb.DeleteFriendTagResp, error) {
+	l := friendshipservicelogic.NewDeleteFriendTagLogic(ctx, s.svcCtx)
+	return l.DeleteFriendTag(in)
+}
+
+func (s *FriendshipServiceServer) ListFriendTags(ctx context.Context, in *pb.ListFriendTagsReq) (*pb.ListFriendTagsResp, error) {
+	l := friendshipservicelogic.NewListFriendTagsLogic(ctx, s.svcCtx)
+	return l.ListFriendTags(in)
+}
+
+func (s *FriendshipServiceServer) SetFriendTags(ctx context.Context, in *pb.SetFriendTagsReq) (*pb.SetFriendTagsResp, error) {
+	l := friendshipservicelogic.NewSetFriendTagsLogic(ctx, s.svcCtx)
+	return l.SetFriendTags(in)
+}
+
+func (s *FriendshipServiceServer) RemoveFriendTag(ctx context.Context, in *pb.RemoveFriendTagReq) (*pb.RemoveFriendTagResp, error) {
+	l := friendshipservicelogic.NewRemoveFriendTagLogic(ctx, s.svcCtx)
+	return l.RemoveFriendTag(in)
+}

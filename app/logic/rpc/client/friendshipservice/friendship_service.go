@@ -18,12 +18,24 @@ type (
 	AcceptFriendResp           = pb.AcceptFriendResp
 	AddFriendReq               = pb.AddFriendReq
 	AddFriendResp              = pb.AddFriendResp
+	CreateFriendTagReq         = pb.CreateFriendTagReq
+	CreateFriendTagResp        = pb.CreateFriendTagResp
+	DeleteFriendTagReq         = pb.DeleteFriendTagReq
+	DeleteFriendTagResp        = pb.DeleteFriendTagResp
 	ListFriendApplicationsReq  = pb.ListFriendApplicationsReq
 	ListFriendApplicationsResp = pb.ListFriendApplicationsResp
+	ListFriendTagsReq          = pb.ListFriendTagsReq
+	ListFriendTagsResp         = pb.ListFriendTagsResp
 	ListFriendsReq             = pb.ListFriendsReq
 	ListFriendsResp            = pb.ListFriendsResp
 	RejectFriendReq            = pb.RejectFriendReq
 	RejectFriendResp           = pb.RejectFriendResp
+	RemoveFriendTagReq         = pb.RemoveFriendTagReq
+	RemoveFriendTagResp        = pb.RemoveFriendTagResp
+	RenameFriendTagReq         = pb.RenameFriendTagReq
+	RenameFriendTagResp        = pb.RenameFriendTagResp
+	SetFriendTagsReq           = pb.SetFriendTagsReq
+	SetFriendTagsResp          = pb.SetFriendTagsResp
 
 	FriendshipService interface {
 		// AddFriend sends a friend request or accepts an existing pending one.
@@ -36,6 +48,12 @@ type (
 		RejectFriend(ctx context.Context, in *RejectFriendReq, opts ...grpc.CallOption) (*RejectFriendResp, error)
 		// ListFriends lists all accepted friends of the user.
 		ListFriends(ctx context.Context, in *ListFriendsReq, opts ...grpc.CallOption) (*ListFriendsResp, error)
+		CreateFriendTag(ctx context.Context, in *CreateFriendTagReq, opts ...grpc.CallOption) (*CreateFriendTagResp, error)
+		RenameFriendTag(ctx context.Context, in *RenameFriendTagReq, opts ...grpc.CallOption) (*RenameFriendTagResp, error)
+		DeleteFriendTag(ctx context.Context, in *DeleteFriendTagReq, opts ...grpc.CallOption) (*DeleteFriendTagResp, error)
+		ListFriendTags(ctx context.Context, in *ListFriendTagsReq, opts ...grpc.CallOption) (*ListFriendTagsResp, error)
+		SetFriendTags(ctx context.Context, in *SetFriendTagsReq, opts ...grpc.CallOption) (*SetFriendTagsResp, error)
+		RemoveFriendTag(ctx context.Context, in *RemoveFriendTagReq, opts ...grpc.CallOption) (*RemoveFriendTagResp, error)
 	}
 
 	defaultFriendshipService struct {
@@ -77,4 +95,34 @@ func (m *defaultFriendshipService) RejectFriend(ctx context.Context, in *RejectF
 func (m *defaultFriendshipService) ListFriends(ctx context.Context, in *ListFriendsReq, opts ...grpc.CallOption) (*ListFriendsResp, error) {
 	client := pb.NewFriendshipServiceClient(m.cli.Conn())
 	return client.ListFriends(ctx, in, opts...)
+}
+
+func (m *defaultFriendshipService) CreateFriendTag(ctx context.Context, in *CreateFriendTagReq, opts ...grpc.CallOption) (*CreateFriendTagResp, error) {
+	client := pb.NewFriendshipServiceClient(m.cli.Conn())
+	return client.CreateFriendTag(ctx, in, opts...)
+}
+
+func (m *defaultFriendshipService) RenameFriendTag(ctx context.Context, in *RenameFriendTagReq, opts ...grpc.CallOption) (*RenameFriendTagResp, error) {
+	client := pb.NewFriendshipServiceClient(m.cli.Conn())
+	return client.RenameFriendTag(ctx, in, opts...)
+}
+
+func (m *defaultFriendshipService) DeleteFriendTag(ctx context.Context, in *DeleteFriendTagReq, opts ...grpc.CallOption) (*DeleteFriendTagResp, error) {
+	client := pb.NewFriendshipServiceClient(m.cli.Conn())
+	return client.DeleteFriendTag(ctx, in, opts...)
+}
+
+func (m *defaultFriendshipService) ListFriendTags(ctx context.Context, in *ListFriendTagsReq, opts ...grpc.CallOption) (*ListFriendTagsResp, error) {
+	client := pb.NewFriendshipServiceClient(m.cli.Conn())
+	return client.ListFriendTags(ctx, in, opts...)
+}
+
+func (m *defaultFriendshipService) SetFriendTags(ctx context.Context, in *SetFriendTagsReq, opts ...grpc.CallOption) (*SetFriendTagsResp, error) {
+	client := pb.NewFriendshipServiceClient(m.cli.Conn())
+	return client.SetFriendTags(ctx, in, opts...)
+}
+
+func (m *defaultFriendshipService) RemoveFriendTag(ctx context.Context, in *RemoveFriendTagReq, opts ...grpc.CallOption) (*RemoveFriendTagResp, error) {
+	client := pb.NewFriendshipServiceClient(m.cli.Conn())
+	return client.RemoveFriendTag(ctx, in, opts...)
 }

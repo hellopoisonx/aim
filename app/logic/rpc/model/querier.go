@@ -14,9 +14,11 @@ type Querier interface {
 	CountMessagesByConversation(ctx context.Context, conversationID int64) (int64, error)
 	CreateBotToken(ctx context.Context, arg CreateBotTokenParams) (BotToken, error)
 	CreateConversation(ctx context.Context, arg CreateConversationParams) (CreateConversationRow, error)
+	CreateFriendTag(ctx context.Context, arg CreateFriendTagParams) (FriendTag, error)
 	CreateUserInfo(ctx context.Context, arg CreateUserInfoParams) (UserInfo, error)
 	DeactivateConversation(ctx context.Context, id int64) error
 	DeleteBotWebhook(ctx context.Context, botUserID int64) (int64, error)
+	DeleteFriendTag(ctx context.Context, arg DeleteFriendTagParams) (int64, error)
 	GetBotActionByName(ctx context.Context, action string) (BotAction, error)
 	// Returns the token entry plus the owner's user_type / status / nickname so
 	// the BotAuth middleware can validate the bot identity in a single query.
@@ -30,6 +32,8 @@ type Querier interface {
 	GetConversationsByUserID(ctx context.Context, userID int64) ([]GetConversationsByUserIDRow, error)
 	GetDirectConversationByMembers(ctx context.Context, arg GetDirectConversationByMembersParams) (GetDirectConversationByMembersRow, error)
 	GetEnabledActionByWebhookEvent(ctx context.Context, event string) (string, error)
+	GetFriendTagByID(ctx context.Context, arg GetFriendTagByIDParams) (FriendTag, error)
+	GetFriendTagsByIDs(ctx context.Context, arg GetFriendTagsByIDsParams) ([]FriendTag, error)
 	GetFriendship(ctx context.Context, arg GetFriendshipParams) (GetFriendshipRow, error)
 	GetFriendshipBidirectional(ctx context.Context, arg GetFriendshipBidirectionalParams) ([]GetFriendshipBidirectionalRow, error)
 	GetFriendshipByPair(ctx context.Context, arg GetFriendshipByPairParams) (Friendship, error)
@@ -48,13 +52,26 @@ type Querier interface {
 	ListBotTokensByBot(ctx context.Context, botUserID int64) ([]BotToken, error)
 	ListConversationReadStates(ctx context.Context, conversationID int64) ([]ConversationReadState, error)
 	ListEnabledActionsByToken(ctx context.Context, tokenID int64) ([]string, error)
-	ListFriends(ctx context.Context, userID int64) ([]Friendship, error)
+	ListFriendTagAssignmentsForUser(ctx context.Context, userID int64) ([]ListFriendTagAssignmentsForUserRow, error)
+	ListFriendTags(ctx context.Context, userID int64) ([]FriendTag, error)
+	ListFriendTagsForFriend(ctx context.Context, arg ListFriendTagsForFriendParams) ([]FriendTag, error)
+	ListFriends(ctx context.Context, dollar_1 int64) ([]ListFriendsRow, error)
+	ListFriendsByTagID(ctx context.Context, arg ListFriendsByTagIDParams) ([]ListFriendsByTagIDRow, error)
+	ListFriendsByTagName(ctx context.Context, arg ListFriendsByTagNameParams) ([]ListFriendsByTagNameRow, error)
 	ListMessagesByConversation(ctx context.Context, arg ListMessagesByConversationParams) ([]Message, error)
 	ListMessagesByConversationInitial(ctx context.Context, arg ListMessagesByConversationInitialParams) ([]Message, error)
 	ListPendingFriendApplications(ctx context.Context, friendID int64) ([]Friendship, error)
 	RemoveConversationMembers(ctx context.Context, arg RemoveConversationMembersParams) (int64, error)
+	RemoveFriendTagAssignment(ctx context.Context, arg RemoveFriendTagAssignmentParams) (int64, error)
+	RenameFriendTag(ctx context.Context, arg RenameFriendTagParams) (FriendTag, error)
+	ReplaceFriendTags(ctx context.Context, arg ReplaceFriendTagsParams) error
 	RevokeBotToken(ctx context.Context, arg RevokeBotTokenParams) (int64, error)
+	SearchConversationsByName(ctx context.Context, arg SearchConversationsByNameParams) ([]SearchConversationsByNameRow, error)
+	SearchFriendsByQuery(ctx context.Context, arg SearchFriendsByQueryParams) ([]SearchFriendsByQueryRow, error)
+	SearchMessagesGlobal(ctx context.Context, arg SearchMessagesGlobalParams) ([]SearchMessagesGlobalRow, error)
+	SearchMessagesInConversation(ctx context.Context, arg SearchMessagesInConversationParams) ([]SearchMessagesInConversationRow, error)
 	SearchUserInfoByNickname(ctx context.Context, arg SearchUserInfoByNicknameParams) ([]UserInfo, error)
+	SearchUserInfoByQuery(ctx context.Context, arg SearchUserInfoByQueryParams) ([]SearchUserInfoByQueryRow, error)
 	UpdateConversation(ctx context.Context, arg UpdateConversationParams) error
 	UpdateConversationCreator(ctx context.Context, arg UpdateConversationCreatorParams) error
 	UpdateConversationMemberRole(ctx context.Context, arg UpdateConversationMemberRoleParams) (int64, error)

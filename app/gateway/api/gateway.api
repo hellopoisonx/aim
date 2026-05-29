@@ -62,14 +62,15 @@ type AddFriendRequest {
 }
 
 type FriendshipItem {
-	UserId      int64  `json:"user_id"`
-	FriendId    int64  `json:"friend_id"`
-	Status      string `json:"status"`
-	CreatedAt   int64  `json:"created_at"`
-	UpdatedAt   int64  `json:"updated_at"`
-	Name      string `json:"name,optional"`
-	Email     string `json:"email,optional"`
-	Avatar    string `json:"avatar,optional"`
+	UserId    int64           `json:"user_id"`
+	FriendId  int64           `json:"friend_id"`
+	Status    string          `json:"status"`
+	CreatedAt int64           `json:"created_at"`
+	UpdatedAt int64           `json:"updated_at"`
+	Name      string          `json:"name,optional"`
+	Email     string          `json:"email,optional"`
+	Avatar    string          `json:"avatar,optional"`
+	Tags      []FriendTagItem `json:"tags,optional"`
 }
 
 type AddFriendResponse {
@@ -474,6 +475,24 @@ service gateway-api {
 
 	@handler RejectFriend
 	post /reject/:id (RejectFriendRequest) returns (RejectFriendResponse)
+
+	@handler SetFriendTags
+	put /:id/tags (SetFriendTagsRequest) returns (SetFriendTagsResponse)
+
+	@handler RemoveFriendTag
+	delete /:id/tags/:tag_id (RemoveFriendTagRequest) returns (RemoveFriendTagResponse)
+
+	@handler ListFriendTags
+	get /tags returns (ListFriendTagsResponse)
+
+	@handler CreateFriendTag
+	post /tags (CreateFriendTagRequest) returns (CreateFriendTagResponse)
+
+	@handler RenameFriendTag
+	put /tags/:id (RenameFriendTagRequest) returns (RenameFriendTagResponse)
+
+	@handler DeleteFriendTag
+	delete /tags/:id (DeleteFriendTagRequest) returns (DeleteFriendTagResponse)
 }
 
 type PresenceItem {
@@ -713,5 +732,110 @@ service gateway-api {
 
 	@handler BotDownloadAttachment
 	get /attachments/:id/download (BotDownloadAttachmentRequest) returns (BotDownloadAttachmentResponse)
+}
+
+type FriendTagItem {
+	Id        int64  `json:"id"`
+	UserId    int64  `json:"user_id"`
+	Name      string `json:"name"`
+	CreatedAt int64  `json:"created_at"`
+	UpdatedAt int64  `json:"updated_at"`
+}
+
+type CreateFriendTagRequest {
+	Name string `json:"name" validate:"required"`
+}
+
+type CreateFriendTagResponse {
+	Tag FriendTagItem `json:"tag"`
+}
+
+type RenameFriendTagRequest {
+	Id   int64  `path:"id" validate:"required"`
+	Name string `json:"name" validate:"required"`
+}
+
+type RenameFriendTagResponse {
+	Tag FriendTagItem `json:"tag"`
+}
+
+type DeleteFriendTagRequest {
+	Id int64 `path:"id" validate:"required"`
+}
+
+type DeleteFriendTagResponse {
+	Deleted bool `json:"deleted"`
+}
+
+type ListFriendTagsResponse {
+	Tags []FriendTagItem `json:"tags"`
+}
+
+type SetFriendTagsRequest {
+	Id     int64   `path:"id" validate:"required"`
+	TagIds []int64 `json:"tag_ids"`
+}
+
+type SetFriendTagsResponse {
+	Friendship FriendshipItem `json:"friendship"`
+}
+
+type RemoveFriendTagRequest {
+	Id    int64 `path:"id" validate:"required"`
+	TagId int64 `path:"tag_id" validate:"required"`
+}
+
+type RemoveFriendTagResponse {
+	Friendship FriendshipItem `json:"friendship"`
+}
+
+type SearchRequest {
+	Query           string `form:"q" validate:"required"`
+	Scope           string `form:"scope,optional"`
+	ConversationId  int64  `form:"conversation_id,optional"`
+	CursorCreatedAt int64  `form:"cursor_created_at,optional"`
+	CursorId        int64  `form:"cursor_id,optional"`
+	Limit           int32  `form:"limit,default=20,optional"`
+}
+
+type SearchUserResultItem {
+	User    UserInfo `json:"user"`
+	Snippet string   `json:"snippet"`
+}
+
+type SearchFriendResultItem {
+	Friendship FriendshipItem `json:"friendship"`
+	User       UserInfo       `json:"user"`
+	Snippet    string         `json:"snippet"`
+}
+
+type SearchConversationResultItem {
+	Conversation ConversationItem `json:"conversation"`
+	Snippet      string           `json:"snippet"`
+}
+
+type SearchMessageResultItem {
+	Message MessageItem `json:"message"`
+	Snippet string      `json:"snippet"`
+}
+
+type SearchResponse {
+	Users               []SearchUserResultItem         `json:"users"`
+	Friends             []SearchFriendResultItem       `json:"friends"`
+	Conversations       []SearchConversationResultItem `json:"conversations"`
+	Messages            []SearchMessageResultItem      `json:"messages"`
+	NextCursorCreatedAt int64                          `json:"next_cursor_created_at"`
+	NextCursorId        int64                          `json:"next_cursor_id"`
+	HasMore             bool                           `json:"has_more"`
+}
+
+@server (
+	middleware: Auth
+	prefix:     /api/search
+	group:      search
+)
+service gateway-api {
+	@handler Search
+	get / (SearchRequest) returns (SearchResponse)
 }
 

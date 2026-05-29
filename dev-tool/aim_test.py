@@ -310,6 +310,26 @@ class RESTClient:
         """NEW: reject pending friend request."""
         return self._post(f"/api/friends/reject/{friend_id}")["friendship"]
 
+    # ── Friend Tags ──
+
+    def list_friend_tags(self) -> list:
+        return self._get("/api/friends/tags")["tags"]
+
+    def create_friend_tag(self, name: str) -> dict:
+        return self._post("/api/friends/tags", {"name": name})["tag"]
+
+    def rename_friend_tag(self, tag_id: int, name: str) -> dict:
+        return self._put(f"/api/friends/tags/{tag_id}", {"name": name})["tag"]
+
+    def delete_friend_tag(self, tag_id: int) -> dict:
+        return self._delete(f"/api/friends/tags/{tag_id}")
+
+    def set_friend_tags(self, friend_id: int, tag_ids: list) -> dict:
+        return self._put(f"/api/friends/{friend_id}/tags", {"tag_ids": tag_ids})["friendship"]
+
+    def remove_friend_tag(self, friend_id: int, tag_id: int) -> dict:
+        return self._delete(f"/api/friends/{friend_id}/tags/{tag_id}")["friendship"]
+
     # ── Conversations ──
 
     def create_conversation(self, member_ids: list, name: str = "") -> dict:
@@ -400,6 +420,24 @@ class RESTClient:
         if avatar is not None:
             body["avatar"] = avatar
         return self._put(f"/api/conversations/{conversation_id}", body)
+
+    # ── Search ──
+
+    def unified_search(self, query: str, scope: str = "", conversation_id: int = 0,
+                       cursor_created_at: int = 0, cursor_id: int = 0, limit: int = 20) -> dict:
+        params = [f"q={query}"]
+        if scope:
+            params.append(f"scope={scope}")
+        if conversation_id:
+            params.append(f"conversation_id={conversation_id}")
+        if cursor_created_at:
+            params.append(f"cursor_created_at={cursor_created_at}")
+        if cursor_id:
+            params.append(f"cursor_id={cursor_id}")
+        if limit:
+            params.append(f"limit={limit}")
+        qs = "?" + "&".join(params)
+        return self._get(f"/api/search{qs}")
 
 
 # ── WebSocket Client ────────────────────────────────────────────────────────────
@@ -830,7 +868,84 @@ def cmd_presence_friends(args):
         print(f"✗ Get friends presence failed: {e}")
 
 
-def cmd_create_conversation(args):
+def cmd_friend_tag_list(args):
+    client = RESTClient()
+    try:
+        tags = client.list_friend_tags()
+        print(f"✓ {len(tags)} tag(s):")
+        print_json(tags)
+    except APIError as e:
+        print(f"✗ List tags failed: {e}")
+
+
+def cmd_friend_tag_create(args):
+    client = RESTClient()
+    try:
+        tag = client.create_friend_tag(args.name)
+        print(f"✓ Tag created:")
+        print_json(tag)
+    except APIError as e:
+        print(f"✗ Create tag failed: {e}")
+
+
+def cmd_friend_tag_rename(args):
+    client = RESTClient()
+    try:
+        tag = client.rename_friend_tag(args.id, args.name)
+        print(f"✓ Tag renamed:")
+        print_json(tag)
+    except APIError as e:
+        print(f"✗ Rename tag failed: {e}")
+
+
+def cmd_friend_tag_delete(args):
+    client = RESTClient()
+    try:
+        result = client.delete_friend_tag(args.id)
+        print(f"✓ Deleted: {result.get('deleted', False)}")
+    except APIError as e:
+        print(f"✗ Delete tag failed: {e}")
+
+
+def cmd_friend_tags_set(args):
+    client = RESTClient()
+    try:
+        tag_ids = [int(x.strip()) for x in args.tag_ids.split(",") if x.strip()]
+        result = client.set_friend_tags(args.friend_id, tag_ids)
+        print(f"✓ Tags set for friend {args.friend_id}:")
+        print_json(result)
+    except APIError as e:
+        print(f"✗ Set tags failed: {e}")
+
+
+def cmd_friend_tag_remove(args):
+    client = RESTClient()
+    try:
+        result = client.remove_friend_tag(args.friend_id, args.tag_id)
+        print(f"✓ Tag {args.tag_id} removed from friend {args.friend_id}:")
+        print_json(result)
+    except APIError as e:
+        print(f"✗ Remove tag failed: {e}")
+
+
+def cmd_search_unified(args):
+    client = RESTClient()
+    try:
+        result = client.unified_search(
+            args.q, args.scope, args.conversation_id,
+            args.cursor_created_at, args.cursor_id, args.limit,
+        )
+        print(f"✓ Search results for '{args.q}':")
+        for kind in ["users", "friends", "conversations", "messages"]:
+            items = result.get(kind, [])
+            if items:
+                print(f"  ── {kind.capitalize()} ({len(items)}):")
+                print_json(items)
+        print(f"  next_cursor_created_at={result.get('next_cursor_created_at')}, next_cursor_id={result.get('next_cursor_id')}, has_more={result.get('has_more')}")
+    except APIError as e:
+        print(f"✗ Search failed: {e}")
+
+
     client = RESTClient()
     try:
         member_ids = [int(m.strip()) for m in args.member_ids.split(",")] if args.member_ids else [args.member_id] if args.member_id else []
@@ -1302,7 +1417,35 @@ Type 'help' for commands, 'quit' to exit.
                 friends = client.get_friends_presence()
                 print(f"✓ {len(friends)} friend presence record(s):")
                 print_json(friends)
-            elif cmd == "conv-list" or cmd == "list-conversations" or cmd == "conversations":
+            elif cmd == "friend-tags":
+                tags = client.list_friend_tags()
+                print(f"✓ {len(tags)} tag(s):")
+                print_json(tags)
+            elif cmd == "friend-tag-create" and len(parts) >= 2:
+                tag = client.create_friend_tag(parts[1])
+                print(f"✓ Tag created:")
+                print_json(tag)
+            elif cmd == "friend-tag-rename" and len(parts) >= 3:
+                tag = client.rename_friend_tag(int(parts[1]), parts[2])
+                print(f"✓ Tag renamed:")
+                print_json(tag)
+            elif cmd == "friend-tag-delete" and len(parts) >= 2:
+                result = client.delete_friend_tag(int(parts[1]))
+                print(f"✓ Deleted: {result.get('deleted', False)}")
+            elif cmd == "friend-tags-set" and len(parts) >= 3:
+                tag_ids = [int(x.strip()) for x in parts[2].split(",") if x.strip()]
+                result = client.set_friend_tags(int(parts[1]), tag_ids)
+                print(f"✓ Tags set:")
+                print_json(result)
+            elif cmd == "friend-tag-remove" and len(parts) >= 3:
+                result = client.remove_friend_tag(int(parts[1]), int(parts[2]))
+                print(f"✓ Tag removed:")
+                print_json(result)
+            elif cmd == "search-unified" and len(parts) >= 2:
+                result = client.unified_search(parts[1])
+                print(f"✓ Search results for '{parts[1]}':")
+                print_json(result)
+
                 convs = client.list_conversations()
                 print(f"✓ {len(convs)} conversation(s):")
                 print_json(convs)
@@ -1644,7 +1787,36 @@ Examples:
     sub.add_parser("friend-list", help="List friends")
     sub.add_parser("presence-friends", help="List friends presence")
 
-    # Conversations
+    # Friend Tags
+    p = sub.add_parser("friend-tags", help="List friend tags")
+
+    p = sub.add_parser("friend-tag-create", help="Create a friend tag")
+    p.add_argument("--name", required=True, help="Tag name")
+
+    p = sub.add_parser("friend-tag-rename", help="Rename a friend tag")
+    p.add_argument("--id", type=int, required=True, help="Tag ID")
+    p.add_argument("--name", required=True, help="New name")
+
+    p = sub.add_parser("friend-tag-delete", help="Delete a friend tag")
+    p.add_argument("--id", type=int, required=True, help="Tag ID")
+
+    p = sub.add_parser("friend-tags-set", help="Set tags for a friend")
+    p.add_argument("--friend-id", type=int, required=True, help="Friend user ID")
+    p.add_argument("--tag-ids", required=True, help="Comma-separated tag IDs")
+
+    p = sub.add_parser("friend-tag-remove", help="Remove a single tag from a friend")
+    p.add_argument("--friend-id", type=int, required=True, help="Friend user ID")
+    p.add_argument("--tag-id", type=int, required=True, help="Tag ID to remove")
+
+    # Search
+    p = sub.add_parser("search-unified", help="Unified search")
+    p.add_argument("--q", required=True, help="Search query")
+    p.add_argument("--scope", default="", help="Comma-separated scopes (users,friends,conversations,messages)")
+    p.add_argument("--conversation-id", type=int, default=0, help="Conversation scope for message search")
+    p.add_argument("--cursor-created-at", type=int, default=0, help="Message search pagination cursor")
+    p.add_argument("--cursor-id", type=int, default=0, help="Message search pagination cursor")
+    p.add_argument("--limit", type=int, default=20, help="Results per page, default 20, max 100")
+
     p = sub.add_parser("conv-list", help="List conversations")
     p = sub.add_parser("conv-create", help="Create conversation")
     p.add_argument("--member-id", type=int, help="Single member ID")
@@ -1764,6 +1936,13 @@ Examples:
         "friend-reject": cmd_reject_friend,
         "friend-list": cmd_friend_list,
         "presence-friends": cmd_presence_friends,
+        "friend-tags": cmd_friend_tag_list,
+        "friend-tag-create": cmd_friend_tag_create,
+        "friend-tag-rename": cmd_friend_tag_rename,
+        "friend-tag-delete": cmd_friend_tag_delete,
+        "friend-tags-set": cmd_friend_tags_set,
+        "friend-tag-remove": cmd_friend_tag_remove,
+        "search-unified": cmd_search_unified,
         "conv-list": cmd_list_conversations,
         "conv-create": cmd_create_conversation,
         "group-create": cmd_create_group,

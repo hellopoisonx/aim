@@ -79,6 +79,21 @@ type ConversationReadState struct {
 	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
 }
 
+type FriendTag struct {
+	ID        int64              `json:"id"`
+	UserID    int64              `json:"user_id"`
+	Name      string             `json:"name"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+}
+
+type FriendTagAssignment struct {
+	UserID    int64              `json:"user_id"`
+	FriendID  int64              `json:"friend_id"`
+	TagID     int64              `json:"tag_id"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
 type Friendship struct {
 	UserID    int64              `json:"user_id"`
 	FriendID  int64              `json:"friend_id"`

@@ -12,6 +12,7 @@ import (
 	conversations "github.com/hellopoisonx/aim/app/gateway/api/internal/handler/conversations"
 	friends "github.com/hellopoisonx/aim/app/gateway/api/internal/handler/friends"
 	presence "github.com/hellopoisonx/aim/app/gateway/api/internal/handler/presence"
+	search "github.com/hellopoisonx/aim/app/gateway/api/internal/handler/search"
 	users "github.com/hellopoisonx/aim/app/gateway/api/internal/handler/users"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 
@@ -217,6 +218,16 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 			[]rest.Middleware{serverCtx.Auth},
 			[]rest.Route{
 				{
+					Method:  http.MethodPut,
+					Path:    "/:id/tags",
+					Handler: friends.SetFriendTagsHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodDelete,
+					Path:    "/:id/tags/:tag_id",
+					Handler: friends.RemoveFriendTagHandler(serverCtx),
+				},
+				{
 					Method:  http.MethodPost,
 					Path:    "/accept/:id",
 					Handler: friends.AcceptFriendHandler(serverCtx),
@@ -236,6 +247,26 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 					Path:    "/reject/:id",
 					Handler: friends.RejectFriendHandler(serverCtx),
 				},
+				{
+					Method:  http.MethodGet,
+					Path:    "/tags",
+					Handler: friends.ListFriendTagsHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/tags",
+					Handler: friends.CreateFriendTagHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPut,
+					Path:    "/tags/:id",
+					Handler: friends.RenameFriendTagHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodDelete,
+					Path:    "/tags/:id",
+					Handler: friends.DeleteFriendTagHandler(serverCtx),
+				},
 			}...,
 		),
 		rest.WithPrefix("/api/friends"),
@@ -253,6 +284,20 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 			}...,
 		),
 		rest.WithPrefix("/api/presence"),
+	)
+
+	server.AddRoutes(
+		rest.WithMiddlewares(
+			[]rest.Middleware{serverCtx.Auth},
+			[]rest.Route{
+				{
+					Method:  http.MethodGet,
+					Path:    "/",
+					Handler: search.SearchHandler(serverCtx),
+				},
+			}...,
+		),
+		rest.WithPrefix("/api/search"),
 	)
 
 	server.AddRoutes(

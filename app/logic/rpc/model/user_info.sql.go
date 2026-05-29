@@ -7,6 +7,8 @@ package model
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const createUserInfo = `-- name: CreateUserInfo :one
@@ -151,6 +153,66 @@ func (q *Queries) SearchUserInfoByNickname(ctx context.Context, arg SearchUserIn
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.UserType,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const searchUserInfoByQuery = `-- name: SearchUserInfoByQuery :many
+SELECT id, email, status, nickname, avatar, created_at, updated_at, user_type,
+       similarity(nickname || ' ' || email, $1::text) AS rank,
+       ts_headline('simple', nickname || ' ' || email, plainto_tsquery('simple', $1::text), 'StartSel=<mark>, StopSel=</mark>, MaxWords=12, MinWords=1, ShortWord=1') AS snippet
+FROM user_info
+WHERE nickname ILIKE '%' || $1::text || '%'
+   OR email ILIKE '%' || $1::text || '%'
+ORDER BY rank DESC, created_at DESC, id ASC
+LIMIT $2
+`
+
+type SearchUserInfoByQueryParams struct {
+	Search  string `json:"search"`
+	MaxRows int32  `json:"max_rows"`
+}
+
+type SearchUserInfoByQueryRow struct {
+	ID        int64              `json:"id"`
+	Email     string             `json:"email"`
+	Status    int16              `json:"status"`
+	Nickname  string             `json:"nickname"`
+	Avatar    string             `json:"avatar"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+	UserType  string             `json:"user_type"`
+	Rank      float32            `json:"rank"`
+	Snippet   []byte             `json:"snippet"`
+}
+
+func (q *Queries) SearchUserInfoByQuery(ctx context.Context, arg SearchUserInfoByQueryParams) ([]SearchUserInfoByQueryRow, error) {
+	rows, err := q.db.Query(ctx, searchUserInfoByQuery, arg.Search, arg.MaxRows)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SearchUserInfoByQueryRow{}
+	for rows.Next() {
+		var i SearchUserInfoByQueryRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Email,
+			&i.Status,
+			&i.Nickname,
+			&i.Avatar,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.UserType,
+			&i.Rank,
+			&i.Snippet,
 		); err != nil {
 			return nil, err
 		}

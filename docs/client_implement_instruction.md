@@ -187,7 +187,12 @@ Authorization: Bearer <access_token>
 | `GET` | `/api/friends/applications` | 好友申请列表 | 是 |
 | `POST` | `/api/friends/accept/:id` | 接受好友申请 | 是 |
 | `POST` | `/api/friends/reject/:id` | 拒绝好友申请 | 是 |
-| `POST` | `/api/conversations` | 创建会话 | 是 |
+| `GET` | `/api/friends/tags` | 列出好友标签 | 是 |
+| `POST` | `/api/friends/tags` | 创建好友标签 | 是 |
+| `PUT` | `/api/friends/tags/:id` | 重命名好友标签 | 是 |
+| `DELETE` | `/api/friends/tags/:id` | 删除好友标签 | 是 |
+| `PUT` | `/api/friends/:id/tags` | 设置好友的标签列表 | 是 |
+| `DELETE` | `/api/friends/:id/tags/:tag_id` | 删除好友的某个标签 | 是 |
 | `POST` | `/api/conversations/group` | 创建群聊 | 是 |
 | `GET` | `/api/conversations` | 获取会话列表 | 是 |
 | `GET` | `/api/conversations/history/:id` | 拉取消息历史 | 是 |
@@ -202,7 +207,7 @@ Authorization: Bearer <access_token>
 | `POST` | `/api/attachments/:id/complete` | 完成附件上传 | 是 |
 | `GET` | `/api/attachments/:id` | 获取附件元数据 | 是 |
 | `GET` | `/api/attachments/:id/download` | 获取下载授权 URL | 是 |
-
+| `GET` | `/api/search` | 统一搜索（用户/好友/会话/消息） | 是 |
 ### 3.2 会话列表
 
 ```
@@ -305,6 +310,84 @@ GET /api/presence/friends
 ```
 
 返回好友在线状态的初始快照，WS 连接/重连后先调此接口填充状态，后续由 WS 实时更新。
+
+### 3.5 好友标签管理
+
+**列出标签**：
+```
+GET /api/friends/tags
+```
+返回 `{"tags": [{"id":1,"user_id":123,"name":"同事","created_at":...,"updated_at":...}]}`。
+
+**创建标签**：
+```
+POST /api/friends/tags
+{"name": "同事"}
+```
+返回 `{"tag": {...}}`。参数 `name` 必填，最多 64 字符。
+
+**重命名标签**：
+```
+PUT /api/friends/tags/:id
+{"name": "新名称"}
+```
+
+**删除标签**：
+```
+DELETE /api/friends/tags/:id
+```
+返回 `{"deleted": true}`。删除标签会级联清除所有好友的该标签。
+
+**设置好友标签**（覆盖式）：
+```
+PUT /api/friends/:friend_id/tags
+{"tag_ids": [1, 3]}
+```
+返回该好友的最新 FriendshipItem（含 tags）。空数组清空所有标签。
+
+**删除好友的单个标签**：
+```
+DELETE /api/friends/:friend_id/tags/:tag_id
+```
+删除后其他标签不受影响。
+
+`GET /api/friends/me` 响应中 `FriendshipItem` 现已含 `tags` 字段，类型为 `[{id, user_id, name, created_at, updated_at}]`。
+
+### 3.6 统一搜索
+
+```
+GET /api/search
+  ?q=搜索关键词
+  &scope=users,friends,conversations,messages   // 可选，逗号分隔
+  &conversation_id=456                           // 可选，限定消息搜索会话
+  &cursor_created_at=1700000000000              // 可选，消息分页游标
+  &cursor_id=10001                              // 可选
+  &limit=20                                     // 可选，默认 20，最大 100
+```
+
+返回按 scope 分类的结果，每条含 `snippet` 高亮片段：
+
+```json
+{
+  "code": 0,
+  "body": {
+    "users": [{"user": {...}, "snippet": "含<mark>关键</mark>词的片段"}],
+    "friends": [{"friendship": {...}, "user": {...}, "snippet": "..."}],
+    "conversations": [{"conversation": {...}, "snippet": "..."}],
+    "messages": [{"message": {...}, "snippet": "..."}],
+    "next_cursor_created_at": ...,
+    "next_cursor_id": ...,
+    "has_more": false
+  }
+}
+```
+
+**搜索特点**：
+
+- scope 为空时搜索所有类型
+- 消息搜索通过 `conversation_members` 做访问控制，只返回当前用户参与的会话消息
+- snippet 中命中部分用 `<mark>...</mark>` 标记
+- 消息搜索使用 `(created_at DESC, id DESC)` 游标分页
 
 ---
 

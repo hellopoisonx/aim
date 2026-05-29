@@ -194,12 +194,12 @@ WHERE cm.conversation_id = $1
 `
 
 type GetConversationMembersDetailRow struct {
-	UserID      int64              `json:"user_id"`
-	Email       string             `json:"email"`
-	Avatar      string             `json:"avatar"`
-	Name        string             `json:"name"`
-	Role        string             `json:"role"`
-	JoinedAt    pgtype.Timestamptz `json:"joined_at"`
+	UserID   int64              `json:"user_id"`
+	Email    string             `json:"email"`
+	Avatar   string             `json:"avatar"`
+	Name     string             `json:"name"`
+	Role     string             `json:"role"`
+	JoinedAt pgtype.Timestamptz `json:"joined_at"`
 }
 
 func (q *Queries) GetConversationMembersDetail(ctx context.Context, conversationID int64) ([]GetConversationMembersDetailRow, error) {
@@ -354,6 +354,68 @@ func (q *Queries) RemoveConversationMembers(ctx context.Context, arg RemoveConve
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const searchConversationsByName = `-- name: SearchConversationsByName :many
+SELECT c.id, c.conversation_type, c.is_active, c.name, c.avatar, c.creator_id, c.created_at,
+       similarity(c.name, $2::text) AS rank,
+       ts_headline('simple', c.name, plainto_tsquery('simple', $2::text), 'StartSel=<mark>, StopSel=</mark>, MaxWords=12, MinWords=1, ShortWord=1') AS snippet
+FROM conversations c
+JOIN conversation_members cm ON cm.conversation_id = c.id
+WHERE cm.user_id = $1
+  AND c.is_active = true
+  AND c.name <> ''
+  AND c.name ILIKE '%' || $2::text || '%'
+ORDER BY rank DESC, c.created_at DESC, c.id DESC
+LIMIT $3
+`
+
+type SearchConversationsByNameParams struct {
+	UserID  int64  `json:"user_id"`
+	Search  string `json:"search"`
+	MaxRows int32  `json:"max_rows"`
+}
+
+type SearchConversationsByNameRow struct {
+	ID               int64              `json:"id"`
+	ConversationType string             `json:"conversation_type"`
+	IsActive         bool               `json:"is_active"`
+	Name             string             `json:"name"`
+	Avatar           string             `json:"avatar"`
+	CreatorID        int64              `json:"creator_id"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	Rank             float32            `json:"rank"`
+	Snippet          []byte             `json:"snippet"`
+}
+
+func (q *Queries) SearchConversationsByName(ctx context.Context, arg SearchConversationsByNameParams) ([]SearchConversationsByNameRow, error) {
+	rows, err := q.db.Query(ctx, searchConversationsByName, arg.UserID, arg.Search, arg.MaxRows)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SearchConversationsByNameRow{}
+	for rows.Next() {
+		var i SearchConversationsByNameRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ConversationType,
+			&i.IsActive,
+			&i.Name,
+			&i.Avatar,
+			&i.CreatorID,
+			&i.CreatedAt,
+			&i.Rank,
+			&i.Snippet,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const updateConversation = `-- name: UpdateConversation :exec
