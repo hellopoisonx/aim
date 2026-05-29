@@ -100,10 +100,10 @@ docker compose --env-file deploy/env/local.env \
 - [x] 指标上报、链路追踪、日志聚合
 - [x] [官方rag知识库bot](https://github.com/hellopoisonx/echo)
 - [x] [客户端](https://github.com/hellopoisonx/aim-desktop)
-- [-] 前置nginx反代 `gateway`, 配置ssl证书
-- [-] ws 帧并包
-- [-] 用户侧bot管理接口
-- [-] 官方群聊机器人
+- [ ] 前置nginx反代 `gateway`, 配置ssl证书
+- [ ] ws 帧并包
+- [ ] 用户侧bot管理接口
+- [ ] 官方群聊机器人
 
 ## 开发指南
 
