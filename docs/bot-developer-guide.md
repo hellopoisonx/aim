@@ -46,6 +46,7 @@ Authorization: Bot aim_bot_<64位hex>
 | `bot.conversation.history` | 调用 `GET /api/bot/v1/conversations/:id/history` |
 | `bot.conversation.members.read` | 调用 `GET /api/bot/v1/conversations/:id/members` |
 | `bot.message.send` | 调用 `POST /api/bot/v1/messages` |
+| `bot.attachment.download` | 调用 `GET /api/bot/v1/attachments/:id/download` 获取附件下载 URL |
 | `bot.read_receipt.write` | 调用 `POST /api/bot/v1/conversations/:id/read-receipt` |
 | `bot.read_receipt.read` | 调用 `GET /api/bot/v1/conversations/:id/read-states` |
 | `bot.webhook.read` | 调用 `GET /api/bot/v1/webhook` |

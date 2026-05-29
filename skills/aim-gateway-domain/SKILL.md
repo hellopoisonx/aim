@@ -24,6 +24,7 @@ description: aim 的网关域。对应 `gateway` 模块。
 
 ## 最近变更
 
+- 2026-05-29: Gateway 文档同步。`docs/api/gateway-openapi.yaml` 成为 REST schema/参数/错误响应的权威文档；`docs/client_implement_instruction.md`、`docs/bot-developer-guide.md` 与 `references/api.md` 改为引用 OpenAPI 并同步好友标签、统一搜索、群管理员/群主转让接口。
 - 2026-05-29: 好友标签 REST。新增 `GET /api/friends/tags`（列出标签）、`POST /api/friends/tags`（创建标签）、`PUT /api/friends/tags/:id`（重命名）、`DELETE /api/friends/tags/:id`（删除标签）、`PUT /api/friends/:id/tags`（设置好友标签）、`DELETE /api/friends/:id/tags/:tag_id`（删除单个标签）。`FriendshipItem` 新增 `tags` 字段透出好友分组。
 - 2026-05-29: 统一搜索 REST。新增 `GET /api/search?q=&scope=&conversation_id=&cursor_created_at=&cursor_id=&limit=` 端点，scope 可组合 `users/friends/conversations/messages`，返回 snippet 高亮片段与游标分页；通过 `LogicSearchClient.UnifiedSearch` 调用 logic `SearchService`。
 - 2026-05-28: Docker/压测/Bot SDK 集成配置统一 GatewayRpc 监听端口为 `9091`；根 Compose 拆分为 `deploy/compose/base|dev|prod|observability|tools.yaml`，生产只通过反向代理发布 REST/WS。

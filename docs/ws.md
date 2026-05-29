@@ -192,7 +192,7 @@ message PushMessagePayload {
 | `conversation_type` | `direct` / `group`；容错情况下可能为空字符串，客户端需兼容。 |
 | `client_msg_id` | 发送者客户端消息 ID；发送方可用它与本地 pending 消息匹配。 |
 | `is_system` | `true` 表示群变更系统消息。 |
-| `sender_info` | 发送者名称、邮箱、显示名快照。 |
+| `sender_info` | 发送者名称与邮箱快照。 |
 | `mentions` | 被 @ 用户 ID 的十进制字符串列表。 |
 
 群变更系统消息通常满足：`sender_id=0`、`message_type="system"`、`is_system=true`，常见事件包括 `member_joined`、`member_left`、`member_removed`、`group_renamed`、`group_dismissed`、`group_avatar_changed`。

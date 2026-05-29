@@ -173,6 +173,8 @@ Authorization: Bearer <access_token>
 
 ## 3. REST API 使用
 
+本节仅保留客户端实现视角的速查与流程说明；完整 REST 路径、参数、响应 schema 与错误响应以 [`docs/api/gateway-openapi.yaml`](api/gateway-openapi.yaml) 为准。
+
 ### 3.1 必读端点速查
 
 | 方法 | 路径 | 用途 | 需鉴权 |
@@ -193,12 +195,16 @@ Authorization: Bearer <access_token>
 | `DELETE` | `/api/friends/tags/:id` | 删除好友标签 | 是 |
 | `PUT` | `/api/friends/:id/tags` | 设置好友的标签列表 | 是 |
 | `DELETE` | `/api/friends/:id/tags/:tag_id` | 删除好友的某个标签 | 是 |
+| `POST` | `/api/conversations` | 创建直聊或群聊 | 是 |
 | `POST` | `/api/conversations/group` | 创建群聊 | 是 |
 | `GET` | `/api/conversations` | 获取会话列表 | 是 |
 | `GET` | `/api/conversations/history/:id` | 拉取消息历史 | 是 |
 | `GET` | `/api/conversations/:id/members` | 群成员详情 | 是 |
 | `POST` | `/api/conversations/:id/members` | 添加群成员 | 是 |
 | `DELETE` | `/api/conversations/:id/members/:uid` | 移除群成员 | 是 |
+| `POST` | `/api/conversations/:id/members/:uid/admin` | 授予群管理员 | 是 |
+| `DELETE` | `/api/conversations/:id/members/:uid/admin` | 撤销群管理员 | 是 |
+| `POST` | `/api/conversations/:id/owner` | 转让群主 | 是 |
 | `POST` | `/api/conversations/:id/leave` | 退出群聊 | 是 |
 | `DELETE` | `/api/conversations/:id` | 解散群聊 | 是 |
 | `PUT` | `/api/conversations/:id` | 更新群信息 | 是 |
@@ -208,6 +214,7 @@ Authorization: Bearer <access_token>
 | `GET` | `/api/attachments/:id` | 获取附件元数据 | 是 |
 | `GET` | `/api/attachments/:id/download` | 获取下载授权 URL | 是 |
 | `GET` | `/api/search` | 统一搜索（用户/好友/会话/消息） | 是 |
+
 ### 3.2 会话列表
 
 ```
@@ -1113,9 +1120,8 @@ GET /api/attachments/:file_id/download
 POST /api/conversations/group
 {
   "member_ids": [123, 456, 789],
-  "name": "项目讨论组",     // 可选
-  "avatar": "https://...",  // 可选
-  "device_id": "device-uuid"
+  "name": "项目讨论组",     // 必填
+  "avatar": "https://..."   // 可选
 }
 ```
 
@@ -1151,11 +1157,14 @@ POST /api/conversations/group
 | 方法 | 路径 | 用途 | 权限 |
 |------|------|------|------|
 | `GET` | `/api/conversations/:id/members` | 成员详情 | 群成员 |
-| `POST` | `/api/conversations/:id/members` | 添加成员 | 群主 |
-| `DELETE` | `/api/conversations/:id/members/:uid` | 移除成员 | 群主 |
-| `POST` | `/api/conversations/:id/leave` | 退出群聊 | 群成员 |
+| `POST` | `/api/conversations/:id/members` | 添加成员 | 群主/管理员 |
+| `DELETE` | `/api/conversations/:id/members/:uid` | 移除成员 | 群主/管理员（admin 仅可移除普通成员） |
+| `POST` | `/api/conversations/:id/members/:uid/admin` | 授予管理员 | 群主 |
+| `DELETE` | `/api/conversations/:id/members/:uid/admin` | 撤销管理员 | 群主 |
+| `POST` | `/api/conversations/:id/owner` | 转让群主 | 群主 |
+| `POST` | `/api/conversations/:id/leave` | 退出群聊 | 群成员（群主需先转让或解散） |
 | `DELETE` | `/api/conversations/:id` | 解散群聊 | 群主 |
-| `PUT` | `/api/conversations/:id` | 更新群信息 | 群主 |
+| `PUT` | `/api/conversations/:id` | 更新群信息 | 群主/管理员 |
 
 ---
 

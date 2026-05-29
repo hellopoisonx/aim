@@ -46,6 +46,8 @@ tags:
     description: 会话、历史消息、群管理
   - name: Presence
     description: 好友在线状态快照
+  - name: Search
+    description: 统一搜索（用户、好友、会话、消息）
   - name: Attachments
     description: 附件上传、完成、元数据与下载授权
   - name: Bot OpenAPI
@@ -278,6 +280,150 @@ paths:
         "404": { $ref: '#/components/responses/NotFound' }
         "409": { $ref: '#/components/responses/Conflict' }
         "500": { $ref: '#/components/responses/InternalError' }
+  /api/friends/tags:
+    get:
+      tags: [Friends]
+      operationId: friendsListTags
+      summary: 列出当前用户好友标签
+      description: 需要 Bearer JWT。返回当前用户创建的好友标签列表。
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: 好友标签列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListFriendTagsResponseEnvelope'
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "500": { $ref: '#/components/responses/InternalError' }
+    post:
+      tags: [Friends]
+      operationId: friendsCreateTag
+      summary: 创建好友标签
+      description: 需要 Bearer JWT。标签归属当前用户，可随后绑定到好友关系。
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateFriendTagRequest'
+      responses:
+        "200":
+          description: 创建后的标签
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FriendTagResponseEnvelope'
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "409": { $ref: '#/components/responses/Conflict' }
+        "500": { $ref: '#/components/responses/InternalError' }
+  /api/friends/tags/{id}:
+    put:
+      tags: [Friends]
+      operationId: friendsRenameTag
+      summary: 重命名好友标签
+      description: 需要 Bearer JWT。只能重命名当前用户自己的标签。
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/FriendTagIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateFriendTagRequest'
+      responses:
+        "200":
+          description: 重命名后的标签
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FriendTagResponseEnvelope'
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "403": { $ref: '#/components/responses/Forbidden' }
+        "404": { $ref: '#/components/responses/NotFound' }
+        "409": { $ref: '#/components/responses/Conflict' }
+        "500": { $ref: '#/components/responses/InternalError' }
+    delete:
+      tags: [Friends]
+      operationId: friendsDeleteTag
+      summary: 删除好友标签
+      description: 需要 Bearer JWT。删除标签会级联清除所有好友关系上的该标签绑定。
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/FriendTagIdPath'
+      responses:
+        "200":
+          description: 删除结果
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeleteFriendTagResponseEnvelope'
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "403": { $ref: '#/components/responses/Forbidden' }
+        "404": { $ref: '#/components/responses/NotFound' }
+        "500": { $ref: '#/components/responses/InternalError' }
+  /api/friends/{id}/tags:
+    put:
+      tags: [Friends]
+      operationId: friendsSetFriendTags
+      summary: 覆盖设置指定好友的标签列表
+      description: |
+        需要 Bearer JWT。路径 `id` 是好友用户 ID；请求体 `tag_ids` 为当前用户标签 ID 列表。
+        本接口为覆盖式设置，传空数组或省略 `tag_ids` 可清空该好友所有标签。
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/FriendUserIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetFriendTagsRequest'
+      responses:
+        "200":
+          description: 更新后的好友关系（含 tags）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FriendshipResponseEnvelope'
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "403": { $ref: '#/components/responses/Forbidden' }
+        "404": { $ref: '#/components/responses/NotFound' }
+        "500": { $ref: '#/components/responses/InternalError' }
+  /api/friends/{id}/tags/{tag_id}:
+    delete:
+      tags: [Friends]
+      operationId: friendsRemoveFriendTag
+      summary: 删除指定好友的单个标签绑定
+      description: 需要 Bearer JWT。仅删除该好友与指定标签的绑定，不影响其他标签。
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/FriendUserIdPath'
+        - $ref: '#/components/parameters/FriendRelationTagIdPath'
+      responses:
+        "200":
+          description: 更新后的好友关系（含 tags）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FriendshipResponseEnvelope'
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "403": { $ref: '#/components/responses/Forbidden' }
+        "404": { $ref: '#/components/responses/NotFound' }
+        "500": { $ref: '#/components/responses/InternalError' }
   /api/conversations:
     get:
       tags: [Conversations]
@@ -330,7 +476,7 @@ paths:
       tags: [Conversations]
       operationId: conversationsCreateGroup
       summary: 创建群聊
-      description: 需要 Bearer JWT。固定创建 `conversation_type=group`，请求体无需传 `conversation_type`。
+      description: 需要 Bearer JWT。固定创建 `conversation_type=group`，请求体无需传 `conversation_type`；`name` 为必填群名。
       security:
         - BearerAuth: []
       requestBody:
@@ -595,6 +741,34 @@ paths:
               schema:
                 $ref: '#/components/schemas/GetFriendsPresenceResponseEnvelope'
         "401": { $ref: '#/components/responses/Unauthorized' }
+        "500": { $ref: '#/components/responses/InternalError' }
+  /api/search:
+    get:
+      tags: [Search]
+      operationId: searchUnified
+      summary: 统一搜索用户、好友、会话与消息
+      description: |
+        需要 Bearer JWT。`scope` 可用逗号组合 `users`、`friends`、`conversations`、`messages`；为空时搜索全部类型。
+        消息搜索可用 `(cursor_created_at, cursor_id)` 游标分页，并可通过 `conversation_id` 限定会话。
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/SearchQQuery'
+        - $ref: '#/components/parameters/SearchScopeQuery'
+        - $ref: '#/components/parameters/SearchConversationIdQuery'
+        - $ref: '#/components/parameters/CursorCreatedAtQuery'
+        - $ref: '#/components/parameters/CursorIdQuery'
+        - $ref: '#/components/parameters/SearchLimitQuery'
+      responses:
+        "200":
+          description: 按 scope 分类的搜索结果
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchResponseEnvelope'
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "403": { $ref: '#/components/responses/Forbidden' }
         "500": { $ref: '#/components/responses/InternalError' }
   /api/attachments/init:
     post:
@@ -985,6 +1159,24 @@ components:
       required: true
       schema: { type: integer, format: int64, minimum: 1 }
       description: 好友申请/关系 ID。
+    FriendUserIdPath:
+      name: id
+      in: path
+      required: true
+      schema: { type: integer, format: int64, minimum: 1 }
+      description: 好友用户 ID。
+    FriendTagIdPath:
+      name: id
+      in: path
+      required: true
+      schema: { type: integer, format: int64, minimum: 1 }
+      description: 好友标签 ID。
+    FriendRelationTagIdPath:
+      name: tag_id
+      in: path
+      required: true
+      schema: { type: integer, format: int64, minimum: 1 }
+      description: 要从好友关系上移除的标签 ID。
     ConversationIdPath:
       name: id
       in: path
@@ -1027,6 +1219,32 @@ components:
       required: false
       schema: { type: integer, format: int32, default: 50, minimum: 1, maximum: 100 }
       description: 每页数量；默认 50，当前逻辑上限 100。
+    SearchQQuery:
+      name: q
+      in: query
+      required: true
+      schema: { type: string, minLength: 1 }
+      description: 搜索关键词。
+    SearchScopeQuery:
+      name: scope
+      in: query
+      required: false
+      schema:
+        type: string
+        example: users,friends,conversations,messages
+      description: 逗号分隔的搜索范围；可选 `users`、`friends`、`conversations`、`messages`，为空表示全部。
+    SearchConversationIdQuery:
+      name: conversation_id
+      in: query
+      required: false
+      schema: { type: integer, format: int64, minimum: 0 }
+      description: 仅搜索指定会话内消息；仅对 `messages` scope 有效。
+    SearchLimitQuery:
+      name: limit
+      in: query
+      required: false
+      schema: { type: integer, format: int32, default: 20, minimum: 1, maximum: 100 }
+      description: 搜索每页数量；默认 20，当前逻辑上限 100。
   responses:
     EmptyOK:
       description: 成功。当前实现返回 HTTP 200 且响应体为空。
@@ -1252,6 +1470,15 @@ components:
           required: [body]
           properties:
             body: { $ref: '#/components/schemas/GetUserByNameResponse' }
+    FriendTagItem:
+      type: object
+      required: [id, user_id, name, created_at, updated_at]
+      properties:
+        id: { type: integer, format: int64 }
+        user_id: { type: integer, format: int64, description: 标签归属用户 ID。 }
+        name: { type: string, minLength: 1 }
+        created_at: { type: integer, format: int64, description: Unix milliseconds。 }
+        updated_at: { type: integer, format: int64, description: Unix milliseconds。 }
     FriendshipItem:
       type: object
       required: [user_id, friend_id, status, created_at, updated_at]
@@ -1264,6 +1491,11 @@ components:
         name: { type: string }
         email: { type: string, nullable: true, format: email }
         avatar: { type: string, nullable: true }
+        tags:
+          type: array
+          nullable: true
+          description: 当前好友关系绑定的标签列表；旧响应或空绑定时可能省略或为空数组。
+          items: { $ref: '#/components/schemas/FriendTagItem' }
     FriendshipResponse:
       type: object
       required: [friendship]
@@ -1304,6 +1536,56 @@ components:
           required: [body]
           properties:
             body: { $ref: '#/components/schemas/ListFriendsResponse' }
+    CreateFriendTagRequest:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 64 }
+    FriendTagResponse:
+      type: object
+      required: [tag]
+      properties:
+        tag: { $ref: '#/components/schemas/FriendTagItem' }
+    FriendTagResponseEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelopeBase'
+        - type: object
+          required: [body]
+          properties:
+            body: { $ref: '#/components/schemas/FriendTagResponse' }
+    DeleteFriendTagResponse:
+      type: object
+      required: [deleted]
+      properties:
+        deleted: { type: boolean }
+    DeleteFriendTagResponseEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelopeBase'
+        - type: object
+          required: [body]
+          properties:
+            body: { $ref: '#/components/schemas/DeleteFriendTagResponse' }
+    ListFriendTagsResponse:
+      type: object
+      required: [tags]
+      properties:
+        tags:
+          type: array
+          items: { $ref: '#/components/schemas/FriendTagItem' }
+    ListFriendTagsResponseEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelopeBase'
+        - type: object
+          required: [body]
+          properties:
+            body: { $ref: '#/components/schemas/ListFriendTagsResponse' }
+    SetFriendTagsRequest:
+      type: object
+      properties:
+        tag_ids:
+          type: array
+          description: 覆盖式标签 ID 列表；空数组或省略表示清空该好友所有标签。
+          items: { type: integer, format: int64, minimum: 1 }
     ConversationType:
       type: string
       enum: [direct, group]
@@ -1384,7 +1666,7 @@ components:
       required: [name, email]
       properties:
         name: { type: string }
-        email: { type: string, format: email }
+        email: { type: string }
     MessageReadDetailItem:
       type: object
       required: [user_id, is_read, last_read_message_id, updated_at, email, avatar]
@@ -1393,7 +1675,7 @@ components:
         is_read: { type: boolean }
         last_read_message_id: { type: integer, format: int64 }
         updated_at: { type: integer, format: int64, description: Unix milliseconds。 }
-        email: { type: string, format: email }
+        email: { type: string }
         avatar: { type: string }
         name: { type: string }
     MessageItem:
@@ -1415,6 +1697,7 @@ components:
           items: { type: string, description: 被 @ 用户 ID 的十进制字符串。 }
         read_details:
           type: array
+          nullable: true
           items: { $ref: '#/components/schemas/MessageReadDetailItem' }
     ReadStateItem:
       type: object
@@ -1645,6 +1928,57 @@ components:
           required: [body]
           properties:
             body: { $ref: '#/components/schemas/DownloadAttachmentResponse' }
+    SearchUserResultItem:
+      type: object
+      required: [user, snippet]
+      properties:
+        user: { $ref: '#/components/schemas/UserInfo' }
+        snippet: { type: string, description: 命中片段，命中词使用 `<mark>...</mark>` 包裹。 }
+    SearchFriendResultItem:
+      type: object
+      required: [friendship, user, snippet]
+      properties:
+        friendship: { $ref: '#/components/schemas/FriendshipItem' }
+        user: { $ref: '#/components/schemas/UserInfo' }
+        snippet: { type: string, description: 命中片段，命中词使用 `<mark>...</mark>` 包裹。 }
+    SearchConversationResultItem:
+      type: object
+      required: [conversation, snippet]
+      properties:
+        conversation: { $ref: '#/components/schemas/ConversationItem' }
+        snippet: { type: string, description: 命中片段，命中词使用 `<mark>...</mark>` 包裹。 }
+    SearchMessageResultItem:
+      type: object
+      required: [message, snippet]
+      properties:
+        message: { $ref: '#/components/schemas/MessageItem' }
+        snippet: { type: string, description: 命中片段，命中词使用 `<mark>...</mark>` 包裹。 }
+    SearchResponse:
+      type: object
+      required: [users, friends, conversations, messages, next_cursor_created_at, next_cursor_id, has_more]
+      properties:
+        users:
+          type: array
+          items: { $ref: '#/components/schemas/SearchUserResultItem' }
+        friends:
+          type: array
+          items: { $ref: '#/components/schemas/SearchFriendResultItem' }
+        conversations:
+          type: array
+          items: { $ref: '#/components/schemas/SearchConversationResultItem' }
+        messages:
+          type: array
+          items: { $ref: '#/components/schemas/SearchMessageResultItem' }
+        next_cursor_created_at: { type: integer, format: int64, description: 消息搜索下一页游标时间；非消息 scope 或无更多结果时为 0。 }
+        next_cursor_id: { type: integer, format: int64, description: 消息搜索下一页游标 ID；非消息 scope 或无更多结果时为 0。 }
+        has_more: { type: boolean, description: 消息搜索是否还有下一页。 }
+    SearchResponseEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelopeBase'
+        - type: object
+          required: [body]
+          properties:
+            body: { $ref: '#/components/schemas/SearchResponse' }
     BotMe:
       type: object
       required: [bot_user_id, nickname, avatar, status, scopes]

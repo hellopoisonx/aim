@@ -7,6 +7,8 @@
 
 ## REST API - `/api`
 
+完整 REST OpenAPI 规范维护在 `docs/api/gateway-openapi.yaml`；本文件保留领域边界、实现位置与关键权限说明。
+
 ### 规范
 
 - 统一返回http status code + json
@@ -67,8 +69,22 @@
 | GET | `/api/friends/applications` | `Auth` 中间件（JWT Bearer token） | `internal/handler/friends/list_friend_applications_handler.go` |
 | POST | `/api/friends/accept/:id` | `Auth` 中间件（JWT Bearer token） | `internal/handler/friends/accept_friend_handler.go` |
 | POST | `/api/friends/reject/:id` | `Auth` 中间件（JWT Bearer token） | `internal/handler/friends/reject_friend_handler.go` |
+| GET | `/api/friends/tags` | `Auth` 中间件（JWT Bearer token） | `internal/handler/friends/list_friend_tags_handler.go` |
+| POST | `/api/friends/tags` | `Auth` 中间件（JWT Bearer token） | `internal/handler/friends/create_friend_tag_handler.go` |
+| PUT | `/api/friends/tags/:id` | `Auth` 中间件（JWT Bearer token） | `internal/handler/friends/rename_friend_tag_handler.go` |
+| DELETE | `/api/friends/tags/:id` | `Auth` 中间件（JWT Bearer token） | `internal/handler/friends/delete_friend_tag_handler.go` |
+| PUT | `/api/friends/:id/tags` | `Auth` 中间件（JWT Bearer token） | `internal/handler/friends/set_friend_tags_handler.go` |
+| DELETE | `/api/friends/:id/tags/:tag_id` | `Auth` 中间件（JWT Bearer token） | `internal/handler/friends/remove_friend_tag_handler.go` |
 
-`GET /api/friends/me` 从 JWT payload 提取 `user_id`，调用 `FriendshipService.ListFriends` 返回当前用户的所有已接受好友列表。
+`GET /api/friends/me` 从 JWT payload 提取 `user_id`，调用 `FriendshipService.ListFriends` 返回当前用户的所有已接受好友列表；`FriendshipItem.tags` 透出当前好友关系绑定的标签。标签管理端点均以当前 JWT 用户为标签 owner，`PUT /api/friends/:id/tags` 为覆盖式设置。
+
+### 统一搜索 - `/api/search`
+
+| Method | Path | Auth | Handler |
+| --- | --- | --- | --- |
+| GET | `/api/search?q=&scope=&conversation_id=&cursor_created_at=&cursor_id=&limit=` | `Auth` 中间件（JWT Bearer token） | `internal/handler/search/search_handler.go` |
+
+`GET /api/search` 调用 logic `SearchService.UnifiedSearch`。`scope` 可逗号组合 `users/friends/conversations/messages`，为空搜索全部；消息搜索通过 `(cursor_created_at, cursor_id)` 游标分页，`limit` 默认 20、上限 100。响应按 scope 分类返回 `snippet`（命中词用 `<mark>...</mark>` 包裹）。
 
 ### 代理转发 `logic` - `/api/conversations`
 
@@ -79,24 +95,25 @@
 | GET | `/api/conversations` | `Auth` 中间件（JWT Bearer token） | `internal/handler/conversations/list_conversations_handler.go` |
 
 - `POST /api/conversations` 调用 `ConversationService.CreateConversation`（通过 `LogicRpc`）创建直聊/群聊会话。
-- `POST /api/conversations/group` 调用 `ConversationService.CreateConversation`（通过 `LogicRpc`）创建群聊会话。请求体无需 `conversation_type` 字段（固定为 `"group"`），支持 `name`（群名）和 `avatar`（群头像）可选字段。底层复用同一 RPC 方法，响应类型与 `POST /api/conversations` 一致。
-- `GET /api/conversations` 调用 `ConversationService.GetUserConversations`（通过 `LogicRpc`）返回当前用户参与的所有会话，每条记录包含 `conversation_id`、`conversation_type`、`is_active`、`created_at`、`member_ids`。
-- 两个端点均受 `Auth` 中间件保护，`user_id` 从 JWT payload 提取。
+- `POST /api/conversations/group` 调用 `ConversationService.CreateConversation`（通过 `LogicRpc`）创建群聊会话。请求体无需 `conversation_type` 字段（固定为 `"group"`），`name` 为必填群名，`avatar`（群头像）可选。底层复用同一 RPC 方法，响应类型与 `POST /api/conversations` 一致。
+- `GET /api/conversations` 调用 `ConversationService.GetUserConversations`（通过 `LogicRpc`）返回当前用户参与的所有会话，每条记录包含 `conversation_id`、`conversation_type`、`is_active`、`created_at`、`member_ids`、`name`、`avatar`、`creator_id`。
+- 以上端点均受 `Auth` 中间件保护，`user_id` 从 JWT payload 提取。
 
 ### 群管理 REST 端点
 
 | Method | Path | Auth | 说明 |
 | --- | --- | --- | --- |
-| `GET` | `/api/conversations/:id/members` | `Auth` 中间件 | 获取成员详情列表（`user_id`, `email`, `avatar`, `role`, `joined_at`） |
-| `POST` | `/api/conversations/:id/members` | `Auth` 中间件 | 邀请成员入群；服务端仅允许 `owner` 执行 |
-| `DELETE` | `/api/conversations/:id/members/:uid` | `Auth` 中间件 | 移除单个群成员；服务端仅允许 `owner` 执行 |
+| `GET` | `/api/conversations/:id/members` | `Auth` 中间件 | 获取成员详情列表（`user_id`, `email`, `avatar`, `role`, `joined_at`, `name`） |
+| `POST` | `/api/conversations/:id/members` | `Auth` 中间件 | 邀请成员入群；`owner` / `admin` 可执行 |
+| `DELETE` | `/api/conversations/:id/members/:uid` | `Auth` 中间件 | 移除单个群成员；`owner` 可移除非 owner，`admin` 仅可移除普通 member，不能移除自己 |
+| `POST` | `/api/conversations/:id/members/:uid/admin` | `Auth` 中间件 | 授予群管理员；仅 `owner` 可执行，目标必须是普通成员 |
+| `DELETE` | `/api/conversations/:id/members/:uid/admin` | `Auth` 中间件 | 撤销群管理员；仅 `owner` 可执行；目标已是普通成员时幂等成功 |
+| `POST` | `/api/conversations/:id/owner` | `Auth` 中间件 | 转让群主；仅当前 `owner` 可执行，目标必须是不同的群成员，原群主转为 `admin` |
 | `POST` | `/api/conversations/:id/leave` | `Auth` 中间件 | 退出群聊；`owner` 需先转让或解散群聊 |
 | `DELETE` | `/api/conversations/:id` | `Auth` 中间件 | 解散群聊；仅 `owner` 可操作 |
-| `PUT` | `/api/conversations/:id` | `Auth` 中间件 | 更新群信息（body: `name`, `avatar`，均为 optional；仅 `owner` 可操作） |
+| `PUT` | `/api/conversations/:id` | `Auth` 中间件 | 更新群信息（body: `name`, `avatar`，均为 optional）；`owner` / `admin` 可执行 |
 
-以上端点均通过 `LogicRpc` 调用 `ConversationService` 的对应 RPC（`AddGroupMembers`, `RemoveGroupMembers`, `LeaveGroup`, `DismissGroup`, `UpdateGroupInfo`, `GetConversationMembersDetail`）。`user_id` 和 `operator_id` 从 JWT payload 提取。服务端在 logic 层统一执行角色校验：`owner / admin / member` 的权限边界以 `app/logic/rpc/internal/service/conversation_service.go` 为准，gateway 只负责传递身份与参数。
-
-**角色约束说明**：当前群管理接口按“群主强约束”实现，`admin` 角色虽然已入库并可透出到成员详情，但暂未开放额外管理权限；后续若开放管理员能力，需要同步更新 logic 侧权限矩阵与 gateway 文档。
+以上端点均通过 `LogicRpc` 调用 `ConversationService` 的对应 RPC（`AddGroupMembers`, `RemoveGroupMembers`, `GrantGroupAdmin`, `RevokeGroupAdmin`, `TransferGroupOwner`, `LeaveGroup`, `DismissGroup`, `UpdateGroupInfo`, `GetConversationMembersDetail`）。`user_id` 和 `operator_id` 从 JWT payload 提取。服务端在 logic 层统一执行角色校验：`owner / admin / member` 的权限边界以 `app/logic/rpc/internal/service/conversation_service.go` 为准，gateway 只负责传递身份与参数。
 
 **类型更新**：`ConversationItem`、`CreateConversationRequest`、`CreateConversationResponse` 新增 `name`、`avatar`、`creator_id` 字段。`CreateConversationRequest` 新增 `Name` 字段用于创建群聊时指定群名。
 

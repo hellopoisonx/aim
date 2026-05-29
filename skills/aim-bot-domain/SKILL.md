@@ -55,8 +55,9 @@ description: aim 的 Bot OpenAPI 域。覆盖第三方 Bot 接入、token 鉴权
 3. Bot 服务用 `Authorization: Bot <token>` 调 `/api/bot/v1/messages` 发消息；
    通过 `GET /api/bot/v1/conversations/:id/history` 读历史、
    `GET /api/bot/v1/conversations/:id/members` 读成员、
-   `POST /api/bot/v1/conversations/:id/read-receipt` 上报已读，
-   `GET /api/bot/v1/conversations/:id/read-states` 读取已读状态。
+   `POST /api/bot/v1/conversations/:id/read-receipt` 上报已读、
+   `GET /api/bot/v1/conversations/:id/read-states` 读取已读状态，
+   以及 `GET /api/bot/v1/attachments/:id/download` 获取附件下载授权。
 4. Go 业务可导入 `github.com/hellopoisonx/aim/bot_sdk`（包名 `botsdk`）使用
    REST Client、rotate-secret Webhook 验签与异步消息处理器。
 5. 第三方 HTTP 服务在 `X-AIM-Signature` 校验通过后处理 `message.created` 事件。
@@ -97,6 +98,7 @@ description: aim 的 Bot OpenAPI 域。覆盖第三方 Bot 接入、token 鉴权
 
 ## 最近变更
 
+- 2026-05-29: Bot 开发者文档同步 `docs/api/gateway-openapi.yaml`。Action 表补齐 `bot.attachment.download`，附件下载端点以 OpenAPI schema 为准。
 - 2026-05-28: `bot_sdk/testdata/integration/etc/` 从标准本地 Docker 配置重新同步，补齐 Prometheus 配置块并统一 GatewayRpc `9091`；集成 Compose 迁移/Kafka 初始化改用 `deploy/scripts/`。
 - 2026-05-28: `bot_sdk/testdata/integration/docker-compose.yaml` 的 Tempo 镜像固定为 `grafana/tempo:2.8.1`，避免 `latest` 拉到不兼容的 v3 RC schema；集成测试 `etc/logic.yaml`/`etc/core.yaml` 已启用 `aim.conversation.events` 群管理系统消息链路。
 - 2026-05-27: `bot_sdk.AsyncProcessor` 新增 `UpdateSecret` 方法，支持运行时 webhook 密钥轮换无需重启；`ServeHTTP` 中 `p.secret` 读取加锁防止 data race。
