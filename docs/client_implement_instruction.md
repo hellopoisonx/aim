@@ -5,7 +5,6 @@
 > **参考文件**：
 > - REST API 规范：[`docs/api/gateway-openapi.yaml`](api/gateway-openapi.yaml)
 > - WebSocket 帧协议：[`docs/ws.md`](ws.md)
-> - Bot 接入：[`docs/bot-developer-guide.md`](bot-developer-guide.md)
 > - Proto 源文件：`shared/proto/ws/ws.proto`、`shared/proto/gateway/gateway.proto`
 
 ---
@@ -499,15 +498,6 @@ Authorization: Bearer <access_token>
 }
 ```
 
-#### 使用 Token
-
-签发的 Token 可用于调用 Bot OpenAPI（`/api/bot/v1/*`），鉴权方式为：
-
-```
-Authorization: Bot <plaintext_token>
-```
-
-详见 [Bot 开发者指南](bot-developer-guide.md)。
 
 #### Action 字典
 
