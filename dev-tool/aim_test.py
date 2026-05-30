@@ -485,6 +485,67 @@ class RESTClient:
         return self._post(f"/api/conversations/{conversation_id}/owner",
                            {"user_id": user_id})
 
+
+    # ── User Bot Management ──
+
+    def create_user_bot(self, email: str = "", nickname: str = "", avatar: str = "") -> dict:
+        return self._post("/api/user/bots", {"email": email, "nickname": nickname, "avatar": avatar})
+
+    def list_user_bots(self) -> list:
+        return self._get("/api/user/bots")["bots"]
+
+    def get_user_bot(self, bot_id: int) -> dict:
+        return self._get(f"/api/user/bots/{bot_id}")["bot"]
+
+    def update_user_bot(self, bot_id: int, nickname: str, avatar: str = "") -> dict:
+        return self._put(f"/api/user/bots/{bot_id}", {"nickname": nickname, "avatar": avatar})["bot"]
+
+    def enable_user_bot(self, bot_id: int) -> dict:
+        return self._post(f"/api/user/bots/{bot_id}/enable")["bot"]
+
+    def disable_user_bot(self, bot_id: int) -> dict:
+        return self._post(f"/api/user/bots/{bot_id}/disable")["bot"]
+
+    def delete_user_bot(self, bot_id: int) -> dict:
+        return self._delete(f"/api/user/bots/{bot_id}")
+
+    def create_bot_token(self, bot_id: int, name: str = "", expires_at: int = 0, actions: list = None) -> dict:
+        body = {"actions": actions or ["bot.message.send"]}
+        if name:
+            body["name"] = name
+        if expires_at:
+            body["expires_at"] = expires_at
+        return self._post(f"/api/user/bots/{bot_id}/tokens", body)
+
+    def list_bot_tokens(self, bot_id: int) -> list:
+        return self._get(f"/api/user/bots/{bot_id}/tokens")["tokens"]
+
+    def update_bot_token(self, bot_id: int, token_id: int, name: str = "", expires_at: int = 0, actions: list = None) -> dict:
+        body = {"actions": actions or ["bot.message.send"]}
+        if name:
+            body["name"] = name
+        if expires_at:
+            body["expires_at"] = expires_at
+        return self._put(f"/api/user/bots/{bot_id}/tokens/{token_id}", body)["token"]
+
+    def rotate_bot_token(self, bot_id: int, token_id: int) -> dict:
+        return self._post(f"/api/user/bots/{bot_id}/tokens/{token_id}/rotate")
+
+    def revoke_bot_token(self, bot_id: int, token_id: int) -> dict:
+        return self._delete(f"/api/user/bots/{bot_id}/tokens/{token_id}")
+
+    def add_bot_to_conversation(self, bot_id: int, conversation_id: int) -> dict:
+        return self._post(f"/api/user/bots/{bot_id}/conversations/{conversation_id}")
+
+    def create_bot_direct_conversation(self, bot_id: int) -> dict:
+        return self._post(f"/api/user/bots/{bot_id}/direct-conversation")
+
+    def list_bot_actions(self) -> list:
+        return self._get("/api/user/bot-actions")["actions"]
+
+    def list_bot_events(self) -> list:
+        return self._get("/api/user/bot-events")["events"]
+
 # ── WebSocket Client ────────────────────────────────────────────────────────────
 
 class WSClient:
@@ -1493,6 +1554,120 @@ def cmd_bot_webhook_delete(args):
     print_json(body)
 
 
+# ── User Bot Management CLI commands ──
+
+def _client_for(args) -> RESTClient:
+    token = TokenManager.load(args.profile if hasattr(args, 'profile') else "")
+    return RESTClient(token=token)
+
+def _print_bot(bot: dict):
+    print(f"Bot #{bot.get('bot_user_id')}: {bot.get('nickname')} ({bot.get('email')}) [{bot.get('status')}]")
+
+def cmd_user_bot_create(args):
+    client = _client_for(args)
+    resp = client.create_user_bot(args.email, args.nickname, args.avatar or "")
+    print("✓ Bot created:")
+    _print_bot(resp["bot"])
+    print_json(resp)
+
+def cmd_user_bot_list(args):
+    client = _client_for(args)
+    bots = client.list_user_bots()
+    print(f"✓ {len(bots)} bot(s):")
+    for b in bots:
+        _print_bot(b)
+    print_json(bots)
+
+def cmd_user_bot_get(args):
+    client = _client_for(args)
+    bot = client.get_user_bot(args.bot_id)
+    _print_bot(bot)
+    print_json(bot)
+
+def cmd_user_bot_update(args):
+    client = _client_for(args)
+    bot = client.update_user_bot(args.bot_id, args.nickname, args.avatar or "")
+    print("✓ Bot updated:")
+    _print_bot(bot)
+    print_json(bot)
+
+def cmd_user_bot_enable(args):
+    client = _client_for(args)
+    bot = client.enable_user_bot(args.bot_id)
+    print("✓ Bot enabled")
+    _print_bot(bot)
+
+def cmd_user_bot_disable(args):
+    client = _client_for(args)
+    bot = client.disable_user_bot(args.bot_id)
+    print("✓ Bot disabled")
+    _print_bot(bot)
+
+def cmd_user_bot_delete(args):
+    client = _client_for(args)
+    resp = client.delete_user_bot(args.bot_id)
+    print(f"✓ Deleted: {resp.get('deleted', False)}")
+
+def cmd_user_bot_token_create(args):
+    client = _client_for(args)
+    actions = [a.strip() for a in args.actions.split(",")] if args.actions else ["bot.message.send"]
+    resp = client.create_bot_token(args.bot_id, args.name or "", args.expires_at or 0, actions)
+    print(f"✓ Token created: token_id={resp['token']['token_id']}")
+    if resp.get("plaintext_token"):
+        print(f"⚠  Plaintext token (shown once): {resp['plaintext_token']}")
+    print_json(resp)
+
+def cmd_user_bot_token_list(args):
+    client = _client_for(args)
+    tokens = client.list_bot_tokens(args.bot_id)
+    print(f"✓ {len(tokens)} token(s) for bot #{args.bot_id}:")
+    print_json(tokens)
+
+def cmd_user_bot_token_update(args):
+    client = _client_for(args)
+    actions = [a.strip() for a in args.actions.split(",")] if args.actions else ["bot.message.send"]
+    token = client.update_bot_token(args.bot_id, args.token_id, args.name or "", args.expires_at or 0, actions)
+    print(f"✓ Token updated: token_id={token['token_id']}")
+    print_json(token)
+
+def cmd_user_bot_token_rotate(args):
+    client = _client_for(args)
+    resp = client.rotate_bot_token(args.bot_id, args.token_id)
+    print(f"✓ Token rotated: token_id={resp['token']['token_id']}")
+    if resp.get("plaintext_token"):
+        print(f"⚠  New plaintext token (shown once): {resp['plaintext_token']}")
+    print_json(resp)
+
+def cmd_user_bot_token_revoke(args):
+    client = _client_for(args)
+    resp = client.revoke_bot_token(args.bot_id, args.token_id)
+    print(f"✓ Revoked: {resp.get('revoked', False)}")
+
+def cmd_user_bot_add_conv(args):
+    client = _client_for(args)
+    resp = client.add_bot_to_conversation(args.bot_id, args.conversation_id)
+    print(f"✓ Bot #{args.bot_id} added to conversation #{args.conversation_id}")
+    print_json(resp)
+
+def cmd_user_bot_direct_conv(args):
+    client = _client_for(args)
+    resp = client.create_bot_direct_conversation(args.bot_id)
+    print(f"✓ Direct conversation with Bot #{args.bot_id} created: #{resp.get('conversation_id')}")
+    print_json(resp)
+
+def cmd_bot_actions(args):
+    client = _client_for(args)
+    actions = client.list_bot_actions()
+    print(f"✓ {len(actions)} enabled bot action(s):")
+    print_json(actions)
+
+def cmd_bot_events(args):
+    client = _client_for(args)
+    events = client.list_bot_events()
+    print(f"✓ {len(events)} enabled bot event(s):")
+    print_json(events)
+
+
 def cmd_interactive(args):
     """Interactive mode for exploring the API."""
     _active_profile: str = "default"  # current active profile
@@ -1776,6 +1951,70 @@ Type 'help' for commands, 'quit' to exit.
                     continue
                 ws.send_ack(int(parts[1]))
             elif cmd == "ws-recv":
+                print("Waiting for frames... (Ctrl+C to stop)")
+                try:
+                    while True:
+                        time.sleep(0.1)
+                except KeyboardInterrupt:
+                    print()
+            elif cmd == "bot-create" and len(parts) >= 2:
+                resp = client.create_user_bot(parts[2] if len(parts) > 2 else "", parts[1])
+                print(f"✓ Bot created: #{resp['bot']['bot_user_id']} ({resp['bot']['nickname']})")
+                if resp.get("plaintext_token"):
+                    print(f"⚠  Token: {resp['plaintext_token']}")
+                print_json(resp)
+            elif cmd == "bot-list":
+                bots = client.list_user_bots()
+                print(f"✓ {len(bots)} bot(s):")
+                for b in bots:
+                    print(f"  #{b['bot_user_id']}: {b['nickname']} [{b['status']}]")
+            elif cmd == "bot-get" and len(parts) >= 2:
+                bot = client.get_user_bot(int(parts[1]))
+                print_json(bot)
+            elif cmd == "bot-update" and len(parts) >= 3:
+                bot = client.update_user_bot(int(parts[1]), parts[2])
+                print(f"✓ Bot updated: {bot['nickname']}")
+            elif cmd == "bot-enable" and len(parts) >= 2:
+                bot = client.enable_user_bot(int(parts[1]))
+                print(f"✓ Bot enabled: #{bot['bot_user_id']}")
+            elif cmd == "bot-disable" and len(parts) >= 2:
+                bot = client.disable_user_bot(int(parts[1]))
+                print(f"✓ Bot disabled: #{bot['bot_user_id']}")
+            elif cmd == "bot-delete" and len(parts) >= 2:
+                resp = client.delete_user_bot(int(parts[1]))
+                print(f"✓ Deleted: {resp.get('deleted', False)}")
+            elif cmd == "bot-token-create" and len(parts) >= 2:
+                actions = parts[2].split(",") if len(parts) > 2 else ["bot.message.send"]
+                resp = client.create_bot_token(int(parts[1]), "", 0, actions)
+                print(f"✓ Token created: token_id={resp['token']['token_id']}")
+                if resp.get("plaintext_token"):
+                    print(f"⚠  Token: {resp['plaintext_token']}")
+            elif cmd == "bot-token-list" and len(parts) >= 2:
+                tokens = client.list_bot_tokens(int(parts[1]))
+                print(f"✓ {len(tokens)} token(s):")
+                print_json(tokens)
+            elif cmd == "bot-token-revoke" and len(parts) >= 3:
+                resp = client.revoke_bot_token(int(parts[1]), int(parts[2]))
+                print(f"✓ Revoked: {resp.get('revoked', False)}")
+            elif cmd == "bot-token-rotate" and len(parts) >= 3:
+                resp = client.rotate_bot_token(int(parts[1]), int(parts[2]))
+                print(f"✓ Token rotated: token_id={resp['token']['token_id']}")
+                if resp.get("plaintext_token"):
+                    print(f"⚠  New token: {resp['plaintext_token']}")
+            elif cmd == "bot-add-conv" and len(parts) >= 3:
+                resp = client.add_bot_to_conversation(int(parts[1]), int(parts[2]))
+                print(f"✓ Bot #{parts[1]} added to conversation #{parts[2]}")
+            elif cmd == "bot-direct-conv" and len(parts) >= 2:
+                resp = client.create_bot_direct_conversation(int(parts[1]))
+                print(f"✓ Direct conversation: #{resp.get('conversation_id')}")
+            elif cmd == "bot-actions":
+                actions = client.list_bot_actions()
+                print(f"✓ {len(actions)} enabled action(s):")
+                print_json(actions)
+            elif cmd == "bot-events":
+                events = client.list_bot_events()
+                print(f"✓ {len(events)} enabled event(s):")
+                print_json(events)
                 print("Waiting for frames... (Ctrl+C to stop)")
                 try:
                     while True:
@@ -2116,6 +2355,83 @@ Examples:
     p = sub.add_parser("bot-webhook-delete", help="DELETE /api/bot/v1/webhook")
     p.add_argument("--token", default="", help=bot_token_help)
 
+    # User Bot Management
+
+    p = sub.add_parser("user-bot-create", help="POST /api/user/bots (create personal Bot)")
+    p.add_argument("--email", default="")
+    p.add_argument("--nickname", required=True)
+    p.add_argument("--avatar", default="")
+    p.add_argument("--profile", default="", help="Profile name")
+
+    p = sub.add_parser("user-bot-list", help="GET /api/user/bots (list owned Bots)")
+    p.add_argument("--profile", default="", help="Profile name")
+
+    p = sub.add_parser("user-bot-get", help="GET /api/user/bots/:id")
+    p.add_argument("--bot-id", type=int, required=True)
+    p.add_argument("--profile", default="", help="Profile name")
+
+    p = sub.add_parser("user-bot-update", help="PUT /api/user/bots/:id")
+    p.add_argument("--bot-id", type=int, required=True)
+    p.add_argument("--nickname", required=True)
+    p.add_argument("--avatar", default="")
+    p.add_argument("--profile", default="", help="Profile name")
+
+    p = sub.add_parser("user-bot-enable", help="POST /api/user/bots/:id/enable")
+    p.add_argument("--bot-id", type=int, required=True)
+    p.add_argument("--profile", default="", help="Profile name")
+
+    p = sub.add_parser("user-bot-disable", help="POST /api/user/bots/:id/disable")
+    p.add_argument("--bot-id", type=int, required=True)
+    p.add_argument("--profile", default="", help="Profile name")
+
+    p = sub.add_parser("user-bot-delete", help="DELETE /api/user/bots/:id (soft-delete)")
+    p.add_argument("--bot-id", type=int, required=True)
+    p.add_argument("--profile", default="", help="Profile name")
+
+    p = sub.add_parser("user-bot-token-create", help="POST /api/user/bots/:id/tokens")
+    p.add_argument("--bot-id", type=int, required=True)
+    p.add_argument("--name", default="")
+    p.add_argument("--expires-at", type=int, default=0, help="Unix milliseconds, 0=no expiry")
+    p.add_argument("--actions", default="", help="Comma-separated action names (default: bot.message.send)")
+    p.add_argument("--profile", default="", help="Profile name")
+
+    p = sub.add_parser("user-bot-token-list", help="GET /api/user/bots/:id/tokens")
+    p.add_argument("--bot-id", type=int, required=True)
+    p.add_argument("--profile", default="", help="Profile name")
+
+    p = sub.add_parser("user-bot-token-update", help="PUT /api/user/bots/:id/tokens/:token_id")
+    p.add_argument("--bot-id", type=int, required=True)
+    p.add_argument("--token-id", type=int, required=True)
+    p.add_argument("--name", default="")
+    p.add_argument("--expires-at", type=int, default=0)
+    p.add_argument("--actions", default="", help="Comma-separated action names")
+    p.add_argument("--profile", default="", help="Profile name")
+
+    p = sub.add_parser("user-bot-token-rotate", help="POST /api/user/bots/:id/tokens/:token_id/rotate")
+    p.add_argument("--bot-id", type=int, required=True)
+    p.add_argument("--token-id", type=int, required=True)
+    p.add_argument("--profile", default="", help="Profile name")
+
+    p = sub.add_parser("user-bot-token-revoke", help="DELETE /api/user/bots/:id/tokens/:token_id")
+    p.add_argument("--bot-id", type=int, required=True)
+    p.add_argument("--token-id", type=int, required=True)
+    p.add_argument("--profile", default="", help="Profile name")
+
+    p = sub.add_parser("user-bot-add-conv", help="POST /api/user/bots/:id/conversations/:conversation_id")
+    p.add_argument("--bot-id", type=int, required=True)
+    p.add_argument("--conversation-id", type=int, required=True)
+    p.add_argument("--profile", default="", help="Profile name")
+
+    p = sub.add_parser("user-bot-direct-conv", help="POST /api/user/bots/:id/direct-conversation")
+    p.add_argument("--bot-id", type=int, required=True)
+    p.add_argument("--profile", default="", help="Profile name")
+
+    p = sub.add_parser("bot-actions", help="GET /api/user/bot-actions")
+    p.add_argument("--profile", default="", help="Profile name")
+
+    p = sub.add_parser("bot-events", help="GET /api/user/bot-events")
+    p.add_argument("--profile", default="", help="Profile name")
+
     # Attachments
     p = sub.add_parser("attachment-init", help="POST /api/attachments/init")
     p.add_argument("--conversation-id", type=int, required=True)
@@ -2237,6 +2553,22 @@ Examples:
         "group-grant-admin": cmd_grant_group_admin,
         "group-revoke-admin": cmd_revoke_group_admin,
         "group-transfer-owner": cmd_transfer_group_owner,
+        "user-bot-create": cmd_user_bot_create,
+        "user-bot-list": cmd_user_bot_list,
+        "user-bot-get": cmd_user_bot_get,
+        "user-bot-update": cmd_user_bot_update,
+        "user-bot-enable": cmd_user_bot_enable,
+        "user-bot-disable": cmd_user_bot_disable,
+        "user-bot-delete": cmd_user_bot_delete,
+        "user-bot-token-create": cmd_user_bot_token_create,
+        "user-bot-token-list": cmd_user_bot_token_list,
+        "user-bot-token-update": cmd_user_bot_token_update,
+        "user-bot-token-rotate": cmd_user_bot_token_rotate,
+        "user-bot-token-revoke": cmd_user_bot_token_revoke,
+        "user-bot-add-conv": cmd_user_bot_add_conv,
+        "user-bot-direct-conv": cmd_user_bot_direct_conv,
+        "bot-actions": cmd_bot_actions,
+        "bot-events": cmd_bot_events,
         "interactive": cmd_interactive,
         "run-all": cmd_run_all,
     }

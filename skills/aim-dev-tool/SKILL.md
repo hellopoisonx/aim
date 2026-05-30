@@ -248,6 +248,7 @@ python generate_fixtures.py --count 5000   # 自定义数量
 
 ## 最近变更
 
+- 2026-05-30: 用户侧 Bot 管理命令。新增 `RESTClient` 16 个方法（`create_user_bot`/`list_user_bots`/`get_user_bot`/`update_user_bot`/`enable_user_bot`/`disable_user_bot`/`delete_user_bot`/`create_bot_token`/`list_bot_tokens`/`update_bot_token`/`rotate_bot_token`/`revoke_bot_token`/`add_bot_to_conversation`/`create_bot_direct_conversation`/`list_bot_actions`/`list_bot_events`）；CLI 新增 `user-bot-create`/`user-bot-list`/`user-bot-get`/`user-bot-update`/`user-bot-enable`/`user-bot-disable`/`user-bot-delete`/`user-bot-token-create`/`user-bot-token-list`/`user-bot-token-update`/`user-bot-token-rotate`/`user-bot-token-revoke`/`user-bot-add-conv`/`user-bot-direct-conv`/`bot-actions`/`bot-events` 子命令；交互模式新增 `bot-create`/`bot-list`/`bot-get`/`bot-update`/`bot-enable`/`bot-disable`/`bot-delete`/`bot-token-create`/`bot-token-list`/`bot-token-revoke`/`bot-token-rotate`/`bot-add-conv`/`bot-direct-conv`/`bot-actions`/`bot-events` 命令。
 - 2026-05-30: `WSClient` 自动跟踪已连续处理的白名单 pending 推送 `seq`，自动心跳携带 `HeartbeatPayload.last_seq` 以触发服务端 L1 pending 补发；`ws-heartbeat` 新增 `--last-seq` 覆盖参数，交互模式支持 `ws-heartbeat N`。
 - 2026-05-28: 压测配置统一 GatewayRpc 监听 `9091`（宿主机 `19091`），修复 `dev-tool/etc/core.yaml` 中重复 `Consumers` 与误缩进的 `Presence.TTLSeconds`；压测 Compose 迁移/Kafka topic 初始化改用 `deploy/scripts/`，避免遗漏新 migration 或 topic。
 - 2026-05-28: 压测 compose 的 `bench-tempo` 镜像固定为 `grafana/tempo:2.8.1`，避免 `latest` 拉到 Tempo v3 RC 后无法解析仓库共用的 `deploy/tempo/tempo.yaml`；压测 `etc/logic.yaml`/`etc/core.yaml` 已启用 `aim.conversation.events` 群管理系统消息链路。

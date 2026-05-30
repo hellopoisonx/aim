@@ -72,6 +72,29 @@ PYTHONIOENCODING=utf-8 python aim_test.py <command> [--args]
 | `interactive` | 进入 REPL 交互模式 |
 | `run-all` | 运行全流程集成测试（注册→登录→好友→会话→WS→注销） |
 
+### 用户侧 Bot 管理
+
+| 命令 | 参数 | 鉴权 | 对应 API |
+|------|------|------|----------|
+| `user-bot-create` | `--nickname` [`--email`] [`--avatar`] | Bearer | `POST /api/user/bots` |
+| `user-bot-list` | — | Bearer | `GET /api/user/bots` |
+| `user-bot-get` | `--bot-id` | Bearer | `GET /api/user/bots/:id` |
+| `user-bot-update` | `--bot-id` `--nickname` [`--avatar`] | Bearer | `PUT /api/user/bots/:id` |
+| `user-bot-enable` | `--bot-id` | Bearer | `POST /api/user/bots/:id/enable` |
+| `user-bot-disable` | `--bot-id` | Bearer | `POST /api/user/bots/:id/disable` |
+| `user-bot-delete` | `--bot-id` | Bearer | `DELETE /api/user/bots/:id` (软删除) |
+| `user-bot-token-create` | `--bot-id` [`--name`] [`--expires-at`] [`--actions`] | Bearer | `POST /api/user/bots/:id/tokens` |
+| `user-bot-token-list` | `--bot-id` | Bearer | `GET /api/user/bots/:id/tokens` |
+| `user-bot-token-update` | `--bot-id` `--token-id` `--actions` [`--name`] [`--expires-at`] | Bearer | `PUT /api/user/bots/:id/tokens/:token_id` |
+| `user-bot-token-rotate` | `--bot-id` `--token-id` | Bearer | `POST /api/user/bots/:id/tokens/:token_id/rotate` |
+| `user-bot-token-revoke` | `--bot-id` `--token-id` | Bearer | `DELETE /api/user/bots/:id/tokens/:token_id` |
+| `user-bot-add-conv` | `--bot-id` `--conversation-id` | Bearer | `POST /api/user/bots/:id/conversations/:conversation_id` |
+| `user-bot-direct-conv` | `--bot-id` | Bearer | `POST /api/user/bots/:id/direct-conversation` |
+| `bot-actions` | — | Bearer | `GET /api/user/bot-actions` |
+| `bot-events` | — | Bearer | `GET /api/user/bot-events` |
+
+注：`--actions` 接受逗号分隔的 action 名称（如 `bot.message.send,bot.conversation.list`），默认 `bot.message.send`。Token 创建/轮换返回的 `plaintext_token` 只在响应中出现一次。软删除 Bot 会禁用 Bot 并撤销所有 Token，不物理删除历史消息。
+
 ### --profile 参数
 
 支持多用户并行测试。不同 profile 的 token 独立持久化。
@@ -155,6 +178,69 @@ aim [default] [#1] ·> conv-update 5 --name "New Name"
 ✓ Updated conversation #5
 aim [default] [#1] ·> conv-remove-member 5 7
 ✓ Removed user #7
+```
+
+### Bot 管理（交互模式）
+
+```bash
+# 创建 Bot
+aim [default] [#1] ·> bot-create my-bot bot@example.com
+✓ Bot created: #9000000001 (my-bot)
+
+# 查看 Bot 列表
+aim [default] [#1] ·> bot-list
+✓ 2 bot(s):
+  #9000000001: my-bot [1]
+
+# 查看 Bot 详情
+aim [default] [#1] ·> bot-get 9000000001
+{ "bot_user_id": 9000000001, ... }
+
+# 更新 Bot 昵称
+aim [default] [#1] ·> bot-update 9000000001 new-name
+✓ Bot updated: new-name
+
+# 启用/禁用
+aim [default] [#1] ·> bot-enable 9000000001
+aim [default] [#1] ·> bot-disable 9000000001
+
+# 删除（软删除）
+aim [default] [#1] ·> bot-delete 9000000001
+✓ Deleted: true
+
+# 创建 Token（默认 bot.message.send）
+aim [default] [#1] ·> bot-token-create 9000000001
+✓ Token created: token_id=...
+⚠  Token: aim_bot_... (shown once)
+
+# 创建 Token 带自定义 action
+aim [default] [#1] ·> bot-token-create 9000000001 bot.message.send,bot.conversation.list
+
+# 列出 Token
+aim [default] [#1] ·> bot-token-list 9000000001
+
+# 轮换 Token
+aim [default] [#1] ·> bot-token-rotate 9000000001 <token_id>
+✓ Token rotated: ...
+⚠  New token: aim_bot_... (shown once)
+
+# 撤销 Token
+aim [default] [#1] ·> bot-token-revoke 9000000001 <token_id>
+✓ Revoked: true
+
+# 加入群聊
+aim [default] [#1] ·> bot-add-conv 9000000001 5
+✓ Bot #9000000001 added to conversation #5
+
+# 创建 user-bot direct 会话
+aim [default] [#1] ·> bot-direct-conv 9000000001
+✓ Direct conversation: #6
+
+# 查看可用 action
+aim [default] [#1] ·> bot-actions
+
+# 查看可用 webhook event
+aim [default] [#1] ·> bot-events
 ```
 
 ### Profile 切换
