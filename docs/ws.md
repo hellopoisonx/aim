@@ -45,11 +45,11 @@ message WsFrame {
 
 - 客户端发送帧时维护单调递增 `seq`。
 - `FRAME_TYPE_SERVER_ACK` 的 `ServerAckPayload.ack_seq` 必须匹配被确认的客户端帧 `seq`。
-- 客户端可通过 `FRAME_TYPE_ACK` 的 `ClientAckPayload.ack_seq` 确认收到服务端推送帧。
+- 客户端可通过 `FRAME_TYPE_ACK` 的 `ClientAckPayload.ack_seq` 确认已处理的服务端可重放推送帧；不要用 `SERVER_ACK`、`TOKEN_EXPIRED`、`RECONNECT` 等非 pending/control 帧推进该游标。
 - 当前实现细节：
   - WebSocket handler 主动写出的 `SERVER_ACK` / `TOKEN_EXPIRED` 使用服务端本地单调 `seq`。
   - 通过内部 `GatewayService` gRPC 写出的推送帧会先以 `seq=0` 作为“待分配”哨兵，实际写出前由 per-connection writer 补齐为正数；客户端仍应兼容历史版本或异常实现中的 `seq=0`，可只对 `seq>0` 的服务端帧发送 `FRAME_TYPE_ACK`。
-  - gateway 当前仅记录 `LastAckedSeq`，尚未实现基于 ACK 的服务端 pending / 离线补发。
+  - gateway 维护 per-connection `LastAckedSeq` 与短 TTL L1 pending 队列；客户端 `FRAME_TYPE_ACK.ack_seq` 或 `HeartbeatPayload.last_seq` 会推进该游标并清理已确认 pending 帧。该游标面向服务端白名单 pending 推送帧，客户端不要用心跳 ACK 等非 pending 帧的 `seq` 越过尚未处理的 pending 帧。
 
 ## 3. 帧类型总览
 
@@ -93,7 +93,7 @@ message WsFrame {
 | `FRAME_TYPE_TOKEN_EXPIRED` | 否 | 连接控制帧；客户端应以 close code、token 过期时间和 refresh 流程处理，不做 pending。 |
 | `FRAME_TYPE_SERVER_ACK` | 否 | 它确认客户端上行帧，不属于服务端推送 pending；客户端发送消息的 pending 由 `client_msg_id`、重试和历史拉取兜底。 |
 
-如果后续实现服务端基于 `LastAckedSeq` 的补发，也应只对白名单帧（`PUSH_MESSAGE`、`PUSH_NOTIFICATION`、`PUSH_FRIEND_APPLICATION`、`PUSH_READ_RECEIPT`）启用，并保持短 TTL、最大容量和业务 key 合并。pending 归属应是 per-connection 的出站补发窗口，且只保存已由 writer 分配正数 `seq` 的帧；当前不需要新增协议字段。
+服务端已实现基于 L1 内存缓存的 per-connection pending 窗口：只对白名单帧（`PUSH_MESSAGE`、`PUSH_NOTIFICATION`、`PUSH_FRIEND_APPLICATION`、`PUSH_READ_RECEIPT`）启用，默认每连接最多 128 帧、TTL 5 分钟；只保存已由 writer 分配正数 `seq` 且成功写出的帧。客户端心跳携带 `last_seq` 时，gateway 先推进 `LastAckedSeq` 并清理 `seq <= last_seq` 的 pending，再返回心跳 `SERVER_ACK`，随后用原始 `seq` 补发 `seq > last_seq` 的白名单帧。客户端计算 `last_seq` 时只应基于已处理的白名单 pending 推送帧，不能因为先收到心跳 ACK 就跳过尚未处理的 replay 帧。该机制不跨断线/重连持久化，离线或重连后的最终状态仍以 REST 历史/快照接口为准。
 
 ## 4. Payload 结构
 
@@ -127,12 +127,13 @@ message HeartbeatPayload {
 }
 ```
 
-- `last_seq` 表示客户端最新收到的服务端序列号。
+- `last_seq` 表示客户端已连续处理的最大白名单 pending 推送帧序列号；客户端应填写已处理的最大可重放服务端推送 `seq`，不能用存在空洞的“最新收到 seq”或非 pending/control 帧 `seq` 越过未处理帧。
 - 服务端收到心跳后：
   1. 更新连接 `LastSeen`。
   2. 续约 Redis presence / user_gateway TTL。
-  3. 返回 `SERVER_ACK`。
-- 当前 `last_seq` 尚未用于自动补发。
+  3. 用 `last_seq` 推进连接 `LastAckedSeq`，并清理 `seq <= last_seq` 的 pending 帧。
+  4. 返回心跳 `SERVER_ACK`。
+  5. 从 L1 pending 队列补发 `seq > last_seq` 的白名单服务端推送帧。
 
 ### 4.3 输入状态：`TypingPayload`
 
@@ -173,7 +174,7 @@ message ClientAckPayload {
 ```
 
 - `ack_seq` 为客户端确认收到的服务端帧 `seq`。
-- gateway 当前只记录每个连接的最大 `LastAckedSeq`，不返回 ACK。
+- gateway 记录每个连接的最大 `LastAckedSeq`，并清理 `seq <= ack_seq` 的 L1 pending 帧；该确认帧本身不返回 `SERVER_ACK`。
 - 当前实现会在写出前为 `seq=0` 的待分配服务端帧补齐正数；客户端仍应兼容历史版本或异常实现中的 `seq=0`，只对 `seq>0` 的服务端帧发送确认。
 
 ### 4.6 推送消息：`PushMessagePayload`
@@ -411,4 +412,4 @@ message ServerAckPayload {
 - 新增帧类型时只能追加编号，不复用历史编号。
 - `mentions` 使用十进制用户 ID 字符串，避免跨语言精度问题。
 - `conversation_type` 合法值为 `direct` / `group`；客户端需容忍少数 fallback 推送为空字符串。
-- 当前服务端尚不提供基于 ACK 的离线补发；客户端可按 §3.3 对白名单帧做轻量 pending，但仍应以 REST 历史/快照接口作为最终状态来源。
+- 服务端提供当前连接生命周期内的轻量 ACK/心跳补发窗口，但不提供跨断线/离线持久补发；客户端仍应以 REST 历史/快照接口作为最终状态来源。

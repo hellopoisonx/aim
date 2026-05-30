@@ -29,6 +29,8 @@
 - 每个 `Connection` 维护 bounded outbound channel 和单独 `writerLoop`；所有 GatewayService 推送、handler ACK、TOKEN_EXPIRED 等写入都通过该队列串行化。
 - `writerLoop` 是同一连接唯一 WebSocket writer，按出队顺序执行“分配 seq → 编码 → 写 socket → 返回结果”，避免多个 goroutine 抢同一把锁，也保证写出顺序与 seq 顺序一致。
 - 连接注销、context 取消或 token 过期关闭时必须停止 writer 并让后续写入返回错误，避免 goroutine 泄漏。
+- 成功写出的白名单推送帧进入 per-connection L1 pending 队列（默认每连接 128 帧、TTL 5 分钟）；`FRAME_TYPE_ACK.ack_seq` 与 `HeartbeatPayload.last_seq` 都会推进 `LastAckedSeq` 并清理 `seq <= ack_seq/last_seq` 的 pending。客户端应只用已连续处理的白名单 pending 推送帧推进该游标，不能用心跳 ACK/control 帧 seq 越过空洞。
+- 心跳处理顺序：解码 `HeartbeatPayload.last_seq` → 更新 `LastSeen`/presence TTL → 推进 ACK 游标 → 返回心跳 `SERVER_ACK` → 用原始 `seq` 补发 `seq > last_seq` 的白名单 pending 帧；重放帧不再次入队。
 
 ## 测试
 
@@ -75,7 +77,7 @@ go test -run 'Test.*WebSocket|Test.*Gateway|Test.*Manager' ./app/gateway/api/...
 
 ## 轻量 pending 帧分类
 
-客户端或未来服务端 ACK 补发实现只应对白名单帧做短 TTL、有限容量 pending：
+服务端 ACK/心跳补发实现只对白名单帧做短 TTL、有限容量 pending：
 
 - `FRAME_TYPE_PUSH_MESSAGE`：按 `message_id` 去重；发送方可用 `client_msg_id` 合并本地 sending，最终以 history 为准。
 - `FRAME_TYPE_PUSH_NOTIFICATION`：低容量短 TTL；有通知中心/配置快照时以 REST 快照为准。
@@ -83,3 +85,5 @@ go test -run 'Test.*WebSocket|Test.*Gateway|Test.*Manager' ./app/gateway/api/...
 - `FRAME_TYPE_PUSH_READ_RECEIPT`：按 `(conversation_id, user_id)` 合并最大 `last_read_message_id`，最终以 history 返回的 `read_states` / `read_details` 校准。
 
 不要 pending：`FRAME_TYPE_PUSH_TYPING`、`FRAME_TYPE_PUSH_PRESENCE`、`FRAME_TYPE_RECONNECT`、`FRAME_TYPE_TOKEN_EXPIRED`、`FRAME_TYPE_SERVER_ACK`。其中 presence 重连后直接拉 `GET /api/presence/friends` 快照；连接控制帧和 ACK 不做重放。
+
+实现位置：`app/gateway/api/internal/ws/replay_store.go` 复用 go-zero `collection.Cache` 作为 L1 内存缓存；`writerLoop` 成功写出后入队，`handleHeartbeat` 根据 `last_seq` 触发补发。本机制不跨断线/重连持久化，重连后的最终状态仍以 REST history/presence/业务快照为准。

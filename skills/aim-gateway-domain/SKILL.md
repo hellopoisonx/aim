@@ -24,6 +24,7 @@ description: aim 的网关域。对应 `gateway` 模块。
 
 ## 最近变更
 
+- 2026-05-30: WS 心跳触发服务端轻量重放。`ReplayStore` 复用 go-zero `collection.Cache` L1 内存缓存，按连接保存白名单 pending 帧（默认 128 帧、5 分钟）；`HeartbeatPayload.last_seq` 与 `FRAME_TYPE_ACK.ack_seq` 基于已连续处理的白名单 pending 推送帧推进 `LastAckedSeq` 并清理已确认帧，心跳 ACK 后补发 `seq > last_seq` 的白名单帧。
 - 2026-05-30: WS 轻量 pending 分类文档化。推荐 pending 白名单为 `PUSH_MESSAGE`、`PUSH_NOTIFICATION`、`PUSH_FRIEND_APPLICATION`、`PUSH_READ_RECEIPT`；`PUSH_TYPING`、`PUSH_PRESENCE`、`RECONNECT`、`TOKEN_EXPIRED`、`SERVER_ACK` 不进入 pending，presence 重连后拉 `GET /api/presence/friends` 快照。同步更新 `docs/ws.md`、`docs/client_implement_instruction.md` 与 `references/ws-internals.md`。
 - 2026-05-29: Gateway 文档同步。`docs/api/gateway-openapi.yaml` 成为 REST schema/参数/错误响应的权威文档；`docs/client_implement_instruction.md`、`docs/bot-developer-guide.md` 与 `references/api.md` 改为引用 OpenAPI 并同步好友标签、统一搜索、群管理员/群主转让接口。
 - 2026-05-29: 好友标签 REST。新增 `GET /api/friends/tags`（列出标签）、`POST /api/friends/tags`（创建标签）、`PUT /api/friends/tags/:id`（重命名）、`DELETE /api/friends/tags/:id`（删除标签）、`PUT /api/friends/:id/tags`（设置好友标签）、`DELETE /api/friends/:id/tags/:tag_id`（删除单个标签）。`FriendshipItem` 新增 `tags` 字段透出好友分组。

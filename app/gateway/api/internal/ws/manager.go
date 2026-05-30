@@ -30,6 +30,7 @@ type Connection struct {
 	writerStop     chan struct{}
 	writerDone     chan struct{}
 	writerStopOnce sync.Once
+	replay         *ReplayStore // 可能为 nil（未注册连接）
 
 	ExpiresAt    int64       // Unix timestamp when token expires (in seconds), 0 if no expiry
 	ExpiryTimer  *time.Timer // timer that fires at token expiry, nil if not set
@@ -58,20 +59,24 @@ type Manager struct {
 
 	pendingMu      sync.Mutex
 	pendingOffline map[Identity]time.Time // identity → deadline for grace
+
+	replay *ReplayStore // pending/replay 队列，服务侧面向心跳重放用
 }
 
 // NewManager creates a new connection manager without Redis or node identity.
 // Use NewManagerWithPresence for production setups.
 func NewManager() *Manager {
-	return &Manager{
+	m := &Manager{
 		connections:    make(map[Identity]*Connection),
 		pendingOffline: make(map[Identity]time.Time),
 	}
+	m.replay = mustNewReplayStore()
+	return m
 }
 
 // NewManagerWithPresence creates a manager that synchronises Redis presence sets.
 func NewManagerWithPresence(redisClient *redis.Client, nodeID string, ttlSeconds int) *Manager {
-	return &Manager{
+	m := &Manager{
 		connections:      make(map[Identity]*Connection),
 		redisClient:      redisClient,
 		nodeID:           nodeID,
@@ -80,6 +85,24 @@ func NewManagerWithPresence(redisClient *redis.Client, nodeID string, ttlSeconds
 		reconnectGrace:   30 * time.Second, // default: 30s token-refresh grace
 		pendingOffline:   make(map[Identity]time.Time),
 	}
+	m.replay = mustNewReplayStore()
+	return m
+}
+
+// mustNewReplayStore 创建默认参数的 ReplayStore；构建失败在当前
+// 代码路径上不可能发生（依赖 go-zero collection.NewCache），如果
+// 出现反而意味着 fail-fast。
+func mustNewReplayStore() *ReplayStore {
+	store, err := NewReplayStore()
+	if err != nil {
+		panic(fmt.Sprintf("ws: init replay store: %v", err))
+	}
+	return store
+}
+
+// ReplayStore returns the underlying pending/replay store.
+func (m *Manager) ReplayStore() *ReplayStore {
+	return m.replay
 }
 
 // SetHeartbeatTimeout configures the heartbeat timeout for stale connection detection.
@@ -115,6 +138,7 @@ func (m *Manager) Register(ctx context.Context, identity Identity, conn *websock
 
 	now := time.Now().UnixMilli()
 	connEntry := newConnection(identity, conn, cancel, now)
+	connEntry.replay = m.replay
 	m.connections[identity] = connEntry
 	connEntry.startWriter(ctx)
 
@@ -202,17 +226,22 @@ func (m *Manager) MarkTokenExpired(identity Identity) {
 // RecordClientAck advances LastAckedSeq for an identity to the highest seq the
 // client has acknowledged. The seq counter is monotonic so older acks are
 // dropped silently. Returns false when the identity has no active connection.
+// 同时从 pending/replay 队列中清除 seq <= ackSeq 的帧，释放内存。
 func (m *Manager) RecordClientAck(identity Identity, ackSeq int64) bool {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-
+	m.mu.Lock()
 	conn, exists := m.connections[identity]
 	if !exists {
+		m.mu.Unlock()
 		return false
 	}
 
 	if ackSeq > conn.LastAckedSeq {
 		conn.LastAckedSeq = ackSeq
+	}
+	m.mu.Unlock()
+
+	if m.replay != nil {
+		m.replay.Ack(identity, ackSeq)
 	}
 	return true
 }
@@ -252,6 +281,9 @@ func (m *Manager) Unregister(ctx context.Context, identity Identity) (*PresenceR
 
 	m.mu.Unlock()
 	conn.stopWriter()
+	if m.replay != nil {
+		m.replay.Delete(identity)
+	}
 
 	if tokenExpired {
 		// Register reconnect grace instead of publishing offline.

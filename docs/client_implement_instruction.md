@@ -788,16 +788,15 @@ CREATE TABLE local_read_states (
 
 ```go
 type SeqTracker struct {
-    lastAckedSeq int64   // 已确认的最大服务端 seq
-    // 可用于重连时请求补发，也可用于调试
+    lastAckedSeq int64   // 已连续处理的最大白名单 pending 推送 seq；心跳 last_seq 应填写该值，不能越过空洞/非 pending 帧
 }
 ```
 
-目前 gateway 只记录 `LastAckedSeq`，不自动补发。重连后通过 REST 拉取历史补全。
+gateway 会记录 `LastAckedSeq`，并在当前连接生命周期内维护短 TTL、有限容量的 L1 pending 重放窗口。客户端发送 `FRAME_TYPE_ACK.ack_seq` 或心跳 `HeartbeatPayload.last_seq` 都会推进服务端游标；该值必须是“已连续处理”的最大白名单 pending 推送 `seq`，不能用乱序收到的更大 `seq`、心跳 ACK 或控制帧 `seq` 越过空洞；心跳时服务端会在返回 `SERVER_ACK` 后补发 `seq > last_seq` 的白名单 pending 帧。断线/重连后仍通过 REST 拉取历史/快照补全。
 
 ### 7.5 服务端推送轻量 pending 队列
 
-轻量 pending 用于降低在线抖动、UI 消费窗口或未来服务端 ACK 补发中的短暂丢帧影响；它不是权威存储。客户端重连后仍必须按 §8.4 拉取历史、presence 快照、read states 和业务列表校准最终状态。
+轻量 pending 用于降低在线抖动、UI 消费窗口或服务端 ACK/心跳补发中的短暂丢帧影响；它不是权威存储。客户端重连后仍必须按 §8.4 拉取历史、presence 快照、read states 和业务列表校准最终状态。
 
 推荐白名单：
 
@@ -815,7 +814,7 @@ type SeqTracker struct {
 - `FRAME_TYPE_RECONNECT`、`FRAME_TYPE_TOKEN_EXPIRED`：连接控制帧，由连接状态机、close code、token refresh 处理，重放没有意义。
 - `FRAME_TYPE_SERVER_ACK`：只确认客户端上行帧，不进入服务端推送 pending；发送消息的本地 pending 由 `client_msg_id`、重试和 history 兜底。
 
-如果未来 gateway 启用基于 `LastAckedSeq` 的服务端补发，也应只对白名单帧启用，并设置短 TTL、最大容量和业务 key 合并策略，禁止 typing/presence/control/ack 入队。服务端补发窗口应按连接维护，只保存已分配正数 `seq` 的出站帧；当前客户端可先实现本地轻量 pending，不需要依赖服务端补发。
+gateway 已启用基于 `LastAckedSeq` / `HeartbeatPayload.last_seq` 的当前连接轻量补发：只对白名单帧启用，默认短 TTL、最大容量，禁止 typing/presence/control/ack 入队；服务端补发窗口按连接维护，只保存已分配正数 `seq` 且已成功写出的出站帧，不跨断线/重连持久化。客户端仍应保留本地 pending/去重逻辑，并以 history/快照作为最终状态来源。
 
 ---
 
@@ -987,10 +986,11 @@ updated_at TIMESTAMPTZ           -- MONOTONIC 更新
 
 ```
 type = HEARTBEAT
-payload = HeartbeatPayload{ last_seq = <客户端已确认的最大服务端 seq> }
+payload = HeartbeatPayload{ last_seq = <客户端已连续处理的最大白名单 pending 推送 seq> }
 ```
 
 - 收到 `SERVER_ACK` 表示心跳成功
+- 心跳 `last_seq` 会触发服务端清理已确认 pending，并补发当前连接内 `seq > last_seq` 的白名单推送帧
 - 如果连续 60s 未收到服务端任何消息，考虑重连
 - 心跳同时续约 Redis presence TTL（服务端 45s TTL）
 

@@ -367,7 +367,7 @@ message SendMessagePayload {
 // HeartbeatPayload — 心跳保活
 // 客户端每 30s 发送一次，网关据此维护用户在线状态
 message HeartbeatPayload {
-  int64 last_seq = 1; // 客户端最新收到的服务端消息序列号（用于断线重连后的消息补发）
+  int64 last_seq = 1; // 客户端已连续处理的最大白名单 pending 推送序列号（用于当前连接 L1 pending 补发）
 }
 
 // TypingPayload — 正在输入通知

@@ -170,6 +170,123 @@ func TestServeWSHeartbeatAck(t *testing.T) {
 	require.Equal(t, int64(2), pushFrame.GetSeq())
 }
 
+func TestServeWSHeartbeatReplaysPendingFrames(t *testing.T) {
+	t.Parallel()
+
+	serverCtx := newTestServiceContext(t)
+	manager := wsmanager.NewManager()
+	handler := NewWsHandler(serverCtx, manager)
+	server := httptest.NewServer(http.HandlerFunc(handler.ServeWS))
+	t.Cleanup(server.Close)
+
+	const (
+		userID   int64 = 4201
+		deviceID       = "desktop-replay"
+	)
+	ctx := context.Background()
+	conn := dialUser(t, ctx, server.URL, userID, deviceID)
+	require.Eventually(t, func() bool {
+		return manager.CountByUser(userID) == 1
+	}, time.Second, 10*time.Millisecond)
+
+	pushResp, err := wsmanager.NewGatewayServer(manager).PushMessage(ctx, &gwpb.PushMessageReq{
+		MessageId:        9101,
+		ConversationId:   7101,
+		ConversationType: "single",
+		MessageType:      "text",
+		Content:          "pending replay",
+		SenderId:         99,
+		SentAt:           time.Now().UnixMilli(),
+		ClientMsgId:      "pending-replay",
+		TargetUserId:     userID,
+	})
+	require.NoError(t, err)
+	require.True(t, pushResp.GetSuccess())
+
+	pushFrame := readWSFrame(t, conn)
+	require.Equal(t, pb.FrameType_FRAME_TYPE_PUSH_MESSAGE, pushFrame.GetType())
+	require.Equal(t, int64(1), pushFrame.GetSeq())
+	require.Equal(t, 1, manager.ReplayStore().Len(wsmanager.Identity{UserID: userID, DeviceID: deviceID}))
+
+	// 客户端心跳上报 last_seq=0，表示尚未确认任何服务端 seq；服务端应先 ACK 心跳，再重放 seq=1 的 pending 帧。
+	heartbeatPayload, err := wsmanager.EncodePayload(&pb.HeartbeatPayload{LastSeq: 0})
+	require.NoError(t, err)
+	heartbeatFrame := wsmanager.BuildFrame(pb.FrameType_FRAME_TYPE_HEARTBEAT, 1001, heartbeatPayload)
+	heartbeatData, err := wsmanager.EncodeFrame(heartbeatFrame)
+	require.NoError(t, err)
+	require.NoError(t, conn.Write(ctx, websocket.MessageBinary, heartbeatData))
+
+	ackFrame := readWSFrame(t, conn)
+	require.Equal(t, pb.FrameType_FRAME_TYPE_SERVER_ACK, ackFrame.GetType())
+	ackPayload, err := wsmanager.DecodePayload(ackFrame)
+	require.NoError(t, err)
+	ack, ok := ackPayload.(*pb.ServerAckPayload)
+	require.True(t, ok)
+	require.Equal(t, int64(1001), ack.GetAckSeq())
+
+	replayedFrame := readWSFrame(t, conn)
+	require.Equal(t, pb.FrameType_FRAME_TYPE_PUSH_MESSAGE, replayedFrame.GetType())
+	require.Equal(t, pushFrame.GetSeq(), replayedFrame.GetSeq())
+	require.Equal(t, pushFrame.GetPayload(), replayedFrame.GetPayload())
+
+	// 重放路径不应把 replayedFrame 再次入队。
+	require.Equal(t, 1, manager.ReplayStore().Len(wsmanager.Identity{UserID: userID, DeviceID: deviceID}))
+}
+
+func TestServeWSHeartbeatLastSeqTrimsPendingFrames(t *testing.T) {
+	t.Parallel()
+
+	serverCtx := newTestServiceContext(t)
+	manager := wsmanager.NewManager()
+	handler := NewWsHandler(serverCtx, manager)
+	server := httptest.NewServer(http.HandlerFunc(handler.ServeWS))
+	t.Cleanup(server.Close)
+
+	const (
+		userID   int64 = 4202
+		deviceID       = "desktop-trim"
+	)
+	ctx := context.Background()
+	conn := dialUser(t, ctx, server.URL, userID, deviceID)
+	require.Eventually(t, func() bool {
+		return manager.CountByUser(userID) == 1
+	}, time.Second, 10*time.Millisecond)
+
+	pushResp, err := wsmanager.NewGatewayServer(manager).PushMessage(ctx, &gwpb.PushMessageReq{
+		MessageId:        9102,
+		ConversationId:   7102,
+		ConversationType: "single",
+		MessageType:      "text",
+		Content:          "pending trim",
+		SenderId:         99,
+		SentAt:           time.Now().UnixMilli(),
+		ClientMsgId:      "pending-trim",
+		TargetUserId:     userID,
+	})
+	require.NoError(t, err)
+	require.True(t, pushResp.GetSuccess())
+
+	pushFrame := readWSFrame(t, conn)
+	require.Equal(t, pb.FrameType_FRAME_TYPE_PUSH_MESSAGE, pushFrame.GetType())
+	require.Equal(t, int64(1), pushFrame.GetSeq())
+
+	heartbeatPayload, err := wsmanager.EncodePayload(&pb.HeartbeatPayload{LastSeq: pushFrame.GetSeq()})
+	require.NoError(t, err)
+	heartbeatFrame := wsmanager.BuildFrame(pb.FrameType_FRAME_TYPE_HEARTBEAT, 1002, heartbeatPayload)
+	heartbeatData, err := wsmanager.EncodeFrame(heartbeatFrame)
+	require.NoError(t, err)
+	require.NoError(t, conn.Write(ctx, websocket.MessageBinary, heartbeatData))
+
+	ackFrame := readWSFrame(t, conn)
+	require.Equal(t, pb.FrameType_FRAME_TYPE_SERVER_ACK, ackFrame.GetType())
+
+	identity := wsmanager.Identity{UserID: userID, DeviceID: deviceID}
+	require.Eventually(t, func() bool {
+		entry, getErr := manager.Get(identity)
+		return getErr == nil && entry.LastAckedSeq == pushFrame.GetSeq() && manager.ReplayStore().Len(identity) == 0
+	}, time.Second, 10*time.Millisecond)
+}
+
 func TestServeWSSendMessageAck(t *testing.T) {
 	t.Parallel()
 

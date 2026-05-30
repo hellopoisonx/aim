@@ -25,9 +25,10 @@ const connectionWriteQueueSize = 64
 var errConnectionWriterClosed = errors.New("connection writer closed")
 
 type writeRequest struct {
-	ctx    context.Context
-	frame  *wspb.WsFrame
-	result chan error
+	ctx        context.Context
+	frame      *wspb.WsFrame
+	result     chan error
+	skipReplay bool // 重放路径的帧不再进 pending 队列
 }
 
 func (r writeRequest) complete(err error) {
@@ -97,7 +98,11 @@ func (c *Connection) writerLoop(ctx context.Context) {
 			c.failPendingWrites(errConnectionWriterClosed)
 			return
 		case req := <-c.writeCh:
-			req.complete(c.writeQueuedFrame(req.ctx, req.frame))
+			err := c.writeQueuedFrame(req.ctx, req.frame)
+			if err == nil && !req.skipReplay {
+				c.recordReplay(req.frame)
+			}
+			req.complete(err)
 		}
 	}
 }
@@ -111,6 +116,18 @@ func (c *Connection) failPendingWrites(err error) {
 			return
 		}
 	}
+}
+
+// recordReplay 记录已写出的可重放帧到 pending 队列。调用点保证
+// frame.Seq 已被 writerLoop 分配。
+func (c *Connection) recordReplay(frame *wspb.WsFrame) {
+	if c == nil || c.replay == nil || frame == nil {
+		return
+	}
+	if !IsReplayable(frame.GetType()) {
+		return
+	}
+	c.replay.Append(c.Identity, frame)
 }
 
 func (c *Connection) writeQueuedFrame(ctx context.Context, frame *wspb.WsFrame) error {
@@ -515,7 +532,18 @@ func (c *Connection) WriteFrame(ctx context.Context, frameType wspb.FrameType, p
 // WriteEncodedFrame queues an already-built WsFrame for the connection writer.
 // The per-connection writer goroutine is the only WebSocket writer. It assigns
 // a positive server seq when frame.Seq is 0 and writes frames in queue order.
+// 写出成功后，可重放帧会被记入 pending 队列用于心跳补发。
 func (c *Connection) WriteEncodedFrame(ctx context.Context, frame *wspb.WsFrame) error {
+	return c.writeEncodedFrame(ctx, frame, false)
+}
+
+// WriteEncodedFrameNoReplay 与 WriteEncodedFrame 一致，但不将帧记入 pending 队列。
+// 仅用于心跳触发的重放路径，避免重复追加造成无限增长。
+func (c *Connection) WriteEncodedFrameNoReplay(ctx context.Context, frame *wspb.WsFrame) error {
+	return c.writeEncodedFrame(ctx, frame, true)
+}
+
+func (c *Connection) writeEncodedFrame(ctx context.Context, frame *wspb.WsFrame, skipReplay bool) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -529,13 +557,19 @@ func (c *Connection) WriteEncodedFrame(ctx context.Context, frame *wspb.WsFrame)
 	}
 
 	if c.writeCh == nil {
-		return c.writeQueuedFrame(ctx, proto.Clone(frame).(*wspb.WsFrame))
+		cloned := proto.Clone(frame).(*wspb.WsFrame)
+		err := c.writeQueuedFrame(ctx, cloned)
+		if err == nil && !skipReplay {
+			c.recordReplay(cloned)
+		}
+		return err
 	}
 
 	req := writeRequest{
-		ctx:    ctx,
-		frame:  proto.Clone(frame).(*wspb.WsFrame),
-		result: make(chan error, 1),
+		ctx:        ctx,
+		frame:      proto.Clone(frame).(*wspb.WsFrame),
+		result:     make(chan error, 1),
+		skipReplay: skipReplay,
 	}
 
 	select {

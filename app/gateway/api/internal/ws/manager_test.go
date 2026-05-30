@@ -7,13 +7,22 @@ import (
 	"time"
 
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/ws"
+	wspb "github.com/hellopoisonx/aim/shared/proto/ws/pb"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/goleak"
 )
 
 func TestMain(m *testing.M) {
-	goleak.VerifyTestMain(m)
+	// collection.Cache 启动的 timingwheel / cacheStat goroutine 为进程级常驻，
+	// 无公开关闭接口；ReplayStore 在 Manager 初始化时会拉起它们。
+	// go-zero proc.signals / stat.usage 是包初始化的进程级 goroutine，不会退出。
+	goleak.VerifyTestMain(m,
+		goleak.IgnoreTopFunction("github.com/zeromicro/go-zero/core/collection.(*TimingWheel).run"),
+		goleak.IgnoreTopFunction("github.com/zeromicro/go-zero/core/collection.(*cacheStat).statLoop"),
+		goleak.IgnoreTopFunction("github.com/zeromicro/go-zero/core/proc.init.1.func1"),
+		goleak.IgnoreTopFunction("github.com/zeromicro/go-zero/core/stat.init.1.func1"),
+	)
 }
 
 func TestManagerRegister(t *testing.T) {
@@ -464,4 +473,58 @@ func TestMultiDeviceTokenExpiredDoesNotOffline(t *testing.T) {
 	// Should not switch to offline (grace + other device still connected)
 	assert.False(t, result.Switched, "should not switch to offline: another device is connected")
 	assert.Equal(t, 1, mgr.CountByUser(1)) // device-2 still connected
+}
+
+func TestManagerRecordClientAckTrimsReplayStore(t *testing.T) {
+	t.Parallel()
+
+	mgr := ws.NewManager()
+	identity := ws.Identity{UserID: 9901, DeviceID: "ack-device"}
+	_, cancel := context.WithCancel(context.Background())
+
+	_, err := mgr.Register(context.Background(), identity, nil, cancel)
+	require.NoError(t, err)
+
+	mgr.ReplayStore().Append(identity, &wspb.WsFrame{
+		Type: wspb.FrameType_FRAME_TYPE_PUSH_MESSAGE,
+		Seq:  10,
+	})
+	mgr.ReplayStore().Append(identity, &wspb.WsFrame{
+		Type: wspb.FrameType_FRAME_TYPE_PUSH_MESSAGE,
+		Seq:  11,
+	})
+	mgr.ReplayStore().Append(identity, &wspb.WsFrame{
+		Type: wspb.FrameType_FRAME_TYPE_PUSH_MESSAGE,
+		Seq:  12,
+	})
+
+	require.True(t, mgr.RecordClientAck(identity, 11))
+	conn, err := mgr.Get(identity)
+	require.NoError(t, err)
+	assert.Equal(t, int64(11), conn.LastAckedSeq)
+
+	pending := mgr.ReplayStore().PendingAfter(identity, 0)
+	require.Len(t, pending, 1)
+	assert.Equal(t, int64(12), pending[0].GetSeq())
+}
+
+func TestManagerUnregisterDeletesReplayStore(t *testing.T) {
+	t.Parallel()
+
+	mgr := ws.NewManager()
+	identity := ws.Identity{UserID: 9902, DeviceID: "delete-device"}
+	_, cancel := context.WithCancel(context.Background())
+
+	_, err := mgr.Register(context.Background(), identity, nil, cancel)
+	require.NoError(t, err)
+
+	mgr.ReplayStore().Append(identity, &wspb.WsFrame{
+		Type: wspb.FrameType_FRAME_TYPE_PUSH_MESSAGE,
+		Seq:  1,
+	})
+	require.Equal(t, 1, mgr.ReplayStore().Len(identity))
+
+	_, err = mgr.Unregister(context.Background(), identity)
+	require.NoError(t, err)
+	assert.Equal(t, 0, mgr.ReplayStore().Len(identity))
 }
