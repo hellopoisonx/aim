@@ -819,15 +819,21 @@ type SeqTracker struct {
 ### 8.2 新设备首次加载
 
 ```
-1. 登录 → 获取 access_token
-2. 连接 WS /ws
-3. GET /api/conversations → 获取会话列表
-4. 对每个会话：
-   a. GET /api/conversations/history/:id?limit=50
-   b. 将返回消息批量插入 local_messages（按 message_id 去重）
-   c. 若 has_more=true，记录 next_cursor_* 备用
-   d. 对返回的 read_states 更新 local_read_states
-5. GET /api/presence/friends → 获取好友在线快照
+1. 重连 WS                                              # 步骤 1：连接 /ws
+   ├─ 登录 / refresh 获取 access_token
+   └─ 连接 WS /ws
+2. 拉会话列表                                          # 步骤 2
+   └─ GET /api/conversations
+3. 拉最近消息 / 未读消息                              # 步骤 3
+   └─ 对每个会话：
+       a. GET /api/conversations/history/:id?limit=50
+       b. 将返回消息批量插入 local_messages（按 message_id 去重）
+       c. 若 has_more=true，记录 next_cursor_* 备用
+       d. 保留 read_states 响应给步骤 5 使用
+4. 拉好友 presence 快照                                 # 步骤 4
+   └─ GET /api/presence/friends
+5. 更新 read state 快照                                  # 步骤 5
+   └─ 将各会话的 read_states 写入 local_read_states
 6. 开启 WS 消息接收循环
 ```
 
@@ -854,15 +860,36 @@ type SeqTracker struct {
 ```
 检测到 WS 断线
   │
-  ├─ 启动自动重连
+  ├─ 启动自动重连（指数退避，详见 §13.2）
   │
-  └─ 重连成功后：
-      ├─ GET /api/conversations（以防断线期间有新会话）
-      ├─ GET /api/presence/friends（刷新好友在线状态）
-      └─ 对每个活跃会话，取本地最新 message_id 作为锚点：
-           GET /api/conversations/history/:id
-           → 将结果中 message_id > 本地最新 的消息插入缓存
+  └─ 重连成功后按以下顺序恢复：
+      1. 重连 WS
+         └─ 使用最新 access_token 重新握手 /ws；若收到 TOKEN_EXPIRED，
+             先 POST /api/auth/refresh 再重连。
+      2. 拉会话列表
+         └─ GET /api/conversations
+             覆盖断线期间新增/退出的会话，更新会话索引、群名/头像、成员列表。
+      3. 拉最近消息 / 未读消息
+         └─ 对每个活跃会话，以本地最新 message_id 作为锚点：
+             GET /api/conversations/history/:id?limit=50（必要时翻页）
+             → 将 message_id > 本地最新的消息插入 local_messages（去重合并）
+             → 用于补齐断线期间漏掉的消息和未读角标
+      4. 拉好友 presence 快照
+         └─ GET /api/presence/friends
+             覆盖断线期间错过的 PUSH_PRESENCE，恢复好友在线/离线显示。
+      5. 更新 read state 快照
+         └─ 取步骤 3 各会话 history 响应中的 read_states 字段，
+             写入 local_read_states（GREATEST 取大，不允许倒退）。
+             用于刷新已读标记、重新计算每个会话的未读数。
 ```
+
+**实现要点**：
+
+- 步骤 2~5 是恢复客户端权威状态的必要顺序，不要省略或调换：先有会话索引才知道要为哪些会话拉历史，先有最新消息才能正确计算未读数，最后用 read state 校准已读边界。
+- 历史消息合并以 **`message_id` 为主键去重**；推送通道在重连完成前可能已经投递了部分新消息，本地缓存可能与 history 响应有交集，应直接以 `message_id` 覆盖/忽略，不要重复展示。
+- `read_states` 来自 `GET /api/conversations/history/:id` 响应（详见 §8.2 步骤 3d 与 §9.3），客户端目前没有单独的 read-state 快照端点；如果某些会话不需要拉历史，可只调用 `history?limit=1` 等占位请求获取最新 `read_states`，或在用户进入该会话时再补齐。
+- 未读角标 = `本地消息中 message_id > 自己的 last_read_message_id 的数量`。read state 与最近消息都更新后再统一刷新未读计数，避免中间态闪烁。
+- 实时通道恢复后，PUSH_MESSAGE / PUSH_READ_RECEIPT / PUSH_PRESENCE 会继续做增量更新；步骤 3~5 只负责把断线期间的差异补齐。
 
 ### 8.5 跨设备同步
 
@@ -1203,9 +1230,12 @@ if response.code != 0 {
   - 第 5 次+：等 10s（上限）
   - 重连成功 → 重置计数
 
-重连后恢复：
-  - GET /api/presence/friends
-  - 对活跃会话增量拉取
+重连后恢复（与 §8.4 一致）：
+  1. 重连 WS（必要时先 refresh token）
+  2. GET /api/conversations              # 拉会话列表
+  3. GET /api/conversations/history/:id  # 拉最近/未读消息（以本地最新 message_id 为锚点）
+  4. GET /api/presence/friends           # 拉好友 presence 快照
+  5. 用 history 响应中的 read_states 更新 local_read_states  # read state 快照
 ```
 
 ### 13.3 消息发送失败处理
@@ -1247,12 +1277,15 @@ TTL: 24 小时
    │         └─ 失败 → 跳转登录页
    └─ 无 → 跳转登录页
 
-2. 登录成功：
+2. 登录成功（首次加载，顺序与 §8.4 重连恢复一致）：
    ├─ 存储 access_token, refresh_token, user_id
-   ├─ 建立 WS 连接 (GET /ws)
-   ├─ GET /api/conversations → 获取会话列表
-   ├─ 对每个会话拉取最近 50 条历史消息
-   └─ GET /api/presence/friends → 在线状态快照
+   ├─ 建立 WS 连接 (GET /ws)                  # 步骤 1：重连 WS
+   ├─ GET /api/conversations                  # 步骤 2：拉会话列表
+   ├─ 对每个会话 GET /api/conversations/history/:id?limit=50  # 步骤 3：拉最近/未读消息
+   │     → 插入 local_messages（按 message_id 去重）
+   │     → 保留 read_states 响应供步骤 5 使用
+   ├─ GET /api/presence/friends                # 步骤 4：拉好友 presence 快照
+   └─ 将各会话的 read_states 写入 local_read_states  # 步骤 5：read state 快照
 
 3. 进入消息监听循环：
    ├─ WS 帧处理循环
@@ -1299,9 +1332,13 @@ TTL: 24 小时
 
 回到前台：
   ├─ 检查 WS 连接是否存活
-  │   ├─ 存活 → 恢复心跳
-  │   └─ 断开 → 重连 + 增量同步
-  └─ 刷新在线状态快照
+  │   ├─ 存活 → 恢复心跳，拉 presence 快照以补上漏掉的 PUSH_PRESENCE
+  │   └─ 断开 → 按 §8.4 的重连恢复顺序执行：
+  │            1) 重连 WS
+  │            2) GET /api/conversations
+  │            3) 对活跃会话 GET /api/conversations/history/:id（拉最近/未读）
+  │            4) GET /api/presence/friends
+  └─            5) 用 history.read_states 更新 local_read_states
 ```
 
 ### 14.5 应用退出
