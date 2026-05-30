@@ -100,9 +100,11 @@ docker compose --env-file deploy/env/local.env \
 - [x] 指标上报、链路追踪、日志聚合
 - [x] [官方rag知识库bot](https://github.com/hellopoisonx/echo)
 - [x] [客户端](https://github.com/hellopoisonx/aim-desktop)
+- [x] ws帧等待队列，重放机制
+- [x] [内存+redis双层缓存](https://go-zero.dev/components/cache), 内置 `singleflight` 语义防击穿, 随机ttl抖动防雪崩。
 - [ ] 前置nginx反代 `gateway`, 配置ssl证书
-- [ ] ws 帧并包
-- [ ] 用户侧bot管理接口
+- [ ] ~ws 帧并包~
+- [x] 用户侧bot管理接口
 - [ ] 官方群聊机器人
 
 ## 开发指南
@@ -113,4 +115,3 @@ docker compose --env-file deploy/env/local.env \
 - 业务错误使用 `errorx.NewCodeError`
 - core → logic 单向依赖；logic 绝不导入 core
 - 客户端只与 gateway 通信
-

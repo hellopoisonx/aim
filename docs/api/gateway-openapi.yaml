@@ -52,6 +52,8 @@ tags:
     description: 附件上传、完成、元数据与下载授权
   - name: Bot OpenAPI
     description: "第三方 Bot HTTP 接入接口，使用 `Authorization: Bot <token>`"
+  - name: User Bot Management
+    description: 普通用户创建、管理个人 Bot 及其 Token 的 REST 接口，使用 Bearer JWT。
 paths:
   /api/auth/register:
     post:
@@ -1128,6 +1130,372 @@ paths:
         "403": { $ref: '#/components/responses/BotForbidden' }
         "404": { $ref: '#/components/responses/NotFound' }
         "500": { $ref: '#/components/responses/InternalError' }
+  /api/user/bots:
+    post:
+      tags: [User Bot Management]
+      operationId: createUserBot
+      summary: 创建个人 Bot
+      description: |
+        当前用户创建一个属于自己的 Bot。
+        Bot 本质是一个特殊用户（`user_type=bot`），拥有独立的 `user_id` 和资料。
+
+        创建完成后可通过返回的 `bot_user_id` 签发 Token、加入群聊等。
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUserBotRequest'
+      responses:
+        "200":
+          description: 创建成功，返回 Bot 信息
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateUserBotResponseEnvelope'
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "500": { $ref: '#/components/responses/InternalError' }
+    get:
+      tags: [User Bot Management]
+      operationId: listUserBots
+      summary: 列出我的 Bots
+      description: 返回当前用户创建的所有 Bot。
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Bot 列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListUserBotsResponseEnvelope'
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "500": { $ref: '#/components/responses/InternalError' }
+  /api/user/bots/{id}:
+    get:
+      tags: [User Bot Management]
+      operationId: getUserBot
+      summary: 获取单个 Bot
+      description: 返回指定 Bot 的详细信息。仅 owner 可查看。
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UserBotIdPath'
+      responses:
+        "200":
+          description: Bot 信息
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetUserBotResponseEnvelope'
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "403": { $ref: '#/components/responses/Forbidden' }
+        "404": { $ref: '#/components/responses/NotFound' }
+        "500": { $ref: '#/components/responses/InternalError' }
+    put:
+      tags: [User Bot Management]
+      operationId: updateUserBotProfile
+      summary: 更新 Bot 资料
+      description: 更新 Bot 的昵称和头像。仅 owner 可操作。
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UserBotIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUserBotProfileRequest'
+      responses:
+        "200":
+          description: 更新后的 Bot 信息
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpdateUserBotProfileResponseEnvelope'
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "403": { $ref: '#/components/responses/Forbidden' }
+        "404": { $ref: '#/components/responses/NotFound' }
+        "500": { $ref: '#/components/responses/InternalError' }
+    delete:
+      tags: [User Bot Management]
+      operationId: deleteUserBot
+      summary: 删除 Bot（软删除）
+      description: 软删除指定 Bot。仅 owner 可操作。删除后 Bot Token 将失效。
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UserBotIdPath'
+      responses:
+        "200":
+          description: 删除结果
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeleteUserBotResponseEnvelope'
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "403": { $ref: '#/components/responses/Forbidden' }
+        "404": { $ref: '#/components/responses/NotFound' }
+        "500": { $ref: '#/components/responses/InternalError' }
+  /api/user/bots/{id}/enable:
+    post:
+      tags: [User Bot Management]
+      operationId: enableUserBot
+      summary: 启用 Bot
+      description: 将 Bot 状态恢复为启用。仅 owner 可操作。
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UserBotIdPath'
+      responses:
+        "200":
+          description: 启用成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnableUserBotResponseEnvelope'
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "403": { $ref: '#/components/responses/Forbidden' }
+        "404": { $ref: '#/components/responses/NotFound' }
+        "500": { $ref: '#/components/responses/InternalError' }
+  /api/user/bots/{id}/disable:
+    post:
+      tags: [User Bot Management]
+      operationId: disableUserBot
+      summary: 禁用 Bot
+      description: 禁用后 Bot Token 将失效，Bot 无法收发消息。仅 owner 可操作。
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UserBotIdPath'
+      responses:
+        "200":
+          description: 禁用成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DisableUserBotResponseEnvelope'
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "403": { $ref: '#/components/responses/Forbidden' }
+        "404": { $ref: '#/components/responses/NotFound' }
+        "500": { $ref: '#/components/responses/InternalError' }
+  /api/user/bots/{id}/tokens:
+    post:
+      tags: [User Bot Management]
+      operationId: createUserBotToken
+      summary: 签发 Bot Token
+      description: |
+        为 Bot 签发一个新的访问 Token。
+        Token 的 `plaintext_token` 仅在创建时返回一次，请即时保存。
+        `actions` 指定 Token 授权的 action 列表。
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UserBotIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUserBotTokenRequest'
+      responses:
+        "200":
+          description: 创建成功，返回 Token 信息与明文
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateUserBotTokenResponseEnvelope'
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "403": { $ref: '#/components/responses/Forbidden' }
+        "404": { $ref: '#/components/responses/NotFound' }
+        "500": { $ref: '#/components/responses/InternalError' }
+    get:
+      tags: [User Bot Management]
+      operationId: listUserBotTokens
+      summary: 列出 Bot Token
+      description: 返回指定 Bot 的所有 Token（不含明文）。
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UserBotIdPath'
+      responses:
+        "200":
+          description: Token 列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListUserBotTokensResponseEnvelope'
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "403": { $ref: '#/components/responses/Forbidden' }
+        "404": { $ref: '#/components/responses/NotFound' }
+        "500": { $ref: '#/components/responses/InternalError' }
+  /api/user/bots/{id}/tokens/{token_id}:
+    put:
+      tags: [User Bot Management]
+      operationId: updateUserBotToken
+      summary: 更新 Token 配置
+      description: 更新 Token 的名称、过期时间和 action 列表。
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UserBotIdPath'
+        - $ref: '#/components/parameters/UserBotTokenIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUserBotTokenRequest'
+      responses:
+        "200":
+          description: 更新后的 Token 信息
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpdateUserBotTokenResponseEnvelope'
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "403": { $ref: '#/components/responses/Forbidden' }
+        "404": { $ref: '#/components/responses/NotFound' }
+        "500": { $ref: '#/components/responses/InternalError' }
+    delete:
+      tags: [User Bot Management]
+      operationId: revokeUserBotToken
+      summary: 撤销 Token
+      description: 撤销后 Token 将立即失效。
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UserBotIdPath'
+        - $ref: '#/components/parameters/UserBotTokenIdPath'
+      responses:
+        "200":
+          description: 撤销结果
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RevokeUserBotTokenResponseEnvelope'
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "403": { $ref: '#/components/responses/Forbidden' }
+        "404": { $ref: '#/components/responses/NotFound' }
+        "500": { $ref: '#/components/responses/InternalError' }
+  /api/user/bots/{id}/tokens/{token_id}/rotate:
+    post:
+      tags: [User Bot Management]
+      operationId: rotateUserBotToken
+      summary: 轮换 Token（换发新 key）
+      description: |
+        为 Token 换发新的 key。
+        `plaintext_token` 仅在轮换时返回一次，请即时保存。
+        旧 key 立即失效。
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UserBotIdPath'
+        - $ref: '#/components/parameters/UserBotTokenIdPath'
+      responses:
+        "200":
+          description: 轮换成功，返回新 Token 信息与明文
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RotateUserBotTokenResponseEnvelope'
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "403": { $ref: '#/components/responses/Forbidden' }
+        "404": { $ref: '#/components/responses/NotFound' }
+        "500": { $ref: '#/components/responses/InternalError' }
+  /api/user/bots/{id}/conversations/{conversation_id}:
+    post:
+      tags: [User Bot Management]
+      operationId: addUserBotToConversation
+      summary: 将 Bot 加入群聊
+      description: 将指定 Bot 添加为群聊成员。调用者必须是群 owner/admin。
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UserBotIdPath'
+        - $ref: '#/components/parameters/UserBotConversationIdPath'
+      responses:
+        "200":
+          description: 群聊信息
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AddUserBotToConversationResponseEnvelope'
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "403": { $ref: '#/components/responses/Forbidden' }
+        "404": { $ref: '#/components/responses/NotFound' }
+        "500": { $ref: '#/components/responses/InternalError' }
+  /api/user/bots/{id}/direct-conversation:
+    post:
+      tags: [User Bot Management]
+      operationId: createUserBotDirectConversation
+      summary: 创建与 Bot 的直聊会话
+      description: 为当前用户与指定 Bot 创建一个 direct 会话。如会话已存在则返回已有会话。
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UserBotIdPath'
+      responses:
+        "200":
+          description: 会话信息
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateUserBotDirectConversationResponseEnvelope'
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "403": { $ref: '#/components/responses/Forbidden' }
+        "404": { $ref: '#/components/responses/NotFound' }
+        "500": { $ref: '#/components/responses/InternalError' }
+  /api/user/bot-actions:
+    get:
+      tags: [User Bot Management]
+      operationId: listBotActions
+      summary: 获取 Bot Action 字典
+      description: 返回所有可授权的 Bot action 列表。用于 Token 签发时选择权限范围。
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Action 列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListBotActionsResponseEnvelope'
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "500": { $ref: '#/components/responses/InternalError' }
+  /api/user/bot-events:
+    get:
+      tags: [User Bot Management]
+      operationId: listBotEvents
+      summary: 获取 Bot Event 映射
+      description: 返回事件 → 所需 action 的映射列表。用于配置 Webhook 订阅时了解权限要求。
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Event 映射列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListBotEventsResponseEnvelope'
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "500": { $ref: '#/components/responses/InternalError' }
 components:
   securitySchemes:
     BearerAuth:
@@ -1245,6 +1613,24 @@ components:
       required: false
       schema: { type: integer, format: int32, default: 20, minimum: 1, maximum: 100 }
       description: 搜索每页数量；默认 20，当前逻辑上限 100。
+    UserBotIdPath:
+      name: id
+      in: path
+      required: true
+      schema: { type: integer, format: int64, minimum: 1 }
+      description: Bot 用户 ID。
+    UserBotTokenIdPath:
+      name: token_id
+      in: path
+      required: true
+      schema: { type: integer, format: int64, minimum: 1 }
+      description: Bot Token ID。
+    UserBotConversationIdPath:
+      name: conversation_id
+      in: path
+      required: true
+      schema: { type: integer, format: int64, minimum: 1 }
+      description: 会话 ID。
   responses:
     EmptyOK:
       description: 成功。当前实现返回 HTTP 200 且响应体为空。
@@ -2251,3 +2637,300 @@ components:
           required: [body]
           properties:
             body: { $ref: '#/components/schemas/BotDeleteWebhookResponse' }
+
+    # ========== User Bot Management Schemas ==========
+
+    UserBotInfo:
+      type: object
+      required: [bot_user_id, owner_user_id, email, nickname, avatar, status, created_at, updated_at]
+      properties:
+        bot_user_id: { type: integer, format: int64, description: Bot 用户 ID。 }
+        owner_user_id: { type: integer, format: int64, description: Bot 创建者用户 ID。 }
+        email: { type: string, format: email }
+        nickname: { type: string }
+        avatar: { type: string }
+        status: { type: integer, format: int32, description: 状态：1=启用, 2=禁用。 }
+        created_at: { type: integer, format: int64, description: Unix milliseconds。 }
+        updated_at: { type: integer, format: int64, description: Unix milliseconds。 }
+    CreateUserBotRequest:
+      type: object
+      required: [nickname]
+      properties:
+        email: { type: string, format: email, nullable: true }
+        nickname: { type: string, minLength: 1 }
+        avatar: { type: string, nullable: true }
+    CreateUserBotResponse:
+      type: object
+      required: [bot]
+      properties:
+        bot: { $ref: '#/components/schemas/UserBotInfo' }
+    CreateUserBotResponseEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelopeBase'
+        - type: object
+          required: [body]
+          properties:
+            body: { $ref: '#/components/schemas/CreateUserBotResponse' }
+    ListUserBotsResponse:
+      type: object
+      required: [bots]
+      properties:
+        bots:
+          type: array
+          items: { $ref: '#/components/schemas/UserBotInfo' }
+    ListUserBotsResponseEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelopeBase'
+        - type: object
+          required: [body]
+          properties:
+            body: { $ref: '#/components/schemas/ListUserBotsResponse' }
+    GetUserBotResponse:
+      type: object
+      required: [bot]
+      properties:
+        bot: { $ref: '#/components/schemas/UserBotInfo' }
+    GetUserBotResponseEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelopeBase'
+        - type: object
+          required: [body]
+          properties:
+            body: { $ref: '#/components/schemas/GetUserBotResponse' }
+    UpdateUserBotProfileRequest:
+      type: object
+      required: [nickname]
+      properties:
+        nickname: { type: string, minLength: 1 }
+        avatar: { type: string, nullable: true }
+    UpdateUserBotProfileResponse:
+      type: object
+      required: [bot]
+      properties:
+        bot: { $ref: '#/components/schemas/UserBotInfo' }
+    UpdateUserBotProfileResponseEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelopeBase'
+        - type: object
+          required: [body]
+          properties:
+            body: { $ref: '#/components/schemas/UpdateUserBotProfileResponse' }
+    EnableUserBotResponse:
+      type: object
+      required: [bot]
+      properties:
+        bot: { $ref: '#/components/schemas/UserBotInfo' }
+    EnableUserBotResponseEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelopeBase'
+        - type: object
+          required: [body]
+          properties:
+            body: { $ref: '#/components/schemas/EnableUserBotResponse' }
+    DisableUserBotResponse:
+      type: object
+      required: [bot]
+      properties:
+        bot: { $ref: '#/components/schemas/UserBotInfo' }
+    DisableUserBotResponseEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelopeBase'
+        - type: object
+          required: [body]
+          properties:
+            body: { $ref: '#/components/schemas/DisableUserBotResponse' }
+    DeleteUserBotResponse:
+      type: object
+      required: [deleted]
+      properties:
+        deleted: { type: boolean }
+    DeleteUserBotResponseEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelopeBase'
+        - type: object
+          required: [body]
+          properties:
+            body: { $ref: '#/components/schemas/DeleteUserBotResponse' }
+    UserBotTokenInfo:
+      type: object
+      required: [token_id, bot_user_id, name, actions, expires_at, revoked_at, created_at]
+      properties:
+        token_id: { type: integer, format: int64, description: Token ID。 }
+        bot_user_id: { type: integer, format: int64, description: Bot 用户 ID。 }
+        name: { type: string, description: Token 名称标记。 }
+        actions:
+          type: array
+          items: { type: string }
+          description: 授权的 action 列表。
+        expires_at: { type: integer, format: int64, description: 过期时间，Unix milliseconds。0 表示永不过期。 }
+        revoked_at: { type: integer, format: int64, description: 撤销时间，Unix milliseconds。0 表示未撤销。 }
+        created_at: { type: integer, format: int64, description: Unix milliseconds。 }
+    CreateUserBotTokenRequest:
+      type: object
+      required: [actions]
+      properties:
+        name: { type: string, nullable: true, description: Token 名称标记。 }
+        expires_at: { type: integer, format: int64, nullable: true, description: 过期时间，Unix milliseconds。省略或 0 表示不过期。 }
+        actions:
+          type: array
+          minItems: 1
+          items: { type: string }
+          description: 授权的 action 列表（从 `/api/user/bot-actions` 获取可选值）。
+    CreateUserBotTokenResponse:
+      type: object
+      required: [token, plaintext_token]
+      properties:
+        token: { $ref: '#/components/schemas/UserBotTokenInfo' }
+        plaintext_token: { type: string, description: 明文 Token，仅创建/轮换时返回一次。 }
+    CreateUserBotTokenResponseEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelopeBase'
+        - type: object
+          required: [body]
+          properties:
+            body: { $ref: '#/components/schemas/CreateUserBotTokenResponse' }
+    ListUserBotTokensResponse:
+      type: object
+      required: [tokens]
+      properties:
+        tokens:
+          type: array
+          items: { $ref: '#/components/schemas/UserBotTokenInfo' }
+    ListUserBotTokensResponseEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelopeBase'
+        - type: object
+          required: [body]
+          properties:
+            body: { $ref: '#/components/schemas/ListUserBotTokensResponse' }
+    UpdateUserBotTokenRequest:
+      type: object
+      required: [actions]
+      properties:
+        name: { type: string, nullable: true }
+        expires_at: { type: integer, format: int64, nullable: true }
+        actions:
+          type: array
+          minItems: 1
+          items: { type: string }
+    UpdateUserBotTokenResponse:
+      type: object
+      required: [token]
+      properties:
+        token: { $ref: '#/components/schemas/UserBotTokenInfo' }
+    UpdateUserBotTokenResponseEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelopeBase'
+        - type: object
+          required: [body]
+          properties:
+            body: { $ref: '#/components/schemas/UpdateUserBotTokenResponse' }
+    RotateUserBotTokenResponse:
+      type: object
+      required: [token, plaintext_token]
+      properties:
+        token: { $ref: '#/components/schemas/UserBotTokenInfo' }
+        plaintext_token: { type: string, description: 轮换后的新明文 Token，仅此一次。 }
+    RotateUserBotTokenResponseEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelopeBase'
+        - type: object
+          required: [body]
+          properties:
+            body: { $ref: '#/components/schemas/RotateUserBotTokenResponse' }
+    RevokeUserBotTokenResponse:
+      type: object
+      required: [revoked]
+      properties:
+        revoked: { type: boolean }
+    RevokeUserBotTokenResponseEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelopeBase'
+        - type: object
+          required: [body]
+          properties:
+            body: { $ref: '#/components/schemas/RevokeUserBotTokenResponse' }
+    AddUserBotToConversationResponse:
+      type: object
+      required: [conversation_id, conversation_type, is_active, created_at, member_ids, name, avatar, creator_id]
+      properties:
+        conversation_id: { type: integer, format: int64 }
+        conversation_type: { type: string, description: direct / group。 }
+        is_active: { type: boolean }
+        created_at: { type: integer, format: int64, description: Unix milliseconds。 }
+        member_ids:
+          type: array
+          items: { type: integer, format: int64 }
+        name: { type: string }
+        avatar: { type: string }
+        creator_id: { type: integer, format: int64 }
+    AddUserBotToConversationResponseEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelopeBase'
+        - type: object
+          required: [body]
+          properties:
+            body: { $ref: '#/components/schemas/AddUserBotToConversationResponse' }
+    CreateUserBotDirectConversationResponse:
+      type: object
+      required: [conversation_id, conversation_type, is_active, created_at, member_ids, name, avatar, creator_id]
+      properties:
+        conversation_id: { type: integer, format: int64 }
+        conversation_type: { type: string, description: direct。 }
+        is_active: { type: boolean }
+        created_at: { type: integer, format: int64, description: Unix milliseconds。 }
+        member_ids:
+          type: array
+          items: { type: integer, format: int64 }
+        name: { type: string }
+        avatar: { type: string }
+        creator_id: { type: integer, format: int64 }
+    CreateUserBotDirectConversationResponseEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelopeBase'
+        - type: object
+          required: [body]
+          properties:
+            body: { $ref: '#/components/schemas/CreateUserBotDirectConversationResponse' }
+    BotActionItem:
+      type: object
+      required: [id, action, description]
+      properties:
+        id: { type: integer, format: int64 }
+        action: { type: string }
+        description: { type: string }
+    BotEventItem:
+      type: object
+      required: [event, action, description]
+      properties:
+        event: { type: string }
+        action: { type: string }
+        description: { type: string }
+    ListBotActionsResponse:
+      type: object
+      required: [actions]
+      properties:
+        actions:
+          type: array
+          items: { $ref: '#/components/schemas/BotActionItem' }
+    ListBotActionsResponseEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelopeBase'
+        - type: object
+          required: [body]
+          properties:
+            body: { $ref: '#/components/schemas/ListBotActionsResponse' }
+    ListBotEventsResponse:
+      type: object
+      required: [events]
+      properties:
+        events:
+          type: array
+          items: { $ref: '#/components/schemas/BotEventItem' }
+    ListBotEventsResponseEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelopeBase'
+        - type: object
+          required: [body]
+          properties:
+            body: { $ref: '#/components/schemas/ListBotEventsResponse' }

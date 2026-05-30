@@ -398,6 +398,142 @@ GET /api/search
 
 ---
 
+### 3.7 用户侧 Bot 管理
+
+用户可以通过 REST 接口创建、管理自己的个人 Bot。Bot 是一个特殊用户（`user_type=bot`），
+拥有独立 `user_id` 和资料，可以与人类用户收发消息、加入群聊。
+
+所有用户侧 Bot 管理端点均需 Bearer JWT 鉴权。Snowflake ID 使用 JSON number（int64）。
+
+#### 端点速查
+
+| 方法 | 路径 | 用途 |
+|------|------|------|
+| `POST` | `/api/user/bots` | **创建个人 Bot** |
+| `GET` | `/api/user/bots` | 列出我的 Bots |
+| `GET` | `/api/user/bots/:id` | 获取 Bot 详情 |
+| `PUT` | `/api/user/bots/:id` | 更新 Bot 资料（昵称/头像） |
+| `POST` | `/api/user/bots/:id/enable` | 启用 Bot |
+| `POST` | `/api/user/bots/:id/disable` | 禁用 Bot |
+| `DELETE` | `/api/user/bots/:id` | 删除 Bot（软删除） |
+| `POST` | `/api/user/bots/:id/tokens` | 签发 Token |
+| `GET` | `/api/user/bots/:id/tokens` | 列出 Token |
+| `PUT` | `/api/user/bots/:id/tokens/:token_id` | 更新 Token 配置 |
+| `POST` | `/api/user/bots/:id/tokens/:token_id/rotate` | 轮换 Token（换发新 key） |
+| `DELETE` | `/api/user/bots/:id/tokens/:token_id` | 撤销 Token |
+| `POST` | `/api/user/bots/:id/conversations/:conversation_id` | 将 Bot 加入群聊 |
+| `POST` | `/api/user/bots/:id/direct-conversation` | 创建与 Bot 的直聊会话 |
+| `GET` | `/api/user/bot-actions` | 获取 Bot Action 字典 |
+| `GET` | `/api/user/bot-events` | 获取 Bot Event 映射 |
+
+#### 创建 Bot
+
+```
+POST /api/user/bots
+Content-Type: application/json
+Authorization: Bearer <access_token>
+
+{
+  "email": "bot@example.com",   // 可选
+  "nickname": "我的机器人",      // 必填
+  "avatar": "https://..."        // 可选
+}
+```
+
+响应：
+
+```json
+{
+  "code": 0,
+  "msg": "ok",
+  "body": {
+    "bot": {
+      "bot_user_id": 10086,
+      "owner_user_id": 1,
+      "email": "bot@example.com",
+      "nickname": "我的机器人",
+      "avatar": "",
+      "status": 1,
+      "created_at": 1717056000000,
+      "updated_at": 1717056000000
+    }
+  }
+}
+```
+
+创建后可通过返回的 `bot_user_id` 为 Bot 签发 Token。
+
+#### 签发 Token
+
+```
+POST /api/user/bots/:id/tokens
+Content-Type: application/json
+Authorization: Bearer <access_token>
+
+{
+  "name": "dev-token",               // 可选
+  "expires_at": 1770000000000,        // 可选，Unix ms，0 或省略 = 不过期
+  "actions": ["bot.message.send",     // 必填，至少一个 action
+    "bot.conversation.list",
+    "bot.self.read"]
+}
+```
+
+响应中 `plaintext_token`**仅此一次返回**，请即时保存：
+
+```json
+{
+  "code": 0,
+  "body": {
+    "token": {
+      "token_id": 1,
+      "bot_user_id": 10086,
+      "name": "dev-token",
+      "actions": ["bot.message.send", "bot.conversation.list", "bot.self.read"],
+      "expires_at": 1770000000000,
+      "revoked_at": 0,
+      "created_at": 1717056000000
+    },
+    "plaintext_token": "aim_bot_xxxxxxxxxxxxx"
+  }
+}
+```
+
+#### 使用 Token
+
+签发的 Token 可用于调用 Bot OpenAPI（`/api/bot/v1/*`），鉴权方式为：
+
+```
+Authorization: Bot <plaintext_token>
+```
+
+详见 [Bot 开发者指南](bot-developer-guide.md)。
+
+#### Action 字典
+
+`GET /api/user/bot-actions` 返回所有可授权的 action 列表，每个 action 包含 `id`、`action`、`description`。
+签发 Token 时需从该列表中选择 action。Action 包括消息收发、会话管理、Webhook 配置等。
+
+#### 将 Bot 加入群聊
+
+调用者必须是群 owner 或 admin。成功后 Bot 会成为群成员，可收发群消息。
+
+```
+POST /api/user/bots/:id/conversations/:conversation_id
+Authorization: Bearer <access_token>
+```
+
+#### 创建直聊会话
+
+为当前用户与指定 Bot 创建一个 direct 会话。如会话已存在则返回已有会话。
+
+```
+POST /api/user/bots/:id/direct-conversation
+Authorization: Bearer <access_token>
+```
+
+> 完整 REST 路径、参数与响应 schema 以 [`docs/api/gateway-openapi.yaml`](api/gateway-openapi.yaml) 为准。
+
 ## 4. WebSocket 帧协议
 
 ### 4.1 连接
