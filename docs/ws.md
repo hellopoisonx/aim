@@ -48,8 +48,8 @@ message WsFrame {
 - 客户端可通过 `FRAME_TYPE_ACK` 的 `ClientAckPayload.ack_seq` 确认收到服务端推送帧。
 - 当前实现细节：
   - WebSocket handler 主动写出的 `SERVER_ACK` / `TOKEN_EXPIRED` 使用服务端本地单调 `seq`。
-  - 通过内部 `GatewayService` gRPC 写出的推送帧当前 `seq=0`；客户端应能容忍 `seq=0`，可只对 `seq>0` 的服务端帧发送 `FRAME_TYPE_ACK`。
-  - gateway 当前仅记录 `LastAckedSeq`，尚未实现基于 ACK 的离线补发。
+  - 通过内部 `GatewayService` gRPC 写出的推送帧会先以 `seq=0` 作为“待分配”哨兵，实际写出前由 per-connection writer 补齐为正数；客户端仍应兼容历史版本或异常实现中的 `seq=0`，可只对 `seq>0` 的服务端帧发送 `FRAME_TYPE_ACK`。
+  - gateway 当前仅记录 `LastAckedSeq`，尚未实现基于 ACK 的服务端 pending / 离线补发。
 
 ## 3. 帧类型总览
 
@@ -76,6 +76,24 @@ message WsFrame {
 | `FRAME_TYPE_TOKEN_EXPIRED` | 107 | `TokenExpiredPayload` | access token 已过期，随后关闭连接。 |
 | `FRAME_TYPE_PUSH_FRIEND_APPLICATION` | 108 | `PushFriendApplicationPayload` | 推送好友申请状态/通知。 |
 | `FRAME_TYPE_PUSH_READ_RECEIPT` | 109 | `PushReadReceiptPayload` | 推送已读游标更新。 |
+
+### 3.3 轻量 pending 队列建议
+
+轻量 pending 指短 TTL、有限容量的临时缓冲/待处理队列，用于降低在线抖动或 UI 处理窗口内的丢帧影响。它不是权威数据源：客户端重连后仍必须通过历史、presence 快照、read states 或业务列表快照校准最终状态。
+
+| 服务端帧 | 是否建议进入 pending | 合并与最终校准策略 |
+|---|---|---|
+| `FRAME_TYPE_PUSH_MESSAGE` | 是 | 按 `message_id` 去重；发送方还可用 `client_msg_id` 合并本地 sending 记录。断线/重连后最终以 `GET /api/conversations/history/:id` 为准；附件解析更新若复用该帧，只触发对应消息刷新，不覆盖 history 权威结果。 |
+| `FRAME_TYPE_PUSH_NOTIFICATION` | 是 | 低容量、短 TTL 保存；如后续存在通知中心/配置快照接口，最终以对应 REST 快照为准。无持久通知中心时 pending 仅降低在线抖动丢失概率。 |
+| `FRAME_TYPE_PUSH_FRIEND_APPLICATION` | 是 | 按好友关系双方与 `updated_at` 合并最新状态；收到后可先更新红点/入口，再刷新好友申请列表或好友列表确认最终状态。 |
+| `FRAME_TYPE_PUSH_READ_RECEIPT` | 是 | 按 `(conversation_id, user_id)` 合并，只保留最大 `last_read_message_id` 与最新 `updated_at`；最终以历史接口返回的 `read_states` / `read_details` 校准。 |
+| `FRAME_TYPE_PUSH_TYPING` | 否 | 输入状态是瞬时 UI 信号，客户端按超时自动清除即可，不做重放。 |
+| `FRAME_TYPE_PUSH_PRESENCE` | 否 | presence 变化不做 pending；建连/重连后直接拉 `GET /api/presence/friends` 快照覆盖本地状态。 |
+| `FRAME_TYPE_RECONNECT` | 否 | 连接控制帧，只驱动当前连接迁移；错过后由连接关闭/重连状态机兜底，重放没有意义。 |
+| `FRAME_TYPE_TOKEN_EXPIRED` | 否 | 连接控制帧；客户端应以 close code、token 过期时间和 refresh 流程处理，不做 pending。 |
+| `FRAME_TYPE_SERVER_ACK` | 否 | 它确认客户端上行帧，不属于服务端推送 pending；客户端发送消息的 pending 由 `client_msg_id`、重试和历史拉取兜底。 |
+
+如果后续实现服务端基于 `LastAckedSeq` 的补发，也应只对白名单帧（`PUSH_MESSAGE`、`PUSH_NOTIFICATION`、`PUSH_FRIEND_APPLICATION`、`PUSH_READ_RECEIPT`）启用，并保持短 TTL、最大容量和业务 key 合并。pending 归属应是 per-connection 的出站补发窗口，且只保存已由 writer 分配正数 `seq` 的帧；当前不需要新增协议字段。
 
 ## 4. Payload 结构
 
@@ -156,7 +174,7 @@ message ClientAckPayload {
 
 - `ack_seq` 为客户端确认收到的服务端帧 `seq`。
 - gateway 当前只记录每个连接的最大 `LastAckedSeq`，不返回 ACK。
-- 由于当前内部 gRPC 推送帧可能 `seq=0`，客户端可只对 `seq>0` 的服务端帧发送确认。
+- 当前实现会在写出前为 `seq=0` 的待分配服务端帧补齐正数；客户端仍应兼容历史版本或异常实现中的 `seq=0`，只对 `seq>0` 的服务端帧发送确认。
 
 ### 4.6 推送消息：`PushMessagePayload`
 
@@ -393,4 +411,4 @@ message ServerAckPayload {
 - 新增帧类型时只能追加编号，不复用历史编号。
 - `mentions` 使用十进制用户 ID 字符串，避免跨语言精度问题。
 - `conversation_type` 合法值为 `direct` / `group`；客户端需容忍少数 fallback 推送为空字符串。
-- 当前服务端对 typing / notification 等瞬时事件采用 best-effort 投递，客户端不应依赖其强一致到达。
+- 当前服务端尚不提供基于 ACK 的离线补发；客户端可按 §3.3 对白名单帧做轻量 pending，但仍应以 REST 历史/快照接口作为最终状态来源。

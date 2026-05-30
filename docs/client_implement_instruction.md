@@ -434,7 +434,7 @@ message WsFrame {
 - **服务端 seq**：单调递增，但不保证连续
 - `SERVER_ACK.ack_seq` 匹配被确认的客户端帧 `seq`
 - `ClientAckPayload.ack_seq` 匹配被确认的服务端帧 `seq`
-- 当前内部 gRPC 推送帧可能 `seq=0`，客户端应容忍 `seq=0`，可只对 `seq>0` 的帧发送 `FRAME_TYPE_ACK`
+- 内部 gRPC 推送帧写出前会由 per-connection writer 为 `seq=0` 的待分配帧补齐正数服务端 seq；客户端仍应容忍历史版本或异常实现中的 `seq=0`，可只对 `seq>0` 的帧发送 `FRAME_TYPE_ACK`
 
 ### 4.4 帧类型总览
 
@@ -453,6 +453,7 @@ message WsFrame {
 | 类型 | 编号 | Payload | 说明 |
 |------|------|---------|------|
 | `FRAME_TYPE_PUSH_MESSAGE` | 101 | `PushMessagePayload` | 推送聊天消息 / 附件解析更新 |
+| `FRAME_TYPE_PUSH_PRESENCE` | 102 | `PushPresencePayload` | 在线状态 |
 | `FRAME_TYPE_PUSH_NOTIFICATION` | 103 | `PushNotificationPayload` | 系统通知 |
 | `FRAME_TYPE_PUSH_TYPING` | 104 | `PushTypingPayload` | 输入状态 |
 | `FRAME_TYPE_RECONNECT` | 105 | `ReconnectPayload` | 服务端要求重连 |
@@ -794,6 +795,28 @@ type SeqTracker struct {
 
 目前 gateway 只记录 `LastAckedSeq`，不自动补发。重连后通过 REST 拉取历史补全。
 
+### 7.5 服务端推送轻量 pending 队列
+
+轻量 pending 用于降低在线抖动、UI 消费窗口或未来服务端 ACK 补发中的短暂丢帧影响；它不是权威存储。客户端重连后仍必须按 §8.4 拉取历史、presence 快照、read states 和业务列表校准最终状态。
+
+推荐白名单：
+
+| 服务端帧 | 是否进入 pending | 客户端处理建议 |
+|------|------|------|
+| `FRAME_TYPE_PUSH_MESSAGE` | 是 | 按 `message_id` 去重；发送方可用 `client_msg_id` 合并本地 `sending` 记录。最终仍以 `GET /api/conversations/history/:id` 为准；附件解析更新只触发对应消息刷新，不覆盖历史权威结果。 |
+| `FRAME_TYPE_PUSH_NOTIFICATION` | 是 | 短 TTL、低容量保存；用于提示系统公告/维护/强升级等。若后续有通知中心或配置快照接口，最终以 REST 快照为准。 |
+| `FRAME_TYPE_PUSH_FRIEND_APPLICATION` | 是 | 按好友双方与 `updated_at` 合并最新状态；收到后可先更新入口红点，再调用 `GET /api/friends/applications` 或好友列表接口校准。 |
+| `FRAME_TYPE_PUSH_READ_RECEIPT` | 是 | 按 `(conversation_id, user_id)` 合并，只保留最大 `last_read_message_id` 与最新 `updated_at`；最终以 history 响应中的 `read_states` / `read_details` 校准。 |
+
+不进入 pending：
+
+- `FRAME_TYPE_PUSH_TYPING`：瞬时 UI 信号，按 4s 左右超时自动清除，不重放。
+- `FRAME_TYPE_PUSH_PRESENCE`：重连后直接拉 `GET /api/presence/friends` 快照覆盖本地状态。
+- `FRAME_TYPE_RECONNECT`、`FRAME_TYPE_TOKEN_EXPIRED`：连接控制帧，由连接状态机、close code、token refresh 处理，重放没有意义。
+- `FRAME_TYPE_SERVER_ACK`：只确认客户端上行帧，不进入服务端推送 pending；发送消息的本地 pending 由 `client_msg_id`、重试和 history 兜底。
+
+如果未来 gateway 启用基于 `LastAckedSeq` 的服务端补发，也应只对白名单帧启用，并设置短 TTL、最大容量和业务 key 合并策略，禁止 typing/presence/control/ack 入队。服务端补发窗口应按连接维护，只保存已分配正数 `seq` 的出站帧；当前客户端可先实现本地轻量 pending，不需要依赖服务端补发。
+
 ---
 
 ## 8. 云端消息漫游
@@ -889,7 +912,7 @@ type SeqTracker struct {
 - 历史消息合并以 **`message_id` 为主键去重**；推送通道在重连完成前可能已经投递了部分新消息，本地缓存可能与 history 响应有交集，应直接以 `message_id` 覆盖/忽略，不要重复展示。
 - `read_states` 来自 `GET /api/conversations/history/:id` 响应（详见 §8.2 步骤 3d 与 §9.3），客户端目前没有单独的 read-state 快照端点；如果某些会话不需要拉历史，可只调用 `history?limit=1` 等占位请求获取最新 `read_states`，或在用户进入该会话时再补齐。
 - 未读角标 = `本地消息中 message_id > 自己的 last_read_message_id 的数量`。read state 与最近消息都更新后再统一刷新未读计数，避免中间态闪烁。
-- 实时通道恢复后，PUSH_MESSAGE / PUSH_READ_RECEIPT / PUSH_PRESENCE 会继续做增量更新；步骤 3~5 只负责把断线期间的差异补齐。
+- 实时通道恢复后，`PUSH_MESSAGE` / `PUSH_NOTIFICATION` / `PUSH_FRIEND_APPLICATION` / `PUSH_READ_RECEIPT` 可按 §7.5 做轻量 pending 增量处理；`PUSH_PRESENCE` 不做 pending，步骤 4 的快照负责覆盖断线期间的 presence 差异。步骤 3~5 负责把断线期间的权威状态补齐。
 
 ### 8.5 跨设备同步
 

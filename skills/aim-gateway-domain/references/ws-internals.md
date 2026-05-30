@@ -72,3 +72,14 @@ go test -run 'Test.*WebSocket|Test.*Gateway|Test.*Manager' ./app/gateway/api/...
 兼容性：旧版 caller 未设置 `target_user_id`（值为 0）时自动回退，保证升级期间行为不变。
 
 修复记录：2026-05-22 修复前错误地使用 `req.UserId`（状态变更者）查找连接，导致推送不达。
+
+## 轻量 pending 帧分类
+
+客户端或未来服务端 ACK 补发实现只应对白名单帧做短 TTL、有限容量 pending：
+
+- `FRAME_TYPE_PUSH_MESSAGE`：按 `message_id` 去重；发送方可用 `client_msg_id` 合并本地 sending，最终以 history 为准。
+- `FRAME_TYPE_PUSH_NOTIFICATION`：低容量短 TTL；有通知中心/配置快照时以 REST 快照为准。
+- `FRAME_TYPE_PUSH_FRIEND_APPLICATION`：按好友双方与 `updated_at` 合并，最终刷新好友申请列表或好友列表。
+- `FRAME_TYPE_PUSH_READ_RECEIPT`：按 `(conversation_id, user_id)` 合并最大 `last_read_message_id`，最终以 history 返回的 `read_states` / `read_details` 校准。
+
+不要 pending：`FRAME_TYPE_PUSH_TYPING`、`FRAME_TYPE_PUSH_PRESENCE`、`FRAME_TYPE_RECONNECT`、`FRAME_TYPE_TOKEN_EXPIRED`、`FRAME_TYPE_SERVER_ACK`。其中 presence 重连后直接拉 `GET /api/presence/friends` 快照；连接控制帧和 ACK 不做重放。
