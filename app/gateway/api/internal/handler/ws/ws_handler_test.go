@@ -27,6 +27,7 @@ import (
 	logicpb "github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 	"github.com/hellopoisonx/aim/app/shared/jwt"
+	gwpb "github.com/hellopoisonx/aim/shared/proto/gateway/pb"
 	pb "github.com/hellopoisonx/aim/shared/proto/ws/pb"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/codes"
@@ -135,6 +136,7 @@ func TestServeWSHeartbeatAck(t *testing.T) {
 	ackFrame, err := wsmanager.DecodeFrame(ackData)
 	require.NoError(t, err)
 	require.Equal(t, pb.FrameType_FRAME_TYPE_SERVER_ACK, ackFrame.GetType())
+	require.Equal(t, int64(1), ackFrame.GetSeq())
 
 	ackPayload, err := wsmanager.DecodePayload(ackFrame)
 	require.NoError(t, err)
@@ -143,6 +145,29 @@ func TestServeWSHeartbeatAck(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, int64(11), ack.GetAckSeq())
 	require.Equal(t, 1, manager.Count())
+
+	pushResp, err := wsmanager.NewGatewayServer(manager).PushMessage(ctx, &gwpb.PushMessageReq{
+		MessageId:        9001,
+		ConversationId:   7001,
+		ConversationType: "single",
+		MessageType:      "text",
+		Content:          "after heartbeat",
+		SenderId:         99,
+		SentAt:           time.Now().UnixMilli(),
+		ClientMsgId:      "after-heartbeat",
+		TargetUserId:     42,
+	})
+	require.NoError(t, err)
+	require.True(t, pushResp.GetSuccess())
+
+	messageType, pushData, err := conn.Read(ctx)
+	require.NoError(t, err)
+	require.Equal(t, websocket.MessageBinary, messageType)
+
+	pushFrame, err := wsmanager.DecodeFrame(pushData)
+	require.NoError(t, err)
+	require.Equal(t, pb.FrameType_FRAME_TYPE_PUSH_MESSAGE, pushFrame.GetType())
+	require.Equal(t, int64(2), pushFrame.GetSeq())
 }
 
 func TestServeWSSendMessageAck(t *testing.T) {
@@ -184,6 +209,7 @@ func TestServeWSSendMessageAck(t *testing.T) {
 	ackFrame, err := wsmanager.DecodeFrame(ackData)
 	require.NoError(t, err)
 	require.Equal(t, pb.FrameType_FRAME_TYPE_SERVER_ACK, ackFrame.GetType())
+	require.Equal(t, int64(1), ackFrame.GetSeq())
 
 	ackPayload, err := wsmanager.DecodePayload(ackFrame)
 	require.NoError(t, err)

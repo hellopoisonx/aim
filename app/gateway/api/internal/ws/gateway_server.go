@@ -3,6 +3,7 @@ package ws
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -18,6 +19,129 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 )
+
+const connectionWriteQueueSize = 64
+
+var errConnectionWriterClosed = errors.New("connection writer closed")
+
+type writeRequest struct {
+	ctx    context.Context
+	frame  *wspb.WsFrame
+	result chan error
+}
+
+func (r writeRequest) complete(err error) {
+	if r.result == nil {
+		return
+	}
+
+	select {
+	case r.result <- err:
+	default:
+	}
+}
+
+func newConnection(identity Identity, conn *websocket.Conn, cancel context.CancelFunc, lastSeen int64) *Connection {
+	connection := &Connection{
+		Identity: identity,
+		Cancel:   cancel,
+		Conn:     conn,
+		LastSeen: lastSeen,
+	}
+
+	if conn != nil {
+		connection.writeCh = make(chan writeRequest, connectionWriteQueueSize)
+		connection.writerStop = make(chan struct{})
+		connection.writerDone = make(chan struct{})
+	}
+
+	return connection
+}
+
+func (c *Connection) nextServerSeq() int64 {
+	return c.serverSeq.Add(1)
+}
+
+func (c *Connection) startWriter(ctx context.Context) {
+	if c == nil || c.writeCh == nil {
+		return
+	}
+
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	go c.writerLoop(ctx)
+}
+
+func (c *Connection) stopWriter() {
+	if c == nil || c.writerStop == nil || c.writerDone == nil {
+		return
+	}
+
+	c.writerStopOnce.Do(func() {
+		close(c.writerStop)
+		<-c.writerDone
+	})
+}
+
+func (c *Connection) writerLoop(ctx context.Context) {
+	defer close(c.writerDone)
+
+	for {
+		select {
+		case <-ctx.Done():
+			c.failPendingWrites(ctx.Err())
+			return
+		case <-c.writerStop:
+			c.failPendingWrites(errConnectionWriterClosed)
+			return
+		case req := <-c.writeCh:
+			req.complete(c.writeQueuedFrame(req.ctx, req.frame))
+		}
+	}
+}
+
+func (c *Connection) failPendingWrites(err error) {
+	for {
+		select {
+		case req := <-c.writeCh:
+			req.complete(err)
+		default:
+			return
+		}
+	}
+}
+
+func (c *Connection) writeQueuedFrame(ctx context.Context, frame *wspb.WsFrame) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+
+	if c.Conn == nil {
+		return fmt.Errorf("connection is nil")
+	}
+
+	if frame.GetSeq() == 0 {
+		frame.Seq = c.nextServerSeq()
+	}
+
+	data, err := EncodeFrame(frame)
+	if err != nil {
+		return fmt.Errorf("encode frame: %w", err)
+	}
+
+	writeCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	return c.Conn.Write(writeCtx, websocket.MessageBinary, data)
+}
 
 // GatewayServer implements the GatewayServiceServer interface.
 type GatewayServer struct {
@@ -388,28 +512,48 @@ func (c *Connection) WriteFrame(ctx context.Context, frameType wspb.FrameType, p
 	return nil
 }
 
-// WriteEncodedFrame writes an already-built WsFrame to the connection.
-// It serializes all writers on the same WebSocket because coder/websocket only
-// permits one concurrent writer per connection.
+// WriteEncodedFrame queues an already-built WsFrame for the connection writer.
+// The per-connection writer goroutine is the only WebSocket writer. It assigns
+// a positive server seq when frame.Seq is 0 and writes frames in queue order.
 func (c *Connection) WriteEncodedFrame(ctx context.Context, frame *wspb.WsFrame) error {
-	if c.Conn == nil {
-		return fmt.Errorf("connection is nil")
+	if ctx == nil {
+		ctx = context.Background()
 	}
-
-	data, err := EncodeFrame(frame)
-	if err != nil {
-		return fmt.Errorf("encode frame: %w", err)
-	}
-
-	c.writeMu.Lock()
-	defer c.writeMu.Unlock()
 
 	if c.Conn == nil {
 		return fmt.Errorf("connection is nil")
 	}
 
-	writeCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
+	if frame == nil {
+		return fmt.Errorf("frame is nil")
+	}
 
-	return c.Conn.Write(writeCtx, websocket.MessageBinary, data)
+	if c.writeCh == nil {
+		return c.writeQueuedFrame(ctx, proto.Clone(frame).(*wspb.WsFrame))
+	}
+
+	req := writeRequest{
+		ctx:    ctx,
+		frame:  proto.Clone(frame).(*wspb.WsFrame),
+		result: make(chan error, 1),
+	}
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-c.writerDone:
+		return errConnectionWriterClosed
+	case <-c.writerStop:
+		return errConnectionWriterClosed
+	case c.writeCh <- req:
+	}
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-c.writerDone:
+		return errConnectionWriterClosed
+	case err := <-req.result:
+		return err
+	}
 }

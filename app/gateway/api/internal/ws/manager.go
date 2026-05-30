@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/coder/websocket"
@@ -20,10 +21,16 @@ type Identity struct {
 
 // Connection represents a single WebSocket connection with its context.
 type Connection struct {
-	Identity     Identity
-	Cancel       context.CancelFunc
-	Conn         *websocket.Conn
-	writeMu      sync.Mutex
+	Identity Identity
+	Cancel   context.CancelFunc
+	Conn     *websocket.Conn
+
+	serverSeq      atomic.Int64
+	writeCh        chan writeRequest
+	writerStop     chan struct{}
+	writerDone     chan struct{}
+	writerStopOnce sync.Once
+
 	ExpiresAt    int64       // Unix timestamp when token expires (in seconds), 0 if no expiry
 	ExpiryTimer  *time.Timer // timer that fires at token expiry, nil if not set
 	LastSeen     int64       // Unix timestamp (milliseconds) of last heartbeat or frame received
@@ -107,12 +114,9 @@ func (m *Manager) Register(ctx context.Context, identity Identity, conn *websock
 	}
 
 	now := time.Now().UnixMilli()
-	m.connections[identity] = &Connection{
-		Identity: identity,
-		Cancel:   cancel,
-		Conn:     conn,
-		LastSeen: now,
-	}
+	connEntry := newConnection(identity, conn, cancel, now)
+	m.connections[identity] = connEntry
+	connEntry.startWriter(ctx)
 
 	// Cancel any pending offline for this identity (token-refresh grace).
 	cancelled := m.cancelPendingOfflineLocked(identity)
@@ -243,9 +247,11 @@ func (m *Manager) Unregister(ctx context.Context, identity Identity) (*PresenceR
 
 	tokenExpired := conn.TokenExpired
 	delete(m.connections, identity)
+	total := len(m.connections)
 	_ = conn.Cancel // cancel is called by handler on disconnect
 
 	m.mu.Unlock()
+	conn.stopWriter()
 
 	if tokenExpired {
 		// Register reconnect grace instead of publishing offline.
@@ -254,12 +260,12 @@ func (m *Manager) Unregister(ctx context.Context, identity Identity) (*PresenceR
 		m.RenewPresenceTTL(ctx, identity.UserID)
 
 		logx.WithContext(ctx).Infof("ws connection unregistered (token expired, grace=%v): user_id=%d device_id=%s total=%d",
-			m.reconnectGrace, identity.UserID, identity.DeviceID, len(m.connections))
+			m.reconnectGrace, identity.UserID, identity.DeviceID, total)
 		return &PresenceResult{}, nil
 	}
 
 	logx.WithContext(ctx).Infof("ws connection unregistered: user_id=%d device_id=%s total=%d",
-		identity.UserID, identity.DeviceID, len(m.connections))
+		identity.UserID, identity.DeviceID, total)
 
 	return m.updatePresenceOnUnregister(ctx, identity.UserID, identity.DeviceID), nil
 }
@@ -536,13 +542,18 @@ func (m *Manager) ForceOfflineForExpiredGrace(ctx context.Context, identity Iden
 // CloseAll closes all connections and clears the manager.
 func (m *Manager) CloseAll() {
 	m.mu.Lock()
-	defer m.mu.Unlock()
-
+	connections := make([]*Connection, 0, len(m.connections))
 	for identity, conn := range m.connections {
+		connections = append(connections, conn)
+		delete(m.connections, identity)
+	}
+	m.mu.Unlock()
+
+	for _, conn := range connections {
 		if conn.Cancel != nil {
 			conn.Cancel()
 		}
 
-		delete(m.connections, identity)
+		conn.stopWriter()
 	}
 }

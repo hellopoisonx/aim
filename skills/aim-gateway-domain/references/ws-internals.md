@@ -22,6 +22,14 @@
 - 新增帧类型时同步修改 `shared/proto/ws/ws.proto`、payload decode switch、handler/ack 映射和测试。
 - WS 握手只接受 `Authorization: Bearer <token>`；不要支持 query token。
 
+## 服务端 seq 分配
+
+- `WsFrame.seq` 按每条 WebSocket 连接独立递增；`ClientAck.ack_seq` 也按连接推进 `LastAckedSeq`。
+- 服务端业务代码可构造 `seq=0` 的帧作为“待分配”哨兵；实际写出前必须由 `Connection` 写队列补齐为正数。
+- 每个 `Connection` 维护 bounded outbound channel 和单独 `writerLoop`；所有 GatewayService 推送、handler ACK、TOKEN_EXPIRED 等写入都通过该队列串行化。
+- `writerLoop` 是同一连接唯一 WebSocket writer，按出队顺序执行“分配 seq → 编码 → 写 socket → 返回结果”，避免多个 goroutine 抢同一把锁，也保证写出顺序与 seq 顺序一致。
+- 连接注销、context 取消或 token 过期关闭时必须停止 writer 并让后续写入返回错误，避免 goroutine 泄漏。
+
 ## 测试
 
 ```bash

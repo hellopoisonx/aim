@@ -230,6 +230,7 @@ func TestGatewayServerPushMessage(t *testing.T) {
 	frame, err := readFrame(ctx, conn)
 	require.NoError(t, err)
 	require.Equal(t, wspb.FrameType_FRAME_TYPE_PUSH_MESSAGE, frame.GetType())
+	require.Equal(t, int64(1), frame.GetSeq())
 
 	payload, err := DecodePayload(frame)
 	require.NoError(t, err)
@@ -240,6 +241,164 @@ func TestGatewayServerPushMessage(t *testing.T) {
 	require.Equal(t, "hello from push", pushMsg.GetContent())
 	require.Equal(t, "client-msg-123", pushMsg.GetClientMsgId())
 	require.Equal(t, []string{"42"}, pushMsg.GetMentions())
+}
+
+func TestGatewayServerConnectionSeqIncrementsPerConnection(t *testing.T) {
+	t.Parallel()
+
+	env := setupGatewayTest(t)
+	t.Cleanup(env.cleanup)
+
+	userID := int64(22345)
+	wsServer := newWSTestServer(t, env.manager, userID, "seq-device")
+	t.Cleanup(wsServer.close)
+
+	conn, err := wsServer.dialWebSocket("test-token")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = conn.Close(websocket.StatusNormalClosure, "test done") })
+
+	require.NoError(t, waitForRegistration(env.manager, userID, 500*time.Millisecond))
+
+	ctx := context.Background()
+	pushResp, err := env.client.PushMessage(ctx, &pb.PushMessageReq{
+		MessageId:        1001,
+		ConversationId:   2001,
+		ConversationType: "single",
+		MessageType:      "text",
+		Content:          "first",
+		SenderId:         3001,
+		SentAt:           time.Now().UnixMilli(),
+		ClientMsgId:      "seq-msg-1",
+		TargetUserId:     userID,
+	})
+	require.NoError(t, err)
+	require.True(t, pushResp.Success)
+
+	presenceResp, err := env.client.PushPresence(ctx, &pb.PushPresenceReq{
+		UserId:       3001,
+		Status:       "online",
+		UpdatedAt:    time.Now().UnixMilli(),
+		TargetUserId: userID,
+	})
+	require.NoError(t, err)
+	require.True(t, presenceResp.Success)
+
+	firstFrame, err := readFrame(ctx, conn)
+	require.NoError(t, err)
+	require.Equal(t, wspb.FrameType_FRAME_TYPE_PUSH_MESSAGE, firstFrame.GetType())
+	require.Equal(t, int64(1), firstFrame.GetSeq())
+
+	secondFrame, err := readFrame(ctx, conn)
+	require.NoError(t, err)
+	require.Equal(t, wspb.FrameType_FRAME_TYPE_PUSH_PRESENCE, secondFrame.GetType())
+	require.Equal(t, int64(2), secondFrame.GetSeq())
+}
+
+func TestConnectionWriteQueueAssignsSeqForConcurrentWrites(t *testing.T) {
+	t.Parallel()
+
+	env := setupGatewayTest(t)
+	t.Cleanup(env.cleanup)
+
+	identity := Identity{UserID: 22346, DeviceID: "queue-device"}
+	wsServer := newWSTestServer(t, env.manager, identity.UserID, identity.DeviceID)
+	t.Cleanup(wsServer.close)
+
+	conn, err := wsServer.dialWebSocket("test-token")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = conn.Close(websocket.StatusNormalClosure, "test done") })
+
+	require.NoError(t, waitForRegistration(env.manager, identity.UserID, 500*time.Millisecond))
+	connEntry, err := env.manager.Get(identity)
+	require.NoError(t, err)
+
+	const frameCount = 8
+	readCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	framesCh := make(chan *wspb.WsFrame, frameCount)
+	readErrCh := make(chan error, 1)
+	go func() {
+		for range frameCount {
+			frame, err := readFrame(readCtx, conn)
+			if err != nil {
+				readErrCh <- err
+				return
+			}
+
+			framesCh <- frame
+		}
+
+		close(framesCh)
+	}()
+
+	var wg sync.WaitGroup
+	writeErrCh := make(chan error, frameCount)
+	for i := range frameCount {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+
+			writeErrCh <- connEntry.WriteFrame(context.Background(), wspb.FrameType_FRAME_TYPE_PUSH_NOTIFICATION, &wspb.PushNotificationPayload{
+				NotificationType: "seq-test",
+				Title:            fmt.Sprintf("title-%d", i),
+				Body:             "body",
+			})
+		}(i)
+	}
+
+	wg.Wait()
+	close(writeErrCh)
+	for err := range writeErrCh {
+		require.NoError(t, err)
+	}
+
+	frames := make([]*wspb.WsFrame, 0, frameCount)
+	for len(frames) < frameCount {
+		select {
+		case err := <-readErrCh:
+			require.NoError(t, err)
+		case frame, ok := <-framesCh:
+			require.True(t, ok, "reader finished before receiving all frames")
+			frames = append(frames, frame)
+		case <-readCtx.Done():
+			require.NoError(t, readCtx.Err())
+		}
+	}
+
+	for i, frame := range frames {
+		require.Equal(t, wspb.FrameType_FRAME_TYPE_PUSH_NOTIFICATION, frame.GetType())
+		require.Equal(t, int64(i+1), frame.GetSeq())
+	}
+}
+
+func TestConnectionWriteFrameAfterUnregisterReturnsError(t *testing.T) {
+	t.Parallel()
+
+	env := setupGatewayTest(t)
+	t.Cleanup(env.cleanup)
+
+	identity := Identity{UserID: 22347, DeviceID: "closed-writer-device"}
+	wsServer := newWSTestServer(t, env.manager, identity.UserID, identity.DeviceID)
+	t.Cleanup(wsServer.close)
+
+	conn, err := wsServer.dialWebSocket("test-token")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = conn.Close(websocket.StatusNormalClosure, "test done") })
+
+	require.NoError(t, waitForRegistration(env.manager, identity.UserID, 500*time.Millisecond))
+	connEntry, err := env.manager.Get(identity)
+	require.NoError(t, err)
+
+	_, err = env.manager.Unregister(context.Background(), identity)
+	require.NoError(t, err)
+
+	err = connEntry.WriteFrame(context.Background(), wspb.FrameType_FRAME_TYPE_PUSH_NOTIFICATION, &wspb.PushNotificationPayload{
+		NotificationType: "closed",
+		Title:            "closed",
+		Body:             "writer closed",
+	})
+	require.ErrorIs(t, err, errConnectionWriterClosed)
 }
 
 func TestGatewayServerPushPresence(t *testing.T) {
@@ -274,6 +433,7 @@ func TestGatewayServerPushPresence(t *testing.T) {
 	frame, err := readFrame(ctx, conn)
 	require.NoError(t, err)
 	require.Equal(t, wspb.FrameType_FRAME_TYPE_PUSH_PRESENCE, frame.GetType())
+	require.Equal(t, int64(1), frame.GetSeq())
 
 	payload, err := DecodePayload(frame)
 	require.NoError(t, err)
@@ -625,10 +785,12 @@ func TestGatewayServerPushMessageMultiDevice(t *testing.T) {
 	frame1, err := readFrame(ctx, conn1)
 	require.NoError(t, err)
 	require.Equal(t, wspb.FrameType_FRAME_TYPE_PUSH_MESSAGE, frame1.GetType())
+	require.Equal(t, int64(1), frame1.GetSeq())
 
 	frame2, err := readFrame(ctx, conn2)
 	require.NoError(t, err)
 	require.Equal(t, wspb.FrameType_FRAME_TYPE_PUSH_MESSAGE, frame2.GetType())
+	require.Equal(t, int64(1), frame2.GetSeq())
 
 	// Verify content is the same on both
 	payload1, _ := DecodePayload(frame1)
@@ -681,6 +843,7 @@ func TestGatewayServerPushMessageSkipsSourceDeviceForSender(t *testing.T) {
 	frame2, err := readFrame(ctx, conn2)
 	require.NoError(t, err)
 	require.Equal(t, wspb.FrameType_FRAME_TYPE_PUSH_MESSAGE, frame2.GetType())
+	require.Equal(t, int64(1), frame2.GetSeq())
 
 	readCtx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()

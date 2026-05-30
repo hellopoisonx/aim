@@ -358,7 +358,7 @@ func (h *WsHandler) handleReadReceipt(ctx context.Context, conn *websocket.Conn,
 	// depends on the durable cursor update.
 	go h.fanOutReadReceiptLocal(context.WithoutCancel(ctx), identity.UserID, receiptPayload.GetConversationId(), resp.GetReadState().GetLastReadMessageId(), resp.GetReadState().GetUpdatedAt())
 
-	ackFrame, err := ws.NewServerAck(frame.GetSeq(), "", h.nextSeq())
+	ackFrame, err := ws.NewServerAck(frame.GetSeq(), "", 0)
 	if err != nil {
 		return err
 	}
@@ -449,7 +449,7 @@ func (h *WsHandler) handleHeartbeat(ctx context.Context, conn *websocket.Conn, f
 		h.manager.RecordHeartbeat(ctx, identity)
 	}
 
-	ackFrame, err := ws.NewServerAck(frame.GetSeq(), "", h.nextSeq())
+	ackFrame, err := ws.NewServerAck(frame.GetSeq(), "", 0)
 	if err != nil {
 		return err
 	}
@@ -515,7 +515,7 @@ func (h *WsHandler) handleSendMessage(ctx context.Context, conn *websocket.Conn,
 	resp, err := h.srv.CoreClient.Transfer(transferCtx, req)
 
 	// Map result to SERVER_ACK
-	return h.writeFrame(ctx, conn, mapTransferToAck(frame.GetSeq(), sendPayload.GetClientMsgId(), h.nextSeq(), resp, err))
+	return h.writeFrame(ctx, conn, mapTransferToAck(frame.GetSeq(), sendPayload.GetClientMsgId(), 0, resp, err))
 }
 
 // writeErrorAck writes a SERVER_ACK with error info. Returns nil if conn is nil (test mode).
@@ -531,7 +531,7 @@ func (h *WsHandler) writeErrorAck(ctx context.Context, conn *websocket.Conn, ack
 	ackFrame, err := ws.NewServerAckExtended(
 		ackSeq,
 		clientMsgID,
-		h.nextSeq(),
+		0,
 		status,
 		int32(code),
 		msg,
@@ -643,6 +643,10 @@ func (h *WsHandler) writeFrame(ctx context.Context, conn *websocket.Conn, frame 
 		}
 	}
 
+	if frame.GetSeq() == 0 {
+		frame.Seq = h.nextSeq()
+	}
+
 	data, err := ws.EncodeFrame(frame)
 	if err != nil {
 		span.RecordError(err)
@@ -682,7 +686,7 @@ func (h *WsHandler) sendTokenExpired(ctx context.Context, conn *websocket.Conn, 
 		return
 	}
 
-	frame := ws.BuildFrame(pb.FrameType_FRAME_TYPE_TOKEN_EXPIRED, h.nextSeq(), payloadBytes)
+	frame := ws.BuildFrame(pb.FrameType_FRAME_TYPE_TOKEN_EXPIRED, 0, payloadBytes)
 
 	if err := h.writeFrame(ctx, conn, frame); err != nil {
 		logx.WithContext(ctx).Errorf("failed to send token expired frame: %v", err)
