@@ -42,3 +42,9 @@ func (s *AuthServiceServer) Logout(ctx context.Context, in *pb.LogoutReq) (*pb.L
 	l := logic.NewLogoutLogic(ctx, s.svcCtx)
 	return l.Logout(in)
 }
+
+// CreateBotCredential creates a disabled placeholder credential for a bot.
+func (s *AuthServiceServer) CreateBotCredential(ctx context.Context, in *pb.CreateBotCredentialReq) (*pb.CreateBotCredentialResp, error) {
+	l := logic.NewCreateBotCredentialLogic(ctx, s.svcCtx)
+	return l.CreateBotCredential(in)
+}

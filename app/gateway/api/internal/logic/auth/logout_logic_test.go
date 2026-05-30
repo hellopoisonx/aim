@@ -84,3 +84,5 @@ func (c *recordingAuthClient) Logout(_ context.Context, req *authservice.LogoutR
 
 	return &authservice.LogoutResp{Success: true}, nil
 }
+
+func (c *recordingAuthClient) CreateBotCredential(context.Context, *authservice.CreateBotCredentialReq, ...grpc.CallOption) (*authservice.CreateBotCredentialResp, error) { return nil, nil }

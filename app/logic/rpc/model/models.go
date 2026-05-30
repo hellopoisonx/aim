@@ -113,6 +113,14 @@ type Message struct {
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 }
 
+type UserBot struct {
+	BotUserID   int64              `json:"bot_user_id"`
+	OwnerUserID int64              `json:"owner_user_id"`
+	DeletedAt   pgtype.Timestamptz `json:"deleted_at"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+}
+
 type UserInfo struct {
 	ID        int64              `json:"id"`
 	Email     string             `json:"email"`

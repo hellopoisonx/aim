@@ -35,6 +35,22 @@ type AddGroupMembersResponse struct {
 	CreatorId        int64   `json:"creator_id"`
 }
 
+type AddUserBotToConversationRequest struct {
+	Id             int64 `path:"id" validate:"required"`
+	ConversationId int64 `path:"conversation_id" validate:"required"`
+}
+
+type AddUserBotToConversationResponse struct {
+	ConversationId   int64   `json:"conversation_id"`
+	ConversationType string  `json:"conversation_type"`
+	IsActive         bool    `json:"is_active"`
+	CreatedAt        int64   `json:"created_at"`
+	MemberIds        []int64 `json:"member_ids"`
+	Name             string  `json:"name"`
+	Avatar           string  `json:"avatar"`
+	CreatorId        int64   `json:"creator_id"`
+}
+
 type AttachmentFileInfo struct {
 	FileId             string                 `json:"file_id"`
 	OwnerId            int64                  `json:"owner_id"`
@@ -53,6 +69,12 @@ type AttachmentFileInfo struct {
 	Width              int32                  `json:"width,optional"`
 	Height             int32                  `json:"height,optional"`
 	Metadata           map[string]interface{} `json:"metadata,optional"`
+}
+
+type BotActionItem struct {
+	Id          int64  `json:"id"`
+	Action      string `json:"action"`
+	Description string `json:"description"`
 }
 
 type BotConversationItem struct {
@@ -75,6 +97,12 @@ type BotDownloadAttachmentResponse struct {
 	Url       string            `json:"url"`
 	Headers   map[string]string `json:"headers,optional"`
 	ExpiresAt int64             `json:"expires_at"`
+}
+
+type BotEventItem struct {
+	Event       string `json:"event"`
+	Action      string `json:"action"`
+	Description string `json:"description"`
 }
 
 type BotGetConversationHistoryRequest struct {
@@ -266,12 +294,65 @@ type CreateGroupRequest struct {
 	Avatar    string  `json:"avatar,optional"`
 }
 
+type CreateUserBotDirectConversationRequest struct {
+	Id int64 `path:"id" validate:"required"`
+}
+
+type CreateUserBotDirectConversationResponse struct {
+	ConversationId   int64   `json:"conversation_id"`
+	ConversationType string  `json:"conversation_type"`
+	IsActive         bool    `json:"is_active"`
+	CreatedAt        int64   `json:"created_at"`
+	MemberIds        []int64 `json:"member_ids"`
+	Name             string  `json:"name"`
+	Avatar           string  `json:"avatar"`
+	CreatorId        int64   `json:"creator_id"`
+}
+
+type CreateUserBotRequest struct {
+	Email    string `json:"email"`
+	Nickname string `json:"nickname" validate:"required"`
+	Avatar   string `json:"avatar,optional"`
+}
+
+type CreateUserBotResponse struct {
+	Bot UserBotInfo `json:"bot"`
+}
+
+type CreateUserBotTokenRequest struct {
+	Id        int64    `path:"id" validate:"required"`
+	Name      string   `json:"name,optional"`
+	ExpiresAt int64    `json:"expires_at,optional"`
+	Actions   []string `json:"actions" validate:"required,min=1"`
+}
+
+type CreateUserBotTokenResponse struct {
+	Token          UserBotTokenInfo `json:"token"`
+	PlaintextToken string           `json:"plaintext_token"`
+}
+
 type DeleteFriendTagRequest struct {
 	Id int64 `path:"id" validate:"required"`
 }
 
 type DeleteFriendTagResponse struct {
 	Deleted bool `json:"deleted"`
+}
+
+type DeleteUserBotRequest struct {
+	Id int64 `path:"id" validate:"required"`
+}
+
+type DeleteUserBotResponse struct {
+	Deleted bool `json:"deleted"`
+}
+
+type DisableUserBotRequest struct {
+	Id int64 `path:"id" validate:"required"`
+}
+
+type DisableUserBotResponse struct {
+	Bot UserBotInfo `json:"bot"`
 }
 
 type DismissGroupRequest struct {
@@ -286,6 +367,14 @@ type DownloadAttachmentResponse struct {
 	Url       string            `json:"url"`
 	Headers   map[string]string `json:"headers,optional"`
 	ExpiresAt int64             `json:"expires_at"`
+}
+
+type EnableUserBotRequest struct {
+	Id int64 `path:"id" validate:"required"`
+}
+
+type EnableUserBotResponse struct {
+	Bot UserBotInfo `json:"bot"`
 }
 
 type FriendTagItem struct {
@@ -339,6 +428,14 @@ type GetFriendsPresenceResponse struct {
 	Presences []PresenceItem `json:"presences"`
 }
 
+type GetUserBotRequest struct {
+	Id int64 `path:"id" validate:"required"`
+}
+
+type GetUserBotResponse struct {
+	Bot UserBotInfo `json:"bot"`
+}
+
 type GetUserByIdRequest struct {
 	Id int64 `path:"id" validate:"required"`
 }
@@ -383,6 +480,14 @@ type LeaveGroupRequest struct {
 	Id int64 `path:"id" validate:"required"`
 }
 
+type ListBotActionsResponse struct {
+	Actions []BotActionItem `json:"actions"`
+}
+
+type ListBotEventsResponse struct {
+	Events []BotEventItem `json:"events"`
+}
+
 type ListConversationsResponse struct {
 	Conversations []ConversationItem `json:"conversations"`
 }
@@ -397,6 +502,18 @@ type ListFriendTagsResponse struct {
 
 type ListFriendsResponse struct {
 	Friends []FriendshipItem `json:"friends"`
+}
+
+type ListUserBotTokensRequest struct {
+	Id int64 `path:"id" validate:"required"`
+}
+
+type ListUserBotTokensResponse struct {
+	Tokens []UserBotTokenInfo `json:"tokens"`
+}
+
+type ListUserBotsResponse struct {
+	Bots []UserBotInfo `json:"bots"`
 }
 
 type LoginRequest struct {
@@ -522,6 +639,25 @@ type RevokeGroupAdminRequest struct {
 	Uid int64 `path:"uid" validate:"required"`
 }
 
+type RevokeUserBotTokenRequest struct {
+	Id      int64 `path:"id" validate:"required"`
+	TokenId int64 `path:"token_id" validate:"required"`
+}
+
+type RevokeUserBotTokenResponse struct {
+	Revoked bool `json:"revoked"`
+}
+
+type RotateUserBotTokenRequest struct {
+	Id      int64 `path:"id" validate:"required"`
+	TokenId int64 `path:"token_id" validate:"required"`
+}
+
+type RotateUserBotTokenResponse struct {
+	Token          UserBotTokenInfo `json:"token"`
+	PlaintextToken string           `json:"plaintext_token"`
+}
+
 type SearchConversationResultItem struct {
 	Conversation ConversationItem `json:"conversation"`
 	Snippet      string           `json:"snippet"`
@@ -606,6 +742,49 @@ type UpdateGroupInfoResponse struct {
 	Avatar           string `json:"avatar"`
 	CreatorId        int64  `json:"creator_id"`
 	CreatedAt        int64  `json:"created_at"`
+}
+
+type UpdateUserBotProfileRequest struct {
+	Id       int64  `path:"id" validate:"required"`
+	Nickname string `json:"nickname" validate:"required"`
+	Avatar   string `json:"avatar,optional"`
+}
+
+type UpdateUserBotProfileResponse struct {
+	Bot UserBotInfo `json:"bot"`
+}
+
+type UpdateUserBotTokenRequest struct {
+	Id        int64    `path:"id" validate:"required"`
+	TokenId   int64    `path:"token_id" validate:"required"`
+	Name      string   `json:"name,optional"`
+	ExpiresAt int64    `json:"expires_at,optional"`
+	Actions   []string `json:"actions" validate:"required,min=1"`
+}
+
+type UpdateUserBotTokenResponse struct {
+	Token UserBotTokenInfo `json:"token"`
+}
+
+type UserBotInfo struct {
+	BotUserId   int64  `json:"bot_user_id"`
+	OwnerUserId int64  `json:"owner_user_id"`
+	Email       string `json:"email"`
+	Nickname    string `json:"nickname"`
+	Avatar      string `json:"avatar"`
+	Status      int32  `json:"status"`
+	CreatedAt   int64  `json:"created_at"`
+	UpdatedAt   int64  `json:"updated_at"`
+}
+
+type UserBotTokenInfo struct {
+	TokenId   int64    `json:"token_id"`
+	BotUserId int64    `json:"bot_user_id"`
+	Name      string   `json:"name"`
+	Actions   []string `json:"actions"`
+	ExpiresAt int64    `json:"expires_at"`
+	RevokedAt int64    `json:"revoked_at"`
+	CreatedAt int64    `json:"created_at"`
 }
 
 type UserInfo struct {

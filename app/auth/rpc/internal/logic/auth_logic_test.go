@@ -232,9 +232,16 @@ func (s *memoryUserStore) GetUserByEmail(_ context.Context, email string) (auths
 	return user, nil
 }
 
+
+// CreateBotCredential is a stub to satisfy the UserStore interface;
+// bot-specific tests can override this.
+func (s *memoryUserStore) CreateBotCredential(ctx context.Context, email, passwordHash, name string) (authsvc.UserCredential, error) {
+	return s.CreateUser(ctx, email, passwordHash, name)
+}
+
 type memorySessionStore struct {
 	next     int
-	rt       map[string][2]string
+	rt       map[string][2]string //nolint:unused
 	byDevice map[[2]string]string
 	err      error
 }

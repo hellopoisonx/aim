@@ -909,3 +909,21 @@ func TestFilterMentionsByMemberIDs(t *testing.T) {
 	// No overlap
 	assert.Empty(t, filterMentionsByMemberIDs([]int64{5, 6}, []int64{1, 2}))
 }
+
+// --- Bot management stubs (required by expanded model.Querier) ---
+
+func (f *fakeQuerier) ClearBotTokenActions(ctx context.Context, tokenID int64) (int64, error) { return 0, nil }
+func (f *fakeQuerier) CreateUserBotOwnership(ctx context.Context, arg model.CreateUserBotOwnershipParams) (model.UserBot, error) { return model.UserBot{}, nil }
+func (f *fakeQuerier) CreateUserBotProfile(ctx context.Context, arg model.CreateUserBotProfileParams) (model.UserInfo, error) { return model.UserInfo{}, nil }
+func (f *fakeQuerier) GetManagedBotToken(ctx context.Context, arg model.GetManagedBotTokenParams) (model.BotToken, error) { return model.BotToken{}, nil }
+func (f *fakeQuerier) GetManagedUserBot(ctx context.Context, arg model.GetManagedUserBotParams) (model.GetManagedUserBotRow, error) { return model.GetManagedUserBotRow{}, nil }
+func (f *fakeQuerier) ListEnabledBotActions(ctx context.Context) ([]model.BotAction, error) { return nil, nil }
+func (f *fakeQuerier) ListEnabledBotActionsByNames(ctx context.Context, names []string) ([]model.BotAction, error) { return nil, nil }
+func (f *fakeQuerier) ListEnabledBotEvents(ctx context.Context) ([]model.ListEnabledBotEventsRow, error) { return nil, nil }
+func (f *fakeQuerier) ListManagedUserBots(ctx context.Context, ownerUserID int64) ([]model.ListManagedUserBotsRow, error) { return nil, nil }
+func (f *fakeQuerier) RevokeAllBotTokensByBot(ctx context.Context, botUserID int64) (int64, error) { return 0, nil }
+func (f *fakeQuerier) RevokeManagedBotToken(ctx context.Context, arg model.RevokeManagedBotTokenParams) (int64, error) { return 0, nil }
+func (f *fakeQuerier) SoftDeleteManagedUserBot(ctx context.Context, arg model.SoftDeleteManagedUserBotParams) (int64, error) { return 0, nil }
+func (f *fakeQuerier) UpdateManagedBotToken(ctx context.Context, arg model.UpdateManagedBotTokenParams) (model.BotToken, error) { return model.BotToken{}, nil }
+func (f *fakeQuerier) UpdateManagedUserBotProfile(ctx context.Context, arg model.UpdateManagedUserBotProfileParams) (model.UserInfo, error) { return model.UserInfo{}, nil }
+func (f *fakeQuerier) UpdateManagedUserBotStatus(ctx context.Context, arg model.UpdateManagedUserBotStatusParams) (model.UserInfo, error) { return model.UserInfo{}, nil }

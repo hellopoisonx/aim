@@ -9,6 +9,7 @@ import (
 )
 
 type Querier interface {
+	CreateBotCredential(ctx context.Context, arg CreateBotCredentialParams) (CreateBotCredentialRow, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (CreateUserRow, error)
 	GetUserByEmail(ctx context.Context, email string) (GetUserByEmailRow, error)
 	GetUserByID(ctx context.Context, id int64) (GetUserByIDRow, error)

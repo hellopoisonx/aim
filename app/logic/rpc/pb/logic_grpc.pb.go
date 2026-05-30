@@ -1711,13 +1711,28 @@ var SearchService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	BotService_ValidateBotToken_FullMethodName              = "/logic.BotService/ValidateBotToken"
-	BotService_GetBotProfile_FullMethodName                 = "/logic.BotService/GetBotProfile"
-	BotService_ListBotConversations_FullMethodName          = "/logic.BotService/ListBotConversations"
-	BotService_GetBotWebhook_FullMethodName                 = "/logic.BotService/GetBotWebhook"
-	BotService_SetBotWebhook_FullMethodName                 = "/logic.BotService/SetBotWebhook"
-	BotService_DeleteBotWebhook_FullMethodName              = "/logic.BotService/DeleteBotWebhook"
-	BotService_ResolveBotWebhookEventActions_FullMethodName = "/logic.BotService/ResolveBotWebhookEventActions"
+	BotService_ValidateBotToken_FullMethodName                = "/logic.BotService/ValidateBotToken"
+	BotService_GetBotProfile_FullMethodName                   = "/logic.BotService/GetBotProfile"
+	BotService_ListBotConversations_FullMethodName            = "/logic.BotService/ListBotConversations"
+	BotService_GetBotWebhook_FullMethodName                   = "/logic.BotService/GetBotWebhook"
+	BotService_SetBotWebhook_FullMethodName                   = "/logic.BotService/SetBotWebhook"
+	BotService_DeleteBotWebhook_FullMethodName                = "/logic.BotService/DeleteBotWebhook"
+	BotService_ResolveBotWebhookEventActions_FullMethodName   = "/logic.BotService/ResolveBotWebhookEventActions"
+	BotService_CreateUserBot_FullMethodName                   = "/logic.BotService/CreateUserBot"
+	BotService_ListUserBots_FullMethodName                    = "/logic.BotService/ListUserBots"
+	BotService_GetUserBot_FullMethodName                      = "/logic.BotService/GetUserBot"
+	BotService_UpdateUserBotProfile_FullMethodName            = "/logic.BotService/UpdateUserBotProfile"
+	BotService_SetUserBotStatus_FullMethodName                = "/logic.BotService/SetUserBotStatus"
+	BotService_DeleteUserBot_FullMethodName                   = "/logic.BotService/DeleteUserBot"
+	BotService_CreateUserBotToken_FullMethodName              = "/logic.BotService/CreateUserBotToken"
+	BotService_ListUserBotTokens_FullMethodName               = "/logic.BotService/ListUserBotTokens"
+	BotService_UpdateUserBotToken_FullMethodName              = "/logic.BotService/UpdateUserBotToken"
+	BotService_RotateUserBotToken_FullMethodName              = "/logic.BotService/RotateUserBotToken"
+	BotService_RevokeUserBotToken_FullMethodName              = "/logic.BotService/RevokeUserBotToken"
+	BotService_AddUserBotToConversation_FullMethodName        = "/logic.BotService/AddUserBotToConversation"
+	BotService_CreateUserBotDirectConversation_FullMethodName = "/logic.BotService/CreateUserBotDirectConversation"
+	BotService_ListBotActions_FullMethodName                  = "/logic.BotService/ListBotActions"
+	BotService_ListBotEvents_FullMethodName                   = "/logic.BotService/ListBotEvents"
 )
 
 // BotServiceClient is the client API for BotService service.
@@ -1749,6 +1764,23 @@ type BotServiceClient interface {
 	// ResolveBotWebhookEventActions maps webhook event names (e.g. message.created)
 	// to the enabled actions required to subscribe to them.
 	ResolveBotWebhookEventActions(ctx context.Context, in *ResolveBotWebhookEventActionsReq, opts ...grpc.CallOption) (*ResolveBotWebhookEventActionsResp, error)
+	// User-side Bot management RPCs. Gateway calls these with the authenticated
+	// user_id from the user Access Token; Bot runtime still uses Bot tokens.
+	CreateUserBot(ctx context.Context, in *CreateUserBotReq, opts ...grpc.CallOption) (*CreateUserBotResp, error)
+	ListUserBots(ctx context.Context, in *ListUserBotsReq, opts ...grpc.CallOption) (*ListUserBotsResp, error)
+	GetUserBot(ctx context.Context, in *GetUserBotReq, opts ...grpc.CallOption) (*GetUserBotResp, error)
+	UpdateUserBotProfile(ctx context.Context, in *UpdateUserBotProfileReq, opts ...grpc.CallOption) (*UpdateUserBotProfileResp, error)
+	SetUserBotStatus(ctx context.Context, in *SetUserBotStatusReq, opts ...grpc.CallOption) (*SetUserBotStatusResp, error)
+	DeleteUserBot(ctx context.Context, in *DeleteUserBotReq, opts ...grpc.CallOption) (*DeleteUserBotResp, error)
+	CreateUserBotToken(ctx context.Context, in *CreateUserBotTokenReq, opts ...grpc.CallOption) (*CreateUserBotTokenResp, error)
+	ListUserBotTokens(ctx context.Context, in *ListUserBotTokensReq, opts ...grpc.CallOption) (*ListUserBotTokensResp, error)
+	UpdateUserBotToken(ctx context.Context, in *UpdateUserBotTokenReq, opts ...grpc.CallOption) (*UpdateUserBotTokenResp, error)
+	RotateUserBotToken(ctx context.Context, in *RotateUserBotTokenReq, opts ...grpc.CallOption) (*RotateUserBotTokenResp, error)
+	RevokeUserBotToken(ctx context.Context, in *RevokeUserBotTokenReq, opts ...grpc.CallOption) (*RevokeUserBotTokenResp, error)
+	AddUserBotToConversation(ctx context.Context, in *AddUserBotToConversationReq, opts ...grpc.CallOption) (*AddUserBotToConversationResp, error)
+	CreateUserBotDirectConversation(ctx context.Context, in *CreateUserBotDirectConversationReq, opts ...grpc.CallOption) (*CreateUserBotDirectConversationResp, error)
+	ListBotActions(ctx context.Context, in *ListBotActionsReq, opts ...grpc.CallOption) (*ListBotActionsResp, error)
+	ListBotEvents(ctx context.Context, in *ListBotEventsReq, opts ...grpc.CallOption) (*ListBotEventsResp, error)
 }
 
 type botServiceClient struct {
@@ -1829,6 +1861,156 @@ func (c *botServiceClient) ResolveBotWebhookEventActions(ctx context.Context, in
 	return out, nil
 }
 
+func (c *botServiceClient) CreateUserBot(ctx context.Context, in *CreateUserBotReq, opts ...grpc.CallOption) (*CreateUserBotResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateUserBotResp)
+	err := c.cc.Invoke(ctx, BotService_CreateUserBot_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *botServiceClient) ListUserBots(ctx context.Context, in *ListUserBotsReq, opts ...grpc.CallOption) (*ListUserBotsResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListUserBotsResp)
+	err := c.cc.Invoke(ctx, BotService_ListUserBots_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *botServiceClient) GetUserBot(ctx context.Context, in *GetUserBotReq, opts ...grpc.CallOption) (*GetUserBotResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetUserBotResp)
+	err := c.cc.Invoke(ctx, BotService_GetUserBot_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *botServiceClient) UpdateUserBotProfile(ctx context.Context, in *UpdateUserBotProfileReq, opts ...grpc.CallOption) (*UpdateUserBotProfileResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UpdateUserBotProfileResp)
+	err := c.cc.Invoke(ctx, BotService_UpdateUserBotProfile_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *botServiceClient) SetUserBotStatus(ctx context.Context, in *SetUserBotStatusReq, opts ...grpc.CallOption) (*SetUserBotStatusResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetUserBotStatusResp)
+	err := c.cc.Invoke(ctx, BotService_SetUserBotStatus_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *botServiceClient) DeleteUserBot(ctx context.Context, in *DeleteUserBotReq, opts ...grpc.CallOption) (*DeleteUserBotResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteUserBotResp)
+	err := c.cc.Invoke(ctx, BotService_DeleteUserBot_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *botServiceClient) CreateUserBotToken(ctx context.Context, in *CreateUserBotTokenReq, opts ...grpc.CallOption) (*CreateUserBotTokenResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateUserBotTokenResp)
+	err := c.cc.Invoke(ctx, BotService_CreateUserBotToken_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *botServiceClient) ListUserBotTokens(ctx context.Context, in *ListUserBotTokensReq, opts ...grpc.CallOption) (*ListUserBotTokensResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListUserBotTokensResp)
+	err := c.cc.Invoke(ctx, BotService_ListUserBotTokens_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *botServiceClient) UpdateUserBotToken(ctx context.Context, in *UpdateUserBotTokenReq, opts ...grpc.CallOption) (*UpdateUserBotTokenResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UpdateUserBotTokenResp)
+	err := c.cc.Invoke(ctx, BotService_UpdateUserBotToken_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *botServiceClient) RotateUserBotToken(ctx context.Context, in *RotateUserBotTokenReq, opts ...grpc.CallOption) (*RotateUserBotTokenResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RotateUserBotTokenResp)
+	err := c.cc.Invoke(ctx, BotService_RotateUserBotToken_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *botServiceClient) RevokeUserBotToken(ctx context.Context, in *RevokeUserBotTokenReq, opts ...grpc.CallOption) (*RevokeUserBotTokenResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RevokeUserBotTokenResp)
+	err := c.cc.Invoke(ctx, BotService_RevokeUserBotToken_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *botServiceClient) AddUserBotToConversation(ctx context.Context, in *AddUserBotToConversationReq, opts ...grpc.CallOption) (*AddUserBotToConversationResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AddUserBotToConversationResp)
+	err := c.cc.Invoke(ctx, BotService_AddUserBotToConversation_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *botServiceClient) CreateUserBotDirectConversation(ctx context.Context, in *CreateUserBotDirectConversationReq, opts ...grpc.CallOption) (*CreateUserBotDirectConversationResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateUserBotDirectConversationResp)
+	err := c.cc.Invoke(ctx, BotService_CreateUserBotDirectConversation_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *botServiceClient) ListBotActions(ctx context.Context, in *ListBotActionsReq, opts ...grpc.CallOption) (*ListBotActionsResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListBotActionsResp)
+	err := c.cc.Invoke(ctx, BotService_ListBotActions_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *botServiceClient) ListBotEvents(ctx context.Context, in *ListBotEventsReq, opts ...grpc.CallOption) (*ListBotEventsResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListBotEventsResp)
+	err := c.cc.Invoke(ctx, BotService_ListBotEvents_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // BotServiceServer is the server API for BotService service.
 // All implementations must embed UnimplementedBotServiceServer
 // for forward compatibility.
@@ -1858,6 +2040,23 @@ type BotServiceServer interface {
 	// ResolveBotWebhookEventActions maps webhook event names (e.g. message.created)
 	// to the enabled actions required to subscribe to them.
 	ResolveBotWebhookEventActions(context.Context, *ResolveBotWebhookEventActionsReq) (*ResolveBotWebhookEventActionsResp, error)
+	// User-side Bot management RPCs. Gateway calls these with the authenticated
+	// user_id from the user Access Token; Bot runtime still uses Bot tokens.
+	CreateUserBot(context.Context, *CreateUserBotReq) (*CreateUserBotResp, error)
+	ListUserBots(context.Context, *ListUserBotsReq) (*ListUserBotsResp, error)
+	GetUserBot(context.Context, *GetUserBotReq) (*GetUserBotResp, error)
+	UpdateUserBotProfile(context.Context, *UpdateUserBotProfileReq) (*UpdateUserBotProfileResp, error)
+	SetUserBotStatus(context.Context, *SetUserBotStatusReq) (*SetUserBotStatusResp, error)
+	DeleteUserBot(context.Context, *DeleteUserBotReq) (*DeleteUserBotResp, error)
+	CreateUserBotToken(context.Context, *CreateUserBotTokenReq) (*CreateUserBotTokenResp, error)
+	ListUserBotTokens(context.Context, *ListUserBotTokensReq) (*ListUserBotTokensResp, error)
+	UpdateUserBotToken(context.Context, *UpdateUserBotTokenReq) (*UpdateUserBotTokenResp, error)
+	RotateUserBotToken(context.Context, *RotateUserBotTokenReq) (*RotateUserBotTokenResp, error)
+	RevokeUserBotToken(context.Context, *RevokeUserBotTokenReq) (*RevokeUserBotTokenResp, error)
+	AddUserBotToConversation(context.Context, *AddUserBotToConversationReq) (*AddUserBotToConversationResp, error)
+	CreateUserBotDirectConversation(context.Context, *CreateUserBotDirectConversationReq) (*CreateUserBotDirectConversationResp, error)
+	ListBotActions(context.Context, *ListBotActionsReq) (*ListBotActionsResp, error)
+	ListBotEvents(context.Context, *ListBotEventsReq) (*ListBotEventsResp, error)
 	mustEmbedUnimplementedBotServiceServer()
 }
 
@@ -1888,6 +2087,51 @@ func (UnimplementedBotServiceServer) DeleteBotWebhook(context.Context, *DeleteBo
 }
 func (UnimplementedBotServiceServer) ResolveBotWebhookEventActions(context.Context, *ResolveBotWebhookEventActionsReq) (*ResolveBotWebhookEventActionsResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ResolveBotWebhookEventActions not implemented")
+}
+func (UnimplementedBotServiceServer) CreateUserBot(context.Context, *CreateUserBotReq) (*CreateUserBotResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CreateUserBot not implemented")
+}
+func (UnimplementedBotServiceServer) ListUserBots(context.Context, *ListUserBotsReq) (*ListUserBotsResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListUserBots not implemented")
+}
+func (UnimplementedBotServiceServer) GetUserBot(context.Context, *GetUserBotReq) (*GetUserBotResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetUserBot not implemented")
+}
+func (UnimplementedBotServiceServer) UpdateUserBotProfile(context.Context, *UpdateUserBotProfileReq) (*UpdateUserBotProfileResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UpdateUserBotProfile not implemented")
+}
+func (UnimplementedBotServiceServer) SetUserBotStatus(context.Context, *SetUserBotStatusReq) (*SetUserBotStatusResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetUserBotStatus not implemented")
+}
+func (UnimplementedBotServiceServer) DeleteUserBot(context.Context, *DeleteUserBotReq) (*DeleteUserBotResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DeleteUserBot not implemented")
+}
+func (UnimplementedBotServiceServer) CreateUserBotToken(context.Context, *CreateUserBotTokenReq) (*CreateUserBotTokenResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CreateUserBotToken not implemented")
+}
+func (UnimplementedBotServiceServer) ListUserBotTokens(context.Context, *ListUserBotTokensReq) (*ListUserBotTokensResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListUserBotTokens not implemented")
+}
+func (UnimplementedBotServiceServer) UpdateUserBotToken(context.Context, *UpdateUserBotTokenReq) (*UpdateUserBotTokenResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UpdateUserBotToken not implemented")
+}
+func (UnimplementedBotServiceServer) RotateUserBotToken(context.Context, *RotateUserBotTokenReq) (*RotateUserBotTokenResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RotateUserBotToken not implemented")
+}
+func (UnimplementedBotServiceServer) RevokeUserBotToken(context.Context, *RevokeUserBotTokenReq) (*RevokeUserBotTokenResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RevokeUserBotToken not implemented")
+}
+func (UnimplementedBotServiceServer) AddUserBotToConversation(context.Context, *AddUserBotToConversationReq) (*AddUserBotToConversationResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method AddUserBotToConversation not implemented")
+}
+func (UnimplementedBotServiceServer) CreateUserBotDirectConversation(context.Context, *CreateUserBotDirectConversationReq) (*CreateUserBotDirectConversationResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CreateUserBotDirectConversation not implemented")
+}
+func (UnimplementedBotServiceServer) ListBotActions(context.Context, *ListBotActionsReq) (*ListBotActionsResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListBotActions not implemented")
+}
+func (UnimplementedBotServiceServer) ListBotEvents(context.Context, *ListBotEventsReq) (*ListBotEventsResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListBotEvents not implemented")
 }
 func (UnimplementedBotServiceServer) mustEmbedUnimplementedBotServiceServer() {}
 func (UnimplementedBotServiceServer) testEmbeddedByValue()                    {}
@@ -2036,6 +2280,276 @@ func _BotService_ResolveBotWebhookEventActions_Handler(srv interface{}, ctx cont
 	return interceptor(ctx, in, info, handler)
 }
 
+func _BotService_CreateUserBot_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateUserBotReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BotServiceServer).CreateUserBot(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BotService_CreateUserBot_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BotServiceServer).CreateUserBot(ctx, req.(*CreateUserBotReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BotService_ListUserBots_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListUserBotsReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BotServiceServer).ListUserBots(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BotService_ListUserBots_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BotServiceServer).ListUserBots(ctx, req.(*ListUserBotsReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BotService_GetUserBot_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetUserBotReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BotServiceServer).GetUserBot(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BotService_GetUserBot_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BotServiceServer).GetUserBot(ctx, req.(*GetUserBotReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BotService_UpdateUserBotProfile_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateUserBotProfileReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BotServiceServer).UpdateUserBotProfile(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BotService_UpdateUserBotProfile_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BotServiceServer).UpdateUserBotProfile(ctx, req.(*UpdateUserBotProfileReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BotService_SetUserBotStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetUserBotStatusReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BotServiceServer).SetUserBotStatus(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BotService_SetUserBotStatus_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BotServiceServer).SetUserBotStatus(ctx, req.(*SetUserBotStatusReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BotService_DeleteUserBot_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteUserBotReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BotServiceServer).DeleteUserBot(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BotService_DeleteUserBot_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BotServiceServer).DeleteUserBot(ctx, req.(*DeleteUserBotReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BotService_CreateUserBotToken_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateUserBotTokenReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BotServiceServer).CreateUserBotToken(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BotService_CreateUserBotToken_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BotServiceServer).CreateUserBotToken(ctx, req.(*CreateUserBotTokenReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BotService_ListUserBotTokens_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListUserBotTokensReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BotServiceServer).ListUserBotTokens(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BotService_ListUserBotTokens_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BotServiceServer).ListUserBotTokens(ctx, req.(*ListUserBotTokensReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BotService_UpdateUserBotToken_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateUserBotTokenReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BotServiceServer).UpdateUserBotToken(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BotService_UpdateUserBotToken_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BotServiceServer).UpdateUserBotToken(ctx, req.(*UpdateUserBotTokenReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BotService_RotateUserBotToken_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RotateUserBotTokenReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BotServiceServer).RotateUserBotToken(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BotService_RotateUserBotToken_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BotServiceServer).RotateUserBotToken(ctx, req.(*RotateUserBotTokenReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BotService_RevokeUserBotToken_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RevokeUserBotTokenReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BotServiceServer).RevokeUserBotToken(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BotService_RevokeUserBotToken_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BotServiceServer).RevokeUserBotToken(ctx, req.(*RevokeUserBotTokenReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BotService_AddUserBotToConversation_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AddUserBotToConversationReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BotServiceServer).AddUserBotToConversation(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BotService_AddUserBotToConversation_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BotServiceServer).AddUserBotToConversation(ctx, req.(*AddUserBotToConversationReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BotService_CreateUserBotDirectConversation_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateUserBotDirectConversationReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BotServiceServer).CreateUserBotDirectConversation(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BotService_CreateUserBotDirectConversation_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BotServiceServer).CreateUserBotDirectConversation(ctx, req.(*CreateUserBotDirectConversationReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BotService_ListBotActions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListBotActionsReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BotServiceServer).ListBotActions(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BotService_ListBotActions_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BotServiceServer).ListBotActions(ctx, req.(*ListBotActionsReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BotService_ListBotEvents_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListBotEventsReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BotServiceServer).ListBotEvents(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BotService_ListBotEvents_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BotServiceServer).ListBotEvents(ctx, req.(*ListBotEventsReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // BotService_ServiceDesc is the grpc.ServiceDesc for BotService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -2070,6 +2584,66 @@ var BotService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ResolveBotWebhookEventActions",
 			Handler:    _BotService_ResolveBotWebhookEventActions_Handler,
+		},
+		{
+			MethodName: "CreateUserBot",
+			Handler:    _BotService_CreateUserBot_Handler,
+		},
+		{
+			MethodName: "ListUserBots",
+			Handler:    _BotService_ListUserBots_Handler,
+		},
+		{
+			MethodName: "GetUserBot",
+			Handler:    _BotService_GetUserBot_Handler,
+		},
+		{
+			MethodName: "UpdateUserBotProfile",
+			Handler:    _BotService_UpdateUserBotProfile_Handler,
+		},
+		{
+			MethodName: "SetUserBotStatus",
+			Handler:    _BotService_SetUserBotStatus_Handler,
+		},
+		{
+			MethodName: "DeleteUserBot",
+			Handler:    _BotService_DeleteUserBot_Handler,
+		},
+		{
+			MethodName: "CreateUserBotToken",
+			Handler:    _BotService_CreateUserBotToken_Handler,
+		},
+		{
+			MethodName: "ListUserBotTokens",
+			Handler:    _BotService_ListUserBotTokens_Handler,
+		},
+		{
+			MethodName: "UpdateUserBotToken",
+			Handler:    _BotService_UpdateUserBotToken_Handler,
+		},
+		{
+			MethodName: "RotateUserBotToken",
+			Handler:    _BotService_RotateUserBotToken_Handler,
+		},
+		{
+			MethodName: "RevokeUserBotToken",
+			Handler:    _BotService_RevokeUserBotToken_Handler,
+		},
+		{
+			MethodName: "AddUserBotToConversation",
+			Handler:    _BotService_AddUserBotToConversation_Handler,
+		},
+		{
+			MethodName: "CreateUserBotDirectConversation",
+			Handler:    _BotService_CreateUserBotDirectConversation_Handler,
+		},
+		{
+			MethodName: "ListBotActions",
+			Handler:    _BotService_ListBotActions_Handler,
+		},
+		{
+			MethodName: "ListBotEvents",
+			Handler:    _BotService_ListBotEvents_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

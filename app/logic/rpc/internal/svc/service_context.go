@@ -82,7 +82,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 				UserType:     svcCtx.UserTypeCache,
 			})
 			svcCtx.UserInfoService = service.NewUserInfoService(queries, service.WithUserInfoCache(svcCtx.UserCache), service.WithUserTypeCache(svcCtx.UserTypeCache))
-			svcCtx.BotService = service.NewBotService(queries, service.WithBotTokenCache(svcCtx.BotTokenCache))
+			svcCtx.BotService = service.NewBotService(queries, service.WithBotTokenCache(svcCtx.BotTokenCache), service.WithBotManagementPool(pool), service.WithBotIDGenerator(snowflake))
 			svcCtx.queries = queries
 			svcCtx.FriendTagService = service.NewFriendshipTagService(queries, snowflake)
 			svcCtx.SearchService = service.NewSearchService(queries)

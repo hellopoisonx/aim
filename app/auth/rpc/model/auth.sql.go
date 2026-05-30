@@ -11,6 +11,49 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const createBotCredential = `-- name: CreateBotCredential :one
+INSERT INTO user_credentials (id, email, password_hash, name, status)
+VALUES ($1, $2, $3, $4, 0)
+RETURNING id, email, password_hash, name, status, created_at, updated_at
+`
+
+type CreateBotCredentialParams struct {
+	ID           int64  `json:"id"`
+	Email        string `json:"email"`
+	PasswordHash string `json:"password_hash"`
+	Name         string `json:"name"`
+}
+
+type CreateBotCredentialRow struct {
+	ID           int64              `json:"id"`
+	Email        string             `json:"email"`
+	PasswordHash string             `json:"password_hash"`
+	Name         string             `json:"name"`
+	Status       int16              `json:"status"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) CreateBotCredential(ctx context.Context, arg CreateBotCredentialParams) (CreateBotCredentialRow, error) {
+	row := q.db.QueryRow(ctx, createBotCredential,
+		arg.ID,
+		arg.Email,
+		arg.PasswordHash,
+		arg.Name,
+	)
+	var i CreateBotCredentialRow
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.PasswordHash,
+		&i.Name,
+		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const createUser = `-- name: CreateUser :one
 INSERT INTO user_credentials (id, email, password_hash, name, status)
 VALUES ($1, $2, $3, $4, 1)

@@ -64,3 +64,79 @@ func (s *BotServiceServer) ResolveBotWebhookEventActions(ctx context.Context, in
 	l := botservicelogic.NewResolveBotWebhookEventActionsLogic(ctx, s.svcCtx)
 	return l.ResolveBotWebhookEventActions(in)
 }
+
+// User-side Bot management RPCs. Gateway calls these with the authenticated
+func (s *BotServiceServer) CreateUserBot(ctx context.Context, in *pb.CreateUserBotReq) (*pb.CreateUserBotResp, error) {
+	l := botservicelogic.NewCreateUserBotLogic(ctx, s.svcCtx)
+	return l.CreateUserBot(in)
+}
+
+func (s *BotServiceServer) ListUserBots(ctx context.Context, in *pb.ListUserBotsReq) (*pb.ListUserBotsResp, error) {
+	l := botservicelogic.NewListUserBotsLogic(ctx, s.svcCtx)
+	return l.ListUserBots(in)
+}
+
+func (s *BotServiceServer) GetUserBot(ctx context.Context, in *pb.GetUserBotReq) (*pb.GetUserBotResp, error) {
+	l := botservicelogic.NewGetUserBotLogic(ctx, s.svcCtx)
+	return l.GetUserBot(in)
+}
+
+func (s *BotServiceServer) UpdateUserBotProfile(ctx context.Context, in *pb.UpdateUserBotProfileReq) (*pb.UpdateUserBotProfileResp, error) {
+	l := botservicelogic.NewUpdateUserBotProfileLogic(ctx, s.svcCtx)
+	return l.UpdateUserBotProfile(in)
+}
+
+func (s *BotServiceServer) SetUserBotStatus(ctx context.Context, in *pb.SetUserBotStatusReq) (*pb.SetUserBotStatusResp, error) {
+	l := botservicelogic.NewSetUserBotStatusLogic(ctx, s.svcCtx)
+	return l.SetUserBotStatus(in)
+}
+
+func (s *BotServiceServer) DeleteUserBot(ctx context.Context, in *pb.DeleteUserBotReq) (*pb.DeleteUserBotResp, error) {
+	l := botservicelogic.NewDeleteUserBotLogic(ctx, s.svcCtx)
+	return l.DeleteUserBot(in)
+}
+
+func (s *BotServiceServer) CreateUserBotToken(ctx context.Context, in *pb.CreateUserBotTokenReq) (*pb.CreateUserBotTokenResp, error) {
+	l := botservicelogic.NewCreateUserBotTokenLogic(ctx, s.svcCtx)
+	return l.CreateUserBotToken(in)
+}
+
+func (s *BotServiceServer) ListUserBotTokens(ctx context.Context, in *pb.ListUserBotTokensReq) (*pb.ListUserBotTokensResp, error) {
+	l := botservicelogic.NewListUserBotTokensLogic(ctx, s.svcCtx)
+	return l.ListUserBotTokens(in)
+}
+
+func (s *BotServiceServer) UpdateUserBotToken(ctx context.Context, in *pb.UpdateUserBotTokenReq) (*pb.UpdateUserBotTokenResp, error) {
+	l := botservicelogic.NewUpdateUserBotTokenLogic(ctx, s.svcCtx)
+	return l.UpdateUserBotToken(in)
+}
+
+func (s *BotServiceServer) RotateUserBotToken(ctx context.Context, in *pb.RotateUserBotTokenReq) (*pb.RotateUserBotTokenResp, error) {
+	l := botservicelogic.NewRotateUserBotTokenLogic(ctx, s.svcCtx)
+	return l.RotateUserBotToken(in)
+}
+
+func (s *BotServiceServer) RevokeUserBotToken(ctx context.Context, in *pb.RevokeUserBotTokenReq) (*pb.RevokeUserBotTokenResp, error) {
+	l := botservicelogic.NewRevokeUserBotTokenLogic(ctx, s.svcCtx)
+	return l.RevokeUserBotToken(in)
+}
+
+func (s *BotServiceServer) AddUserBotToConversation(ctx context.Context, in *pb.AddUserBotToConversationReq) (*pb.AddUserBotToConversationResp, error) {
+	l := botservicelogic.NewAddUserBotToConversationLogic(ctx, s.svcCtx)
+	return l.AddUserBotToConversation(in)
+}
+
+func (s *BotServiceServer) CreateUserBotDirectConversation(ctx context.Context, in *pb.CreateUserBotDirectConversationReq) (*pb.CreateUserBotDirectConversationResp, error) {
+	l := botservicelogic.NewCreateUserBotDirectConversationLogic(ctx, s.svcCtx)
+	return l.CreateUserBotDirectConversation(in)
+}
+
+func (s *BotServiceServer) ListBotActions(ctx context.Context, in *pb.ListBotActionsReq) (*pb.ListBotActionsResp, error) {
+	l := botservicelogic.NewListBotActionsLogic(ctx, s.svcCtx)
+	return l.ListBotActions(in)
+}
+
+func (s *BotServiceServer) ListBotEvents(ctx context.Context, in *pb.ListBotEventsReq) (*pb.ListBotEventsResp, error) {
+	l := botservicelogic.NewListBotEventsLogic(ctx, s.svcCtx)
+	return l.ListBotEvents(in)
+}

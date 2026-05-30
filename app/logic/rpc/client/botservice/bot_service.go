@@ -14,20 +14,50 @@ import (
 )
 
 type (
-	DeleteBotWebhookReq               = pb.DeleteBotWebhookReq
-	DeleteBotWebhookResp              = pb.DeleteBotWebhookResp
-	GetBotProfileReq                  = pb.GetBotProfileReq
-	GetBotProfileResp                 = pb.GetBotProfileResp
-	GetBotWebhookReq                  = pb.GetBotWebhookReq
-	GetBotWebhookResp                 = pb.GetBotWebhookResp
-	ListBotConversationsReq           = pb.ListBotConversationsReq
-	ListBotConversationsResp          = pb.ListBotConversationsResp
-	ResolveBotWebhookEventActionsReq  = pb.ResolveBotWebhookEventActionsReq
-	ResolveBotWebhookEventActionsResp = pb.ResolveBotWebhookEventActionsResp
-	SetBotWebhookReq                  = pb.SetBotWebhookReq
-	SetBotWebhookResp                 = pb.SetBotWebhookResp
-	ValidateBotTokenReq               = pb.ValidateBotTokenReq
-	ValidateBotTokenResp              = pb.ValidateBotTokenResp
+	AddUserBotToConversationReq         = pb.AddUserBotToConversationReq
+	AddUserBotToConversationResp        = pb.AddUserBotToConversationResp
+	CreateUserBotDirectConversationReq  = pb.CreateUserBotDirectConversationReq
+	CreateUserBotDirectConversationResp = pb.CreateUserBotDirectConversationResp
+	CreateUserBotReq                    = pb.CreateUserBotReq
+	CreateUserBotResp                   = pb.CreateUserBotResp
+	CreateUserBotTokenReq               = pb.CreateUserBotTokenReq
+	CreateUserBotTokenResp              = pb.CreateUserBotTokenResp
+	DeleteBotWebhookReq                 = pb.DeleteBotWebhookReq
+	DeleteBotWebhookResp                = pb.DeleteBotWebhookResp
+	DeleteUserBotReq                    = pb.DeleteUserBotReq
+	DeleteUserBotResp                   = pb.DeleteUserBotResp
+	GetBotProfileReq                    = pb.GetBotProfileReq
+	GetBotProfileResp                   = pb.GetBotProfileResp
+	GetBotWebhookReq                    = pb.GetBotWebhookReq
+	GetBotWebhookResp                   = pb.GetBotWebhookResp
+	GetUserBotReq                       = pb.GetUserBotReq
+	GetUserBotResp                      = pb.GetUserBotResp
+	ListBotActionsReq                   = pb.ListBotActionsReq
+	ListBotActionsResp                  = pb.ListBotActionsResp
+	ListBotConversationsReq             = pb.ListBotConversationsReq
+	ListBotConversationsResp            = pb.ListBotConversationsResp
+	ListBotEventsReq                    = pb.ListBotEventsReq
+	ListBotEventsResp                   = pb.ListBotEventsResp
+	ListUserBotTokensReq                = pb.ListUserBotTokensReq
+	ListUserBotTokensResp               = pb.ListUserBotTokensResp
+	ListUserBotsReq                     = pb.ListUserBotsReq
+	ListUserBotsResp                    = pb.ListUserBotsResp
+	ResolveBotWebhookEventActionsReq    = pb.ResolveBotWebhookEventActionsReq
+	ResolveBotWebhookEventActionsResp   = pb.ResolveBotWebhookEventActionsResp
+	RevokeUserBotTokenReq               = pb.RevokeUserBotTokenReq
+	RevokeUserBotTokenResp              = pb.RevokeUserBotTokenResp
+	RotateUserBotTokenReq               = pb.RotateUserBotTokenReq
+	RotateUserBotTokenResp              = pb.RotateUserBotTokenResp
+	SetBotWebhookReq                    = pb.SetBotWebhookReq
+	SetBotWebhookResp                   = pb.SetBotWebhookResp
+	SetUserBotStatusReq                 = pb.SetUserBotStatusReq
+	SetUserBotStatusResp                = pb.SetUserBotStatusResp
+	UpdateUserBotProfileReq             = pb.UpdateUserBotProfileReq
+	UpdateUserBotProfileResp            = pb.UpdateUserBotProfileResp
+	UpdateUserBotTokenReq               = pb.UpdateUserBotTokenReq
+	UpdateUserBotTokenResp              = pb.UpdateUserBotTokenResp
+	ValidateBotTokenReq                 = pb.ValidateBotTokenReq
+	ValidateBotTokenResp                = pb.ValidateBotTokenResp
 
 	BotService interface {
 		// ValidateBotToken resolves a plaintext token into a bot identity.
@@ -44,6 +74,22 @@ type (
 		DeleteBotWebhook(ctx context.Context, in *DeleteBotWebhookReq, opts ...grpc.CallOption) (*DeleteBotWebhookResp, error)
 		// ResolveBotWebhookEventActions maps webhook event names (e.g. message.created)
 		ResolveBotWebhookEventActions(ctx context.Context, in *ResolveBotWebhookEventActionsReq, opts ...grpc.CallOption) (*ResolveBotWebhookEventActionsResp, error)
+		// User-side Bot management RPCs. Gateway calls these with the authenticated
+		CreateUserBot(ctx context.Context, in *CreateUserBotReq, opts ...grpc.CallOption) (*CreateUserBotResp, error)
+		ListUserBots(ctx context.Context, in *ListUserBotsReq, opts ...grpc.CallOption) (*ListUserBotsResp, error)
+		GetUserBot(ctx context.Context, in *GetUserBotReq, opts ...grpc.CallOption) (*GetUserBotResp, error)
+		UpdateUserBotProfile(ctx context.Context, in *UpdateUserBotProfileReq, opts ...grpc.CallOption) (*UpdateUserBotProfileResp, error)
+		SetUserBotStatus(ctx context.Context, in *SetUserBotStatusReq, opts ...grpc.CallOption) (*SetUserBotStatusResp, error)
+		DeleteUserBot(ctx context.Context, in *DeleteUserBotReq, opts ...grpc.CallOption) (*DeleteUserBotResp, error)
+		CreateUserBotToken(ctx context.Context, in *CreateUserBotTokenReq, opts ...grpc.CallOption) (*CreateUserBotTokenResp, error)
+		ListUserBotTokens(ctx context.Context, in *ListUserBotTokensReq, opts ...grpc.CallOption) (*ListUserBotTokensResp, error)
+		UpdateUserBotToken(ctx context.Context, in *UpdateUserBotTokenReq, opts ...grpc.CallOption) (*UpdateUserBotTokenResp, error)
+		RotateUserBotToken(ctx context.Context, in *RotateUserBotTokenReq, opts ...grpc.CallOption) (*RotateUserBotTokenResp, error)
+		RevokeUserBotToken(ctx context.Context, in *RevokeUserBotTokenReq, opts ...grpc.CallOption) (*RevokeUserBotTokenResp, error)
+		AddUserBotToConversation(ctx context.Context, in *AddUserBotToConversationReq, opts ...grpc.CallOption) (*AddUserBotToConversationResp, error)
+		CreateUserBotDirectConversation(ctx context.Context, in *CreateUserBotDirectConversationReq, opts ...grpc.CallOption) (*CreateUserBotDirectConversationResp, error)
+		ListBotActions(ctx context.Context, in *ListBotActionsReq, opts ...grpc.CallOption) (*ListBotActionsResp, error)
+		ListBotEvents(ctx context.Context, in *ListBotEventsReq, opts ...grpc.CallOption) (*ListBotEventsResp, error)
 	}
 
 	defaultBotService struct {
@@ -97,4 +143,80 @@ func (m *defaultBotService) DeleteBotWebhook(ctx context.Context, in *DeleteBotW
 func (m *defaultBotService) ResolveBotWebhookEventActions(ctx context.Context, in *ResolveBotWebhookEventActionsReq, opts ...grpc.CallOption) (*ResolveBotWebhookEventActionsResp, error) {
 	client := pb.NewBotServiceClient(m.cli.Conn())
 	return client.ResolveBotWebhookEventActions(ctx, in, opts...)
+}
+
+// User-side Bot management RPCs. Gateway calls these with the authenticated
+func (m *defaultBotService) CreateUserBot(ctx context.Context, in *CreateUserBotReq, opts ...grpc.CallOption) (*CreateUserBotResp, error) {
+	client := pb.NewBotServiceClient(m.cli.Conn())
+	return client.CreateUserBot(ctx, in, opts...)
+}
+
+func (m *defaultBotService) ListUserBots(ctx context.Context, in *ListUserBotsReq, opts ...grpc.CallOption) (*ListUserBotsResp, error) {
+	client := pb.NewBotServiceClient(m.cli.Conn())
+	return client.ListUserBots(ctx, in, opts...)
+}
+
+func (m *defaultBotService) GetUserBot(ctx context.Context, in *GetUserBotReq, opts ...grpc.CallOption) (*GetUserBotResp, error) {
+	client := pb.NewBotServiceClient(m.cli.Conn())
+	return client.GetUserBot(ctx, in, opts...)
+}
+
+func (m *defaultBotService) UpdateUserBotProfile(ctx context.Context, in *UpdateUserBotProfileReq, opts ...grpc.CallOption) (*UpdateUserBotProfileResp, error) {
+	client := pb.NewBotServiceClient(m.cli.Conn())
+	return client.UpdateUserBotProfile(ctx, in, opts...)
+}
+
+func (m *defaultBotService) SetUserBotStatus(ctx context.Context, in *SetUserBotStatusReq, opts ...grpc.CallOption) (*SetUserBotStatusResp, error) {
+	client := pb.NewBotServiceClient(m.cli.Conn())
+	return client.SetUserBotStatus(ctx, in, opts...)
+}
+
+func (m *defaultBotService) DeleteUserBot(ctx context.Context, in *DeleteUserBotReq, opts ...grpc.CallOption) (*DeleteUserBotResp, error) {
+	client := pb.NewBotServiceClient(m.cli.Conn())
+	return client.DeleteUserBot(ctx, in, opts...)
+}
+
+func (m *defaultBotService) CreateUserBotToken(ctx context.Context, in *CreateUserBotTokenReq, opts ...grpc.CallOption) (*CreateUserBotTokenResp, error) {
+	client := pb.NewBotServiceClient(m.cli.Conn())
+	return client.CreateUserBotToken(ctx, in, opts...)
+}
+
+func (m *defaultBotService) ListUserBotTokens(ctx context.Context, in *ListUserBotTokensReq, opts ...grpc.CallOption) (*ListUserBotTokensResp, error) {
+	client := pb.NewBotServiceClient(m.cli.Conn())
+	return client.ListUserBotTokens(ctx, in, opts...)
+}
+
+func (m *defaultBotService) UpdateUserBotToken(ctx context.Context, in *UpdateUserBotTokenReq, opts ...grpc.CallOption) (*UpdateUserBotTokenResp, error) {
+	client := pb.NewBotServiceClient(m.cli.Conn())
+	return client.UpdateUserBotToken(ctx, in, opts...)
+}
+
+func (m *defaultBotService) RotateUserBotToken(ctx context.Context, in *RotateUserBotTokenReq, opts ...grpc.CallOption) (*RotateUserBotTokenResp, error) {
+	client := pb.NewBotServiceClient(m.cli.Conn())
+	return client.RotateUserBotToken(ctx, in, opts...)
+}
+
+func (m *defaultBotService) RevokeUserBotToken(ctx context.Context, in *RevokeUserBotTokenReq, opts ...grpc.CallOption) (*RevokeUserBotTokenResp, error) {
+	client := pb.NewBotServiceClient(m.cli.Conn())
+	return client.RevokeUserBotToken(ctx, in, opts...)
+}
+
+func (m *defaultBotService) AddUserBotToConversation(ctx context.Context, in *AddUserBotToConversationReq, opts ...grpc.CallOption) (*AddUserBotToConversationResp, error) {
+	client := pb.NewBotServiceClient(m.cli.Conn())
+	return client.AddUserBotToConversation(ctx, in, opts...)
+}
+
+func (m *defaultBotService) CreateUserBotDirectConversation(ctx context.Context, in *CreateUserBotDirectConversationReq, opts ...grpc.CallOption) (*CreateUserBotDirectConversationResp, error) {
+	client := pb.NewBotServiceClient(m.cli.Conn())
+	return client.CreateUserBotDirectConversation(ctx, in, opts...)
+}
+
+func (m *defaultBotService) ListBotActions(ctx context.Context, in *ListBotActionsReq, opts ...grpc.CallOption) (*ListBotActionsResp, error) {
+	client := pb.NewBotServiceClient(m.cli.Conn())
+	return client.ListBotActions(ctx, in, opts...)
+}
+
+func (m *defaultBotService) ListBotEvents(ctx context.Context, in *ListBotEventsReq, opts ...grpc.CallOption) (*ListBotEventsResp, error) {
+	client := pb.NewBotServiceClient(m.cli.Conn())
+	return client.ListBotEvents(ctx, in, opts...)
 }

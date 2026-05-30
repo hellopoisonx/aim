@@ -11,7 +11,7 @@ description: aim 的 Bot OpenAPI 域。覆盖第三方 Bot 接入、token 鉴权
 - 第三方 Bot 通过 `Authorization: Bot <token>` 调 `/api/bot/v1/*` REST 接口
 - Bot Token 的生成、撤销、action 权限校验
 - Bot Webhook（`message.created`）的订阅、HMAC 签名、重试与防回调循环
-- 运维侧批量 provision Bot 身份（`auth + logic` 双写、入群、签发 token）
+- 用户侧 Bot 管理：普通用户通过 `/api/user/bots/*` REST 创建个人 Bot、签发/轮换/撤销 Token、配置 action 权限、加入会话/群聊（Auth 保护，owner 校验）
 - 涉及 `user_info.user_type='bot'`、`bot_tokens`、`bot_actions`、`bot_token_permissions`、`bot_event_actions`、`bot_webhooks` 等表
 
 ## 设计原则（V0）
@@ -98,6 +98,7 @@ description: aim 的 Bot OpenAPI 域。覆盖第三方 Bot 接入、token 鉴权
 
 ## 最近变更
 
+- 2026-05-30: 用户侧 Bot 管理落地。新增 migration 013（`user_bots` 归属/软删除表）、`BotService` 管理 RPC（Bot CRUD、Token 签发/轮换/撤销/action 配置、加入群聊/创建 direct 会话）、Gateway `/api/user/bots/*` 与 `/api/user/bot-actions` `/api/user/bot-events` 用户侧 REST。auth + logic 双写保留兼容。Webhook 仍由 Bot Token 在 `/api/bot/v1/webhook` 自行注册。
 - 2026-05-29: Bot 开发者文档同步 `docs/api/gateway-openapi.yaml`。Action 表补齐 `bot.attachment.download`，附件下载端点以 OpenAPI schema 为准。
 - 2026-05-28: `bot_sdk/testdata/integration/etc/` 从标准本地 Docker 配置重新同步，补齐 Prometheus 配置块并统一 GatewayRpc `9091`；集成 Compose 迁移/Kafka 初始化改用 `deploy/scripts/`。
 - 2026-05-28: `bot_sdk/testdata/integration/docker-compose.yaml` 的 Tempo 镜像固定为 `grafana/tempo:2.8.1`，避免 `latest` 拉到不兼容的 v3 RC schema；集成测试 `etc/logic.yaml`/`etc/core.yaml` 已启用 `aim.conversation.events` 群管理系统消息链路。

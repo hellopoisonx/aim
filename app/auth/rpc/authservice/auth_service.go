@@ -14,20 +14,24 @@ import (
 )
 
 type (
-	LoginReq         = pb.LoginReq
-	LoginResp        = pb.LoginResp
-	LogoutReq        = pb.LogoutReq
-	LogoutResp       = pb.LogoutResp
-	RefreshTokenReq  = pb.RefreshTokenReq
-	RefreshTokenResp = pb.RefreshTokenResp
-	RegisterReq      = pb.RegisterReq
-	RegisterResp     = pb.RegisterResp
+	CreateBotCredentialReq  = pb.CreateBotCredentialReq
+	CreateBotCredentialResp = pb.CreateBotCredentialResp
+	LoginReq                = pb.LoginReq
+	LoginResp               = pb.LoginResp
+	LogoutReq               = pb.LogoutReq
+	LogoutResp              = pb.LogoutResp
+	RefreshTokenReq         = pb.RefreshTokenReq
+	RefreshTokenResp        = pb.RefreshTokenResp
+	RegisterReq             = pb.RegisterReq
+	RegisterResp            = pb.RegisterResp
 
 	AuthService interface {
 		Register(ctx context.Context, in *RegisterReq, opts ...grpc.CallOption) (*RegisterResp, error)
 		Login(ctx context.Context, in *LoginReq, opts ...grpc.CallOption) (*LoginResp, error)
 		RefreshToken(ctx context.Context, in *RefreshTokenReq, opts ...grpc.CallOption) (*RefreshTokenResp, error)
 		Logout(ctx context.Context, in *LogoutReq, opts ...grpc.CallOption) (*LogoutResp, error)
+		// CreateBotCredential creates a disabled placeholder credential for a bot.
+		CreateBotCredential(ctx context.Context, in *CreateBotCredentialReq, opts ...grpc.CallOption) (*CreateBotCredentialResp, error)
 	}
 
 	defaultAuthService struct {
@@ -59,4 +63,10 @@ func (m *defaultAuthService) RefreshToken(ctx context.Context, in *RefreshTokenR
 func (m *defaultAuthService) Logout(ctx context.Context, in *LogoutReq, opts ...grpc.CallOption) (*LogoutResp, error) {
 	client := pb.NewAuthServiceClient(m.cli.Conn())
 	return client.Logout(ctx, in, opts...)
+}
+
+// CreateBotCredential creates a disabled placeholder credential for a bot.
+func (m *defaultAuthService) CreateBotCredential(ctx context.Context, in *CreateBotCredentialReq, opts ...grpc.CallOption) (*CreateBotCredentialResp, error) {
+	client := pb.NewAuthServiceClient(m.cli.Conn())
+	return client.CreateBotCredential(ctx, in, opts...)
 }

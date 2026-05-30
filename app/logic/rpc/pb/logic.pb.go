@@ -5505,6 +5505,1878 @@ func (x *ResolveBotWebhookEventActionsResp) GetEventActions() []*WebhookEventAct
 	return nil
 }
 
+type UserBotInfo struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	BotUserId     int64                  `protobuf:"varint,1,opt,name=bot_user_id,json=botUserId,proto3" json:"bot_user_id,omitempty"`
+	OwnerUserId   int64                  `protobuf:"varint,2,opt,name=owner_user_id,json=ownerUserId,proto3" json:"owner_user_id,omitempty"`
+	Email         string                 `protobuf:"bytes,3,opt,name=email,proto3" json:"email,omitempty"`
+	Nickname      string                 `protobuf:"bytes,4,opt,name=nickname,proto3" json:"nickname,omitempty"`
+	Avatar        string                 `protobuf:"bytes,5,opt,name=avatar,proto3" json:"avatar,omitempty"`
+	Status        int32                  `protobuf:"varint,6,opt,name=status,proto3" json:"status,omitempty"`
+	CreatedAt     int64                  `protobuf:"varint,7,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	UpdatedAt     int64                  `protobuf:"varint,8,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UserBotInfo) Reset() {
+	*x = UserBotInfo{}
+	mi := &file_app_logic_rpc_logic_proto_msgTypes[99]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UserBotInfo) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UserBotInfo) ProtoMessage() {}
+
+func (x *UserBotInfo) ProtoReflect() protoreflect.Message {
+	mi := &file_app_logic_rpc_logic_proto_msgTypes[99]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UserBotInfo.ProtoReflect.Descriptor instead.
+func (*UserBotInfo) Descriptor() ([]byte, []int) {
+	return file_app_logic_rpc_logic_proto_rawDescGZIP(), []int{99}
+}
+
+func (x *UserBotInfo) GetBotUserId() int64 {
+	if x != nil {
+		return x.BotUserId
+	}
+	return 0
+}
+
+func (x *UserBotInfo) GetOwnerUserId() int64 {
+	if x != nil {
+		return x.OwnerUserId
+	}
+	return 0
+}
+
+func (x *UserBotInfo) GetEmail() string {
+	if x != nil {
+		return x.Email
+	}
+	return ""
+}
+
+func (x *UserBotInfo) GetNickname() string {
+	if x != nil {
+		return x.Nickname
+	}
+	return ""
+}
+
+func (x *UserBotInfo) GetAvatar() string {
+	if x != nil {
+		return x.Avatar
+	}
+	return ""
+}
+
+func (x *UserBotInfo) GetStatus() int32 {
+	if x != nil {
+		return x.Status
+	}
+	return 0
+}
+
+func (x *UserBotInfo) GetCreatedAt() int64 {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return 0
+}
+
+func (x *UserBotInfo) GetUpdatedAt() int64 {
+	if x != nil {
+		return x.UpdatedAt
+	}
+	return 0
+}
+
+type UserBotTokenInfo struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	TokenId       int64                  `protobuf:"varint,1,opt,name=token_id,json=tokenId,proto3" json:"token_id,omitempty"`
+	BotUserId     int64                  `protobuf:"varint,2,opt,name=bot_user_id,json=botUserId,proto3" json:"bot_user_id,omitempty"`
+	Name          string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
+	Actions       []string               `protobuf:"bytes,4,rep,name=actions,proto3" json:"actions,omitempty"`
+	ExpiresAt     int64                  `protobuf:"varint,5,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`
+	RevokedAt     int64                  `protobuf:"varint,6,opt,name=revoked_at,json=revokedAt,proto3" json:"revoked_at,omitempty"`
+	CreatedAt     int64                  `protobuf:"varint,7,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UserBotTokenInfo) Reset() {
+	*x = UserBotTokenInfo{}
+	mi := &file_app_logic_rpc_logic_proto_msgTypes[100]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UserBotTokenInfo) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UserBotTokenInfo) ProtoMessage() {}
+
+func (x *UserBotTokenInfo) ProtoReflect() protoreflect.Message {
+	mi := &file_app_logic_rpc_logic_proto_msgTypes[100]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UserBotTokenInfo.ProtoReflect.Descriptor instead.
+func (*UserBotTokenInfo) Descriptor() ([]byte, []int) {
+	return file_app_logic_rpc_logic_proto_rawDescGZIP(), []int{100}
+}
+
+func (x *UserBotTokenInfo) GetTokenId() int64 {
+	if x != nil {
+		return x.TokenId
+	}
+	return 0
+}
+
+func (x *UserBotTokenInfo) GetBotUserId() int64 {
+	if x != nil {
+		return x.BotUserId
+	}
+	return 0
+}
+
+func (x *UserBotTokenInfo) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *UserBotTokenInfo) GetActions() []string {
+	if x != nil {
+		return x.Actions
+	}
+	return nil
+}
+
+func (x *UserBotTokenInfo) GetExpiresAt() int64 {
+	if x != nil {
+		return x.ExpiresAt
+	}
+	return 0
+}
+
+func (x *UserBotTokenInfo) GetRevokedAt() int64 {
+	if x != nil {
+		return x.RevokedAt
+	}
+	return 0
+}
+
+func (x *UserBotTokenInfo) GetCreatedAt() int64 {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return 0
+}
+
+type BotActionInfo struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            int64                  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	Action        string                 `protobuf:"bytes,2,opt,name=action,proto3" json:"action,omitempty"`
+	Description   string                 `protobuf:"bytes,3,opt,name=description,proto3" json:"description,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BotActionInfo) Reset() {
+	*x = BotActionInfo{}
+	mi := &file_app_logic_rpc_logic_proto_msgTypes[101]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BotActionInfo) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BotActionInfo) ProtoMessage() {}
+
+func (x *BotActionInfo) ProtoReflect() protoreflect.Message {
+	mi := &file_app_logic_rpc_logic_proto_msgTypes[101]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BotActionInfo.ProtoReflect.Descriptor instead.
+func (*BotActionInfo) Descriptor() ([]byte, []int) {
+	return file_app_logic_rpc_logic_proto_rawDescGZIP(), []int{101}
+}
+
+func (x *BotActionInfo) GetId() int64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+func (x *BotActionInfo) GetAction() string {
+	if x != nil {
+		return x.Action
+	}
+	return ""
+}
+
+func (x *BotActionInfo) GetDescription() string {
+	if x != nil {
+		return x.Description
+	}
+	return ""
+}
+
+type BotEventInfo struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Event         string                 `protobuf:"bytes,1,opt,name=event,proto3" json:"event,omitempty"`
+	Action        string                 `protobuf:"bytes,2,opt,name=action,proto3" json:"action,omitempty"`
+	Description   string                 `protobuf:"bytes,3,opt,name=description,proto3" json:"description,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BotEventInfo) Reset() {
+	*x = BotEventInfo{}
+	mi := &file_app_logic_rpc_logic_proto_msgTypes[102]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BotEventInfo) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BotEventInfo) ProtoMessage() {}
+
+func (x *BotEventInfo) ProtoReflect() protoreflect.Message {
+	mi := &file_app_logic_rpc_logic_proto_msgTypes[102]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BotEventInfo.ProtoReflect.Descriptor instead.
+func (*BotEventInfo) Descriptor() ([]byte, []int) {
+	return file_app_logic_rpc_logic_proto_rawDescGZIP(), []int{102}
+}
+
+func (x *BotEventInfo) GetEvent() string {
+	if x != nil {
+		return x.Event
+	}
+	return ""
+}
+
+func (x *BotEventInfo) GetAction() string {
+	if x != nil {
+		return x.Action
+	}
+	return ""
+}
+
+func (x *BotEventInfo) GetDescription() string {
+	if x != nil {
+		return x.Description
+	}
+	return ""
+}
+
+type CreateUserBotReq struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	OwnerUserId   int64                  `protobuf:"varint,1,opt,name=owner_user_id,json=ownerUserId,proto3" json:"owner_user_id,omitempty"`
+	BotUserId     int64                  `protobuf:"varint,2,opt,name=bot_user_id,json=botUserId,proto3" json:"bot_user_id,omitempty"`
+	Email         string                 `protobuf:"bytes,3,opt,name=email,proto3" json:"email,omitempty"`
+	Nickname      string                 `protobuf:"bytes,4,opt,name=nickname,proto3" json:"nickname,omitempty"`
+	Avatar        string                 `protobuf:"bytes,5,opt,name=avatar,proto3" json:"avatar,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateUserBotReq) Reset() {
+	*x = CreateUserBotReq{}
+	mi := &file_app_logic_rpc_logic_proto_msgTypes[103]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateUserBotReq) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateUserBotReq) ProtoMessage() {}
+
+func (x *CreateUserBotReq) ProtoReflect() protoreflect.Message {
+	mi := &file_app_logic_rpc_logic_proto_msgTypes[103]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateUserBotReq.ProtoReflect.Descriptor instead.
+func (*CreateUserBotReq) Descriptor() ([]byte, []int) {
+	return file_app_logic_rpc_logic_proto_rawDescGZIP(), []int{103}
+}
+
+func (x *CreateUserBotReq) GetOwnerUserId() int64 {
+	if x != nil {
+		return x.OwnerUserId
+	}
+	return 0
+}
+
+func (x *CreateUserBotReq) GetBotUserId() int64 {
+	if x != nil {
+		return x.BotUserId
+	}
+	return 0
+}
+
+func (x *CreateUserBotReq) GetEmail() string {
+	if x != nil {
+		return x.Email
+	}
+	return ""
+}
+
+func (x *CreateUserBotReq) GetNickname() string {
+	if x != nil {
+		return x.Nickname
+	}
+	return ""
+}
+
+func (x *CreateUserBotReq) GetAvatar() string {
+	if x != nil {
+		return x.Avatar
+	}
+	return ""
+}
+
+type CreateUserBotResp struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Bot           *UserBotInfo           `protobuf:"bytes,1,opt,name=bot,proto3" json:"bot,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateUserBotResp) Reset() {
+	*x = CreateUserBotResp{}
+	mi := &file_app_logic_rpc_logic_proto_msgTypes[104]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateUserBotResp) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateUserBotResp) ProtoMessage() {}
+
+func (x *CreateUserBotResp) ProtoReflect() protoreflect.Message {
+	mi := &file_app_logic_rpc_logic_proto_msgTypes[104]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateUserBotResp.ProtoReflect.Descriptor instead.
+func (*CreateUserBotResp) Descriptor() ([]byte, []int) {
+	return file_app_logic_rpc_logic_proto_rawDescGZIP(), []int{104}
+}
+
+func (x *CreateUserBotResp) GetBot() *UserBotInfo {
+	if x != nil {
+		return x.Bot
+	}
+	return nil
+}
+
+type ListUserBotsReq struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	OwnerUserId   int64                  `protobuf:"varint,1,opt,name=owner_user_id,json=ownerUserId,proto3" json:"owner_user_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListUserBotsReq) Reset() {
+	*x = ListUserBotsReq{}
+	mi := &file_app_logic_rpc_logic_proto_msgTypes[105]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListUserBotsReq) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListUserBotsReq) ProtoMessage() {}
+
+func (x *ListUserBotsReq) ProtoReflect() protoreflect.Message {
+	mi := &file_app_logic_rpc_logic_proto_msgTypes[105]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListUserBotsReq.ProtoReflect.Descriptor instead.
+func (*ListUserBotsReq) Descriptor() ([]byte, []int) {
+	return file_app_logic_rpc_logic_proto_rawDescGZIP(), []int{105}
+}
+
+func (x *ListUserBotsReq) GetOwnerUserId() int64 {
+	if x != nil {
+		return x.OwnerUserId
+	}
+	return 0
+}
+
+type ListUserBotsResp struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Bots          []*UserBotInfo         `protobuf:"bytes,1,rep,name=bots,proto3" json:"bots,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListUserBotsResp) Reset() {
+	*x = ListUserBotsResp{}
+	mi := &file_app_logic_rpc_logic_proto_msgTypes[106]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListUserBotsResp) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListUserBotsResp) ProtoMessage() {}
+
+func (x *ListUserBotsResp) ProtoReflect() protoreflect.Message {
+	mi := &file_app_logic_rpc_logic_proto_msgTypes[106]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListUserBotsResp.ProtoReflect.Descriptor instead.
+func (*ListUserBotsResp) Descriptor() ([]byte, []int) {
+	return file_app_logic_rpc_logic_proto_rawDescGZIP(), []int{106}
+}
+
+func (x *ListUserBotsResp) GetBots() []*UserBotInfo {
+	if x != nil {
+		return x.Bots
+	}
+	return nil
+}
+
+type GetUserBotReq struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	OwnerUserId   int64                  `protobuf:"varint,1,opt,name=owner_user_id,json=ownerUserId,proto3" json:"owner_user_id,omitempty"`
+	BotUserId     int64                  `protobuf:"varint,2,opt,name=bot_user_id,json=botUserId,proto3" json:"bot_user_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetUserBotReq) Reset() {
+	*x = GetUserBotReq{}
+	mi := &file_app_logic_rpc_logic_proto_msgTypes[107]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetUserBotReq) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetUserBotReq) ProtoMessage() {}
+
+func (x *GetUserBotReq) ProtoReflect() protoreflect.Message {
+	mi := &file_app_logic_rpc_logic_proto_msgTypes[107]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetUserBotReq.ProtoReflect.Descriptor instead.
+func (*GetUserBotReq) Descriptor() ([]byte, []int) {
+	return file_app_logic_rpc_logic_proto_rawDescGZIP(), []int{107}
+}
+
+func (x *GetUserBotReq) GetOwnerUserId() int64 {
+	if x != nil {
+		return x.OwnerUserId
+	}
+	return 0
+}
+
+func (x *GetUserBotReq) GetBotUserId() int64 {
+	if x != nil {
+		return x.BotUserId
+	}
+	return 0
+}
+
+type GetUserBotResp struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Bot           *UserBotInfo           `protobuf:"bytes,1,opt,name=bot,proto3" json:"bot,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetUserBotResp) Reset() {
+	*x = GetUserBotResp{}
+	mi := &file_app_logic_rpc_logic_proto_msgTypes[108]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetUserBotResp) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetUserBotResp) ProtoMessage() {}
+
+func (x *GetUserBotResp) ProtoReflect() protoreflect.Message {
+	mi := &file_app_logic_rpc_logic_proto_msgTypes[108]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetUserBotResp.ProtoReflect.Descriptor instead.
+func (*GetUserBotResp) Descriptor() ([]byte, []int) {
+	return file_app_logic_rpc_logic_proto_rawDescGZIP(), []int{108}
+}
+
+func (x *GetUserBotResp) GetBot() *UserBotInfo {
+	if x != nil {
+		return x.Bot
+	}
+	return nil
+}
+
+type UpdateUserBotProfileReq struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	OwnerUserId   int64                  `protobuf:"varint,1,opt,name=owner_user_id,json=ownerUserId,proto3" json:"owner_user_id,omitempty"`
+	BotUserId     int64                  `protobuf:"varint,2,opt,name=bot_user_id,json=botUserId,proto3" json:"bot_user_id,omitempty"`
+	Nickname      string                 `protobuf:"bytes,3,opt,name=nickname,proto3" json:"nickname,omitempty"`
+	Avatar        string                 `protobuf:"bytes,4,opt,name=avatar,proto3" json:"avatar,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateUserBotProfileReq) Reset() {
+	*x = UpdateUserBotProfileReq{}
+	mi := &file_app_logic_rpc_logic_proto_msgTypes[109]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateUserBotProfileReq) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateUserBotProfileReq) ProtoMessage() {}
+
+func (x *UpdateUserBotProfileReq) ProtoReflect() protoreflect.Message {
+	mi := &file_app_logic_rpc_logic_proto_msgTypes[109]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateUserBotProfileReq.ProtoReflect.Descriptor instead.
+func (*UpdateUserBotProfileReq) Descriptor() ([]byte, []int) {
+	return file_app_logic_rpc_logic_proto_rawDescGZIP(), []int{109}
+}
+
+func (x *UpdateUserBotProfileReq) GetOwnerUserId() int64 {
+	if x != nil {
+		return x.OwnerUserId
+	}
+	return 0
+}
+
+func (x *UpdateUserBotProfileReq) GetBotUserId() int64 {
+	if x != nil {
+		return x.BotUserId
+	}
+	return 0
+}
+
+func (x *UpdateUserBotProfileReq) GetNickname() string {
+	if x != nil {
+		return x.Nickname
+	}
+	return ""
+}
+
+func (x *UpdateUserBotProfileReq) GetAvatar() string {
+	if x != nil {
+		return x.Avatar
+	}
+	return ""
+}
+
+type UpdateUserBotProfileResp struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Bot           *UserBotInfo           `protobuf:"bytes,1,opt,name=bot,proto3" json:"bot,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateUserBotProfileResp) Reset() {
+	*x = UpdateUserBotProfileResp{}
+	mi := &file_app_logic_rpc_logic_proto_msgTypes[110]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateUserBotProfileResp) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateUserBotProfileResp) ProtoMessage() {}
+
+func (x *UpdateUserBotProfileResp) ProtoReflect() protoreflect.Message {
+	mi := &file_app_logic_rpc_logic_proto_msgTypes[110]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateUserBotProfileResp.ProtoReflect.Descriptor instead.
+func (*UpdateUserBotProfileResp) Descriptor() ([]byte, []int) {
+	return file_app_logic_rpc_logic_proto_rawDescGZIP(), []int{110}
+}
+
+func (x *UpdateUserBotProfileResp) GetBot() *UserBotInfo {
+	if x != nil {
+		return x.Bot
+	}
+	return nil
+}
+
+type SetUserBotStatusReq struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	OwnerUserId   int64                  `protobuf:"varint,1,opt,name=owner_user_id,json=ownerUserId,proto3" json:"owner_user_id,omitempty"`
+	BotUserId     int64                  `protobuf:"varint,2,opt,name=bot_user_id,json=botUserId,proto3" json:"bot_user_id,omitempty"`
+	Enabled       bool                   `protobuf:"varint,3,opt,name=enabled,proto3" json:"enabled,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetUserBotStatusReq) Reset() {
+	*x = SetUserBotStatusReq{}
+	mi := &file_app_logic_rpc_logic_proto_msgTypes[111]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetUserBotStatusReq) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetUserBotStatusReq) ProtoMessage() {}
+
+func (x *SetUserBotStatusReq) ProtoReflect() protoreflect.Message {
+	mi := &file_app_logic_rpc_logic_proto_msgTypes[111]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetUserBotStatusReq.ProtoReflect.Descriptor instead.
+func (*SetUserBotStatusReq) Descriptor() ([]byte, []int) {
+	return file_app_logic_rpc_logic_proto_rawDescGZIP(), []int{111}
+}
+
+func (x *SetUserBotStatusReq) GetOwnerUserId() int64 {
+	if x != nil {
+		return x.OwnerUserId
+	}
+	return 0
+}
+
+func (x *SetUserBotStatusReq) GetBotUserId() int64 {
+	if x != nil {
+		return x.BotUserId
+	}
+	return 0
+}
+
+func (x *SetUserBotStatusReq) GetEnabled() bool {
+	if x != nil {
+		return x.Enabled
+	}
+	return false
+}
+
+type SetUserBotStatusResp struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Bot           *UserBotInfo           `protobuf:"bytes,1,opt,name=bot,proto3" json:"bot,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetUserBotStatusResp) Reset() {
+	*x = SetUserBotStatusResp{}
+	mi := &file_app_logic_rpc_logic_proto_msgTypes[112]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetUserBotStatusResp) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetUserBotStatusResp) ProtoMessage() {}
+
+func (x *SetUserBotStatusResp) ProtoReflect() protoreflect.Message {
+	mi := &file_app_logic_rpc_logic_proto_msgTypes[112]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetUserBotStatusResp.ProtoReflect.Descriptor instead.
+func (*SetUserBotStatusResp) Descriptor() ([]byte, []int) {
+	return file_app_logic_rpc_logic_proto_rawDescGZIP(), []int{112}
+}
+
+func (x *SetUserBotStatusResp) GetBot() *UserBotInfo {
+	if x != nil {
+		return x.Bot
+	}
+	return nil
+}
+
+type DeleteUserBotReq struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	OwnerUserId   int64                  `protobuf:"varint,1,opt,name=owner_user_id,json=ownerUserId,proto3" json:"owner_user_id,omitempty"`
+	BotUserId     int64                  `protobuf:"varint,2,opt,name=bot_user_id,json=botUserId,proto3" json:"bot_user_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteUserBotReq) Reset() {
+	*x = DeleteUserBotReq{}
+	mi := &file_app_logic_rpc_logic_proto_msgTypes[113]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteUserBotReq) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteUserBotReq) ProtoMessage() {}
+
+func (x *DeleteUserBotReq) ProtoReflect() protoreflect.Message {
+	mi := &file_app_logic_rpc_logic_proto_msgTypes[113]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteUserBotReq.ProtoReflect.Descriptor instead.
+func (*DeleteUserBotReq) Descriptor() ([]byte, []int) {
+	return file_app_logic_rpc_logic_proto_rawDescGZIP(), []int{113}
+}
+
+func (x *DeleteUserBotReq) GetOwnerUserId() int64 {
+	if x != nil {
+		return x.OwnerUserId
+	}
+	return 0
+}
+
+func (x *DeleteUserBotReq) GetBotUserId() int64 {
+	if x != nil {
+		return x.BotUserId
+	}
+	return 0
+}
+
+type DeleteUserBotResp struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Deleted       bool                   `protobuf:"varint,1,opt,name=deleted,proto3" json:"deleted,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteUserBotResp) Reset() {
+	*x = DeleteUserBotResp{}
+	mi := &file_app_logic_rpc_logic_proto_msgTypes[114]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteUserBotResp) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteUserBotResp) ProtoMessage() {}
+
+func (x *DeleteUserBotResp) ProtoReflect() protoreflect.Message {
+	mi := &file_app_logic_rpc_logic_proto_msgTypes[114]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteUserBotResp.ProtoReflect.Descriptor instead.
+func (*DeleteUserBotResp) Descriptor() ([]byte, []int) {
+	return file_app_logic_rpc_logic_proto_rawDescGZIP(), []int{114}
+}
+
+func (x *DeleteUserBotResp) GetDeleted() bool {
+	if x != nil {
+		return x.Deleted
+	}
+	return false
+}
+
+type CreateUserBotTokenReq struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	OwnerUserId   int64                  `protobuf:"varint,1,opt,name=owner_user_id,json=ownerUserId,proto3" json:"owner_user_id,omitempty"`
+	BotUserId     int64                  `protobuf:"varint,2,opt,name=bot_user_id,json=botUserId,proto3" json:"bot_user_id,omitempty"`
+	Name          string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
+	ExpiresAt     int64                  `protobuf:"varint,4,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`
+	Actions       []string               `protobuf:"bytes,5,rep,name=actions,proto3" json:"actions,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateUserBotTokenReq) Reset() {
+	*x = CreateUserBotTokenReq{}
+	mi := &file_app_logic_rpc_logic_proto_msgTypes[115]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateUserBotTokenReq) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateUserBotTokenReq) ProtoMessage() {}
+
+func (x *CreateUserBotTokenReq) ProtoReflect() protoreflect.Message {
+	mi := &file_app_logic_rpc_logic_proto_msgTypes[115]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateUserBotTokenReq.ProtoReflect.Descriptor instead.
+func (*CreateUserBotTokenReq) Descriptor() ([]byte, []int) {
+	return file_app_logic_rpc_logic_proto_rawDescGZIP(), []int{115}
+}
+
+func (x *CreateUserBotTokenReq) GetOwnerUserId() int64 {
+	if x != nil {
+		return x.OwnerUserId
+	}
+	return 0
+}
+
+func (x *CreateUserBotTokenReq) GetBotUserId() int64 {
+	if x != nil {
+		return x.BotUserId
+	}
+	return 0
+}
+
+func (x *CreateUserBotTokenReq) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *CreateUserBotTokenReq) GetExpiresAt() int64 {
+	if x != nil {
+		return x.ExpiresAt
+	}
+	return 0
+}
+
+func (x *CreateUserBotTokenReq) GetActions() []string {
+	if x != nil {
+		return x.Actions
+	}
+	return nil
+}
+
+type CreateUserBotTokenResp struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Token          *UserBotTokenInfo      `protobuf:"bytes,1,opt,name=token,proto3" json:"token,omitempty"`
+	PlaintextToken string                 `protobuf:"bytes,2,opt,name=plaintext_token,json=plaintextToken,proto3" json:"plaintext_token,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *CreateUserBotTokenResp) Reset() {
+	*x = CreateUserBotTokenResp{}
+	mi := &file_app_logic_rpc_logic_proto_msgTypes[116]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateUserBotTokenResp) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateUserBotTokenResp) ProtoMessage() {}
+
+func (x *CreateUserBotTokenResp) ProtoReflect() protoreflect.Message {
+	mi := &file_app_logic_rpc_logic_proto_msgTypes[116]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateUserBotTokenResp.ProtoReflect.Descriptor instead.
+func (*CreateUserBotTokenResp) Descriptor() ([]byte, []int) {
+	return file_app_logic_rpc_logic_proto_rawDescGZIP(), []int{116}
+}
+
+func (x *CreateUserBotTokenResp) GetToken() *UserBotTokenInfo {
+	if x != nil {
+		return x.Token
+	}
+	return nil
+}
+
+func (x *CreateUserBotTokenResp) GetPlaintextToken() string {
+	if x != nil {
+		return x.PlaintextToken
+	}
+	return ""
+}
+
+type ListUserBotTokensReq struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	OwnerUserId   int64                  `protobuf:"varint,1,opt,name=owner_user_id,json=ownerUserId,proto3" json:"owner_user_id,omitempty"`
+	BotUserId     int64                  `protobuf:"varint,2,opt,name=bot_user_id,json=botUserId,proto3" json:"bot_user_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListUserBotTokensReq) Reset() {
+	*x = ListUserBotTokensReq{}
+	mi := &file_app_logic_rpc_logic_proto_msgTypes[117]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListUserBotTokensReq) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListUserBotTokensReq) ProtoMessage() {}
+
+func (x *ListUserBotTokensReq) ProtoReflect() protoreflect.Message {
+	mi := &file_app_logic_rpc_logic_proto_msgTypes[117]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListUserBotTokensReq.ProtoReflect.Descriptor instead.
+func (*ListUserBotTokensReq) Descriptor() ([]byte, []int) {
+	return file_app_logic_rpc_logic_proto_rawDescGZIP(), []int{117}
+}
+
+func (x *ListUserBotTokensReq) GetOwnerUserId() int64 {
+	if x != nil {
+		return x.OwnerUserId
+	}
+	return 0
+}
+
+func (x *ListUserBotTokensReq) GetBotUserId() int64 {
+	if x != nil {
+		return x.BotUserId
+	}
+	return 0
+}
+
+type ListUserBotTokensResp struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Tokens        []*UserBotTokenInfo    `protobuf:"bytes,1,rep,name=tokens,proto3" json:"tokens,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListUserBotTokensResp) Reset() {
+	*x = ListUserBotTokensResp{}
+	mi := &file_app_logic_rpc_logic_proto_msgTypes[118]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListUserBotTokensResp) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListUserBotTokensResp) ProtoMessage() {}
+
+func (x *ListUserBotTokensResp) ProtoReflect() protoreflect.Message {
+	mi := &file_app_logic_rpc_logic_proto_msgTypes[118]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListUserBotTokensResp.ProtoReflect.Descriptor instead.
+func (*ListUserBotTokensResp) Descriptor() ([]byte, []int) {
+	return file_app_logic_rpc_logic_proto_rawDescGZIP(), []int{118}
+}
+
+func (x *ListUserBotTokensResp) GetTokens() []*UserBotTokenInfo {
+	if x != nil {
+		return x.Tokens
+	}
+	return nil
+}
+
+type UpdateUserBotTokenReq struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	OwnerUserId   int64                  `protobuf:"varint,1,opt,name=owner_user_id,json=ownerUserId,proto3" json:"owner_user_id,omitempty"`
+	BotUserId     int64                  `protobuf:"varint,2,opt,name=bot_user_id,json=botUserId,proto3" json:"bot_user_id,omitempty"`
+	TokenId       int64                  `protobuf:"varint,3,opt,name=token_id,json=tokenId,proto3" json:"token_id,omitempty"`
+	Name          string                 `protobuf:"bytes,4,opt,name=name,proto3" json:"name,omitempty"`
+	ExpiresAt     int64                  `protobuf:"varint,5,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`
+	Actions       []string               `protobuf:"bytes,6,rep,name=actions,proto3" json:"actions,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateUserBotTokenReq) Reset() {
+	*x = UpdateUserBotTokenReq{}
+	mi := &file_app_logic_rpc_logic_proto_msgTypes[119]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateUserBotTokenReq) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateUserBotTokenReq) ProtoMessage() {}
+
+func (x *UpdateUserBotTokenReq) ProtoReflect() protoreflect.Message {
+	mi := &file_app_logic_rpc_logic_proto_msgTypes[119]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateUserBotTokenReq.ProtoReflect.Descriptor instead.
+func (*UpdateUserBotTokenReq) Descriptor() ([]byte, []int) {
+	return file_app_logic_rpc_logic_proto_rawDescGZIP(), []int{119}
+}
+
+func (x *UpdateUserBotTokenReq) GetOwnerUserId() int64 {
+	if x != nil {
+		return x.OwnerUserId
+	}
+	return 0
+}
+
+func (x *UpdateUserBotTokenReq) GetBotUserId() int64 {
+	if x != nil {
+		return x.BotUserId
+	}
+	return 0
+}
+
+func (x *UpdateUserBotTokenReq) GetTokenId() int64 {
+	if x != nil {
+		return x.TokenId
+	}
+	return 0
+}
+
+func (x *UpdateUserBotTokenReq) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *UpdateUserBotTokenReq) GetExpiresAt() int64 {
+	if x != nil {
+		return x.ExpiresAt
+	}
+	return 0
+}
+
+func (x *UpdateUserBotTokenReq) GetActions() []string {
+	if x != nil {
+		return x.Actions
+	}
+	return nil
+}
+
+type UpdateUserBotTokenResp struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Token         *UserBotTokenInfo      `protobuf:"bytes,1,opt,name=token,proto3" json:"token,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateUserBotTokenResp) Reset() {
+	*x = UpdateUserBotTokenResp{}
+	mi := &file_app_logic_rpc_logic_proto_msgTypes[120]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateUserBotTokenResp) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateUserBotTokenResp) ProtoMessage() {}
+
+func (x *UpdateUserBotTokenResp) ProtoReflect() protoreflect.Message {
+	mi := &file_app_logic_rpc_logic_proto_msgTypes[120]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateUserBotTokenResp.ProtoReflect.Descriptor instead.
+func (*UpdateUserBotTokenResp) Descriptor() ([]byte, []int) {
+	return file_app_logic_rpc_logic_proto_rawDescGZIP(), []int{120}
+}
+
+func (x *UpdateUserBotTokenResp) GetToken() *UserBotTokenInfo {
+	if x != nil {
+		return x.Token
+	}
+	return nil
+}
+
+type RotateUserBotTokenReq struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	OwnerUserId   int64                  `protobuf:"varint,1,opt,name=owner_user_id,json=ownerUserId,proto3" json:"owner_user_id,omitempty"`
+	BotUserId     int64                  `protobuf:"varint,2,opt,name=bot_user_id,json=botUserId,proto3" json:"bot_user_id,omitempty"`
+	TokenId       int64                  `protobuf:"varint,3,opt,name=token_id,json=tokenId,proto3" json:"token_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RotateUserBotTokenReq) Reset() {
+	*x = RotateUserBotTokenReq{}
+	mi := &file_app_logic_rpc_logic_proto_msgTypes[121]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RotateUserBotTokenReq) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RotateUserBotTokenReq) ProtoMessage() {}
+
+func (x *RotateUserBotTokenReq) ProtoReflect() protoreflect.Message {
+	mi := &file_app_logic_rpc_logic_proto_msgTypes[121]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RotateUserBotTokenReq.ProtoReflect.Descriptor instead.
+func (*RotateUserBotTokenReq) Descriptor() ([]byte, []int) {
+	return file_app_logic_rpc_logic_proto_rawDescGZIP(), []int{121}
+}
+
+func (x *RotateUserBotTokenReq) GetOwnerUserId() int64 {
+	if x != nil {
+		return x.OwnerUserId
+	}
+	return 0
+}
+
+func (x *RotateUserBotTokenReq) GetBotUserId() int64 {
+	if x != nil {
+		return x.BotUserId
+	}
+	return 0
+}
+
+func (x *RotateUserBotTokenReq) GetTokenId() int64 {
+	if x != nil {
+		return x.TokenId
+	}
+	return 0
+}
+
+type RotateUserBotTokenResp struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Token          *UserBotTokenInfo      `protobuf:"bytes,1,opt,name=token,proto3" json:"token,omitempty"`
+	PlaintextToken string                 `protobuf:"bytes,2,opt,name=plaintext_token,json=plaintextToken,proto3" json:"plaintext_token,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *RotateUserBotTokenResp) Reset() {
+	*x = RotateUserBotTokenResp{}
+	mi := &file_app_logic_rpc_logic_proto_msgTypes[122]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RotateUserBotTokenResp) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RotateUserBotTokenResp) ProtoMessage() {}
+
+func (x *RotateUserBotTokenResp) ProtoReflect() protoreflect.Message {
+	mi := &file_app_logic_rpc_logic_proto_msgTypes[122]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RotateUserBotTokenResp.ProtoReflect.Descriptor instead.
+func (*RotateUserBotTokenResp) Descriptor() ([]byte, []int) {
+	return file_app_logic_rpc_logic_proto_rawDescGZIP(), []int{122}
+}
+
+func (x *RotateUserBotTokenResp) GetToken() *UserBotTokenInfo {
+	if x != nil {
+		return x.Token
+	}
+	return nil
+}
+
+func (x *RotateUserBotTokenResp) GetPlaintextToken() string {
+	if x != nil {
+		return x.PlaintextToken
+	}
+	return ""
+}
+
+type RevokeUserBotTokenReq struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	OwnerUserId   int64                  `protobuf:"varint,1,opt,name=owner_user_id,json=ownerUserId,proto3" json:"owner_user_id,omitempty"`
+	BotUserId     int64                  `protobuf:"varint,2,opt,name=bot_user_id,json=botUserId,proto3" json:"bot_user_id,omitempty"`
+	TokenId       int64                  `protobuf:"varint,3,opt,name=token_id,json=tokenId,proto3" json:"token_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RevokeUserBotTokenReq) Reset() {
+	*x = RevokeUserBotTokenReq{}
+	mi := &file_app_logic_rpc_logic_proto_msgTypes[123]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RevokeUserBotTokenReq) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RevokeUserBotTokenReq) ProtoMessage() {}
+
+func (x *RevokeUserBotTokenReq) ProtoReflect() protoreflect.Message {
+	mi := &file_app_logic_rpc_logic_proto_msgTypes[123]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RevokeUserBotTokenReq.ProtoReflect.Descriptor instead.
+func (*RevokeUserBotTokenReq) Descriptor() ([]byte, []int) {
+	return file_app_logic_rpc_logic_proto_rawDescGZIP(), []int{123}
+}
+
+func (x *RevokeUserBotTokenReq) GetOwnerUserId() int64 {
+	if x != nil {
+		return x.OwnerUserId
+	}
+	return 0
+}
+
+func (x *RevokeUserBotTokenReq) GetBotUserId() int64 {
+	if x != nil {
+		return x.BotUserId
+	}
+	return 0
+}
+
+func (x *RevokeUserBotTokenReq) GetTokenId() int64 {
+	if x != nil {
+		return x.TokenId
+	}
+	return 0
+}
+
+type RevokeUserBotTokenResp struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Revoked       bool                   `protobuf:"varint,1,opt,name=revoked,proto3" json:"revoked,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RevokeUserBotTokenResp) Reset() {
+	*x = RevokeUserBotTokenResp{}
+	mi := &file_app_logic_rpc_logic_proto_msgTypes[124]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RevokeUserBotTokenResp) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RevokeUserBotTokenResp) ProtoMessage() {}
+
+func (x *RevokeUserBotTokenResp) ProtoReflect() protoreflect.Message {
+	mi := &file_app_logic_rpc_logic_proto_msgTypes[124]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RevokeUserBotTokenResp.ProtoReflect.Descriptor instead.
+func (*RevokeUserBotTokenResp) Descriptor() ([]byte, []int) {
+	return file_app_logic_rpc_logic_proto_rawDescGZIP(), []int{124}
+}
+
+func (x *RevokeUserBotTokenResp) GetRevoked() bool {
+	if x != nil {
+		return x.Revoked
+	}
+	return false
+}
+
+type AddUserBotToConversationReq struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	OwnerUserId    int64                  `protobuf:"varint,1,opt,name=owner_user_id,json=ownerUserId,proto3" json:"owner_user_id,omitempty"`
+	BotUserId      int64                  `protobuf:"varint,2,opt,name=bot_user_id,json=botUserId,proto3" json:"bot_user_id,omitempty"`
+	ConversationId int64                  `protobuf:"varint,3,opt,name=conversation_id,json=conversationId,proto3" json:"conversation_id,omitempty"`
+	OperatorId     int64                  `protobuf:"varint,4,opt,name=operator_id,json=operatorId,proto3" json:"operator_id,omitempty"`
+	OperatorName   string                 `protobuf:"bytes,5,opt,name=operator_name,json=operatorName,proto3" json:"operator_name,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *AddUserBotToConversationReq) Reset() {
+	*x = AddUserBotToConversationReq{}
+	mi := &file_app_logic_rpc_logic_proto_msgTypes[125]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AddUserBotToConversationReq) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AddUserBotToConversationReq) ProtoMessage() {}
+
+func (x *AddUserBotToConversationReq) ProtoReflect() protoreflect.Message {
+	mi := &file_app_logic_rpc_logic_proto_msgTypes[125]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AddUserBotToConversationReq.ProtoReflect.Descriptor instead.
+func (*AddUserBotToConversationReq) Descriptor() ([]byte, []int) {
+	return file_app_logic_rpc_logic_proto_rawDescGZIP(), []int{125}
+}
+
+func (x *AddUserBotToConversationReq) GetOwnerUserId() int64 {
+	if x != nil {
+		return x.OwnerUserId
+	}
+	return 0
+}
+
+func (x *AddUserBotToConversationReq) GetBotUserId() int64 {
+	if x != nil {
+		return x.BotUserId
+	}
+	return 0
+}
+
+func (x *AddUserBotToConversationReq) GetConversationId() int64 {
+	if x != nil {
+		return x.ConversationId
+	}
+	return 0
+}
+
+func (x *AddUserBotToConversationReq) GetOperatorId() int64 {
+	if x != nil {
+		return x.OperatorId
+	}
+	return 0
+}
+
+func (x *AddUserBotToConversationReq) GetOperatorName() string {
+	if x != nil {
+		return x.OperatorName
+	}
+	return ""
+}
+
+type AddUserBotToConversationResp struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Conversation  *ConversationResponse  `protobuf:"bytes,1,opt,name=conversation,proto3" json:"conversation,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AddUserBotToConversationResp) Reset() {
+	*x = AddUserBotToConversationResp{}
+	mi := &file_app_logic_rpc_logic_proto_msgTypes[126]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AddUserBotToConversationResp) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AddUserBotToConversationResp) ProtoMessage() {}
+
+func (x *AddUserBotToConversationResp) ProtoReflect() protoreflect.Message {
+	mi := &file_app_logic_rpc_logic_proto_msgTypes[126]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AddUserBotToConversationResp.ProtoReflect.Descriptor instead.
+func (*AddUserBotToConversationResp) Descriptor() ([]byte, []int) {
+	return file_app_logic_rpc_logic_proto_rawDescGZIP(), []int{126}
+}
+
+func (x *AddUserBotToConversationResp) GetConversation() *ConversationResponse {
+	if x != nil {
+		return x.Conversation
+	}
+	return nil
+}
+
+type CreateUserBotDirectConversationReq struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	OwnerUserId   int64                  `protobuf:"varint,1,opt,name=owner_user_id,json=ownerUserId,proto3" json:"owner_user_id,omitempty"`
+	BotUserId     int64                  `protobuf:"varint,2,opt,name=bot_user_id,json=botUserId,proto3" json:"bot_user_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateUserBotDirectConversationReq) Reset() {
+	*x = CreateUserBotDirectConversationReq{}
+	mi := &file_app_logic_rpc_logic_proto_msgTypes[127]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateUserBotDirectConversationReq) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateUserBotDirectConversationReq) ProtoMessage() {}
+
+func (x *CreateUserBotDirectConversationReq) ProtoReflect() protoreflect.Message {
+	mi := &file_app_logic_rpc_logic_proto_msgTypes[127]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateUserBotDirectConversationReq.ProtoReflect.Descriptor instead.
+func (*CreateUserBotDirectConversationReq) Descriptor() ([]byte, []int) {
+	return file_app_logic_rpc_logic_proto_rawDescGZIP(), []int{127}
+}
+
+func (x *CreateUserBotDirectConversationReq) GetOwnerUserId() int64 {
+	if x != nil {
+		return x.OwnerUserId
+	}
+	return 0
+}
+
+func (x *CreateUserBotDirectConversationReq) GetBotUserId() int64 {
+	if x != nil {
+		return x.BotUserId
+	}
+	return 0
+}
+
+type CreateUserBotDirectConversationResp struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Conversation  *ConversationResponse  `protobuf:"bytes,1,opt,name=conversation,proto3" json:"conversation,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateUserBotDirectConversationResp) Reset() {
+	*x = CreateUserBotDirectConversationResp{}
+	mi := &file_app_logic_rpc_logic_proto_msgTypes[128]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateUserBotDirectConversationResp) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateUserBotDirectConversationResp) ProtoMessage() {}
+
+func (x *CreateUserBotDirectConversationResp) ProtoReflect() protoreflect.Message {
+	mi := &file_app_logic_rpc_logic_proto_msgTypes[128]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateUserBotDirectConversationResp.ProtoReflect.Descriptor instead.
+func (*CreateUserBotDirectConversationResp) Descriptor() ([]byte, []int) {
+	return file_app_logic_rpc_logic_proto_rawDescGZIP(), []int{128}
+}
+
+func (x *CreateUserBotDirectConversationResp) GetConversation() *ConversationResponse {
+	if x != nil {
+		return x.Conversation
+	}
+	return nil
+}
+
+type ListBotActionsReq struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListBotActionsReq) Reset() {
+	*x = ListBotActionsReq{}
+	mi := &file_app_logic_rpc_logic_proto_msgTypes[129]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListBotActionsReq) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListBotActionsReq) ProtoMessage() {}
+
+func (x *ListBotActionsReq) ProtoReflect() protoreflect.Message {
+	mi := &file_app_logic_rpc_logic_proto_msgTypes[129]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListBotActionsReq.ProtoReflect.Descriptor instead.
+func (*ListBotActionsReq) Descriptor() ([]byte, []int) {
+	return file_app_logic_rpc_logic_proto_rawDescGZIP(), []int{129}
+}
+
+type ListBotActionsResp struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Actions       []*BotActionInfo       `protobuf:"bytes,1,rep,name=actions,proto3" json:"actions,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListBotActionsResp) Reset() {
+	*x = ListBotActionsResp{}
+	mi := &file_app_logic_rpc_logic_proto_msgTypes[130]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListBotActionsResp) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListBotActionsResp) ProtoMessage() {}
+
+func (x *ListBotActionsResp) ProtoReflect() protoreflect.Message {
+	mi := &file_app_logic_rpc_logic_proto_msgTypes[130]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListBotActionsResp.ProtoReflect.Descriptor instead.
+func (*ListBotActionsResp) Descriptor() ([]byte, []int) {
+	return file_app_logic_rpc_logic_proto_rawDescGZIP(), []int{130}
+}
+
+func (x *ListBotActionsResp) GetActions() []*BotActionInfo {
+	if x != nil {
+		return x.Actions
+	}
+	return nil
+}
+
+type ListBotEventsReq struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListBotEventsReq) Reset() {
+	*x = ListBotEventsReq{}
+	mi := &file_app_logic_rpc_logic_proto_msgTypes[131]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListBotEventsReq) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListBotEventsReq) ProtoMessage() {}
+
+func (x *ListBotEventsReq) ProtoReflect() protoreflect.Message {
+	mi := &file_app_logic_rpc_logic_proto_msgTypes[131]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListBotEventsReq.ProtoReflect.Descriptor instead.
+func (*ListBotEventsReq) Descriptor() ([]byte, []int) {
+	return file_app_logic_rpc_logic_proto_rawDescGZIP(), []int{131}
+}
+
+type ListBotEventsResp struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Events        []*BotEventInfo        `protobuf:"bytes,1,rep,name=events,proto3" json:"events,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListBotEventsResp) Reset() {
+	*x = ListBotEventsResp{}
+	mi := &file_app_logic_rpc_logic_proto_msgTypes[132]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListBotEventsResp) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListBotEventsResp) ProtoMessage() {}
+
+func (x *ListBotEventsResp) ProtoReflect() protoreflect.Message {
+	mi := &file_app_logic_rpc_logic_proto_msgTypes[132]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListBotEventsResp.ProtoReflect.Descriptor instead.
+func (*ListBotEventsResp) Descriptor() ([]byte, []int) {
+	return file_app_logic_rpc_logic_proto_rawDescGZIP(), []int{132}
+}
+
+func (x *ListBotEventsResp) GetEvents() []*BotEventInfo {
+	if x != nil {
+		return x.Events
+	}
+	return nil
+}
+
 var File_app_logic_rpc_logic_proto protoreflect.FileDescriptor
 
 const file_app_logic_rpc_logic_proto_rawDesc = "" +
@@ -5893,7 +7765,130 @@ const file_app_logic_rpc_logic_proto_rawDesc = "" +
 	"\x05event\x18\x01 \x01(\tR\x05event\x12\x16\n" +
 	"\x06action\x18\x02 \x01(\tR\x06action\"c\n" +
 	"!ResolveBotWebhookEventActionsResp\x12>\n" +
-	"\revent_actions\x18\x01 \x03(\v2\x19.logic.WebhookEventActionR\feventActions2r\n" +
+	"\revent_actions\x18\x01 \x03(\v2\x19.logic.WebhookEventActionR\feventActions\"\xf1\x01\n" +
+	"\vUserBotInfo\x12\x1e\n" +
+	"\vbot_user_id\x18\x01 \x01(\x03R\tbotUserId\x12\"\n" +
+	"\rowner_user_id\x18\x02 \x01(\x03R\vownerUserId\x12\x14\n" +
+	"\x05email\x18\x03 \x01(\tR\x05email\x12\x1a\n" +
+	"\bnickname\x18\x04 \x01(\tR\bnickname\x12\x16\n" +
+	"\x06avatar\x18\x05 \x01(\tR\x06avatar\x12\x16\n" +
+	"\x06status\x18\x06 \x01(\x05R\x06status\x12\x1d\n" +
+	"\n" +
+	"created_at\x18\a \x01(\x03R\tcreatedAt\x12\x1d\n" +
+	"\n" +
+	"updated_at\x18\b \x01(\x03R\tupdatedAt\"\xd8\x01\n" +
+	"\x10UserBotTokenInfo\x12\x19\n" +
+	"\btoken_id\x18\x01 \x01(\x03R\atokenId\x12\x1e\n" +
+	"\vbot_user_id\x18\x02 \x01(\x03R\tbotUserId\x12\x12\n" +
+	"\x04name\x18\x03 \x01(\tR\x04name\x12\x18\n" +
+	"\aactions\x18\x04 \x03(\tR\aactions\x12\x1d\n" +
+	"\n" +
+	"expires_at\x18\x05 \x01(\x03R\texpiresAt\x12\x1d\n" +
+	"\n" +
+	"revoked_at\x18\x06 \x01(\x03R\trevokedAt\x12\x1d\n" +
+	"\n" +
+	"created_at\x18\a \x01(\x03R\tcreatedAt\"Y\n" +
+	"\rBotActionInfo\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x16\n" +
+	"\x06action\x18\x02 \x01(\tR\x06action\x12 \n" +
+	"\vdescription\x18\x03 \x01(\tR\vdescription\"^\n" +
+	"\fBotEventInfo\x12\x14\n" +
+	"\x05event\x18\x01 \x01(\tR\x05event\x12\x16\n" +
+	"\x06action\x18\x02 \x01(\tR\x06action\x12 \n" +
+	"\vdescription\x18\x03 \x01(\tR\vdescription\"\xa0\x01\n" +
+	"\x10CreateUserBotReq\x12\"\n" +
+	"\rowner_user_id\x18\x01 \x01(\x03R\vownerUserId\x12\x1e\n" +
+	"\vbot_user_id\x18\x02 \x01(\x03R\tbotUserId\x12\x14\n" +
+	"\x05email\x18\x03 \x01(\tR\x05email\x12\x1a\n" +
+	"\bnickname\x18\x04 \x01(\tR\bnickname\x12\x16\n" +
+	"\x06avatar\x18\x05 \x01(\tR\x06avatar\"9\n" +
+	"\x11CreateUserBotResp\x12$\n" +
+	"\x03bot\x18\x01 \x01(\v2\x12.logic.UserBotInfoR\x03bot\"5\n" +
+	"\x0fListUserBotsReq\x12\"\n" +
+	"\rowner_user_id\x18\x01 \x01(\x03R\vownerUserId\":\n" +
+	"\x10ListUserBotsResp\x12&\n" +
+	"\x04bots\x18\x01 \x03(\v2\x12.logic.UserBotInfoR\x04bots\"S\n" +
+	"\rGetUserBotReq\x12\"\n" +
+	"\rowner_user_id\x18\x01 \x01(\x03R\vownerUserId\x12\x1e\n" +
+	"\vbot_user_id\x18\x02 \x01(\x03R\tbotUserId\"6\n" +
+	"\x0eGetUserBotResp\x12$\n" +
+	"\x03bot\x18\x01 \x01(\v2\x12.logic.UserBotInfoR\x03bot\"\x91\x01\n" +
+	"\x17UpdateUserBotProfileReq\x12\"\n" +
+	"\rowner_user_id\x18\x01 \x01(\x03R\vownerUserId\x12\x1e\n" +
+	"\vbot_user_id\x18\x02 \x01(\x03R\tbotUserId\x12\x1a\n" +
+	"\bnickname\x18\x03 \x01(\tR\bnickname\x12\x16\n" +
+	"\x06avatar\x18\x04 \x01(\tR\x06avatar\"@\n" +
+	"\x18UpdateUserBotProfileResp\x12$\n" +
+	"\x03bot\x18\x01 \x01(\v2\x12.logic.UserBotInfoR\x03bot\"s\n" +
+	"\x13SetUserBotStatusReq\x12\"\n" +
+	"\rowner_user_id\x18\x01 \x01(\x03R\vownerUserId\x12\x1e\n" +
+	"\vbot_user_id\x18\x02 \x01(\x03R\tbotUserId\x12\x18\n" +
+	"\aenabled\x18\x03 \x01(\bR\aenabled\"<\n" +
+	"\x14SetUserBotStatusResp\x12$\n" +
+	"\x03bot\x18\x01 \x01(\v2\x12.logic.UserBotInfoR\x03bot\"V\n" +
+	"\x10DeleteUserBotReq\x12\"\n" +
+	"\rowner_user_id\x18\x01 \x01(\x03R\vownerUserId\x12\x1e\n" +
+	"\vbot_user_id\x18\x02 \x01(\x03R\tbotUserId\"-\n" +
+	"\x11DeleteUserBotResp\x12\x18\n" +
+	"\adeleted\x18\x01 \x01(\bR\adeleted\"\xa8\x01\n" +
+	"\x15CreateUserBotTokenReq\x12\"\n" +
+	"\rowner_user_id\x18\x01 \x01(\x03R\vownerUserId\x12\x1e\n" +
+	"\vbot_user_id\x18\x02 \x01(\x03R\tbotUserId\x12\x12\n" +
+	"\x04name\x18\x03 \x01(\tR\x04name\x12\x1d\n" +
+	"\n" +
+	"expires_at\x18\x04 \x01(\x03R\texpiresAt\x12\x18\n" +
+	"\aactions\x18\x05 \x03(\tR\aactions\"p\n" +
+	"\x16CreateUserBotTokenResp\x12-\n" +
+	"\x05token\x18\x01 \x01(\v2\x17.logic.UserBotTokenInfoR\x05token\x12'\n" +
+	"\x0fplaintext_token\x18\x02 \x01(\tR\x0eplaintextToken\"Z\n" +
+	"\x14ListUserBotTokensReq\x12\"\n" +
+	"\rowner_user_id\x18\x01 \x01(\x03R\vownerUserId\x12\x1e\n" +
+	"\vbot_user_id\x18\x02 \x01(\x03R\tbotUserId\"H\n" +
+	"\x15ListUserBotTokensResp\x12/\n" +
+	"\x06tokens\x18\x01 \x03(\v2\x17.logic.UserBotTokenInfoR\x06tokens\"\xc3\x01\n" +
+	"\x15UpdateUserBotTokenReq\x12\"\n" +
+	"\rowner_user_id\x18\x01 \x01(\x03R\vownerUserId\x12\x1e\n" +
+	"\vbot_user_id\x18\x02 \x01(\x03R\tbotUserId\x12\x19\n" +
+	"\btoken_id\x18\x03 \x01(\x03R\atokenId\x12\x12\n" +
+	"\x04name\x18\x04 \x01(\tR\x04name\x12\x1d\n" +
+	"\n" +
+	"expires_at\x18\x05 \x01(\x03R\texpiresAt\x12\x18\n" +
+	"\aactions\x18\x06 \x03(\tR\aactions\"G\n" +
+	"\x16UpdateUserBotTokenResp\x12-\n" +
+	"\x05token\x18\x01 \x01(\v2\x17.logic.UserBotTokenInfoR\x05token\"v\n" +
+	"\x15RotateUserBotTokenReq\x12\"\n" +
+	"\rowner_user_id\x18\x01 \x01(\x03R\vownerUserId\x12\x1e\n" +
+	"\vbot_user_id\x18\x02 \x01(\x03R\tbotUserId\x12\x19\n" +
+	"\btoken_id\x18\x03 \x01(\x03R\atokenId\"p\n" +
+	"\x16RotateUserBotTokenResp\x12-\n" +
+	"\x05token\x18\x01 \x01(\v2\x17.logic.UserBotTokenInfoR\x05token\x12'\n" +
+	"\x0fplaintext_token\x18\x02 \x01(\tR\x0eplaintextToken\"v\n" +
+	"\x15RevokeUserBotTokenReq\x12\"\n" +
+	"\rowner_user_id\x18\x01 \x01(\x03R\vownerUserId\x12\x1e\n" +
+	"\vbot_user_id\x18\x02 \x01(\x03R\tbotUserId\x12\x19\n" +
+	"\btoken_id\x18\x03 \x01(\x03R\atokenId\"2\n" +
+	"\x16RevokeUserBotTokenResp\x12\x18\n" +
+	"\arevoked\x18\x01 \x01(\bR\arevoked\"\xd0\x01\n" +
+	"\x1bAddUserBotToConversationReq\x12\"\n" +
+	"\rowner_user_id\x18\x01 \x01(\x03R\vownerUserId\x12\x1e\n" +
+	"\vbot_user_id\x18\x02 \x01(\x03R\tbotUserId\x12'\n" +
+	"\x0fconversation_id\x18\x03 \x01(\x03R\x0econversationId\x12\x1f\n" +
+	"\voperator_id\x18\x04 \x01(\x03R\n" +
+	"operatorId\x12#\n" +
+	"\roperator_name\x18\x05 \x01(\tR\foperatorName\"_\n" +
+	"\x1cAddUserBotToConversationResp\x12?\n" +
+	"\fconversation\x18\x01 \x01(\v2\x1b.logic.ConversationResponseR\fconversation\"h\n" +
+	"\"CreateUserBotDirectConversationReq\x12\"\n" +
+	"\rowner_user_id\x18\x01 \x01(\x03R\vownerUserId\x12\x1e\n" +
+	"\vbot_user_id\x18\x02 \x01(\x03R\tbotUserId\"f\n" +
+	"#CreateUserBotDirectConversationResp\x12?\n" +
+	"\fconversation\x18\x01 \x01(\v2\x1b.logic.ConversationResponseR\fconversation\"\x13\n" +
+	"\x11ListBotActionsReq\"D\n" +
+	"\x12ListBotActionsResp\x12.\n" +
+	"\aactions\x18\x01 \x03(\v2\x14.logic.BotActionInfoR\aactions\"\x12\n" +
+	"\x10ListBotEventsReq\"@\n" +
+	"\x11ListBotEventsResp\x12+\n" +
+	"\x06events\x18\x01 \x03(\v2\x13.logic.BotEventInfoR\x06events2r\n" +
 	"\x11PermissionService\x12]\n" +
 	"\x16CheckMessagePermission\x12 .logic.CheckMessagePermissionReq\x1a!.logic.CheckMessagePermissionResp2\xca\x04\n" +
 	"\vUserService\x12E\n" +
@@ -5934,7 +7929,7 @@ const file_app_logic_rpc_logic_proto_rawDesc = "" +
 	"\rSetFriendTags\x12\x17.logic.SetFriendTagsReq\x1a\x18.logic.SetFriendTagsResp\x12H\n" +
 	"\x0fRemoveFriendTag\x12\x19.logic.RemoveFriendTagReq\x1a\x1a.logic.RemoveFriendTagResp2S\n" +
 	"\rSearchService\x12B\n" +
-	"\rUnifiedSearch\x12\x17.logic.UnifiedSearchReq\x1a\x18.logic.UnifiedSearchResp2\xbf\x04\n" +
+	"\rUnifiedSearch\x12\x17.logic.UnifiedSearchReq\x1a\x18.logic.UnifiedSearchResp2\xef\r\n" +
 	"\n" +
 	"BotService\x12K\n" +
 	"\x10ValidateBotToken\x12\x1a.logic.ValidateBotTokenReq\x1a\x1b.logic.ValidateBotTokenResp\x12B\n" +
@@ -5943,7 +7938,23 @@ const file_app_logic_rpc_logic_proto_rawDesc = "" +
 	"\rGetBotWebhook\x12\x17.logic.GetBotWebhookReq\x1a\x18.logic.GetBotWebhookResp\x12B\n" +
 	"\rSetBotWebhook\x12\x17.logic.SetBotWebhookReq\x1a\x18.logic.SetBotWebhookResp\x12K\n" +
 	"\x10DeleteBotWebhook\x12\x1a.logic.DeleteBotWebhookReq\x1a\x1b.logic.DeleteBotWebhookResp\x12r\n" +
-	"\x1dResolveBotWebhookEventActions\x12'.logic.ResolveBotWebhookEventActionsReq\x1a(.logic.ResolveBotWebhookEventActionsRespB\x06Z\x04./pbb\x06proto3"
+	"\x1dResolveBotWebhookEventActions\x12'.logic.ResolveBotWebhookEventActionsReq\x1a(.logic.ResolveBotWebhookEventActionsResp\x12B\n" +
+	"\rCreateUserBot\x12\x17.logic.CreateUserBotReq\x1a\x18.logic.CreateUserBotResp\x12?\n" +
+	"\fListUserBots\x12\x16.logic.ListUserBotsReq\x1a\x17.logic.ListUserBotsResp\x129\n" +
+	"\n" +
+	"GetUserBot\x12\x14.logic.GetUserBotReq\x1a\x15.logic.GetUserBotResp\x12W\n" +
+	"\x14UpdateUserBotProfile\x12\x1e.logic.UpdateUserBotProfileReq\x1a\x1f.logic.UpdateUserBotProfileResp\x12K\n" +
+	"\x10SetUserBotStatus\x12\x1a.logic.SetUserBotStatusReq\x1a\x1b.logic.SetUserBotStatusResp\x12B\n" +
+	"\rDeleteUserBot\x12\x17.logic.DeleteUserBotReq\x1a\x18.logic.DeleteUserBotResp\x12Q\n" +
+	"\x12CreateUserBotToken\x12\x1c.logic.CreateUserBotTokenReq\x1a\x1d.logic.CreateUserBotTokenResp\x12N\n" +
+	"\x11ListUserBotTokens\x12\x1b.logic.ListUserBotTokensReq\x1a\x1c.logic.ListUserBotTokensResp\x12Q\n" +
+	"\x12UpdateUserBotToken\x12\x1c.logic.UpdateUserBotTokenReq\x1a\x1d.logic.UpdateUserBotTokenResp\x12Q\n" +
+	"\x12RotateUserBotToken\x12\x1c.logic.RotateUserBotTokenReq\x1a\x1d.logic.RotateUserBotTokenResp\x12Q\n" +
+	"\x12RevokeUserBotToken\x12\x1c.logic.RevokeUserBotTokenReq\x1a\x1d.logic.RevokeUserBotTokenResp\x12c\n" +
+	"\x18AddUserBotToConversation\x12\".logic.AddUserBotToConversationReq\x1a#.logic.AddUserBotToConversationResp\x12x\n" +
+	"\x1fCreateUserBotDirectConversation\x12).logic.CreateUserBotDirectConversationReq\x1a*.logic.CreateUserBotDirectConversationResp\x12E\n" +
+	"\x0eListBotActions\x12\x18.logic.ListBotActionsReq\x1a\x19.logic.ListBotActionsResp\x12B\n" +
+	"\rListBotEvents\x12\x17.logic.ListBotEventsReq\x1a\x18.logic.ListBotEventsRespB\x06Z\x04./pbb\x06proto3"
 
 var (
 	file_app_logic_rpc_logic_proto_rawDescOnce sync.Once
@@ -5957,241 +7968,318 @@ func file_app_logic_rpc_logic_proto_rawDescGZIP() []byte {
 	return file_app_logic_rpc_logic_proto_rawDescData
 }
 
-var file_app_logic_rpc_logic_proto_msgTypes = make([]protoimpl.MessageInfo, 99)
+var file_app_logic_rpc_logic_proto_msgTypes = make([]protoimpl.MessageInfo, 133)
 var file_app_logic_rpc_logic_proto_goTypes = []any{
-	(*CheckMessagePermissionReq)(nil),         // 0: logic.CheckMessagePermissionReq
-	(*CheckMessagePermissionResp)(nil),        // 1: logic.CheckMessagePermissionResp
-	(*UserInfoResponse)(nil),                  // 2: logic.UserInfoResponse
-	(*CreateUserInfoReq)(nil),                 // 3: logic.CreateUserInfoReq
-	(*CreateUserInfoResp)(nil),                // 4: logic.CreateUserInfoResp
-	(*GetUserInfoReq)(nil),                    // 5: logic.GetUserInfoReq
-	(*GetUserInfoByEmailReq)(nil),             // 6: logic.GetUserInfoByEmailReq
-	(*GetUserInfoByNicknameReq)(nil),          // 7: logic.GetUserInfoByNicknameReq
-	(*GetUserInfoResp)(nil),                   // 8: logic.GetUserInfoResp
-	(*UpdateUserInfoProfileReq)(nil),          // 9: logic.UpdateUserInfoProfileReq
-	(*UpdateUserInfoProfileResp)(nil),         // 10: logic.UpdateUserInfoProfileResp
-	(*UpdateUserInfoStatusReq)(nil),           // 11: logic.UpdateUserInfoStatusReq
-	(*UpdateUserInfoStatusResp)(nil),          // 12: logic.UpdateUserInfoStatusResp
-	(*SearchUserInfoByNicknameReq)(nil),       // 13: logic.SearchUserInfoByNicknameReq
-	(*SearchUserInfoByNicknameResp)(nil),      // 14: logic.SearchUserInfoByNicknameResp
-	(*CreateConversationReq)(nil),             // 15: logic.CreateConversationReq
-	(*ConversationResponse)(nil),              // 16: logic.ConversationResponse
-	(*CreateConversationResp)(nil),            // 17: logic.CreateConversationResp
-	(*GetConversationMembersReq)(nil),         // 18: logic.GetConversationMembersReq
-	(*GetConversationMembersResp)(nil),        // 19: logic.GetConversationMembersResp
-	(*GetUserConversationsReq)(nil),           // 20: logic.GetUserConversationsReq
-	(*GetUserConversationsResp)(nil),          // 21: logic.GetUserConversationsResp
-	(*AddGroupMembersReq)(nil),                // 22: logic.AddGroupMembersReq
-	(*AddGroupMembersResp)(nil),               // 23: logic.AddGroupMembersResp
-	(*RemoveGroupMembersReq)(nil),             // 24: logic.RemoveGroupMembersReq
-	(*RemoveGroupMembersResp)(nil),            // 25: logic.RemoveGroupMembersResp
-	(*LeaveGroupReq)(nil),                     // 26: logic.LeaveGroupReq
-	(*LeaveGroupResp)(nil),                    // 27: logic.LeaveGroupResp
-	(*DismissGroupReq)(nil),                   // 28: logic.DismissGroupReq
-	(*DismissGroupResp)(nil),                  // 29: logic.DismissGroupResp
-	(*UpdateGroupInfoReq)(nil),                // 30: logic.UpdateGroupInfoReq
-	(*UpdateGroupInfoResp)(nil),               // 31: logic.UpdateGroupInfoResp
-	(*GrantGroupAdminReq)(nil),                // 32: logic.GrantGroupAdminReq
-	(*GrantGroupAdminResp)(nil),               // 33: logic.GrantGroupAdminResp
-	(*RevokeGroupAdminReq)(nil),               // 34: logic.RevokeGroupAdminReq
-	(*RevokeGroupAdminResp)(nil),              // 35: logic.RevokeGroupAdminResp
-	(*TransferGroupOwnerReq)(nil),             // 36: logic.TransferGroupOwnerReq
-	(*TransferGroupOwnerResp)(nil),            // 37: logic.TransferGroupOwnerResp
-	(*GetConversationMembersDetailReq)(nil),   // 38: logic.GetConversationMembersDetailReq
-	(*MemberDetailItem)(nil),                  // 39: logic.MemberDetailItem
-	(*GetConversationMembersDetailResp)(nil),  // 40: logic.GetConversationMembersDetailResp
-	(*GetConversationHistoryReq)(nil),         // 41: logic.GetConversationHistoryReq
-	(*SenderInfo)(nil),                        // 42: logic.SenderInfo
-	(*MessageReadDetailItem)(nil),             // 43: logic.MessageReadDetailItem
-	(*MessageItem)(nil),                       // 44: logic.MessageItem
-	(*ReadStateItem)(nil),                     // 45: logic.ReadStateItem
-	(*GetConversationHistoryResp)(nil),        // 46: logic.GetConversationHistoryResp
-	(*UpdateReadReceiptReq)(nil),              // 47: logic.UpdateReadReceiptReq
-	(*UpdateReadReceiptResp)(nil),             // 48: logic.UpdateReadReceiptResp
-	(*ListConversationReadStatesReq)(nil),     // 49: logic.ListConversationReadStatesReq
-	(*ListConversationReadStatesResp)(nil),    // 50: logic.ListConversationReadStatesResp
-	(*AddFriendReq)(nil),                      // 51: logic.AddFriendReq
-	(*FriendshipResponse)(nil),                // 52: logic.FriendshipResponse
-	(*AddFriendResp)(nil),                     // 53: logic.AddFriendResp
-	(*ListFriendApplicationsReq)(nil),         // 54: logic.ListFriendApplicationsReq
-	(*ListFriendApplicationsResp)(nil),        // 55: logic.ListFriendApplicationsResp
-	(*AcceptFriendReq)(nil),                   // 56: logic.AcceptFriendReq
-	(*AcceptFriendResp)(nil),                  // 57: logic.AcceptFriendResp
-	(*RejectFriendReq)(nil),                   // 58: logic.RejectFriendReq
-	(*RejectFriendResp)(nil),                  // 59: logic.RejectFriendResp
-	(*ListFriendsReq)(nil),                    // 60: logic.ListFriendsReq
-	(*ListFriendsResp)(nil),                   // 61: logic.ListFriendsResp
-	(*FriendTagResponse)(nil),                 // 62: logic.FriendTagResponse
-	(*CreateFriendTagReq)(nil),                // 63: logic.CreateFriendTagReq
-	(*CreateFriendTagResp)(nil),               // 64: logic.CreateFriendTagResp
-	(*RenameFriendTagReq)(nil),                // 65: logic.RenameFriendTagReq
-	(*RenameFriendTagResp)(nil),               // 66: logic.RenameFriendTagResp
-	(*DeleteFriendTagReq)(nil),                // 67: logic.DeleteFriendTagReq
-	(*DeleteFriendTagResp)(nil),               // 68: logic.DeleteFriendTagResp
-	(*ListFriendTagsReq)(nil),                 // 69: logic.ListFriendTagsReq
-	(*ListFriendTagsResp)(nil),                // 70: logic.ListFriendTagsResp
-	(*SetFriendTagsReq)(nil),                  // 71: logic.SetFriendTagsReq
-	(*SetFriendTagsResp)(nil),                 // 72: logic.SetFriendTagsResp
-	(*RemoveFriendTagReq)(nil),                // 73: logic.RemoveFriendTagReq
-	(*RemoveFriendTagResp)(nil),               // 74: logic.RemoveFriendTagResp
-	(*UnifiedSearchReq)(nil),                  // 75: logic.UnifiedSearchReq
-	(*SearchUserResult)(nil),                  // 76: logic.SearchUserResult
-	(*SearchFriendResult)(nil),                // 77: logic.SearchFriendResult
-	(*SearchConversationResult)(nil),          // 78: logic.SearchConversationResult
-	(*SearchMessageResult)(nil),               // 79: logic.SearchMessageResult
-	(*UnifiedSearchResp)(nil),                 // 80: logic.UnifiedSearchResp
-	(*BotIdentity)(nil),                       // 81: logic.BotIdentity
-	(*ValidateBotTokenReq)(nil),               // 82: logic.ValidateBotTokenReq
-	(*ValidateBotTokenResp)(nil),              // 83: logic.ValidateBotTokenResp
-	(*GetBotProfileReq)(nil),                  // 84: logic.GetBotProfileReq
-	(*GetBotProfileResp)(nil),                 // 85: logic.GetBotProfileResp
-	(*ListBotConversationsReq)(nil),           // 86: logic.ListBotConversationsReq
-	(*BotConversationItem)(nil),               // 87: logic.BotConversationItem
-	(*ListBotConversationsResp)(nil),          // 88: logic.ListBotConversationsResp
-	(*BotWebhookConfig)(nil),                  // 89: logic.BotWebhookConfig
-	(*GetBotWebhookReq)(nil),                  // 90: logic.GetBotWebhookReq
-	(*GetBotWebhookResp)(nil),                 // 91: logic.GetBotWebhookResp
-	(*SetBotWebhookReq)(nil),                  // 92: logic.SetBotWebhookReq
-	(*SetBotWebhookResp)(nil),                 // 93: logic.SetBotWebhookResp
-	(*DeleteBotWebhookReq)(nil),               // 94: logic.DeleteBotWebhookReq
-	(*DeleteBotWebhookResp)(nil),              // 95: logic.DeleteBotWebhookResp
-	(*ResolveBotWebhookEventActionsReq)(nil),  // 96: logic.ResolveBotWebhookEventActionsReq
-	(*WebhookEventAction)(nil),                // 97: logic.WebhookEventAction
-	(*ResolveBotWebhookEventActionsResp)(nil), // 98: logic.ResolveBotWebhookEventActionsResp
+	(*CheckMessagePermissionReq)(nil),           // 0: logic.CheckMessagePermissionReq
+	(*CheckMessagePermissionResp)(nil),          // 1: logic.CheckMessagePermissionResp
+	(*UserInfoResponse)(nil),                    // 2: logic.UserInfoResponse
+	(*CreateUserInfoReq)(nil),                   // 3: logic.CreateUserInfoReq
+	(*CreateUserInfoResp)(nil),                  // 4: logic.CreateUserInfoResp
+	(*GetUserInfoReq)(nil),                      // 5: logic.GetUserInfoReq
+	(*GetUserInfoByEmailReq)(nil),               // 6: logic.GetUserInfoByEmailReq
+	(*GetUserInfoByNicknameReq)(nil),            // 7: logic.GetUserInfoByNicknameReq
+	(*GetUserInfoResp)(nil),                     // 8: logic.GetUserInfoResp
+	(*UpdateUserInfoProfileReq)(nil),            // 9: logic.UpdateUserInfoProfileReq
+	(*UpdateUserInfoProfileResp)(nil),           // 10: logic.UpdateUserInfoProfileResp
+	(*UpdateUserInfoStatusReq)(nil),             // 11: logic.UpdateUserInfoStatusReq
+	(*UpdateUserInfoStatusResp)(nil),            // 12: logic.UpdateUserInfoStatusResp
+	(*SearchUserInfoByNicknameReq)(nil),         // 13: logic.SearchUserInfoByNicknameReq
+	(*SearchUserInfoByNicknameResp)(nil),        // 14: logic.SearchUserInfoByNicknameResp
+	(*CreateConversationReq)(nil),               // 15: logic.CreateConversationReq
+	(*ConversationResponse)(nil),                // 16: logic.ConversationResponse
+	(*CreateConversationResp)(nil),              // 17: logic.CreateConversationResp
+	(*GetConversationMembersReq)(nil),           // 18: logic.GetConversationMembersReq
+	(*GetConversationMembersResp)(nil),          // 19: logic.GetConversationMembersResp
+	(*GetUserConversationsReq)(nil),             // 20: logic.GetUserConversationsReq
+	(*GetUserConversationsResp)(nil),            // 21: logic.GetUserConversationsResp
+	(*AddGroupMembersReq)(nil),                  // 22: logic.AddGroupMembersReq
+	(*AddGroupMembersResp)(nil),                 // 23: logic.AddGroupMembersResp
+	(*RemoveGroupMembersReq)(nil),               // 24: logic.RemoveGroupMembersReq
+	(*RemoveGroupMembersResp)(nil),              // 25: logic.RemoveGroupMembersResp
+	(*LeaveGroupReq)(nil),                       // 26: logic.LeaveGroupReq
+	(*LeaveGroupResp)(nil),                      // 27: logic.LeaveGroupResp
+	(*DismissGroupReq)(nil),                     // 28: logic.DismissGroupReq
+	(*DismissGroupResp)(nil),                    // 29: logic.DismissGroupResp
+	(*UpdateGroupInfoReq)(nil),                  // 30: logic.UpdateGroupInfoReq
+	(*UpdateGroupInfoResp)(nil),                 // 31: logic.UpdateGroupInfoResp
+	(*GrantGroupAdminReq)(nil),                  // 32: logic.GrantGroupAdminReq
+	(*GrantGroupAdminResp)(nil),                 // 33: logic.GrantGroupAdminResp
+	(*RevokeGroupAdminReq)(nil),                 // 34: logic.RevokeGroupAdminReq
+	(*RevokeGroupAdminResp)(nil),                // 35: logic.RevokeGroupAdminResp
+	(*TransferGroupOwnerReq)(nil),               // 36: logic.TransferGroupOwnerReq
+	(*TransferGroupOwnerResp)(nil),              // 37: logic.TransferGroupOwnerResp
+	(*GetConversationMembersDetailReq)(nil),     // 38: logic.GetConversationMembersDetailReq
+	(*MemberDetailItem)(nil),                    // 39: logic.MemberDetailItem
+	(*GetConversationMembersDetailResp)(nil),    // 40: logic.GetConversationMembersDetailResp
+	(*GetConversationHistoryReq)(nil),           // 41: logic.GetConversationHistoryReq
+	(*SenderInfo)(nil),                          // 42: logic.SenderInfo
+	(*MessageReadDetailItem)(nil),               // 43: logic.MessageReadDetailItem
+	(*MessageItem)(nil),                         // 44: logic.MessageItem
+	(*ReadStateItem)(nil),                       // 45: logic.ReadStateItem
+	(*GetConversationHistoryResp)(nil),          // 46: logic.GetConversationHistoryResp
+	(*UpdateReadReceiptReq)(nil),                // 47: logic.UpdateReadReceiptReq
+	(*UpdateReadReceiptResp)(nil),               // 48: logic.UpdateReadReceiptResp
+	(*ListConversationReadStatesReq)(nil),       // 49: logic.ListConversationReadStatesReq
+	(*ListConversationReadStatesResp)(nil),      // 50: logic.ListConversationReadStatesResp
+	(*AddFriendReq)(nil),                        // 51: logic.AddFriendReq
+	(*FriendshipResponse)(nil),                  // 52: logic.FriendshipResponse
+	(*AddFriendResp)(nil),                       // 53: logic.AddFriendResp
+	(*ListFriendApplicationsReq)(nil),           // 54: logic.ListFriendApplicationsReq
+	(*ListFriendApplicationsResp)(nil),          // 55: logic.ListFriendApplicationsResp
+	(*AcceptFriendReq)(nil),                     // 56: logic.AcceptFriendReq
+	(*AcceptFriendResp)(nil),                    // 57: logic.AcceptFriendResp
+	(*RejectFriendReq)(nil),                     // 58: logic.RejectFriendReq
+	(*RejectFriendResp)(nil),                    // 59: logic.RejectFriendResp
+	(*ListFriendsReq)(nil),                      // 60: logic.ListFriendsReq
+	(*ListFriendsResp)(nil),                     // 61: logic.ListFriendsResp
+	(*FriendTagResponse)(nil),                   // 62: logic.FriendTagResponse
+	(*CreateFriendTagReq)(nil),                  // 63: logic.CreateFriendTagReq
+	(*CreateFriendTagResp)(nil),                 // 64: logic.CreateFriendTagResp
+	(*RenameFriendTagReq)(nil),                  // 65: logic.RenameFriendTagReq
+	(*RenameFriendTagResp)(nil),                 // 66: logic.RenameFriendTagResp
+	(*DeleteFriendTagReq)(nil),                  // 67: logic.DeleteFriendTagReq
+	(*DeleteFriendTagResp)(nil),                 // 68: logic.DeleteFriendTagResp
+	(*ListFriendTagsReq)(nil),                   // 69: logic.ListFriendTagsReq
+	(*ListFriendTagsResp)(nil),                  // 70: logic.ListFriendTagsResp
+	(*SetFriendTagsReq)(nil),                    // 71: logic.SetFriendTagsReq
+	(*SetFriendTagsResp)(nil),                   // 72: logic.SetFriendTagsResp
+	(*RemoveFriendTagReq)(nil),                  // 73: logic.RemoveFriendTagReq
+	(*RemoveFriendTagResp)(nil),                 // 74: logic.RemoveFriendTagResp
+	(*UnifiedSearchReq)(nil),                    // 75: logic.UnifiedSearchReq
+	(*SearchUserResult)(nil),                    // 76: logic.SearchUserResult
+	(*SearchFriendResult)(nil),                  // 77: logic.SearchFriendResult
+	(*SearchConversationResult)(nil),            // 78: logic.SearchConversationResult
+	(*SearchMessageResult)(nil),                 // 79: logic.SearchMessageResult
+	(*UnifiedSearchResp)(nil),                   // 80: logic.UnifiedSearchResp
+	(*BotIdentity)(nil),                         // 81: logic.BotIdentity
+	(*ValidateBotTokenReq)(nil),                 // 82: logic.ValidateBotTokenReq
+	(*ValidateBotTokenResp)(nil),                // 83: logic.ValidateBotTokenResp
+	(*GetBotProfileReq)(nil),                    // 84: logic.GetBotProfileReq
+	(*GetBotProfileResp)(nil),                   // 85: logic.GetBotProfileResp
+	(*ListBotConversationsReq)(nil),             // 86: logic.ListBotConversationsReq
+	(*BotConversationItem)(nil),                 // 87: logic.BotConversationItem
+	(*ListBotConversationsResp)(nil),            // 88: logic.ListBotConversationsResp
+	(*BotWebhookConfig)(nil),                    // 89: logic.BotWebhookConfig
+	(*GetBotWebhookReq)(nil),                    // 90: logic.GetBotWebhookReq
+	(*GetBotWebhookResp)(nil),                   // 91: logic.GetBotWebhookResp
+	(*SetBotWebhookReq)(nil),                    // 92: logic.SetBotWebhookReq
+	(*SetBotWebhookResp)(nil),                   // 93: logic.SetBotWebhookResp
+	(*DeleteBotWebhookReq)(nil),                 // 94: logic.DeleteBotWebhookReq
+	(*DeleteBotWebhookResp)(nil),                // 95: logic.DeleteBotWebhookResp
+	(*ResolveBotWebhookEventActionsReq)(nil),    // 96: logic.ResolveBotWebhookEventActionsReq
+	(*WebhookEventAction)(nil),                  // 97: logic.WebhookEventAction
+	(*ResolveBotWebhookEventActionsResp)(nil),   // 98: logic.ResolveBotWebhookEventActionsResp
+	(*UserBotInfo)(nil),                         // 99: logic.UserBotInfo
+	(*UserBotTokenInfo)(nil),                    // 100: logic.UserBotTokenInfo
+	(*BotActionInfo)(nil),                       // 101: logic.BotActionInfo
+	(*BotEventInfo)(nil),                        // 102: logic.BotEventInfo
+	(*CreateUserBotReq)(nil),                    // 103: logic.CreateUserBotReq
+	(*CreateUserBotResp)(nil),                   // 104: logic.CreateUserBotResp
+	(*ListUserBotsReq)(nil),                     // 105: logic.ListUserBotsReq
+	(*ListUserBotsResp)(nil),                    // 106: logic.ListUserBotsResp
+	(*GetUserBotReq)(nil),                       // 107: logic.GetUserBotReq
+	(*GetUserBotResp)(nil),                      // 108: logic.GetUserBotResp
+	(*UpdateUserBotProfileReq)(nil),             // 109: logic.UpdateUserBotProfileReq
+	(*UpdateUserBotProfileResp)(nil),            // 110: logic.UpdateUserBotProfileResp
+	(*SetUserBotStatusReq)(nil),                 // 111: logic.SetUserBotStatusReq
+	(*SetUserBotStatusResp)(nil),                // 112: logic.SetUserBotStatusResp
+	(*DeleteUserBotReq)(nil),                    // 113: logic.DeleteUserBotReq
+	(*DeleteUserBotResp)(nil),                   // 114: logic.DeleteUserBotResp
+	(*CreateUserBotTokenReq)(nil),               // 115: logic.CreateUserBotTokenReq
+	(*CreateUserBotTokenResp)(nil),              // 116: logic.CreateUserBotTokenResp
+	(*ListUserBotTokensReq)(nil),                // 117: logic.ListUserBotTokensReq
+	(*ListUserBotTokensResp)(nil),               // 118: logic.ListUserBotTokensResp
+	(*UpdateUserBotTokenReq)(nil),               // 119: logic.UpdateUserBotTokenReq
+	(*UpdateUserBotTokenResp)(nil),              // 120: logic.UpdateUserBotTokenResp
+	(*RotateUserBotTokenReq)(nil),               // 121: logic.RotateUserBotTokenReq
+	(*RotateUserBotTokenResp)(nil),              // 122: logic.RotateUserBotTokenResp
+	(*RevokeUserBotTokenReq)(nil),               // 123: logic.RevokeUserBotTokenReq
+	(*RevokeUserBotTokenResp)(nil),              // 124: logic.RevokeUserBotTokenResp
+	(*AddUserBotToConversationReq)(nil),         // 125: logic.AddUserBotToConversationReq
+	(*AddUserBotToConversationResp)(nil),        // 126: logic.AddUserBotToConversationResp
+	(*CreateUserBotDirectConversationReq)(nil),  // 127: logic.CreateUserBotDirectConversationReq
+	(*CreateUserBotDirectConversationResp)(nil), // 128: logic.CreateUserBotDirectConversationResp
+	(*ListBotActionsReq)(nil),                   // 129: logic.ListBotActionsReq
+	(*ListBotActionsResp)(nil),                  // 130: logic.ListBotActionsResp
+	(*ListBotEventsReq)(nil),                    // 131: logic.ListBotEventsReq
+	(*ListBotEventsResp)(nil),                   // 132: logic.ListBotEventsResp
 }
 var file_app_logic_rpc_logic_proto_depIdxs = []int32{
-	2,  // 0: logic.CreateUserInfoResp.user:type_name -> logic.UserInfoResponse
-	2,  // 1: logic.GetUserInfoResp.user:type_name -> logic.UserInfoResponse
-	2,  // 2: logic.UpdateUserInfoProfileResp.user:type_name -> logic.UserInfoResponse
-	2,  // 3: logic.UpdateUserInfoStatusResp.user:type_name -> logic.UserInfoResponse
-	2,  // 4: logic.SearchUserInfoByNicknameResp.users:type_name -> logic.UserInfoResponse
-	16, // 5: logic.CreateConversationResp.conversation:type_name -> logic.ConversationResponse
-	16, // 6: logic.GetUserConversationsResp.conversations:type_name -> logic.ConversationResponse
-	16, // 7: logic.AddGroupMembersResp.conversation:type_name -> logic.ConversationResponse
-	16, // 8: logic.UpdateGroupInfoResp.conversation:type_name -> logic.ConversationResponse
-	16, // 9: logic.TransferGroupOwnerResp.conversation:type_name -> logic.ConversationResponse
-	39, // 10: logic.GetConversationMembersDetailResp.members:type_name -> logic.MemberDetailItem
-	42, // 11: logic.MessageItem.sender_info:type_name -> logic.SenderInfo
-	43, // 12: logic.MessageItem.read_details:type_name -> logic.MessageReadDetailItem
-	44, // 13: logic.GetConversationHistoryResp.messages:type_name -> logic.MessageItem
-	45, // 14: logic.GetConversationHistoryResp.read_states:type_name -> logic.ReadStateItem
-	45, // 15: logic.UpdateReadReceiptResp.read_state:type_name -> logic.ReadStateItem
-	45, // 16: logic.ListConversationReadStatesResp.read_states:type_name -> logic.ReadStateItem
-	62, // 17: logic.FriendshipResponse.tags:type_name -> logic.FriendTagResponse
-	52, // 18: logic.AddFriendResp.friendship:type_name -> logic.FriendshipResponse
-	52, // 19: logic.ListFriendApplicationsResp.applications:type_name -> logic.FriendshipResponse
-	52, // 20: logic.AcceptFriendResp.friendship:type_name -> logic.FriendshipResponse
-	52, // 21: logic.RejectFriendResp.friendship:type_name -> logic.FriendshipResponse
-	52, // 22: logic.ListFriendsResp.friends:type_name -> logic.FriendshipResponse
-	62, // 23: logic.CreateFriendTagResp.tag:type_name -> logic.FriendTagResponse
-	62, // 24: logic.RenameFriendTagResp.tag:type_name -> logic.FriendTagResponse
-	62, // 25: logic.ListFriendTagsResp.tags:type_name -> logic.FriendTagResponse
-	52, // 26: logic.SetFriendTagsResp.friendship:type_name -> logic.FriendshipResponse
-	52, // 27: logic.RemoveFriendTagResp.friendship:type_name -> logic.FriendshipResponse
-	2,  // 28: logic.SearchUserResult.user:type_name -> logic.UserInfoResponse
-	52, // 29: logic.SearchFriendResult.friendship:type_name -> logic.FriendshipResponse
-	2,  // 30: logic.SearchFriendResult.user:type_name -> logic.UserInfoResponse
-	16, // 31: logic.SearchConversationResult.conversation:type_name -> logic.ConversationResponse
-	44, // 32: logic.SearchMessageResult.message:type_name -> logic.MessageItem
-	76, // 33: logic.UnifiedSearchResp.users:type_name -> logic.SearchUserResult
-	77, // 34: logic.UnifiedSearchResp.friends:type_name -> logic.SearchFriendResult
-	78, // 35: logic.UnifiedSearchResp.conversations:type_name -> logic.SearchConversationResult
-	79, // 36: logic.UnifiedSearchResp.messages:type_name -> logic.SearchMessageResult
-	81, // 37: logic.ValidateBotTokenResp.identity:type_name -> logic.BotIdentity
-	2,  // 38: logic.GetBotProfileResp.profile:type_name -> logic.UserInfoResponse
-	87, // 39: logic.ListBotConversationsResp.conversations:type_name -> logic.BotConversationItem
-	89, // 40: logic.GetBotWebhookResp.webhook:type_name -> logic.BotWebhookConfig
-	89, // 41: logic.SetBotWebhookResp.webhook:type_name -> logic.BotWebhookConfig
-	97, // 42: logic.ResolveBotWebhookEventActionsResp.event_actions:type_name -> logic.WebhookEventAction
-	0,  // 43: logic.PermissionService.CheckMessagePermission:input_type -> logic.CheckMessagePermissionReq
-	3,  // 44: logic.UserService.CreateUserInfo:input_type -> logic.CreateUserInfoReq
-	5,  // 45: logic.UserService.GetUserInfo:input_type -> logic.GetUserInfoReq
-	6,  // 46: logic.UserService.GetUserInfoByEmail:input_type -> logic.GetUserInfoByEmailReq
-	7,  // 47: logic.UserService.GetUserInfoByNickname:input_type -> logic.GetUserInfoByNicknameReq
-	9,  // 48: logic.UserService.UpdateUserInfoProfile:input_type -> logic.UpdateUserInfoProfileReq
-	11, // 49: logic.UserService.UpdateUserInfoStatus:input_type -> logic.UpdateUserInfoStatusReq
-	13, // 50: logic.UserService.SearchUserInfoByNickname:input_type -> logic.SearchUserInfoByNicknameReq
-	15, // 51: logic.ConversationService.CreateConversation:input_type -> logic.CreateConversationReq
-	41, // 52: logic.ConversationService.GetConversationHistory:input_type -> logic.GetConversationHistoryReq
-	18, // 53: logic.ConversationService.GetConversationMembers:input_type -> logic.GetConversationMembersReq
-	20, // 54: logic.ConversationService.GetUserConversations:input_type -> logic.GetUserConversationsReq
-	22, // 55: logic.ConversationService.AddGroupMembers:input_type -> logic.AddGroupMembersReq
-	24, // 56: logic.ConversationService.RemoveGroupMembers:input_type -> logic.RemoveGroupMembersReq
-	26, // 57: logic.ConversationService.LeaveGroup:input_type -> logic.LeaveGroupReq
-	28, // 58: logic.ConversationService.DismissGroup:input_type -> logic.DismissGroupReq
-	30, // 59: logic.ConversationService.UpdateGroupInfo:input_type -> logic.UpdateGroupInfoReq
-	32, // 60: logic.ConversationService.GrantGroupAdmin:input_type -> logic.GrantGroupAdminReq
-	34, // 61: logic.ConversationService.RevokeGroupAdmin:input_type -> logic.RevokeGroupAdminReq
-	36, // 62: logic.ConversationService.TransferGroupOwner:input_type -> logic.TransferGroupOwnerReq
-	38, // 63: logic.ConversationService.GetConversationMembersDetail:input_type -> logic.GetConversationMembersDetailReq
-	47, // 64: logic.ConversationService.UpdateReadReceipt:input_type -> logic.UpdateReadReceiptReq
-	49, // 65: logic.ConversationService.ListConversationReadStates:input_type -> logic.ListConversationReadStatesReq
-	51, // 66: logic.FriendshipService.AddFriend:input_type -> logic.AddFriendReq
-	54, // 67: logic.FriendshipService.ListFriendApplications:input_type -> logic.ListFriendApplicationsReq
-	56, // 68: logic.FriendshipService.AcceptFriend:input_type -> logic.AcceptFriendReq
-	58, // 69: logic.FriendshipService.RejectFriend:input_type -> logic.RejectFriendReq
-	60, // 70: logic.FriendshipService.ListFriends:input_type -> logic.ListFriendsReq
-	63, // 71: logic.FriendshipService.CreateFriendTag:input_type -> logic.CreateFriendTagReq
-	65, // 72: logic.FriendshipService.RenameFriendTag:input_type -> logic.RenameFriendTagReq
-	67, // 73: logic.FriendshipService.DeleteFriendTag:input_type -> logic.DeleteFriendTagReq
-	69, // 74: logic.FriendshipService.ListFriendTags:input_type -> logic.ListFriendTagsReq
-	71, // 75: logic.FriendshipService.SetFriendTags:input_type -> logic.SetFriendTagsReq
-	73, // 76: logic.FriendshipService.RemoveFriendTag:input_type -> logic.RemoveFriendTagReq
-	75, // 77: logic.SearchService.UnifiedSearch:input_type -> logic.UnifiedSearchReq
-	82, // 78: logic.BotService.ValidateBotToken:input_type -> logic.ValidateBotTokenReq
-	84, // 79: logic.BotService.GetBotProfile:input_type -> logic.GetBotProfileReq
-	86, // 80: logic.BotService.ListBotConversations:input_type -> logic.ListBotConversationsReq
-	90, // 81: logic.BotService.GetBotWebhook:input_type -> logic.GetBotWebhookReq
-	92, // 82: logic.BotService.SetBotWebhook:input_type -> logic.SetBotWebhookReq
-	94, // 83: logic.BotService.DeleteBotWebhook:input_type -> logic.DeleteBotWebhookReq
-	96, // 84: logic.BotService.ResolveBotWebhookEventActions:input_type -> logic.ResolveBotWebhookEventActionsReq
-	1,  // 85: logic.PermissionService.CheckMessagePermission:output_type -> logic.CheckMessagePermissionResp
-	4,  // 86: logic.UserService.CreateUserInfo:output_type -> logic.CreateUserInfoResp
-	8,  // 87: logic.UserService.GetUserInfo:output_type -> logic.GetUserInfoResp
-	8,  // 88: logic.UserService.GetUserInfoByEmail:output_type -> logic.GetUserInfoResp
-	8,  // 89: logic.UserService.GetUserInfoByNickname:output_type -> logic.GetUserInfoResp
-	10, // 90: logic.UserService.UpdateUserInfoProfile:output_type -> logic.UpdateUserInfoProfileResp
-	12, // 91: logic.UserService.UpdateUserInfoStatus:output_type -> logic.UpdateUserInfoStatusResp
-	14, // 92: logic.UserService.SearchUserInfoByNickname:output_type -> logic.SearchUserInfoByNicknameResp
-	17, // 93: logic.ConversationService.CreateConversation:output_type -> logic.CreateConversationResp
-	46, // 94: logic.ConversationService.GetConversationHistory:output_type -> logic.GetConversationHistoryResp
-	19, // 95: logic.ConversationService.GetConversationMembers:output_type -> logic.GetConversationMembersResp
-	21, // 96: logic.ConversationService.GetUserConversations:output_type -> logic.GetUserConversationsResp
-	23, // 97: logic.ConversationService.AddGroupMembers:output_type -> logic.AddGroupMembersResp
-	25, // 98: logic.ConversationService.RemoveGroupMembers:output_type -> logic.RemoveGroupMembersResp
-	27, // 99: logic.ConversationService.LeaveGroup:output_type -> logic.LeaveGroupResp
-	29, // 100: logic.ConversationService.DismissGroup:output_type -> logic.DismissGroupResp
-	31, // 101: logic.ConversationService.UpdateGroupInfo:output_type -> logic.UpdateGroupInfoResp
-	33, // 102: logic.ConversationService.GrantGroupAdmin:output_type -> logic.GrantGroupAdminResp
-	35, // 103: logic.ConversationService.RevokeGroupAdmin:output_type -> logic.RevokeGroupAdminResp
-	37, // 104: logic.ConversationService.TransferGroupOwner:output_type -> logic.TransferGroupOwnerResp
-	40, // 105: logic.ConversationService.GetConversationMembersDetail:output_type -> logic.GetConversationMembersDetailResp
-	48, // 106: logic.ConversationService.UpdateReadReceipt:output_type -> logic.UpdateReadReceiptResp
-	50, // 107: logic.ConversationService.ListConversationReadStates:output_type -> logic.ListConversationReadStatesResp
-	53, // 108: logic.FriendshipService.AddFriend:output_type -> logic.AddFriendResp
-	55, // 109: logic.FriendshipService.ListFriendApplications:output_type -> logic.ListFriendApplicationsResp
-	57, // 110: logic.FriendshipService.AcceptFriend:output_type -> logic.AcceptFriendResp
-	59, // 111: logic.FriendshipService.RejectFriend:output_type -> logic.RejectFriendResp
-	61, // 112: logic.FriendshipService.ListFriends:output_type -> logic.ListFriendsResp
-	64, // 113: logic.FriendshipService.CreateFriendTag:output_type -> logic.CreateFriendTagResp
-	66, // 114: logic.FriendshipService.RenameFriendTag:output_type -> logic.RenameFriendTagResp
-	68, // 115: logic.FriendshipService.DeleteFriendTag:output_type -> logic.DeleteFriendTagResp
-	70, // 116: logic.FriendshipService.ListFriendTags:output_type -> logic.ListFriendTagsResp
-	72, // 117: logic.FriendshipService.SetFriendTags:output_type -> logic.SetFriendTagsResp
-	74, // 118: logic.FriendshipService.RemoveFriendTag:output_type -> logic.RemoveFriendTagResp
-	80, // 119: logic.SearchService.UnifiedSearch:output_type -> logic.UnifiedSearchResp
-	83, // 120: logic.BotService.ValidateBotToken:output_type -> logic.ValidateBotTokenResp
-	85, // 121: logic.BotService.GetBotProfile:output_type -> logic.GetBotProfileResp
-	88, // 122: logic.BotService.ListBotConversations:output_type -> logic.ListBotConversationsResp
-	91, // 123: logic.BotService.GetBotWebhook:output_type -> logic.GetBotWebhookResp
-	93, // 124: logic.BotService.SetBotWebhook:output_type -> logic.SetBotWebhookResp
-	95, // 125: logic.BotService.DeleteBotWebhook:output_type -> logic.DeleteBotWebhookResp
-	98, // 126: logic.BotService.ResolveBotWebhookEventActions:output_type -> logic.ResolveBotWebhookEventActionsResp
-	85, // [85:127] is the sub-list for method output_type
-	43, // [43:85] is the sub-list for method input_type
-	43, // [43:43] is the sub-list for extension type_name
-	43, // [43:43] is the sub-list for extension extendee
-	0,  // [0:43] is the sub-list for field type_name
+	2,   // 0: logic.CreateUserInfoResp.user:type_name -> logic.UserInfoResponse
+	2,   // 1: logic.GetUserInfoResp.user:type_name -> logic.UserInfoResponse
+	2,   // 2: logic.UpdateUserInfoProfileResp.user:type_name -> logic.UserInfoResponse
+	2,   // 3: logic.UpdateUserInfoStatusResp.user:type_name -> logic.UserInfoResponse
+	2,   // 4: logic.SearchUserInfoByNicknameResp.users:type_name -> logic.UserInfoResponse
+	16,  // 5: logic.CreateConversationResp.conversation:type_name -> logic.ConversationResponse
+	16,  // 6: logic.GetUserConversationsResp.conversations:type_name -> logic.ConversationResponse
+	16,  // 7: logic.AddGroupMembersResp.conversation:type_name -> logic.ConversationResponse
+	16,  // 8: logic.UpdateGroupInfoResp.conversation:type_name -> logic.ConversationResponse
+	16,  // 9: logic.TransferGroupOwnerResp.conversation:type_name -> logic.ConversationResponse
+	39,  // 10: logic.GetConversationMembersDetailResp.members:type_name -> logic.MemberDetailItem
+	42,  // 11: logic.MessageItem.sender_info:type_name -> logic.SenderInfo
+	43,  // 12: logic.MessageItem.read_details:type_name -> logic.MessageReadDetailItem
+	44,  // 13: logic.GetConversationHistoryResp.messages:type_name -> logic.MessageItem
+	45,  // 14: logic.GetConversationHistoryResp.read_states:type_name -> logic.ReadStateItem
+	45,  // 15: logic.UpdateReadReceiptResp.read_state:type_name -> logic.ReadStateItem
+	45,  // 16: logic.ListConversationReadStatesResp.read_states:type_name -> logic.ReadStateItem
+	62,  // 17: logic.FriendshipResponse.tags:type_name -> logic.FriendTagResponse
+	52,  // 18: logic.AddFriendResp.friendship:type_name -> logic.FriendshipResponse
+	52,  // 19: logic.ListFriendApplicationsResp.applications:type_name -> logic.FriendshipResponse
+	52,  // 20: logic.AcceptFriendResp.friendship:type_name -> logic.FriendshipResponse
+	52,  // 21: logic.RejectFriendResp.friendship:type_name -> logic.FriendshipResponse
+	52,  // 22: logic.ListFriendsResp.friends:type_name -> logic.FriendshipResponse
+	62,  // 23: logic.CreateFriendTagResp.tag:type_name -> logic.FriendTagResponse
+	62,  // 24: logic.RenameFriendTagResp.tag:type_name -> logic.FriendTagResponse
+	62,  // 25: logic.ListFriendTagsResp.tags:type_name -> logic.FriendTagResponse
+	52,  // 26: logic.SetFriendTagsResp.friendship:type_name -> logic.FriendshipResponse
+	52,  // 27: logic.RemoveFriendTagResp.friendship:type_name -> logic.FriendshipResponse
+	2,   // 28: logic.SearchUserResult.user:type_name -> logic.UserInfoResponse
+	52,  // 29: logic.SearchFriendResult.friendship:type_name -> logic.FriendshipResponse
+	2,   // 30: logic.SearchFriendResult.user:type_name -> logic.UserInfoResponse
+	16,  // 31: logic.SearchConversationResult.conversation:type_name -> logic.ConversationResponse
+	44,  // 32: logic.SearchMessageResult.message:type_name -> logic.MessageItem
+	76,  // 33: logic.UnifiedSearchResp.users:type_name -> logic.SearchUserResult
+	77,  // 34: logic.UnifiedSearchResp.friends:type_name -> logic.SearchFriendResult
+	78,  // 35: logic.UnifiedSearchResp.conversations:type_name -> logic.SearchConversationResult
+	79,  // 36: logic.UnifiedSearchResp.messages:type_name -> logic.SearchMessageResult
+	81,  // 37: logic.ValidateBotTokenResp.identity:type_name -> logic.BotIdentity
+	2,   // 38: logic.GetBotProfileResp.profile:type_name -> logic.UserInfoResponse
+	87,  // 39: logic.ListBotConversationsResp.conversations:type_name -> logic.BotConversationItem
+	89,  // 40: logic.GetBotWebhookResp.webhook:type_name -> logic.BotWebhookConfig
+	89,  // 41: logic.SetBotWebhookResp.webhook:type_name -> logic.BotWebhookConfig
+	97,  // 42: logic.ResolveBotWebhookEventActionsResp.event_actions:type_name -> logic.WebhookEventAction
+	99,  // 43: logic.CreateUserBotResp.bot:type_name -> logic.UserBotInfo
+	99,  // 44: logic.ListUserBotsResp.bots:type_name -> logic.UserBotInfo
+	99,  // 45: logic.GetUserBotResp.bot:type_name -> logic.UserBotInfo
+	99,  // 46: logic.UpdateUserBotProfileResp.bot:type_name -> logic.UserBotInfo
+	99,  // 47: logic.SetUserBotStatusResp.bot:type_name -> logic.UserBotInfo
+	100, // 48: logic.CreateUserBotTokenResp.token:type_name -> logic.UserBotTokenInfo
+	100, // 49: logic.ListUserBotTokensResp.tokens:type_name -> logic.UserBotTokenInfo
+	100, // 50: logic.UpdateUserBotTokenResp.token:type_name -> logic.UserBotTokenInfo
+	100, // 51: logic.RotateUserBotTokenResp.token:type_name -> logic.UserBotTokenInfo
+	16,  // 52: logic.AddUserBotToConversationResp.conversation:type_name -> logic.ConversationResponse
+	16,  // 53: logic.CreateUserBotDirectConversationResp.conversation:type_name -> logic.ConversationResponse
+	101, // 54: logic.ListBotActionsResp.actions:type_name -> logic.BotActionInfo
+	102, // 55: logic.ListBotEventsResp.events:type_name -> logic.BotEventInfo
+	0,   // 56: logic.PermissionService.CheckMessagePermission:input_type -> logic.CheckMessagePermissionReq
+	3,   // 57: logic.UserService.CreateUserInfo:input_type -> logic.CreateUserInfoReq
+	5,   // 58: logic.UserService.GetUserInfo:input_type -> logic.GetUserInfoReq
+	6,   // 59: logic.UserService.GetUserInfoByEmail:input_type -> logic.GetUserInfoByEmailReq
+	7,   // 60: logic.UserService.GetUserInfoByNickname:input_type -> logic.GetUserInfoByNicknameReq
+	9,   // 61: logic.UserService.UpdateUserInfoProfile:input_type -> logic.UpdateUserInfoProfileReq
+	11,  // 62: logic.UserService.UpdateUserInfoStatus:input_type -> logic.UpdateUserInfoStatusReq
+	13,  // 63: logic.UserService.SearchUserInfoByNickname:input_type -> logic.SearchUserInfoByNicknameReq
+	15,  // 64: logic.ConversationService.CreateConversation:input_type -> logic.CreateConversationReq
+	41,  // 65: logic.ConversationService.GetConversationHistory:input_type -> logic.GetConversationHistoryReq
+	18,  // 66: logic.ConversationService.GetConversationMembers:input_type -> logic.GetConversationMembersReq
+	20,  // 67: logic.ConversationService.GetUserConversations:input_type -> logic.GetUserConversationsReq
+	22,  // 68: logic.ConversationService.AddGroupMembers:input_type -> logic.AddGroupMembersReq
+	24,  // 69: logic.ConversationService.RemoveGroupMembers:input_type -> logic.RemoveGroupMembersReq
+	26,  // 70: logic.ConversationService.LeaveGroup:input_type -> logic.LeaveGroupReq
+	28,  // 71: logic.ConversationService.DismissGroup:input_type -> logic.DismissGroupReq
+	30,  // 72: logic.ConversationService.UpdateGroupInfo:input_type -> logic.UpdateGroupInfoReq
+	32,  // 73: logic.ConversationService.GrantGroupAdmin:input_type -> logic.GrantGroupAdminReq
+	34,  // 74: logic.ConversationService.RevokeGroupAdmin:input_type -> logic.RevokeGroupAdminReq
+	36,  // 75: logic.ConversationService.TransferGroupOwner:input_type -> logic.TransferGroupOwnerReq
+	38,  // 76: logic.ConversationService.GetConversationMembersDetail:input_type -> logic.GetConversationMembersDetailReq
+	47,  // 77: logic.ConversationService.UpdateReadReceipt:input_type -> logic.UpdateReadReceiptReq
+	49,  // 78: logic.ConversationService.ListConversationReadStates:input_type -> logic.ListConversationReadStatesReq
+	51,  // 79: logic.FriendshipService.AddFriend:input_type -> logic.AddFriendReq
+	54,  // 80: logic.FriendshipService.ListFriendApplications:input_type -> logic.ListFriendApplicationsReq
+	56,  // 81: logic.FriendshipService.AcceptFriend:input_type -> logic.AcceptFriendReq
+	58,  // 82: logic.FriendshipService.RejectFriend:input_type -> logic.RejectFriendReq
+	60,  // 83: logic.FriendshipService.ListFriends:input_type -> logic.ListFriendsReq
+	63,  // 84: logic.FriendshipService.CreateFriendTag:input_type -> logic.CreateFriendTagReq
+	65,  // 85: logic.FriendshipService.RenameFriendTag:input_type -> logic.RenameFriendTagReq
+	67,  // 86: logic.FriendshipService.DeleteFriendTag:input_type -> logic.DeleteFriendTagReq
+	69,  // 87: logic.FriendshipService.ListFriendTags:input_type -> logic.ListFriendTagsReq
+	71,  // 88: logic.FriendshipService.SetFriendTags:input_type -> logic.SetFriendTagsReq
+	73,  // 89: logic.FriendshipService.RemoveFriendTag:input_type -> logic.RemoveFriendTagReq
+	75,  // 90: logic.SearchService.UnifiedSearch:input_type -> logic.UnifiedSearchReq
+	82,  // 91: logic.BotService.ValidateBotToken:input_type -> logic.ValidateBotTokenReq
+	84,  // 92: logic.BotService.GetBotProfile:input_type -> logic.GetBotProfileReq
+	86,  // 93: logic.BotService.ListBotConversations:input_type -> logic.ListBotConversationsReq
+	90,  // 94: logic.BotService.GetBotWebhook:input_type -> logic.GetBotWebhookReq
+	92,  // 95: logic.BotService.SetBotWebhook:input_type -> logic.SetBotWebhookReq
+	94,  // 96: logic.BotService.DeleteBotWebhook:input_type -> logic.DeleteBotWebhookReq
+	96,  // 97: logic.BotService.ResolveBotWebhookEventActions:input_type -> logic.ResolveBotWebhookEventActionsReq
+	103, // 98: logic.BotService.CreateUserBot:input_type -> logic.CreateUserBotReq
+	105, // 99: logic.BotService.ListUserBots:input_type -> logic.ListUserBotsReq
+	107, // 100: logic.BotService.GetUserBot:input_type -> logic.GetUserBotReq
+	109, // 101: logic.BotService.UpdateUserBotProfile:input_type -> logic.UpdateUserBotProfileReq
+	111, // 102: logic.BotService.SetUserBotStatus:input_type -> logic.SetUserBotStatusReq
+	113, // 103: logic.BotService.DeleteUserBot:input_type -> logic.DeleteUserBotReq
+	115, // 104: logic.BotService.CreateUserBotToken:input_type -> logic.CreateUserBotTokenReq
+	117, // 105: logic.BotService.ListUserBotTokens:input_type -> logic.ListUserBotTokensReq
+	119, // 106: logic.BotService.UpdateUserBotToken:input_type -> logic.UpdateUserBotTokenReq
+	121, // 107: logic.BotService.RotateUserBotToken:input_type -> logic.RotateUserBotTokenReq
+	123, // 108: logic.BotService.RevokeUserBotToken:input_type -> logic.RevokeUserBotTokenReq
+	125, // 109: logic.BotService.AddUserBotToConversation:input_type -> logic.AddUserBotToConversationReq
+	127, // 110: logic.BotService.CreateUserBotDirectConversation:input_type -> logic.CreateUserBotDirectConversationReq
+	129, // 111: logic.BotService.ListBotActions:input_type -> logic.ListBotActionsReq
+	131, // 112: logic.BotService.ListBotEvents:input_type -> logic.ListBotEventsReq
+	1,   // 113: logic.PermissionService.CheckMessagePermission:output_type -> logic.CheckMessagePermissionResp
+	4,   // 114: logic.UserService.CreateUserInfo:output_type -> logic.CreateUserInfoResp
+	8,   // 115: logic.UserService.GetUserInfo:output_type -> logic.GetUserInfoResp
+	8,   // 116: logic.UserService.GetUserInfoByEmail:output_type -> logic.GetUserInfoResp
+	8,   // 117: logic.UserService.GetUserInfoByNickname:output_type -> logic.GetUserInfoResp
+	10,  // 118: logic.UserService.UpdateUserInfoProfile:output_type -> logic.UpdateUserInfoProfileResp
+	12,  // 119: logic.UserService.UpdateUserInfoStatus:output_type -> logic.UpdateUserInfoStatusResp
+	14,  // 120: logic.UserService.SearchUserInfoByNickname:output_type -> logic.SearchUserInfoByNicknameResp
+	17,  // 121: logic.ConversationService.CreateConversation:output_type -> logic.CreateConversationResp
+	46,  // 122: logic.ConversationService.GetConversationHistory:output_type -> logic.GetConversationHistoryResp
+	19,  // 123: logic.ConversationService.GetConversationMembers:output_type -> logic.GetConversationMembersResp
+	21,  // 124: logic.ConversationService.GetUserConversations:output_type -> logic.GetUserConversationsResp
+	23,  // 125: logic.ConversationService.AddGroupMembers:output_type -> logic.AddGroupMembersResp
+	25,  // 126: logic.ConversationService.RemoveGroupMembers:output_type -> logic.RemoveGroupMembersResp
+	27,  // 127: logic.ConversationService.LeaveGroup:output_type -> logic.LeaveGroupResp
+	29,  // 128: logic.ConversationService.DismissGroup:output_type -> logic.DismissGroupResp
+	31,  // 129: logic.ConversationService.UpdateGroupInfo:output_type -> logic.UpdateGroupInfoResp
+	33,  // 130: logic.ConversationService.GrantGroupAdmin:output_type -> logic.GrantGroupAdminResp
+	35,  // 131: logic.ConversationService.RevokeGroupAdmin:output_type -> logic.RevokeGroupAdminResp
+	37,  // 132: logic.ConversationService.TransferGroupOwner:output_type -> logic.TransferGroupOwnerResp
+	40,  // 133: logic.ConversationService.GetConversationMembersDetail:output_type -> logic.GetConversationMembersDetailResp
+	48,  // 134: logic.ConversationService.UpdateReadReceipt:output_type -> logic.UpdateReadReceiptResp
+	50,  // 135: logic.ConversationService.ListConversationReadStates:output_type -> logic.ListConversationReadStatesResp
+	53,  // 136: logic.FriendshipService.AddFriend:output_type -> logic.AddFriendResp
+	55,  // 137: logic.FriendshipService.ListFriendApplications:output_type -> logic.ListFriendApplicationsResp
+	57,  // 138: logic.FriendshipService.AcceptFriend:output_type -> logic.AcceptFriendResp
+	59,  // 139: logic.FriendshipService.RejectFriend:output_type -> logic.RejectFriendResp
+	61,  // 140: logic.FriendshipService.ListFriends:output_type -> logic.ListFriendsResp
+	64,  // 141: logic.FriendshipService.CreateFriendTag:output_type -> logic.CreateFriendTagResp
+	66,  // 142: logic.FriendshipService.RenameFriendTag:output_type -> logic.RenameFriendTagResp
+	68,  // 143: logic.FriendshipService.DeleteFriendTag:output_type -> logic.DeleteFriendTagResp
+	70,  // 144: logic.FriendshipService.ListFriendTags:output_type -> logic.ListFriendTagsResp
+	72,  // 145: logic.FriendshipService.SetFriendTags:output_type -> logic.SetFriendTagsResp
+	74,  // 146: logic.FriendshipService.RemoveFriendTag:output_type -> logic.RemoveFriendTagResp
+	80,  // 147: logic.SearchService.UnifiedSearch:output_type -> logic.UnifiedSearchResp
+	83,  // 148: logic.BotService.ValidateBotToken:output_type -> logic.ValidateBotTokenResp
+	85,  // 149: logic.BotService.GetBotProfile:output_type -> logic.GetBotProfileResp
+	88,  // 150: logic.BotService.ListBotConversations:output_type -> logic.ListBotConversationsResp
+	91,  // 151: logic.BotService.GetBotWebhook:output_type -> logic.GetBotWebhookResp
+	93,  // 152: logic.BotService.SetBotWebhook:output_type -> logic.SetBotWebhookResp
+	95,  // 153: logic.BotService.DeleteBotWebhook:output_type -> logic.DeleteBotWebhookResp
+	98,  // 154: logic.BotService.ResolveBotWebhookEventActions:output_type -> logic.ResolveBotWebhookEventActionsResp
+	104, // 155: logic.BotService.CreateUserBot:output_type -> logic.CreateUserBotResp
+	106, // 156: logic.BotService.ListUserBots:output_type -> logic.ListUserBotsResp
+	108, // 157: logic.BotService.GetUserBot:output_type -> logic.GetUserBotResp
+	110, // 158: logic.BotService.UpdateUserBotProfile:output_type -> logic.UpdateUserBotProfileResp
+	112, // 159: logic.BotService.SetUserBotStatus:output_type -> logic.SetUserBotStatusResp
+	114, // 160: logic.BotService.DeleteUserBot:output_type -> logic.DeleteUserBotResp
+	116, // 161: logic.BotService.CreateUserBotToken:output_type -> logic.CreateUserBotTokenResp
+	118, // 162: logic.BotService.ListUserBotTokens:output_type -> logic.ListUserBotTokensResp
+	120, // 163: logic.BotService.UpdateUserBotToken:output_type -> logic.UpdateUserBotTokenResp
+	122, // 164: logic.BotService.RotateUserBotToken:output_type -> logic.RotateUserBotTokenResp
+	124, // 165: logic.BotService.RevokeUserBotToken:output_type -> logic.RevokeUserBotTokenResp
+	126, // 166: logic.BotService.AddUserBotToConversation:output_type -> logic.AddUserBotToConversationResp
+	128, // 167: logic.BotService.CreateUserBotDirectConversation:output_type -> logic.CreateUserBotDirectConversationResp
+	130, // 168: logic.BotService.ListBotActions:output_type -> logic.ListBotActionsResp
+	132, // 169: logic.BotService.ListBotEvents:output_type -> logic.ListBotEventsResp
+	113, // [113:170] is the sub-list for method output_type
+	56,  // [56:113] is the sub-list for method input_type
+	56,  // [56:56] is the sub-list for extension type_name
+	56,  // [56:56] is the sub-list for extension extendee
+	0,   // [0:56] is the sub-list for field type_name
 }
 
 func init() { file_app_logic_rpc_logic_proto_init() }
@@ -6206,7 +8294,7 @@ func file_app_logic_rpc_logic_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_app_logic_rpc_logic_proto_rawDesc), len(file_app_logic_rpc_logic_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   99,
+			NumMessages:   133,
 			NumExtensions: 0,
 			NumServices:   6,
 		},

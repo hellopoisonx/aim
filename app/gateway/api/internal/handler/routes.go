@@ -13,6 +13,7 @@ import (
 	friends "github.com/hellopoisonx/aim/app/gateway/api/internal/handler/friends"
 	presence "github.com/hellopoisonx/aim/app/gateway/api/internal/handler/presence"
 	search "github.com/hellopoisonx/aim/app/gateway/api/internal/handler/search"
+	userbots "github.com/hellopoisonx/aim/app/gateway/api/internal/handler/userbots"
 	users "github.com/hellopoisonx/aim/app/gateway/api/internal/handler/users"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 
@@ -298,6 +299,104 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 			}...,
 		),
 		rest.WithPrefix("/api/search"),
+	)
+
+	server.AddRoutes(
+		rest.WithMiddlewares(
+			[]rest.Middleware{serverCtx.Auth},
+			[]rest.Route{
+				{
+					Method:  http.MethodPost,
+					Path:    "/",
+					Handler: userbots.CreateUserBotHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodGet,
+					Path:    "/",
+					Handler: userbots.ListUserBotsHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodGet,
+					Path:    "/:id",
+					Handler: userbots.GetUserBotHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPut,
+					Path:    "/:id",
+					Handler: userbots.UpdateUserBotProfileHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodDelete,
+					Path:    "/:id",
+					Handler: userbots.DeleteUserBotHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/:id/conversations/:conversation_id",
+					Handler: userbots.AddUserBotToConversationHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/:id/direct-conversation",
+					Handler: userbots.CreateUserBotDirectConversationHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/:id/disable",
+					Handler: userbots.DisableUserBotHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/:id/enable",
+					Handler: userbots.EnableUserBotHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/:id/tokens",
+					Handler: userbots.CreateUserBotTokenHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodGet,
+					Path:    "/:id/tokens",
+					Handler: userbots.ListUserBotTokensHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPut,
+					Path:    "/:id/tokens/:token_id",
+					Handler: userbots.UpdateUserBotTokenHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodDelete,
+					Path:    "/:id/tokens/:token_id",
+					Handler: userbots.RevokeUserBotTokenHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodPost,
+					Path:    "/:id/tokens/:token_id/rotate",
+					Handler: userbots.RotateUserBotTokenHandler(serverCtx),
+				},
+			}...,
+		),
+		rest.WithPrefix("/api/user/bots"),
+	)
+
+	server.AddRoutes(
+		rest.WithMiddlewares(
+			[]rest.Middleware{serverCtx.Auth},
+			[]rest.Route{
+				{
+					Method:  http.MethodGet,
+					Path:    "/bot-actions",
+					Handler: userbots.ListBotActionsHandler(serverCtx),
+				},
+				{
+					Method:  http.MethodGet,
+					Path:    "/bot-events",
+					Handler: userbots.ListBotEventsHandler(serverCtx),
+				},
+			}...,
+		),
+		rest.WithPrefix("/api/user"),
 	)
 
 	server.AddRoutes(

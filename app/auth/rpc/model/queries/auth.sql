@@ -24,3 +24,8 @@ UPDATE user_credentials
 SET status = $2, updated_at = NOW()
 WHERE id = $1
 RETURNING id, email, password_hash, name, status, created_at, updated_at;
+
+-- name: CreateBotCredential :one
+INSERT INTO user_credentials (id, email, password_hash, name, status)
+VALUES ($1, $2, $3, $4, 0)
+RETURNING id, email, password_hash, name, status, created_at, updated_at;

@@ -182,3 +182,19 @@ func assertCodeError(t *testing.T, err error, code int) {
 	require.ErrorAs(t, err, &ce)
 	require.Equal(t, code, ce.Code)
 }
+
+func (f *fakeLogicBotClient) CreateUserBot(context.Context, *pb.CreateUserBotReq, ...grpc.CallOption) (*pb.CreateUserBotResp, error) { return nil, nil }
+func (f *fakeLogicBotClient) ListUserBots(context.Context, *pb.ListUserBotsReq, ...grpc.CallOption) (*pb.ListUserBotsResp, error) { return nil, nil }
+func (f *fakeLogicBotClient) GetUserBot(context.Context, *pb.GetUserBotReq, ...grpc.CallOption) (*pb.GetUserBotResp, error) { return nil, nil }
+func (f *fakeLogicBotClient) UpdateUserBotProfile(context.Context, *pb.UpdateUserBotProfileReq, ...grpc.CallOption) (*pb.UpdateUserBotProfileResp, error) { return nil, nil }
+func (f *fakeLogicBotClient) SetUserBotStatus(context.Context, *pb.SetUserBotStatusReq, ...grpc.CallOption) (*pb.SetUserBotStatusResp, error) { return nil, nil }
+func (f *fakeLogicBotClient) DeleteUserBot(context.Context, *pb.DeleteUserBotReq, ...grpc.CallOption) (*pb.DeleteUserBotResp, error) { return nil, nil }
+func (f *fakeLogicBotClient) CreateUserBotToken(context.Context, *pb.CreateUserBotTokenReq, ...grpc.CallOption) (*pb.CreateUserBotTokenResp, error) { return nil, nil }
+func (f *fakeLogicBotClient) ListUserBotTokens(context.Context, *pb.ListUserBotTokensReq, ...grpc.CallOption) (*pb.ListUserBotTokensResp, error) { return nil, nil }
+func (f *fakeLogicBotClient) UpdateUserBotToken(context.Context, *pb.UpdateUserBotTokenReq, ...grpc.CallOption) (*pb.UpdateUserBotTokenResp, error) { return nil, nil }
+func (f *fakeLogicBotClient) RotateUserBotToken(context.Context, *pb.RotateUserBotTokenReq, ...grpc.CallOption) (*pb.RotateUserBotTokenResp, error) { return nil, nil }
+func (f *fakeLogicBotClient) RevokeUserBotToken(context.Context, *pb.RevokeUserBotTokenReq, ...grpc.CallOption) (*pb.RevokeUserBotTokenResp, error) { return nil, nil }
+func (f *fakeLogicBotClient) AddUserBotToConversation(context.Context, *pb.AddUserBotToConversationReq, ...grpc.CallOption) (*pb.AddUserBotToConversationResp, error) { return nil, nil }
+func (f *fakeLogicBotClient) CreateUserBotDirectConversation(context.Context, *pb.CreateUserBotDirectConversationReq, ...grpc.CallOption) (*pb.CreateUserBotDirectConversationResp, error) { return nil, nil }
+func (f *fakeLogicBotClient) ListBotActions(context.Context, *pb.ListBotActionsReq, ...grpc.CallOption) (*pb.ListBotActionsResp, error) { return nil, nil }
+func (f *fakeLogicBotClient) ListBotEvents(context.Context, *pb.ListBotEventsReq, ...grpc.CallOption) (*pb.ListBotEventsResp, error) { return nil, nil }

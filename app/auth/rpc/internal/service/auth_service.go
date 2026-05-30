@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -19,7 +20,8 @@ import (
 )
 
 const (
-	StatusNormal = 1
+	StatusDisabled = 0
+	StatusNormal   = 1
 
 	CodeInvalidArgument = 40000
 	CodeUnauthorized    = 40100
@@ -29,6 +31,7 @@ const (
 
 type UserStore interface {
 	CreateUser(ctx context.Context, email, passwordHash, name string) (UserCredential, error)
+	CreateBotCredential(ctx context.Context, email, passwordHash, name string) (UserCredential, error)
 	GetUserByEmail(ctx context.Context, email string) (UserCredential, error)
 }
 
@@ -86,6 +89,25 @@ func (s *SQLUserStore) CreateUser(ctx context.Context, email, passwordHash, name
 	return fromCreateUserRow(user), nil
 }
 
+func (s *SQLUserStore) CreateBotCredential(ctx context.Context, email, passwordHash, name string) (UserCredential, error) {
+	id, err := s.ids.NextID()
+	if err != nil {
+		return UserCredential{}, err
+	}
+
+	email = NormalizeEmail(email)
+	if email == "" {
+		email = DefaultBotEmail(id)
+	}
+
+	user, err := s.queries.CreateBotCredential(ctx, model.CreateBotCredentialParams{ID: id, Email: email, PasswordHash: passwordHash, Name: name})
+	if err != nil {
+		return UserCredential{}, err
+	}
+
+	return fromCreateBotCredentialRow(user), nil
+}
+
 func (s *SQLUserStore) GetUserByEmail(ctx context.Context, email string) (UserCredential, error) {
 	user, err := s.queries.GetUserByEmail(ctx, email)
 	if err != nil {
@@ -96,6 +118,10 @@ func (s *SQLUserStore) GetUserByEmail(ctx context.Context, email string) (UserCr
 }
 
 func fromCreateUserRow(user model.CreateUserRow) UserCredential {
+	return UserCredential{ID: user.ID, Email: user.Email, PasswordHash: user.PasswordHash, Name: user.Name, Status: user.Status}
+}
+
+func fromCreateBotCredentialRow(user model.CreateBotCredentialRow) UserCredential {
 	return UserCredential{ID: user.ID, Email: user.Email, PasswordHash: user.PasswordHash, Name: user.Name, Status: user.Status}
 }
 
@@ -207,6 +233,10 @@ func CheckPassword(hash, password string) bool {
 
 func NormalizeEmail(email string) string {
 	return strings.ToLower(strings.TrimSpace(email))
+}
+
+func DefaultBotEmail(userID int64) string {
+	return fmt.Sprintf("bot-%d@bots.aim.local", userID)
 }
 
 func IsDuplicateEmail(err error) bool {

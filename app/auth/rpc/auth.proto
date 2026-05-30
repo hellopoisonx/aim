@@ -9,6 +9,8 @@ service AuthService {
   rpc Login(LoginReq) returns (LoginResp);
   rpc RefreshToken(RefreshTokenReq) returns (RefreshTokenResp);
   rpc Logout(LogoutReq) returns (LogoutResp);
+  // CreateBotCredential creates a disabled placeholder credential for a bot.
+  rpc CreateBotCredential(CreateBotCredentialReq) returns (CreateBotCredentialResp);
 }
 
 message RegisterReq {
@@ -53,4 +55,14 @@ message LogoutReq {
 
 message LogoutResp {
   bool success = 1;
+}
+
+message CreateBotCredentialReq {
+  string email = 1;
+  string nickname = 2;
+}
+
+message CreateBotCredentialResp {
+  int64 user_id = 1;
+  string email = 2;
 }

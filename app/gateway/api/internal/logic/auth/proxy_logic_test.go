@@ -153,3 +153,6 @@ func (c *failingAuthClient) RefreshToken(context.Context, *authservice.RefreshTo
 func (c *failingAuthClient) Logout(context.Context, *authservice.LogoutReq, ...grpc.CallOption) (*authservice.LogoutResp, error) {
 	return nil, c.err
 }
+
+func (c *proxyAuthClient) CreateBotCredential(context.Context, *authservice.CreateBotCredentialReq, ...grpc.CallOption) (*authservice.CreateBotCredentialResp, error) { return nil, nil }
+func (c *failingAuthClient) CreateBotCredential(context.Context, *authservice.CreateBotCredentialReq, ...grpc.CallOption) (*authservice.CreateBotCredentialResp, error) { return nil, c.err }

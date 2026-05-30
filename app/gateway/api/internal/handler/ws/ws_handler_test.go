@@ -597,6 +597,10 @@ func (noopAuthClient) Logout(context.Context, *authservice.LogoutReq, ...grpc.Ca
 	return nil, nil
 }
 
+func (noopAuthClient) CreateBotCredential(context.Context, *authservice.CreateBotCredentialReq, ...grpc.CallOption) (*authservice.CreateBotCredentialResp, error) {
+	return nil, nil
+}
+
 // mockCoreClient implements corepb.TransferServiceClient for testing.
 type mockCoreClient struct {
 	resp *corepb.TransferResp

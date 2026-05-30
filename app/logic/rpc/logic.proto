@@ -556,6 +556,24 @@ service BotService {
   // ResolveBotWebhookEventActions maps webhook event names (e.g. message.created)
   // to the enabled actions required to subscribe to them.
   rpc ResolveBotWebhookEventActions(ResolveBotWebhookEventActionsReq) returns (ResolveBotWebhookEventActionsResp);
+
+  // User-side Bot management RPCs. Gateway calls these with the authenticated
+  // user_id from the user Access Token; Bot runtime still uses Bot tokens.
+  rpc CreateUserBot(CreateUserBotReq) returns (CreateUserBotResp);
+  rpc ListUserBots(ListUserBotsReq) returns (ListUserBotsResp);
+  rpc GetUserBot(GetUserBotReq) returns (GetUserBotResp);
+  rpc UpdateUserBotProfile(UpdateUserBotProfileReq) returns (UpdateUserBotProfileResp);
+  rpc SetUserBotStatus(SetUserBotStatusReq) returns (SetUserBotStatusResp);
+  rpc DeleteUserBot(DeleteUserBotReq) returns (DeleteUserBotResp);
+  rpc CreateUserBotToken(CreateUserBotTokenReq) returns (CreateUserBotTokenResp);
+  rpc ListUserBotTokens(ListUserBotTokensReq) returns (ListUserBotTokensResp);
+  rpc UpdateUserBotToken(UpdateUserBotTokenReq) returns (UpdateUserBotTokenResp);
+  rpc RotateUserBotToken(RotateUserBotTokenReq) returns (RotateUserBotTokenResp);
+  rpc RevokeUserBotToken(RevokeUserBotTokenReq) returns (RevokeUserBotTokenResp);
+  rpc AddUserBotToConversation(AddUserBotToConversationReq) returns (AddUserBotToConversationResp);
+  rpc CreateUserBotDirectConversation(CreateUserBotDirectConversationReq) returns (CreateUserBotDirectConversationResp);
+  rpc ListBotActions(ListBotActionsReq) returns (ListBotActionsResp);
+  rpc ListBotEvents(ListBotEventsReq) returns (ListBotEventsResp);
 }
 
 message BotIdentity {
@@ -657,4 +675,185 @@ message WebhookEventAction {
 
 message ResolveBotWebhookEventActionsResp {
   repeated WebhookEventAction event_actions = 1;
+}
+
+message UserBotInfo {
+  int64 bot_user_id = 1;
+  int64 owner_user_id = 2;
+  string email = 3;
+  string nickname = 4;
+  string avatar = 5;
+  int32 status = 6;
+  int64 created_at = 7;
+  int64 updated_at = 8;
+}
+
+message UserBotTokenInfo {
+  int64 token_id = 1;
+  int64 bot_user_id = 2;
+  string name = 3;
+  repeated string actions = 4;
+  int64 expires_at = 5;
+  int64 revoked_at = 6;
+  int64 created_at = 7;
+}
+
+message BotActionInfo {
+  int64 id = 1;
+  string action = 2;
+  string description = 3;
+}
+
+message BotEventInfo {
+  string event = 1;
+  string action = 2;
+  string description = 3;
+}
+
+message CreateUserBotReq {
+  int64 owner_user_id = 1;
+  int64 bot_user_id = 2;
+  string email = 3;
+  string nickname = 4;
+  string avatar = 5;
+}
+
+message CreateUserBotResp {
+  UserBotInfo bot = 1;
+}
+
+message ListUserBotsReq {
+  int64 owner_user_id = 1;
+}
+
+message ListUserBotsResp {
+  repeated UserBotInfo bots = 1;
+}
+
+message GetUserBotReq {
+  int64 owner_user_id = 1;
+  int64 bot_user_id = 2;
+}
+
+message GetUserBotResp {
+  UserBotInfo bot = 1;
+}
+
+message UpdateUserBotProfileReq {
+  int64 owner_user_id = 1;
+  int64 bot_user_id = 2;
+  string nickname = 3;
+  string avatar = 4;
+}
+
+message UpdateUserBotProfileResp {
+  UserBotInfo bot = 1;
+}
+
+message SetUserBotStatusReq {
+  int64 owner_user_id = 1;
+  int64 bot_user_id = 2;
+  bool enabled = 3;
+}
+
+message SetUserBotStatusResp {
+  UserBotInfo bot = 1;
+}
+
+message DeleteUserBotReq {
+  int64 owner_user_id = 1;
+  int64 bot_user_id = 2;
+}
+
+message DeleteUserBotResp {
+  bool deleted = 1;
+}
+
+message CreateUserBotTokenReq {
+  int64 owner_user_id = 1;
+  int64 bot_user_id = 2;
+  string name = 3;
+  int64 expires_at = 4;
+  repeated string actions = 5;
+}
+
+message CreateUserBotTokenResp {
+  UserBotTokenInfo token = 1;
+  string plaintext_token = 2;
+}
+
+message ListUserBotTokensReq {
+  int64 owner_user_id = 1;
+  int64 bot_user_id = 2;
+}
+
+message ListUserBotTokensResp {
+  repeated UserBotTokenInfo tokens = 1;
+}
+
+message UpdateUserBotTokenReq {
+  int64 owner_user_id = 1;
+  int64 bot_user_id = 2;
+  int64 token_id = 3;
+  string name = 4;
+  int64 expires_at = 5;
+  repeated string actions = 6;
+}
+
+message UpdateUserBotTokenResp {
+  UserBotTokenInfo token = 1;
+}
+
+message RotateUserBotTokenReq {
+  int64 owner_user_id = 1;
+  int64 bot_user_id = 2;
+  int64 token_id = 3;
+}
+
+message RotateUserBotTokenResp {
+  UserBotTokenInfo token = 1;
+  string plaintext_token = 2;
+}
+
+message RevokeUserBotTokenReq {
+  int64 owner_user_id = 1;
+  int64 bot_user_id = 2;
+  int64 token_id = 3;
+}
+
+message RevokeUserBotTokenResp {
+  bool revoked = 1;
+}
+
+message AddUserBotToConversationReq {
+  int64 owner_user_id = 1;
+  int64 bot_user_id = 2;
+  int64 conversation_id = 3;
+  int64 operator_id = 4;
+  string operator_name = 5;
+}
+
+message AddUserBotToConversationResp {
+  ConversationResponse conversation = 1;
+}
+
+message CreateUserBotDirectConversationReq {
+  int64 owner_user_id = 1;
+  int64 bot_user_id = 2;
+}
+
+message CreateUserBotDirectConversationResp {
+  ConversationResponse conversation = 1;
+}
+
+message ListBotActionsReq {}
+
+message ListBotActionsResp {
+  repeated BotActionInfo actions = 1;
+}
+
+message ListBotEventsReq {}
+
+message ListBotEventsResp {
+  repeated BotEventInfo events = 1;
 }
