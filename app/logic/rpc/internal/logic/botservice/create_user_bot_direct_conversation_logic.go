@@ -28,9 +28,9 @@ func (l *CreateUserBotDirectConversationLogic) CreateUserBotDirectConversation(i
 	if l.svcCtx.BotService == nil {
 		return nil, errorx.NewCodeError(errorx.CodeInternal, "bot service not configured")
 	}
-
-	// Verify owner relationship.
-	if _, err := l.svcCtx.BotService.GetUserBot(l.ctx, in.GetOwnerUserId(), in.GetBotUserId()); err != nil {
+	// Verify owner relationship and get bot profile info.
+	botInfo, err := l.svcCtx.BotService.GetUserBot(l.ctx, in.GetOwnerUserId(), in.GetBotUserId())
+	if err != nil {
 		return nil, err
 	}
 
@@ -40,7 +40,7 @@ func (l *CreateUserBotDirectConversationLogic) CreateUserBotDirectConversation(i
 
 	conv, err := l.svcCtx.ConversationService.CreateConversation(l.ctx,
 		"direct", in.GetOwnerUserId(),
-		[]int64{in.GetBotUserId()}, "", "")
+		[]int64{in.GetBotUserId()}, botInfo.Nickname, "")
 	if err != nil {
 		return nil, err
 	}
