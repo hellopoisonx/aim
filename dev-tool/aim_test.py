@@ -136,6 +136,13 @@ FRAME_TYPES = {
 
 FRAME_TYPE_NAMES = {v: k for k, v in FRAME_TYPES.items()}
 
+REPLAYABLE_PUSH_TYPES = {
+    ws_pb2.FRAME_TYPE_PUSH_MESSAGE,
+    ws_pb2.FRAME_TYPE_PUSH_NOTIFICATION,
+    ws_pb2.FRAME_TYPE_PUSH_FRIEND_APPLICATION,
+    ws_pb2.FRAME_TYPE_PUSH_READ_RECEIPT,
+}
+
 
 # ── Token Manager ──────────────────────────────────────────────────────────────
 
@@ -512,10 +519,27 @@ class WSClient:
         self._intentional_close = False
         self._reconnect_count = 0
         self._rest_client = rest_client
+        self._seq_lock = threading.RLock()
+        # 客户端已连续处理的最大白名单 pending 推送 seq；自动心跳会作为 HeartbeatPayload.last_seq 上报。
+        self._last_pending_seq = 0
 
     def _next_seq(self) -> int:
-        self.seq += 1
-        return self.seq
+        with self._seq_lock:
+            self.seq += 1
+            return self.seq
+
+    def last_pending_seq(self) -> int:
+        """Return the largest processed replayable server push seq."""
+        with self._seq_lock:
+            return self._last_pending_seq
+
+    def _mark_replayable_frame_processed(self, frame: ws_pb2.WsFrame):
+        """Advance local replay cursor for server-side L1 pending cleanup."""
+        if frame.type not in REPLAYABLE_PUSH_TYPES or frame.seq <= 0:
+            return
+        with self._seq_lock:
+            if frame.seq > self._last_pending_seq:
+                self._last_pending_seq = frame.seq
 
     def connect(self):
         # The gateway expects a GET /ws upgrade request with Authorization header.
@@ -648,6 +672,7 @@ class WSClient:
             frame.ParseFromString(data)
             ftype = FRAME_TYPE_NAMES.get(frame.type, f"UNKNOWN({frame.type})")
             payload = self._decode_payload(frame)
+            self._mark_replayable_frame_processed(frame)
             if VERBOSE:
                 _ws_debug_print(f"\n  ← [{ftype}] seq={frame.seq}")
                 if payload:
@@ -749,10 +774,12 @@ class WSClient:
         self._send_frame(ws_pb2.FRAME_TYPE_SEND_MESSAGE, payload)
         return client_msg_id
 
-    def send_heartbeat(self):
+    def send_heartbeat(self, last_seq: Optional[int] = None):
         payload = ws_pb2.HeartbeatPayload()
+        if last_seq is None:
+            last_seq = self.last_pending_seq()
+        payload.last_seq = max(int(last_seq), 0)
         self._send_frame(ws_pb2.FRAME_TYPE_HEARTBEAT, payload)
-
     def send_typing(self, conversation_id: int):
         payload = ws_pb2.TypingPayload()
         payload.conversation_id = conversation_id
@@ -766,7 +793,10 @@ class WSClient:
 
     def send_ack(self, ack_seq: int):
         payload = ws_pb2.ClientAckPayload()
-        payload.ack_seq = ack_seq
+        payload.ack_seq = max(int(ack_seq), 0)
+        with self._seq_lock:
+            if payload.ack_seq > self._last_pending_seq:
+                self._last_pending_seq = payload.ack_seq
         self._send_frame(ws_pb2.FRAME_TYPE_ACK, payload)
 
 
@@ -1172,7 +1202,8 @@ def cmd_ws_heartbeat(args):
     if not ws or not ws.is_connected():
         print("✗ Not connected. Run 'ws-connect' first.")
         return
-    ws.send_heartbeat()
+    last_seq = getattr(args, "last_seq", None)
+    ws.send_heartbeat(last_seq=last_seq)
 
 
 def cmd_ws_typing(args):
@@ -1216,7 +1247,7 @@ def _ws_status_line(profile: str = "") -> str:
     """Build a compact WebSocket connection status line for a profile."""
     ws = _get_ws_client(profile)
     if ws and ws.is_connected():
-        return "ws:   ✓ connected"
+        return f"ws:   ✓ connected last_seq={ws.last_pending_seq()}"
     return "ws:   ✗ disconnected"
 
 
@@ -1258,7 +1289,7 @@ def _print_help():
 ├─ WebSocket ───────────────────────────────────────┤
 │  ws-connect [--profile NAME]                      │
 │  ws-send <conv_id> <text> [--profile NAME]        │
-│  ws-heartbeat [--profile NAME]                    │
+│  ws-heartbeat [last_seq] [--profile NAME]         │
 │  ws-typing <id> [--profile NAME]                  │
 │  ws-read-receipt <conv_id> <last_msg_id>          │
 │  ws-ack <ack_seq> [--profile NAME]                │
@@ -1724,7 +1755,8 @@ Type 'help' for commands, 'quit' to exit.
                 if not ws or not ws.is_connected():
                     print(f"✗ Not connected (profile={_active_profile}). Run 'ws-connect' first.")
                     continue
-                ws.send_heartbeat()
+                last_seq = int(parts[1]) if len(parts) >= 2 else None
+                ws.send_heartbeat(last_seq=last_seq)
             elif cmd == "ws-typing" and len(parts) >= 2:
                 ws = _get_ws_client(_profile_key())
                 if not ws or not ws.is_connected():
@@ -2038,6 +2070,7 @@ Examples:
     p.add_argument("--profile", default="", help="Profile name")
     p = sub.add_parser("ws-heartbeat", help="Send heartbeat via WebSocket")
     p.add_argument("--profile", default="", help="Profile name")
+    p.add_argument("--last-seq", type=int, default=None, help="Override HeartbeatPayload.last_seq; defaults to tracked replay cursor")
     p = sub.add_parser("ws-typing", help="Send typing indicator")
     p.add_argument("--conversation-id", type=int, required=True)
     p.add_argument("--profile", default="", help="Profile name")

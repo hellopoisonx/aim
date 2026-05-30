@@ -57,10 +57,13 @@ PYTHONIOENCODING=utf-8 python aim_test.py <command> [--args]
 |------|------|------|--------|
 | `ws-connect` | [`--profile`] | Bearer (header) | — |
 | `ws-send` | `--conversation-id` `--content` [`--message-type`] [`--mentions`] [`--profile`] | Bearer | `SEND_MESSAGE` |
-| `ws-heartbeat` | [`--profile`] | Bearer | `HEARTBEAT` |
+| `ws-heartbeat` | [`--profile`] [`--last-seq`] | Bearer | `HEARTBEAT` |
 | `ws-typing` | `--conversation-id` [`--profile`] | Bearer | `TYPING` |
 | `ws-read-receipt` | `--conversation-id` `--last-msg-id` [`--profile`] | Bearer | `READ_RECEIPT` |
 | `ws-ack` | `--ack-seq` [`--profile`] | Bearer | `ACK` |
+
+
+`ws-heartbeat` 默认使用 `WSClient` 跟踪到的“已连续处理的最大白名单 pending 推送 seq”作为 `HeartbeatPayload.last_seq`，用于触发服务端当前连接 L1 pending 补发；CLI 可用 `--last-seq N` 覆盖，交互模式可用 `ws-heartbeat N` 覆盖。
 
 ### 元命令
 
@@ -124,7 +127,7 @@ python aim_test.py interactive
 ├─ WebSocket ───────────────────────────────────────┤
 │  ws-connect [--profile NAME]                      │
 │  ws-send <conv_id> <text> [--profile NAME]        │
-│  ws-heartbeat [--profile NAME]                    │
+│  ws-heartbeat [last_seq] [--profile NAME]         │
 │  ws-typing <id> [--profile NAME]                  │
 │  ws-read-receipt <conv_id> <last_msg_id>          │
 │  ws-ack <ack_seq> [--profile NAME]                │

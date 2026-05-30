@@ -248,6 +248,7 @@ python generate_fixtures.py --count 5000   # 自定义数量
 
 ## 最近变更
 
+- 2026-05-30: `WSClient` 自动跟踪已连续处理的白名单 pending 推送 `seq`，自动心跳携带 `HeartbeatPayload.last_seq` 以触发服务端 L1 pending 补发；`ws-heartbeat` 新增 `--last-seq` 覆盖参数，交互模式支持 `ws-heartbeat N`。
 - 2026-05-28: 压测配置统一 GatewayRpc 监听 `9091`（宿主机 `19091`），修复 `dev-tool/etc/core.yaml` 中重复 `Consumers` 与误缩进的 `Presence.TTLSeconds`；压测 Compose 迁移/Kafka topic 初始化改用 `deploy/scripts/`，避免遗漏新 migration 或 topic。
 - 2026-05-28: 压测 compose 的 `bench-tempo` 镜像固定为 `grafana/tempo:2.8.1`，避免 `latest` 拉到 Tempo v3 RC 后无法解析仓库共用的 `deploy/tempo/tempo.yaml`；压测 `etc/logic.yaml`/`etc/core.yaml` 已启用 `aim.conversation.events` 群管理系统消息链路。
 - 2026-05-24: 重新生成 `ws_pb2.py`/`gateway_pb2.py`，同步 `PUSH_READ_RECEIPT`、`PushReadReceiptPayload`、`PushMessagePayload.sender_info/is_system/mentions`、`GatewayService.PushReadReceipt` 等协议字段；`aim_test.py` 的帧名称表和解码表新增 `PUSH_READ_RECEIPT`，`ws-send` 支持 `--mentions`，会话创建未传 `name` 时自动生成默认名；`benchmark.py` 修复并发建会话索引竞争，并将非 ACCEPTED 的 `SERVER_ACK` 直接计入错误；压测 compose 的 tracing 后端已改为 Grafana Tempo，HTTP API 暴露在 `13200`；压测 `logic.yaml` 将 `TemporaryConversationMessageLimit` 改为 `-1`，避免 `0` 被服务上下文归一化为默认 10。
