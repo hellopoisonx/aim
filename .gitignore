@@ -24,3 +24,5 @@ coverage*
 /deploy/config/prod/
 /deploy/env/prod.env
 /deploy/env/*.secret.env
+/dev-tool/.venv
+*.venv

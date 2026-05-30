@@ -2155,6 +2155,131 @@ def cmd_run_all(args):
     client_bob.logout()
     print("  ✓ Both users logged out")
 
+    # ─── Bot Management Integration Tests ───
+
+    # 13. Re-login Alice for bot management
+    print("\n── 13. Re-login Alice for Bot Management ──")
+    client_alice = RESTClient(profile="alice")
+    client_alice.login(alice_email, test_password)
+    alice_id = client_alice.token.user_id
+    print(f"  ✓ Alice logged in as #{alice_id}")
+
+    # 14. Create bot
+    print("\n── 14. Create Bot ──")
+    bot_resp = client_alice.create_user_bot(nickname="test-bot", email=f"bot_{int(time.time())}@aim.dev")
+    bot = bot_resp.get("bot", bot_resp)
+    bot_id = int(bot["bot_user_id"])
+    bot_nickname = bot.get("nickname", "N/A")
+    print(f"  ✓ Bot created: #{bot_id} ({bot_nickname})")
+
+    # 15. List bots
+    print("\n── 15. List Bots ──")
+    bots = client_alice.list_user_bots()
+    print(f"  ✓ Found {len(bots)} bot(s)")
+    for b in bots:
+        print(f"    - #{b['bot_user_id']}: {b['nickname']} [enabled={b.get('enabled', True)}]")
+
+    # 16. Get bot detail
+    print("\n── 16. Get Bot Detail ──")
+    bot_detail = client_alice.get_user_bot(bot_id)
+    print(f"  ✓ Bot #{bot_detail['bot_user_id']}: nickname={bot_detail['nickname']}, enabled={bot_detail.get('enabled', True)}")
+
+    # 17. Update bot nickname
+    print("\n── 17. Update Bot Nickname ──")
+    updated_bot = client_alice.update_user_bot(bot_id, nickname="test-bot-v2")
+    print(f"  ✓ Bot updated: #{updated_bot['bot_user_id']} ({updated_bot['nickname']})")
+
+    # 18. Disable bot
+    print("\n── 18. Disable Bot ──")
+    disabled_bot = client_alice.disable_user_bot(bot_id)
+    print(f"  ✓ Bot disabled: enabled={disabled_bot.get('enabled', True)}")
+
+    # 19. Enable bot
+    print("\n── 19. Enable Bot ──")
+    enabled_bot = client_alice.enable_user_bot(bot_id)
+    print(f"  ✓ Bot enabled: enabled={enabled_bot.get('enabled', True)}")
+
+    # 20. Create bot token with custom actions
+    print("\n── 20. Create Bot Token ──")
+    token_resp = client_alice.create_bot_token(
+        bot_id, name="default-token",
+        actions=["bot.message.send", "bot.conversation.list"]
+    )
+    token_id = int(token_resp["token"]["token_id"])
+    plaintext = token_resp.get("plaintext_token", "N/A")
+    print(f"  ✓ Token created: id={token_id}")
+    print(f"    Token (first 20 chars): {plaintext[:20]}...")
+
+    # 21. List bot tokens
+    print("\n── 21. List Bot Tokens ──")
+    tokens = client_alice.list_bot_tokens(bot_id)
+    print(f"  ✓ Found {len(tokens)} token(s)")
+    for t in tokens:
+        print(f"    - token_id={t['token_id']}, name={t.get('name', 'N/A')}, revoked={t.get('revoked', False)}")
+
+    # 22. Update bot token actions
+    print("\n── 22. Update Bot Token ──")
+    updated_token = client_alice.update_bot_token(
+        bot_id, token_id, name="updated-token",
+        actions=["bot.message.send"]
+    )
+    print(f"  ✓ Token updated: name={updated_token.get('name', 'N/A')}")
+
+    # 23. Rotate bot token
+    print("\n── 23. Rotate Bot Token ──")
+    rotated = client_alice.rotate_bot_token(bot_id, token_id)
+    new_token_id = int(rotated["token"]["token_id"])
+    new_plaintext = rotated.get("plaintext_token", "N/A")
+    print(f"  ✓ Token rotated: new_token_id={new_token_id}")
+    print(f"    New token (first 20 chars): {new_plaintext[:20]}...")
+
+    # 24. Revoke the new token
+    print("\n── 24. Revoke Bot Token ──")
+    revoke_resp = client_alice.revoke_bot_token(bot_id, new_token_id)
+    if isinstance(revoke_resp, dict) and not revoke_resp.get("code"):
+        print("  ✓ Token revoked")
+    else:
+        print(f"  ✓ Revoke response: {revoke_resp}")
+
+    # 25. Create a group conversation and add bot to it
+    print("\n── 25. Create Group & Add Bot ──")
+    group_conv = client_alice.create_group([bob_id], name="Test Group")
+    group_conv_id = group_conv["conversation_id"]
+    print(f"  ✓ Group #{group_conv_id} created")
+    add_resp = client_alice.add_bot_to_conversation(bot_id, group_conv_id)
+    print(f"  ✓ Bot #{bot_id} added to group #{group_conv_id}")
+
+    # 26. Create bot direct conversation
+    print("\n── 26. Create Bot Direct Conversation ──")
+    direct_conv = client_alice.create_bot_direct_conversation(bot_id)
+    direct_conv_id = direct_conv.get("conversation_id", "N/A")
+    print(f"  ✓ Bot direct conversation: #{direct_conv_id}")
+
+    # 27. List bot actions
+    print("\n── 27. List Bot Actions ──")
+    actions = client_alice.list_bot_actions()
+    print(f"  ✓ Found {len(actions)} available action(s)")
+    for a in actions[:5]:
+        print(f"    - {a['action']}: {a.get('description', '')}")
+
+    # 28. List bot events
+    print("\n── 28. List Bot Events ──")
+    events = client_alice.list_bot_events()
+    print(f"  ✓ Found {len(events)} available event(s)")
+    for e in events[:5]:
+        print(f"    - {e['event']}: {e.get('description', '')}")
+
+    # 29. Delete bot (soft delete)
+    print("\n── 29. Delete Bot (Soft Delete) ──")
+    del_resp = client_alice.delete_user_bot(bot_id)
+    deleted = del_resp.get("deleted", False) if isinstance(del_resp, dict) else False
+    print(f"  ✓ Bot deleted: {del_resp}")
+
+    # 30. Final logout
+    print("\n── 30. Final Logout ──")
+    client_alice.logout()
+    print("  ✓ Alice logged out")
+
     # Cleanup profile state files
     for profile in ["alice", "bob"]:
         path = _state_file(profile)
@@ -2162,7 +2287,7 @@ def cmd_run_all(args):
             os.remove(path)
 
     print("\n" + "=" * 60)
-    print("  All tests completed!")
+    print("  All tests completed (including Bot management)!")
     print("=" * 60)
 
 
