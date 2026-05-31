@@ -102,10 +102,11 @@ docker compose --env-file deploy/env/local.env \
 - [x] [客户端](https://github.com/hellopoisonx/aim-desktop)
 - [x] ws帧等待队列，重放机制
 - [x] [内存+redis双层缓存](https://go-zero.dev/components/cache), 内置 `singleflight` 语义防击穿, 随机ttl抖动防雪崩。
-- [ ] 前置nginx反代 `gateway`, 配置ssl证书
+- [ ] ~前置nginx反代 `gateway`, 配置ssl证书~
 - [ ] ~ws 帧并包~
 - [x] 用户侧bot管理接口
 - [ ] 官方群聊机器人
+- [x] [雪花ID 生成器](./app/shared/tools/snowflake.go)解决时钟回拨
 
 ## 开发指南
 
