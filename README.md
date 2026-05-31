@@ -1,118 +1,237 @@
-# AIM
+# AIM — 分布式多人在线即时通讯系统
 
-面向多人在线的即时通讯系统，对第三方插件开放接口。
+> AIM 是一个基于 **go-zero** 微服务架构的分布式即时通讯系统，内置可自部署的 AI 助手（Bot OpenAPI），实现「通讯 + AI」的深度融合。
+
+---
+
+## 核心特性
+
+### 通信能力
+
+- **实时消息**：WebSocket + Protobuf 帧协议，支持私聊与群聊
+- **已读回执 & 输入状态**：消息级已读追踪、typing indicator 实时推送
+- **多端同步**：基于 DeviceId 的多设备登录，消息一致投递
+- **断线重连**：WS 帧等待队列 + 重放机制
+
+### 社交功能
+
+- **好友管理**：申请/接受/拒绝 + 自定义标签体系
+- **群组管理**：创建、加人/踢人、群主转让、管理员授予/撤销、退群、解散
+- **聚合搜索**：统一搜索用户、好友、群组、消息内容
+- **在线状态**：Presence 状态广播
+
+### AI 深度集成 — Bot OpenAPI
+
+- **第三方 Bot 接入**：独立 `/api/bot/v1` 路由，Token 鉴权 + Webhook 事件推送
+- **Bot 会话操作**：发消息、查历史、获取成员、标记已读
+- **用户侧 Bot 管理**：创建/编辑/启用/禁用 Bot、Token 生命周期管理
+- 详见 [Bot SDK 文档](bot_sdk/README.md) 及 [aim-bot-domain Skill](skills/aim-bot-domain/SKILL.md)
+
+### 附件系统
+
+- 预签名直传 SeaweedFS（S3 协议），支持 image/video/audio/file
+- 异步解析媒体元数据，自动转码生成缩略图
+- 详见 [aim-attachment-domain Skill](skills/aim-attachment-domain/SKILL.md)
+
+### 可观测性
+
+- OpenTelemetry 全链路追踪 → Grafana Tempo
+- Prometheus 指标 → Grafana 仪表盘
+- Loki + Promtail 日志聚合
+- 详见 [aim-docker-datastore Skill](skills/aim-docker-datastore/SKILL.md)
+
+---
+
+## 技术架构
+
+### 架构图
+
+```mermaid
+graph TB
+    subgraph Client
+        Web[Web 客户端]
+        Desktop[桌面客户端]
+    end
+    subgraph Gateway
+        GW[aim-gateway<br/>REST + WebSocket]
+    end
+    subgraph "Business Services"
+        Auth[aim-auth<br/>认证服务]
+        Logic[aim-logic<br/>业务逻辑服务]
+    end
+    subgraph CoreDomain
+        Core[aim-core<br/>消息投递域]
+    end
+    subgraph Infrastructure
+        Kafka[(Kafka)]
+        Redis[(Redis Stack)]
+        PG[(PostgreSQL)]
+        SeaweedFS[SeaweedFS]
+        Nacos[Nacos]
+    end
+    Web -->|WS/REST| GW
+    Desktop -->|WS/REST| GW
+    GW -->|gRPC| Auth
+    GW -->|gRPC| Logic
+    GW -->|gRPC| Core
+    Core -->|gRPC| Logic
+    Core -->|produce| Kafka
+    Kafka -->|consume| Core
+    Auth -->|produce| Kafka
+    Kafka -->|consume| Logic
+    Auth --> Redis & PG
+    Logic --> Redis & PG
+    Core --> Redis & PG
+    Web -.->|预签名直传| SeaweedFS
+    Desktop -.->|预签名直传| SeaweedFS
+    GW -->|签发预签名 URL| SeaweedFS
+    style GW fill:#1a73e8,color:#fff
+    style Core fill:#e8710a,color:#fff
+    style Auth fill:#34a853,color:#fff
+    style Logic fill:#9b59b6,color:#fff
+```
+
+### 微服务划分
+
+| 服务                 | 职责                                                                                  |
+| -------------------- | ------------------------------------------------------------------------------------- |
+| **aim-gateway**      | 对外入口，REST API 代理 + WebSocket 连接管理，JWT 验签                                |
+| **aim-auth**         | 注册/登录、JWT 签发与刷新、多设备会话管理；注册成功后发布 `UserCreatedEvent` 到 Kafka |
+| **aim-core**         | 消息路由与投递，Kafka 消费者集群                                                      |
+| **aim-logic**        | 用户/好友/群组/Bot 业务逻辑、聚合搜索                                                 |
+| **aim-attachment**   | 附件上传预签名、元数据管理、下载授权                                                  |
+| **aim-data-parsing** | 异步提取附件媒体元数据、生成缩略图                                                    |
+
+> 依赖约束：Logic 绝不导入 Core；客户端只与 Gateway 通信。详见 [aim-repo-mapping Skill](skills/aim-repo-mapping/SKILL.md)。
+
+---
+
+## 技术栈
+
+| 层次           | 技术                                        |
+| -------------- | ------------------------------------------- |
+| **语言**       | Go 1.26                                     |
+| **微服务框架** | go-zero v1.10.1                             |
+| **WebSocket**  | coder/websocket + Protobuf 帧协议           |
+| **RPC**        | Protobuf / gRPC                             |
+| **消息队列**   | Kafka（`conversation_id` 分区保序）         |
+| **缓存**       | Redis Stack                                 |
+| **持久化**     | PostgreSQL（sqlc）                          |
+| **文件存储**   | SeaweedFS（S3 协议）                        |
+| **注册中心**   | Nacos                                       |
+| **可观测性**   | OpenTelemetry + Prometheus + Loki → Grafana |
+
+---
 
 ## 快速开始
 
+### 环境准备
+
+- **Go** ≥ 1.26
+- **Docker** + Docker Compose
+
+### 本地部署
+
 ```bash
-# 启动本地 Docker 环境（核心服务 + 基础设施，端口仅绑定 127.0.0.1）
+# 启动基础设施 + 业务服务
 docker compose --env-file deploy/env/local.env \
   -f deploy/compose/base.yaml \
   -f deploy/compose/dev.yaml \
   up -d --build
 
-# 可选：启动 Prometheus / Loki / Promtail / Grafana
+# （可选）启动可观测性
 docker compose --env-file deploy/env/local.env \
   -f deploy/compose/base.yaml \
   -f deploy/compose/dev.yaml \
   -f deploy/compose/observability.yaml \
   up -d --build
+
+# 本地构建
+go mod tidy
+go build ./...
 ```
 
-部署拆分说明见 `deploy/README.md`。根目录 `docker-compose.yaml` 仅作为本地兼容入口保留。
+> 部署拆分说明见 `deploy/README.md`。
 
-## 架构
+---
+
+## 项目结构
 
 ```
-┌──────────┐     ┌──────────────┐
-│  Client  │     │    Web       │
-└────┬─────┘     └──────┬───────┘
-     │  WS/Protobuf      │
-     └─────────┬─────────┘
-               │
-       ┌───────▼────────┐
-       │  aim-gateway   │  WebSocket + 会话管理 + drain
-       │   (有状态网关)  │
-       └───────┬────────┘
-               │  gRPC
-     ┌─────────▼──────────────┐
-     │                         │
- ┌───▼────┐             ┌──────▼─────┐
- │aim-auth│             │  aim-core  │
- │ (认证) │             │ (消息投递域) │
- └───┬────┘             └──────┬─────┘
-     │                        │  gRPC
-     │              ┌─────────▼──────────┐
-     │              │      Kafka         │
-     │              └────┬───────────────┘
-     │                   │
-     │           ┌───────▼──┐
-     │           │aim-logic │
-     │           │(业务上下文)│
-     │           └──────────┘
-     │                ▲
-     └────────────────┘  aim-core → aim-logic（单向依赖）
+aim/
+├── app/
+│   ├── auth/rpc/          # 认证服务
+│   ├── core/rpc/          # 消息投递服务
+│   ├── gateway/api/       # 对外入口（REST + WebSocket）
+│   ├── logic/rpc/         # 业务逻辑服务
+│   ├── attachment/        # 附件服务
+│   ├── data_parsing/      # 数据解析服务
+│   └── shared/            # 进程内共享包
+├── shared/proto/          # Protobuf 协议定义
+├── skills/                # 领域 Skill 文档
+├── deploy/                # 部署编排
+├── model/                 # sqlc 全局数据模型
+└── docker-compose.yaml    # 本地兼容入口
 ```
 
-## 技术栈
+---
 
-| 组件       | 技术                                                  |
-| ---------- | ----------------------------------------------------- |
-| 微服务框架 | go-zero                                               |
-| WebSocket  | coder/websocket（Protobuf 帧协议）                    |
-| 消息队列   | Kafka（conversation_id 分区保序）                     |
-| 缓存       | Redis Stack                                           |
-| 持久化     | PostgreSQL                                            |
-| 文件存储   | SeaweedFS                                             |
-| 注册中心   | Nacos                                                 |
-| 链路追踪   | OpenTelemetry → Grafana Tempo（Grafana Explore 查询） |
-| 指标采集   | Prometheus（go-zero 内置） → Grafana 仪表盘           |
-| 日志聚合   | Loki + Promtail（Docker stdout JSON） → Grafana       |
-| 数据模型   | sqlc                                                  |
+## API 文档
 
-## 模块
+API 契约定义在 [`app/gateway/api/gateway.api`](app/gateway/api/gateway.api)，采用 **Spec-first** 模式。
 
-| 模块             | 说明                            | Skill                     |
-| ---------------- | ------------------------------- | ------------------------- |
-| aim-gateway      | 连接层（WebSocket + 会话管理）  | `aim-gateway-domain`      |
-| aim-auth         | JWT 认证、多设备登录            | `aim-auth-domain`         |
-| aim-core         | 消息路由与投递                  | `aim-core-domain`         |
-| aim-logic        | 用户/好友/群组、历史消息        | `aim-logic-domain`        |
-| aim-attachment   | 附件上传/下载授权               | `aim-attachment-domain`   |
-| aim-data-parsing | 附件元数据提取、转码            | `aim-data-parsing-domain` |
-| app/shared       | 共享库（errorx/jwt/tracing 等） | `aim-shared-domain`       |
-| dev-tool         | 开发测试工具                    | `aim-dev-tool`            |
+| 分组          | 前缀                 | 说明                         |
+| ------------- | -------------------- | ---------------------------- |
+| 认证          | `/api/auth`          | 注册、登录、刷新 Token、注销 |
+| 用户          | `/api/users`         | 用户查询、好友申请           |
+| 会话          | `/api/conversations` | 会话 CRUD、群管理、历史消息  |
+| 好友          | `/api/friends`       | 好友列表、标签管理           |
+| 搜索          | `/api/search`        | 聚合搜索                     |
+| 附件          | `/api/attachments`   | 上传/下载/查询               |
+| Bot OpenAPI   | `/api/bot/v1`        | 第三方 Bot 接口              |
+| 用户 Bot 管理 | `/api/user/bots`     | Bot 创建/管理/Token 管理     |
 
-> 详细文档见 `skills/` 下对应 Skill。
+### 开发测试工具
 
-## 功能清单
+内置 `aim-dev-tool`（Python CLI），支持 REST/WS 调试、并发压测。详见 [aim-dev-tool Skill](skills/aim-dev-tool/SKILL.md)。
 
-- [x] 信息收发
-- [x] 已读回执
-- [x] 输入状态实时推送
-- [x] 用户上下线状态
-- [x] 多端同步
-- [x] 聚合搜索（消息、群组、用户）
-- [x] 好友管理
-- [x] 群管理
-- [x] 附件上传、下载、预览、转码(图像、视频、音频、其余文件)
-- [x] bot接口、[bot_sdk](bot_sdk/README.md)
-- [x] 指标上报、链路追踪、日志聚合
-- [x] [官方rag知识库bot](https://github.com/hellopoisonx/echo)
-- [x] [客户端](https://github.com/hellopoisonx/aim-desktop)
-- [x] ws帧等待队列，重放机制
-- [x] [内存+redis双层缓存](https://go-zero.dev/components/cache), 内置 `singleflight` 语义防击穿, 随机ttl抖动防雪崩。
-- [ ] ~前置nginx反代 `gateway`, 配置ssl证书~
-- [ ] ~ws 帧并包~
-- [x] 用户侧bot管理接口
-- [ ] 官方群聊机器人
-- [x] [雪花ID 生成器](./app/shared/tools/snowflake.go)解决时钟回拨
+---
+
+## 测试与代码质量
+
+```bash
+go test ./...                       # 运行全部测试（73 个测试文件）
+go test -coverprofile=coverage.out ./...  # 覆盖率
+golangci-lint run                   # 代码检查
+goctl api validate                  # API 契约校验
+```
+
+详见 [aim-dev-tool Skill](skills/aim-dev-tool/SKILL.md)。
+
+---
 
 ## 开发指南
 
-- **Spec-first**：REST 先改 `.api`，RPC 先改 `.proto`
-- **Skill驱动开发**: 将文档总结为skill, agent思考时可以渐进式加载，并且可以确保文档实时更新。
-- 代码生成使用 goctl / protoc / sqlc；不手写生成文件
-- 业务错误使用 `errorx.NewCodeError`
-- core → logic 单向依赖；logic 绝不导入 core
-- 客户端只与 gateway 通信
+- **Spec-first**：REST 先改 `.api`，RPC 先改 `.proto`，再 goctl/protoc 生成
+- **Skill 驱动开发**：领域知识文档化为 Skill，Agent 渐进式加载
+- **数据模型**：使用 sqlc，SQL 源文件在 `model/{migrations,queries}`
+- **错误处理**：业务错误使用 `errorx.NewCodeError`
+- 详细约定见 [AGENTS.md](AGENTS.md)
+
+---
+
+## 未来规划
+
+- [ ] 官方群聊 Bot
+- [ ] ~WS 帧并包优化~
+- [x] [RAG 知识库 Bot 集成](https://github.com/hellopoisonx/echo)
+
+---
+
+## 相关项目
+
+| 项目                                                       | 说明                |
+| ---------------------------------------------------------- | ------------------- |
+| [aim-desktop](https://github.com/hellopoisonx/aim-desktop) | 桌面客户端          |
+| [echo](https://github.com/hellopoisonx/echo)               | 官方 RAG 知识库 Bot |
+| [bot_sdk](bot_sdk/README.md)                               | Bot SDK 文档        |
