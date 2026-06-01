@@ -11,8 +11,8 @@ import (
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/ws"
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/friendshipservice"
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/userservice"
-	gwpb "github.com/hellopoisonx/aim/shared/proto/gateway/pb"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
+	gwpb "github.com/hellopoisonx/aim/shared/proto/gateway/pb"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -50,7 +50,7 @@ func (l *AddFriendLogic) AddFriend(req *types.AddFriendRequest) (resp *types.Add
 		FriendId: req.Id,
 	})
 	if err != nil {
-		return nil, l.sanitizeLogicRPCError("add friend", err)
+		return nil, errorx.SanitizeGRPCError(l, "add friend", err)
 	}
 
 	friendship := rpcResp.GetFriendship()
@@ -91,8 +91,4 @@ func (l *AddFriendLogic) AddFriend(req *types.AddFriendRequest) (resp *types.Add
 	}
 
 	return &types.AddFriendResponse{Friendship: item}, nil
-}
-
-func (l *AddFriendLogic) sanitizeLogicRPCError(operation string, err error) error {
-	return sanitizeLogicRPCError(l, operation, err)
 }

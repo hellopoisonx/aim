@@ -43,7 +43,7 @@ func (l *TransferGroupOwnerLogic) TransferGroupOwner(req *types.TransferGroupOwn
 		TargetUserId:   req.UserId,
 	})
 	if err != nil {
-		return nil, sanitizeLogicRPCError(l, "transfer group owner", err)
+		return nil, errorx.SanitizeGRPCError(l, "transfer group owner", err)
 	}
 	conv := rpcResp.GetConversation()
 	if conv == nil {

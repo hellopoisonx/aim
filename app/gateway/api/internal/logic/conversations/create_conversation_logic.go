@@ -74,7 +74,7 @@ func (l *CreateConversationLogic) CreateConversation(req *types.CreateConversati
 		Avatar:           req.Avatar,
 	})
 	if err != nil {
-		return nil, sanitizeLogicRPCError(l, "create conversation", err)
+		return nil, errorx.SanitizeGRPCError(l, "create conversation", err)
 	}
 
 	conv := rpcResp.GetConversation()
@@ -97,22 +97,4 @@ func (l *CreateConversationLogic) CreateConversation(req *types.CreateConversati
 		Avatar:           conv.GetAvatar(),
 		CreatorId:        conv.GetCreatorId(),
 	}, nil
-}
-
-func sanitizeLogicRPCError(logger logicRPCErrorLogger, operation string, err error) error {
-	if codeErr := errorx.FromGRPCError(err); codeErr != nil {
-		return codeErr
-	}
-
-	logger.Errorf("logic rpc %s failed: %v", operation, err)
-
-	return errorx.NewCodeError(errorx.CodeInternal, "internal error")
-}
-
-type logicRPCErrorLogger interface {
-	Errorf(format string, v ...any)
-}
-
-func (l *CreateConversationLogic) sanitizeLogicRPCError(operation string, err error) error {
-	return sanitizeLogicRPCError(l, operation, err)
 }

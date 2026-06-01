@@ -59,7 +59,7 @@ func (l *UpdateGroupInfoLogic) UpdateGroupInfo(req *types.UpdateGroupInfoRequest
 		Avatar:         avatar,
 	})
 	if err != nil {
-		return nil, sanitizeLogicRPCError(l, "update group info", err)
+		return nil, errorx.SanitizeGRPCError(l, "update group info", err)
 	}
 
 	conv := rpcResp.GetConversation()
@@ -76,8 +76,4 @@ func (l *UpdateGroupInfoLogic) UpdateGroupInfo(req *types.UpdateGroupInfoRequest
 		CreatorId:        conv.GetCreatorId(),
 		CreatedAt:        conv.GetCreatedAt(),
 	}, nil
-}
-
-func (l *UpdateGroupInfoLogic) sanitizeLogicRPCError(operation string, err error) error {
-	return sanitizeLogicRPCError(l, operation, err)
 }

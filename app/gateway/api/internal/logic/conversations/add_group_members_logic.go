@@ -43,7 +43,7 @@ func (l *AddGroupMembersLogic) AddGroupMembers(req *types.AddGroupMembersRequest
 		MemberIds:      req.MemberIds,
 	})
 	if err != nil {
-		return nil, sanitizeLogicRPCError(l, "add group members", err)
+		return nil, errorx.SanitizeGRPCError(l, "add group members", err)
 	}
 
 	conv := rpcResp.GetConversation()
@@ -66,8 +66,4 @@ func (l *AddGroupMembersLogic) AddGroupMembers(req *types.AddGroupMembersRequest
 		Avatar:           conv.GetAvatar(),
 		CreatorId:        conv.GetCreatorId(),
 	}, nil
-}
-
-func (l *AddGroupMembersLogic) sanitizeLogicRPCError(operation string, err error) error {
-	return sanitizeLogicRPCError(l, operation, err)
 }

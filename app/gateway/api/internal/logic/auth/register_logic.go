@@ -9,6 +9,7 @@ import (
 	"github.com/hellopoisonx/aim/app/auth/rpc/authservice"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
+	"github.com/hellopoisonx/aim/app/shared/errorx"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -36,7 +37,7 @@ func (l *RegisterLogic) Register(req *types.RegisterRequest) (resp *types.Regist
 		DeviceId: req.DeviceId,
 	})
 	if err != nil {
-		return nil, l.sanitizeAuthRPCError("register", err)
+		return nil, errorx.SanitizeGRPCError(l, "register", err)
 	}
 
 	return &types.RegisterResponse{UserId: rpcResp.UserId}, nil

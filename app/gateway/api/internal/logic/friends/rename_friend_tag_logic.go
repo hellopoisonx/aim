@@ -41,7 +41,7 @@ func (l *RenameFriendTagLogic) RenameFriendTag(req *types.RenameFriendTagRequest
 		Name:   req.Name,
 	})
 	if err != nil {
-		return nil, sanitizeLogicRPCError(l, "rename friend tag", err)
+		return nil, errorx.SanitizeGRPCError(l, "rename friend tag", err)
 	}
 
 	return &types.RenameFriendTagResponse{

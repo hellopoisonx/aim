@@ -6,18 +6,8 @@ import (
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 )
 
-type rpcErrorLogger interface {
-	Errorf(format string, v ...any)
-	Error(v ...any)
-}
-
-func sanitizeError(logger rpcErrorLogger, operation string, err error) error {
-	if codeErr := errorx.FromGRPCError(err); codeErr != nil {
-		return codeErr
-	}
-
-	logger.Errorf("unexpected RPC error in %s: %v", operation, err)
-	return errorx.NewCodeError(errorx.CodeInternal, "internal error")
+func sanitizeError(logger errorx.ErrorLogger, operation string, err error) error {
+	return errorx.SanitizeGRPCError(logger, operation, err)
 }
 
 func userBotToType(b *pb.UserBotInfo) types.UserBotInfo {

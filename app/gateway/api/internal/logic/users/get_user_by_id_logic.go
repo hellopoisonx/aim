@@ -41,7 +41,7 @@ func (l *GetUserByIdLogic) GetUserById(req *types.GetUserByIdRequest) (resp *typ
 		Id: req.Id,
 	})
 	if err != nil {
-		return nil, sanitizeLogicRPCError(l, "get user by id", err)
+		return nil, errorx.SanitizeGRPCError(l, "get user by id", err)
 	}
 
 	return &types.GetUserByIdResponse{

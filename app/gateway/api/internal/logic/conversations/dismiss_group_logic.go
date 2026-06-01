@@ -41,12 +41,8 @@ func (l *DismissGroupLogic) DismissGroup(req *types.DismissGroupRequest) (err er
 		OperatorId:     identity.UserID,
 	})
 	if err != nil {
-		return sanitizeLogicRPCError(l, "dismiss group", err)
+		return errorx.SanitizeGRPCError(l, "dismiss group", err)
 	}
 
 	return nil
-}
-
-func (l *DismissGroupLogic) sanitizeLogicRPCError(operation string, err error) error {
-	return sanitizeLogicRPCError(l, operation, err)
 }

@@ -42,12 +42,8 @@ func (l *LeaveGroupLogic) LeaveGroup(req *types.LeaveGroupRequest) (err error) {
 		UserName:       "",
 	})
 	if err != nil {
-		return sanitizeLogicRPCError(l, "leave group", err)
+		return errorx.SanitizeGRPCError(l, "leave group", err)
 	}
 
 	return nil
-}
-
-func (l *LeaveGroupLogic) sanitizeLogicRPCError(operation string, err error) error {
-	return sanitizeLogicRPCError(l, operation, err)
 }

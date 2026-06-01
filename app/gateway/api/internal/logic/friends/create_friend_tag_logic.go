@@ -12,20 +12,6 @@ import (
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
-// sanitizeLogicRPCError wraps RPC errors for the gateway.
-func sanitizeLogicRPCError(logger logicRPCErrorLogger, operation string, err error) error {
-	if codeErr := errorx.FromGRPCError(err); codeErr != nil {
-		return codeErr
-	}
-	logger.Errorf("logic rpc %s failed: %v", operation, err)
-	return errorx.NewCodeError(errorx.CodeInternal, "internal error")
-}
-
-// logicRPCErrorLogger is the logging interface used by the error helper.
-type logicRPCErrorLogger interface {
-	Errorf(format string, v ...any)
-}
-
 // friendTagToType converts a proto FriendTagResponse to a gateway type.
 func friendTagToType(t interface {
 	GetId() int64
@@ -33,7 +19,8 @@ func friendTagToType(t interface {
 	GetName() string
 	GetCreatedAt() int64
 	GetUpdatedAt() int64
-}) types.FriendTagItem {
+},
+) types.FriendTagItem {
 	if t == nil {
 		return types.FriendTagItem{}
 	}
@@ -74,7 +61,7 @@ func (l *CreateFriendTagLogic) CreateFriendTag(req *types.CreateFriendTagRequest
 		Name:   req.Name,
 	})
 	if err != nil {
-		return nil, sanitizeLogicRPCError(l, "create friend tag", err)
+		return nil, errorx.SanitizeGRPCError(l, "create friend tag", err)
 	}
 
 	return &types.CreateFriendTagResponse{

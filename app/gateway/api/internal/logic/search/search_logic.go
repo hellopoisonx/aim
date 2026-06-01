@@ -45,16 +45,16 @@ func (l *SearchLogic) Search(req *types.SearchRequest) (resp *types.SearchRespon
 	}
 
 	rpcResp, err := l.svcCtx.LogicSearchClient.UnifiedSearch(l.ctx, &searchservice.UnifiedSearchReq{
-		UserId:         identity.UserID,
-		Query:          req.Query,
-		Scopes:         scopes,
-		ConversationId: req.ConversationId,
+		UserId:          identity.UserID,
+		Query:           req.Query,
+		Scopes:          scopes,
+		ConversationId:  req.ConversationId,
 		CursorCreatedAt: req.CursorCreatedAt,
-		CursorId:       req.CursorId,
-		Limit:          req.Limit,
+		CursorId:        req.CursorId,
+		Limit:           req.Limit,
 	})
 	if err != nil {
-		return nil, sanitizeSearchRPCError(l, "unified search", err)
+		return nil, errorx.SanitizeGRPCError(l, "unified search", err)
 	}
 
 	// Map users
@@ -159,12 +159,4 @@ func (l *SearchLogic) Search(req *types.SearchRequest) (resp *types.SearchRespon
 		NextCursorId:        rpcResp.GetNextCursorId(),
 		HasMore:             rpcResp.GetHasMore(),
 	}, nil
-}
-
-func sanitizeSearchRPCError(l *SearchLogic, operation string, err error) error {
-	if codeErr := errorx.FromGRPCError(err); codeErr != nil {
-		return codeErr
-	}
-	l.Errorf("logic rpc %s failed: %v", operation, err)
-	return errorx.NewCodeError(errorx.CodeInternal, "internal error")
 }

@@ -2,7 +2,6 @@ package bot
 
 import (
 	"context"
-	"errors"
 	"slices"
 	"strconv"
 	"strings"
@@ -34,14 +33,7 @@ func parseOptionalID(raw string, field string) (int64, error) {
 }
 
 func sanitizeBotLogicRPCError(err error) error {
-	var ce *errorx.CodeError
-	if errors.As(err, &ce) {
-		return ce
-	}
-	if ce := errorx.FromGRPCError(err); ce != nil {
-		return ce
-	}
-	return errorx.NewCodeError(errorx.CodeInternal, "internal error")
+	return errorx.SanitizeGRPCErrorNoLog(err)
 }
 
 func requireLogicConversationClient(svcCtx *svc.ServiceContext) (conversationservice.ConversationService, error) {
@@ -78,7 +70,7 @@ func convertBotReadState(st *pb.ReadStateItem) types.BotReadStateItem {
 		UpdatedAt:         st.GetUpdatedAt(),
 		Email:             st.GetEmail(),
 		Avatar:            st.GetAvatar(),
-		Name:             st.GetName(),
+		Name:              st.GetName(),
 	}
 }
 

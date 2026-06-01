@@ -40,7 +40,7 @@ func (l *ListConversationsLogic) ListConversations() (resp *types.ListConversati
 		UserId: identity.UserID,
 	})
 	if err != nil {
-		return nil, sanitizeLogicRPCError(l, "get user conversations", err)
+		return nil, errorx.SanitizeGRPCError(l, "get user conversations", err)
 	}
 
 	convos := rpcResp.GetConversations()
@@ -66,8 +66,4 @@ func (l *ListConversationsLogic) ListConversations() (resp *types.ListConversati
 	return &types.ListConversationsResponse{
 		Conversations: items,
 	}, nil
-}
-
-func (l *ListConversationsLogic) sanitizeLogicRPCError(operation string, err error) error {
-	return sanitizeLogicRPCError(l, operation, err)
 }

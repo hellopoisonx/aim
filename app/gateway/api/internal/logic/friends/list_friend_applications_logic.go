@@ -41,7 +41,7 @@ func (l *ListFriendApplicationsLogic) ListFriendApplications() (*types.ListFrien
 
 	rpcResp, err := l.svcCtx.LogicFriendshipClient.ListFriendApplications(l.ctx, &friendshipservice.ListFriendApplicationsReq{UserId: identity.UserID})
 	if err != nil {
-		return nil, l.sanitizeLogicRPCError("list friend applications", err)
+		return nil, errorx.SanitizeGRPCError(l, "list friend applications", err)
 	}
 
 	applications := make([]types.FriendshipItem, 0, len(rpcResp.GetApplications()))
@@ -59,14 +59,4 @@ func (l *ListFriendApplicationsLogic) ListFriendApplications() (*types.ListFrien
 	}
 
 	return &types.ListFriendApplicationsResponse{Applications: applications}, nil
-}
-
-func (l *ListFriendApplicationsLogic) sanitizeLogicRPCError(operation string, err error) error {
-	if codeErr := errorx.FromGRPCError(err); codeErr != nil {
-		return codeErr
-	}
-
-	l.Errorf("logic rpc %s failed: %v", operation, err)
-
-	return errorx.NewCodeError(errorx.CodeInternal, "internal error")
 }

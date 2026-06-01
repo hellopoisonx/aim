@@ -39,27 +39,23 @@ func (l *GetConversationMembersLogic) GetConversationMembers(req *types.GetConve
 		ConversationId: req.Id,
 	})
 	if err != nil {
-		return nil, sanitizeLogicRPCError(l, "get conversation members", err)
+		return nil, errorx.SanitizeGRPCError(l, "get conversation members", err)
 	}
 
 	members := rpcResp.GetMembers()
 	items := make([]types.MemberDetailItem, 0, len(members))
 	for _, m := range members {
 		items = append(items, types.MemberDetailItem{
-			UserId:      m.GetUserId(),
-			Email:       m.GetEmail(),
-			Avatar:      m.GetAvatar(),
-			Role:        m.GetRole(),
-			JoinedAt:    m.GetJoinedAt(),
-			Name:      m.GetName(),
+			UserId:   m.GetUserId(),
+			Email:    m.GetEmail(),
+			Avatar:   m.GetAvatar(),
+			Role:     m.GetRole(),
+			JoinedAt: m.GetJoinedAt(),
+			Name:     m.GetName(),
 		})
 	}
 
 	return &types.GetConversationMembersResponse{
 		Members: items,
 	}, nil
-}
-
-func (l *GetConversationMembersLogic) sanitizeLogicRPCError(operation string, err error) error {
-	return sanitizeLogicRPCError(l, operation, err)
 }

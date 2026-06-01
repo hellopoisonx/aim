@@ -39,7 +39,7 @@ func (l *ListFriendTagsLogic) ListFriendTags() (resp *types.ListFriendTagsRespon
 		UserId: identity.UserID,
 	})
 	if err != nil {
-		return nil, sanitizeLogicRPCError(l, "list friend tags", err)
+		return nil, errorx.SanitizeGRPCError(l, "list friend tags", err)
 	}
 
 	tags := make([]types.FriendTagItem, 0, len(rpcResp.GetTags()))

@@ -57,7 +57,7 @@ func (l *CreateGroupLogic) CreateGroup(req *types.CreateGroupRequest) (resp *typ
 		Avatar:           req.Avatar,
 	})
 	if err != nil {
-		return nil, sanitizeLogicRPCError(l, "create group", err)
+		return nil, errorx.SanitizeGRPCError(l, "create group", err)
 	}
 
 	conv := rpcResp.GetConversation()

@@ -57,7 +57,7 @@ func (l *GetConversationHistoryLogic) GetConversationHistory(req *types.GetConve
 		Limit:           limit,
 	})
 	if err != nil {
-		return nil, l.sanitizeLogicRPCError("get conversation history", err)
+		return nil, errorx.SanitizeGRPCError(l, "get conversation history", err)
 	}
 
 	messages := make([]types.MessageItem, 0, len(rpcResp.GetMessages()))
@@ -79,8 +79,8 @@ func (l *GetConversationHistoryLogic) GetConversationHistory(req *types.GetConve
 			ConversationId: msg.GetConversationId(),
 			SenderId:       msg.GetSenderId(),
 			SenderInfo: types.SenderInfo{
-				Name:        senderInfo.GetName(),
-				Email:       senderInfo.GetEmail(),
+				Name:  senderInfo.GetName(),
+				Email: senderInfo.GetEmail(),
 			},
 			MessageType: msg.GetMessageType(),
 			Content:     msg.GetContent(),
@@ -114,8 +114,4 @@ func (l *GetConversationHistoryLogic) GetConversationHistory(req *types.GetConve
 		HasMore:             rpcResp.GetHasMore(),
 		ReadStates:          readStates,
 	}, nil
-}
-
-func (l *GetConversationHistoryLogic) sanitizeLogicRPCError(operation string, err error) error {
-	return sanitizeLogicRPCError(l, operation, err)
 }

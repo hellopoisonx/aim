@@ -46,7 +46,7 @@ func (l *LogoutLogic) Logout() (resp *types.LogoutResponse, err error) {
 
 	rpcResp, err := l.svcCtx.AuthClient.Logout(l.ctx, &authservice.LogoutReq{UserId: claims.UserID, DeviceId: claims.DeviceID})
 	if err != nil {
-		return nil, l.sanitizeAuthRPCError("logout", err)
+		return nil, errorx.SanitizeGRPCError(l, "logout", err)
 	}
 
 	// Best-effort: close the WS connection for this device so the kicked client

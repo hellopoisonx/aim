@@ -43,7 +43,7 @@ func (l *RevokeGroupAdminLogic) RevokeGroupAdmin(req *types.RevokeGroupAdminRequ
 		TargetUserId:   req.Uid,
 	})
 	if err != nil {
-		return sanitizeLogicRPCError(l, "revoke group admin", err)
+		return errorx.SanitizeGRPCError(l, "revoke group admin", err)
 	}
 	return nil
 }

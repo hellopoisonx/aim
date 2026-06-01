@@ -10,8 +10,8 @@ import (
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/ws"
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/friendshipservice"
-	gwpb "github.com/hellopoisonx/aim/shared/proto/gateway/pb"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
+	gwpb "github.com/hellopoisonx/aim/shared/proto/gateway/pb"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -45,7 +45,7 @@ func (l *AcceptFriendLogic) AcceptFriend(req *types.AcceptFriendRequest) (resp *
 		FriendId: req.Id,
 	})
 	if err != nil {
-		return nil, l.sanitizeLogicRPCError("accept friend", err)
+		return nil, errorx.SanitizeGRPCError(l, "accept friend", err)
 	}
 
 	friendship := rpcResp.GetFriendship()
@@ -78,14 +78,4 @@ func (l *AcceptFriendLogic) AcceptFriend(req *types.AcceptFriendRequest) (resp *
 	return &types.AcceptFriendResponse{
 		Friendship: item,
 	}, nil
-}
-
-func (l *AcceptFriendLogic) sanitizeLogicRPCError(operation string, err error) error {
-	if codeErr := errorx.FromGRPCError(err); codeErr != nil {
-		return codeErr
-	}
-
-	l.Errorf("logic rpc %s failed: %v", operation, err)
-
-	return errorx.NewCodeError(errorx.CodeInternal, "internal error")
 }

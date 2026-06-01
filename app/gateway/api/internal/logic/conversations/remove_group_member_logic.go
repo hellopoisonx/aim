@@ -43,12 +43,8 @@ func (l *RemoveGroupMemberLogic) RemoveGroupMember(req *types.RemoveGroupMemberR
 		MemberIds:      []int64{req.Uid},
 	})
 	if err != nil {
-		return sanitizeLogicRPCError(l, "remove group member", err)
+		return errorx.SanitizeGRPCError(l, "remove group member", err)
 	}
 
 	return nil
-}
-
-func (l *RemoveGroupMemberLogic) sanitizeLogicRPCError(operation string, err error) error {
-	return sanitizeLogicRPCError(l, operation, err)
 }

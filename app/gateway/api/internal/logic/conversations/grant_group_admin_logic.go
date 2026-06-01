@@ -43,7 +43,7 @@ func (l *GrantGroupAdminLogic) GrantGroupAdmin(req *types.GrantGroupAdminRequest
 		TargetUserId:   req.Uid,
 	})
 	if err != nil {
-		return sanitizeLogicRPCError(l, "grant group admin", err)
+		return errorx.SanitizeGRPCError(l, "grant group admin", err)
 	}
 	return nil
 }

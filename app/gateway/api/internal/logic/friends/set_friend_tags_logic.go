@@ -41,7 +41,7 @@ func (l *SetFriendTagsLogic) SetFriendTags(req *types.SetFriendTagsRequest) (res
 		TagIds:   req.TagIds,
 	})
 	if err != nil {
-		return nil, sanitizeLogicRPCError(l, "set friend tags", err)
+		return nil, errorx.SanitizeGRPCError(l, "set friend tags", err)
 	}
 
 	f := rpcResp.GetFriendship()

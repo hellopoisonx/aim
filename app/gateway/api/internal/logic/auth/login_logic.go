@@ -9,6 +9,7 @@ import (
 	"github.com/hellopoisonx/aim/app/auth/rpc/authservice"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
+	"github.com/hellopoisonx/aim/app/shared/errorx"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -34,7 +35,7 @@ func (l *LoginLogic) Login(req *types.LoginRequest) (resp *types.LoginResponse, 
 		DeviceId: req.DeviceId,
 	})
 	if err != nil {
-		return nil, l.sanitizeAuthRPCError("login", err)
+		return nil, errorx.SanitizeGRPCError(l, "login", err)
 	}
 
 	return &types.LoginResponse{UserId: rpcResp.UserId, AccessToken: rpcResp.AccessToken, RefreshToken: rpcResp.RefreshToken, ExpiresAt: rpcResp.ExpiresAt}, nil

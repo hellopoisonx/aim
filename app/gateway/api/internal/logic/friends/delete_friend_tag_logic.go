@@ -40,7 +40,7 @@ func (l *DeleteFriendTagLogic) DeleteFriendTag(req *types.DeleteFriendTagRequest
 		TagId:  req.Id,
 	})
 	if err != nil {
-		return nil, sanitizeLogicRPCError(l, "delete friend tag", err)
+		return nil, errorx.SanitizeGRPCError(l, "delete friend tag", err)
 	}
 
 	return &types.DeleteFriendTagResponse{Deleted: rpcResp.GetDeleted()}, nil

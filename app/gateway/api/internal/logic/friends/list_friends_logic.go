@@ -42,7 +42,7 @@ func (l *ListFriendsLogic) ListFriends() (resp *types.ListFriendsResponse, err e
 
 	rpcResp, err := l.svcCtx.LogicFriendshipClient.ListFriends(l.ctx, &friendshipservice.ListFriendsReq{UserId: identity.UserID})
 	if err != nil {
-		return nil, l.sanitizeLogicRPCError("list friends", err)
+		return nil, errorx.SanitizeGRPCError(l, "list friends", err)
 	}
 
 	friends := make([]types.FriendshipItem, 0, len(rpcResp.GetFriends()))
@@ -69,16 +69,6 @@ func (l *ListFriendsLogic) ListFriends() (resp *types.ListFriendsResponse, err e
 	}
 
 	return &types.ListFriendsResponse{Friends: friends}, nil
-}
-
-func (l *ListFriendsLogic) sanitizeLogicRPCError(operation string, err error) error {
-	if codeErr := errorx.FromGRPCError(err); codeErr != nil {
-		return codeErr
-	}
-
-	l.Errorf("logic rpc %s failed: %v", operation, err)
-
-	return errorx.NewCodeError(errorx.CodeInternal, "internal error")
 }
 
 // enrichPeerInfo fills display_name, email, avatar on a FriendshipItem by

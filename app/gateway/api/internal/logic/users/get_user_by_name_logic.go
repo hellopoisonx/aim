@@ -43,7 +43,7 @@ func (l *GetUserByNameLogic) GetUserByName(req *types.GetUserByNameRequest) (res
 		Nickname: req.Name,
 	})
 	if err != nil {
-		return nil, l.sanitizeLogicRPCError("get user by name", err)
+		return nil, errorx.SanitizeGRPCError(l, "get user by name", err)
 	}
 
 	users := make([]types.UserListItem, 0, len(rpcResp.GetUsers()))
@@ -62,10 +62,10 @@ func userListItemFromRPC(user *pb.UserInfoResponse) types.UserListItem {
 	}
 
 	return types.UserListItem{
-		Id:          strconv.FormatInt(user.GetId(), 10),
-		Nickname:    user.GetNickname(),
-		Email:       user.GetEmail(),
-		Avatar:      user.GetAvatar(),
+		Id:       strconv.FormatInt(user.GetId(), 10),
+		Nickname: user.GetNickname(),
+		Email:    user.GetEmail(),
+		Avatar:   user.GetAvatar(),
 	}
 }
 
@@ -75,30 +75,12 @@ func userInfoFromRPC(user *pb.UserInfoResponse) types.UserInfo {
 	}
 
 	return types.UserInfo{
-		Id:          user.GetId(),
-		Email:       user.GetEmail(),
-		Status:      user.GetStatus(),
-		Nickname:    user.GetNickname(),
-		Avatar:      user.GetAvatar(),
-		CreatedAt:   user.GetCreatedAt(),
-		UpdatedAt:   user.GetUpdatedAt(),
+		Id:        user.GetId(),
+		Email:     user.GetEmail(),
+		Status:    user.GetStatus(),
+		Nickname:  user.GetNickname(),
+		Avatar:    user.GetAvatar(),
+		CreatedAt: user.GetCreatedAt(),
+		UpdatedAt: user.GetUpdatedAt(),
 	}
-}
-
-func sanitizeLogicRPCError(logger logicRPCErrorLogger, operation string, err error) error {
-	if codeErr := errorx.FromGRPCError(err); codeErr != nil {
-		return codeErr
-	}
-
-	logger.Errorf("logic rpc %s failed: %v", operation, err)
-
-	return errorx.NewCodeError(errorx.CodeInternal, "internal error")
-}
-
-type logicRPCErrorLogger interface {
-	Errorf(format string, v ...any)
-}
-
-func (l *GetUserByNameLogic) sanitizeLogicRPCError(operation string, err error) error {
-	return sanitizeLogicRPCError(l, operation, err)
 }
