@@ -1,0 +1,47 @@
+#!/bin/bash
+# Pre-commit hook: 自动格式化 staged Go 文件
+# 使用 gofmt（Go 标准库），如果 gofumpt 可用则使用 gofumpt
+
+set -euo pipefail
+
+# 如果有 gofumpt 则优先使用，否则 fallback 到 gofmt
+if command -v gofumpt &>/dev/null; then
+  FMT_CMD="gofumpt -l"
+  FMT_WRITE_CMD="gofumpt -w"
+else
+  FMT_CMD="gofmt -l"
+  FMT_WRITE_CMD="gofmt -w"
+fi
+
+# 获取 staged 的 Go 文件（排除删除的文件）
+STAGED_GO_FILES=$(git diff --cached --name-only --diff-filter=ACMR | grep '\.go$' || true)
+
+if [ -z "$STAGED_GO_FILES" ]; then
+  exit 0
+fi
+
+# 检查是否需要格式化
+UNFORMATTED=$($FMT_CMD $STAGED_GO_FILES 2>/dev/null || true)
+
+if [ -n "$UNFORMATTED" ]; then
+  echo "🔧 正在格式化以下 Go 文件："
+  echo "$UNFORMATTED" | sed 's/^/  - /'
+
+  # 执行格式化
+  echo "$STAGED_GO_FILES" | tr '\n' '\0' | xargs -0 $FMT_WRITE_CMD
+
+  # 重新将格式化后的文件添加到暂存区
+  echo "$STAGED_GO_FILES" | tr '\n' '\0' | xargs -0 git add
+
+  echo "✅ 格式化完成，已更新暂存区。"
+fi
+
+# 检查 go.mod / go.sum 是否需要 tidy
+if git diff --cached --name-only | grep -q 'go\.mod$'; then
+  echo "🧹 go.mod 有变更，执行 go mod tidy..."
+  go mod tidy
+  git add go.mod go.sum 2>/dev/null || true
+  echo "✅ go mod tidy 完成。"
+fi
+
+exit 0

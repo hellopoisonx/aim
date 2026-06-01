@@ -167,6 +167,7 @@ aim/
 │   ├── attachment/        # 附件服务
 │   ├── data_parsing/      # 数据解析服务
 │   └── shared/            # 进程内共享包
+├── .githooks/            # Git pre-commit hook（自动格式化）
 ├── shared/proto/          # Protobuf 协议定义
 ├── skills/                # 领域 Skill 文档
 ├── deploy/                # 部署编排
@@ -206,8 +207,19 @@ golangci-lint run                   # 代码检查
 goctl api validate                  # API 契约校验
 ```
 
-详见 [aim-dev-tool Skill](skills/aim-dev-tool/SKILL.md)。
+### Pre-commit 钩子
 
+项目内置 Git pre-commit hook（位于 `.githooks/`），提交前自动格式化 Go 代码：
+
+```bash
+# 在项目根目录执行一次即可激活：
+git config core.hooksPath .githooks
+```
+
+钩子使用 `gofumpt`（优先）/ `gofmt`（fallback）格式化 staged Go 文件，
+并在 `go.mod` 变更时自动执行 `go mod tidy`。
+
+详见 [aim-dev-tool Skill](skills/aim-dev-tool/SKILL.md)。
 ---
 
 ## 开发指南
