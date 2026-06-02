@@ -1,0 +1,111 @@
+name: Smoke Test (Rate Limit)
+
+# 手动触发的限流冒烟测试
+# 跑 dev-tool/rl_smoke.py 5 个端到端测试, 验证 REST/WS/Bot 限流契约
+# 需要起 docker compose, 耗时 ~6-8 分钟
+#
+# 触发: Actions 页 → Smoke Test → Run workflow
+# 通常在: 改完 gateway-api 限流配置 / RateLimitQuota 调参 / 上游限流相关 PR 合并前
+
+on:
+  workflow_dispatch:
+    inputs:
+      quota_window:
+        description: "滑动窗口秒数 (与 gateway 配置对齐)"
+        required: false
+        default: "60"
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  rate-limit-smoke:
+    name: Gateway 限流冒烟 (REST + WS + Bot)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # docker-compose 镜像构建需要整个历史
+          fetch-depth: 0
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+          cache: true
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: dev-tool/requirements.txt
+
+      - name: Install Python deps
+        working-directory: dev-tool
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install -q -r requirements.txt
+
+      - name: Bring up infra
+        env:
+          AIM_ENV_FILE: ../deploy/env/local.env
+        run: |
+          docker compose \
+            --env-file deploy/env/local.env \
+            -f deploy/compose/base.yaml \
+            -f deploy/compose/observability.yaml \
+            -f deploy/compose/dev.yaml \
+            -f deploy/compose/tools.yaml \
+            up -d --build
+          # 等所有容器 healthy
+          echo "等待基础设施 healthy ..."
+          for i in $(seq 1 60); do
+            unhealthy=$(docker ps --format '{{.Names}} {{.Status}}' | grep -E "aim-(gateway|auth|core|logic|postgres|redis|kafka|nacos)" | grep -v -E "healthy|Up [0-9]+ minutes" | wc -l)
+            if [ "$unhealthy" = "0" ]; then
+              echo "  ✓ 基础设施就绪"
+              break
+            fi
+            echo "  ... 等待 $i/60"
+            sleep 5
+          done
+          docker ps --format "table {{.Names}}\t{{.Status}}" | head -25
+
+      - name: Register test users
+        working-directory: dev-tool
+        # rl_smoke.py --setup 会注册 alice + bob 并 login, 写入
+        # .aim_state.json / .aim_state_bob.json。后续 5 个测试复用 token,
+        # token 过期由 _ensure_token_fresh 自动 refresh。
+        run: |
+          .venv/bin/python rl_smoke.py --setup t1
+
+      - name: Run rl_smoke.py all
+        working-directory: dev-tool
+        # RL 限流在 60s 窗口, 5 个测试串行约 5 分钟
+        timeout-minutes: 10
+        run: |
+          .venv/bin/python rl_smoke.py all --quota-window ${{ inputs.quota_window || '60' }}
+        # 退出码非 0 时整个 job 失败
+
+      - name: Dump gateway logs on failure
+        if: failure()
+        run: |
+          echo "=== aim-gateway logs ==="
+          docker logs --tail 200 aim-gateway
+          echo "=== aim-logic logs ==="
+          docker logs --tail 100 aim-logic
+          echo "=== aim-redis keys ==="
+          docker exec aim-redis redis-cli scan 0 match 'aim:gateway:quota:*' count 100
+
+      - name: Tear down
+        if: always()
+        run: |
+          docker compose \
+            --env-file deploy/env/local.env \
+            -f deploy/compose/base.yaml \
+            -f deploy/compose/observability.yaml \
+            -f deploy/compose/dev.yaml \
+            -f deploy/compose/tools.yaml \
+            down -v

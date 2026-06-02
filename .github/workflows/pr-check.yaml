@@ -1,0 +1,116 @@
+name: PR Check
+
+# 触发: 任何 PR + main 分支推送
+# 不依赖 docker, 3-5 分钟完成
+# 作用:
+#   1. 编译 + 单元测试
+#   2. .golangci.yaml lint
+#   3. goctl api go 重生成 + git diff (守住 gateway.api 契约)
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build-test:
+    name: Build + Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+          cache: true
+
+      - name: Download modules
+        run: go mod download
+
+      - name: Build
+        run: go build ./app/... ./shared/...
+
+      - name: Test (with coverage)
+        run: |
+          mkdir -p coverage
+          go test -coverprofile=coverage/coverage.out ./app/... ./shared/...
+          go tool cover -func=coverage/coverage.out | tail -1
+        # AGENTS.md 要求 "代码更改后必须执行测试、覆盖率测试、lint"
+
+      - name: Upload coverage artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage/
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+          cache: true
+
+      - name: Download modules
+        run: go mod download
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: v2.12.2
+          # 仓库根已有 .golangci.yaml
+          # 默认从仓库根跑, 不需要 working-directory
+
+  spec-contract:
+    # 守住 gateway.api 契约: 跑 goctl api go 重生成 routes.go,
+    # 如果生成结果与提交不一致, CI 失败。
+    # 见 plans/gateway-ratelimit-spec-first.md (R2/R3/R4)。
+    name: API Spec Contract (gateway.api)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # 需要未提交变更以做 diff, 浅克隆够用
+          fetch-depth: 0
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+          cache: true
+
+      - name: Install goctl
+        # go-zero 1.10.1+ 支持 middleware: Auth,RateLimit 逗号分隔语法
+        # 锁版本与本仓库一致
+        run: |
+          go install github.com/zeromicro/go-zero/tools/goctl@v1.10.1
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+          goctl --version
+
+      - name: goctl api validate
+        working-directory: app/gateway/api
+        run: goctl api validate -api gateway.api
+
+      - name: goctl api go (regenerate)
+        working-directory: app/gateway/api
+        run: goctl api go -api gateway.api -dir . -style go_zero
+
+      - name: Diff routes.go
+        # 期望: goctl 输出与提交完全一致 (.api 是 single source of truth)
+        # 若不一致, 说明有人手改 routes.go 而忘改 .api (或反之)
+        run: |
+          if ! git diff --exit-code app/gateway/api/internal/handler/routes.go app/gateway/api/internal/handler/types/ 2>&1; then
+            echo "::error::routes.go 与 gateway.api 重新生成结果不一致"
+            echo "请重新跑 'cd app/gateway/api && goctl api go -api gateway.api -dir . -style go_zero' 后提交"
+            exit 1
+          fi
+          echo "✓ routes.go 与 gateway.api 一致"
