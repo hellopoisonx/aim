@@ -64,7 +64,7 @@ jobs:
         run: go mod download
 
       - name: Run golangci-lint
-        uses: golangci/golangci-lint-action@v6
+        uses: golangci/golangci-lint-action@v7
         with:
           version: v2.12.2
           # 仓库根已有 .golangci.yaml
@@ -104,13 +104,17 @@ jobs:
         working-directory: app/gateway/api
         run: goctl api go -api gateway.api -dir . -style go_zero
 
-      - name: Diff routes.go
+      - name: Diff generated handlers/types
         # 期望: goctl 输出与提交完全一致 (.api 是 single source of truth)
-        # 若不一致, 说明有人手改 routes.go 而忘改 .api (或反之)
+        # 若不一致, 说明有人手改 routes.go/types.go 而忘改 .api (或反之)
+        # 路径显式列出两个文件, 避免打错目录导致 git 退出码 128
+        # (128 会被 `!` 翻成 0 错误地跳过 diff 报错)
         run: |
-          if ! git diff --exit-code app/gateway/api/internal/handler/routes.go app/gateway/api/internal/handler/types/ 2>&1; then
-            echo "::error::routes.go 与 gateway.api 重新生成结果不一致"
+          if ! git diff --exit-code \
+              app/gateway/api/internal/handler/routes.go \
+              app/gateway/api/internal/types/types.go 2>&1; then
+            echo "::error::routes.go/types.go 与 gateway.api 重新生成结果不一致"
             echo "请重新跑 'cd app/gateway/api && goctl api go -api gateway.api -dir . -style go_zero' 后提交"
             exit 1
           fi
-          echo "✓ routes.go 与 gateway.api 一致"
+          echo "✓ routes.go / types.go 与 gateway.api 一致"
