@@ -545,6 +545,13 @@ func (h *WsHandler) handleSendMessage(ctx context.Context, conn *websocket.Conn,
 	// Per-(device_id, user_id) sliding-window rate limit. Mirrors the REST
 	// RateLimitMiddleware; a nil store disables the limiter (e.g. when
 	// RateLimitQuota.MaxRequests <= 0).
+	//
+	// The WS path shares ServiceContext.RateLimitQuota with the REST rate
+	// limit declared in gateway.api (`@server (middleware: Auth,RateLimit)`).
+	// A single bucket is intentional: the WS write-message path is the only
+	// opcode currently throttled (typing/read_receipt/heartbeat/ack are
+	// connection-local and intentionally unlimited). Bot traffic is routed
+	// through ServiceContext.BotRateLimitQuota on the REST side only.
 	if h.srv.RateLimitQuota != nil {
 		allowed, _, err := h.srv.RateLimitQuota.AllowPair(ctx, identity.DeviceID, strconv.FormatInt(identity.UserID, 10))
 		if err != nil {

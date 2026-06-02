@@ -30,6 +30,16 @@
 - WS `/ws` 端点通过 `wsauth.ExtractAndValidate` 验签，独立于 REST 中间件。
 - 中间件使用 `Config.Auth.AccessSecret` 密钥，与 auth 服务签发 token 使用相同密钥。
 
+### 限流 (Rate Limit)
+
+Gateway 在 REST 入口与 WebSocket 入口均提供滑动窗口限流,基于 Redis 实现,见 `app/shared/quota`：
+
+- **REST 侧**:通过 `RateLimitMiddleware`（`internal/middleware/ratelimit_middleware.go`）按 `(device_id, user_id)` 维度限流,挂在受 `Auth` 保护的 `@server` 块后面;通过 `BotRateLimitMiddleware` 按 `TokenID` 维度限流,挂在受 `BotAuth` 保护的 `/api/bot/v1` 写消息端点(`post /messages`)后面。
+- **WS 侧**:`/ws` 的 `FRAME_TYPE_SEND_MESSAGE` opcode 在 `ws_handler.handleSendMessage` 中内联调用 `ServiceContext.RateLimitQuota.AllowPair`,与 REST 侧共享同一个 `*quota.QuotaStore` 与同一份配置(`RateLimitQuotaConf`);`heartbeat` / `typing` / `read_receipt` / `ack` **不**限流。
+- **配置**:`Config.RateLimitQuota.WindowSeconds` / `MaxRequests` 控制 REST 与 WS 共享桶;`Config.BotRateLimitQuota.*` 控制 Bot 写消息独立桶(键前缀 `aim:gateway:quota:bot`,与人类流量隔离)。`MaxRequests <= 0` 时 store 为 nil、中间件放行。
+- **契约来源**:REST 限流中间件在 `gateway.api` 中以 `middleware: Auth,RateLimit` 或 `middleware: BotAuth,BotRateLimit` 显式声明,`routes.go` 由 `goctl api go` 生成,**禁止**手工修改 `routes.go` 注入中间件——重生成会被冲掉。
+- **响应**:REST 超额返回 HTTP 429 + `{"code":42900,"msg":"rate limit"}`;WS 超额通过 `SERVER_ACK` 返回 `ACK_STATUS_REJECTED` + `code=42900`,不关闭连接。
+
 ### 代理转发  `auth` - `/api/auth`
 
 - `/register` 参考 `aim-auth-domain` 中的 gRPC api 定义 **无需鉴权**

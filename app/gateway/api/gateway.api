@@ -378,7 +378,7 @@ service gateway-api {
 }
 
 @server (
-	middleware: Auth
+	middleware: Auth,RateLimit
 	prefix:     /api/attachments
 	group:      attachments
 )
@@ -397,7 +397,7 @@ service gateway-api {
 }
 
 @server (
-	middleware: Auth
+	middleware: Auth,RateLimit
 	prefix:     /api/users
 	group:      users
 )
@@ -413,7 +413,7 @@ service gateway-api {
 }
 
 @server (
-	middleware: Auth
+	middleware: Auth,RateLimit
 	prefix:     /api/conversations
 	group:      conversations
 )
@@ -459,7 +459,7 @@ service gateway-api {
 }
 
 @server (
-	middleware: Auth
+	middleware: Auth,RateLimit
 	prefix:     /api/friends
 	group:      friends
 )
@@ -507,7 +507,7 @@ type GetFriendsPresenceResponse {
 }
 
 @server (
-	middleware: Auth
+	middleware: Auth,RateLimit
 	prefix:     /api/presence
 	group:      presence
 )
@@ -718,9 +718,6 @@ service gateway-api {
 	@handler BotListReadStates
 	get /conversations/:id/read-states (BotListReadStatesRequest) returns (BotListReadStatesResponse)
 
-	@handler BotSendMessage
-	post /messages (BotSendMessageRequest) returns (BotSendMessageResponse)
-
 	@handler BotGetWebhook
 	get /webhook returns (BotGetWebhookResponse)
 
@@ -732,6 +729,20 @@ service gateway-api {
 
 	@handler BotDownloadAttachment
 	get /attachments/:id/download (BotDownloadAttachmentRequest) returns (BotDownloadAttachmentResponse)
+}
+
+// Bot write endpoints (rate-limited per TokenID via ServiceContext.BotRateLimitQuota).
+// Split from the read block above so the per-TokenID rate limit does not apply
+// to the high-frequency BotGetMe / BotListConversations / history / members /
+// webhook lookup calls.
+@server (
+	middleware: BotAuth,BotRateLimit
+	prefix:     /api/bot/v1
+	group:      bot
+)
+service gateway-api {
+	@handler BotSendMessage
+	post /messages (BotSendMessageRequest) returns (BotSendMessageResponse)
 }
 
 type FriendTagItem {
@@ -830,7 +841,7 @@ type SearchResponse {
 }
 
 @server (
-	middleware: Auth
+	middleware: Auth,RateLimit
 	prefix:     /api/search
 	group:      search
 )
@@ -1024,7 +1035,7 @@ type ListBotEventsResponse {
 }
 
 @server (
-	middleware: Auth
+	middleware: Auth,RateLimit
 	prefix:     /api/user/bots
 	group:      userbots
 )
@@ -1073,7 +1084,7 @@ service gateway-api {
 }
 
 @server (
-	middleware: Auth
+	middleware: Auth,RateLimit
 	prefix:     /api/user
 	group:      userbots
 )

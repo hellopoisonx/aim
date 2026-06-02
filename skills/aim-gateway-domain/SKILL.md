@@ -24,6 +24,7 @@ description: aim 的网关域。对应 `gateway` 模块。
 
 ## 最近变更
 
+- 2026-06-02: Gateway 限流与 `.api` spec 对齐。拆分 `/api/bot/v1` 服务块为 `bot-read` (BotAuth) + `bot-write` (BotAuth,BotRateLimit),为 8 个 `@server` 块追加 `, RateLimit`,routes.go 与 `.api` 一一对应,WS SEND_MESSAGE 限流与 REST 共享 `ServiceContext.RateLimitQuota`。goctl 1.10.1 会重新生成 `botratelimit_middleware.go` 脚手架,已在 `.gitignore` 排除。同步更新 `references/api.md` 「限流」章节。
 - 2026-05-30: WS 心跳触发服务端轻量重放。`ReplayStore` 复用 go-zero `collection.Cache` L1 内存缓存，按连接保存白名单 pending 帧（默认 128 帧、5 分钟）；`HeartbeatPayload.last_seq` 与 `FRAME_TYPE_ACK.ack_seq` 基于已连续处理的白名单 pending 推送帧推进 `LastAckedSeq` 并清理已确认帧，心跳 ACK 后补发 `seq > last_seq` 的白名单帧。
 - 2026-05-30: WS 轻量 pending 分类文档化。推荐 pending 白名单为 `PUSH_MESSAGE`、`PUSH_NOTIFICATION`、`PUSH_FRIEND_APPLICATION`、`PUSH_READ_RECEIPT`；`PUSH_TYPING`、`PUSH_PRESENCE`、`RECONNECT`、`TOKEN_EXPIRED`、`SERVER_ACK` 不进入 pending，presence 重连后拉 `GET /api/presence/friends` 快照。同步更新 `docs/ws.md`、`docs/client_implement_instruction.md` 与 `references/ws-internals.md`。
 - 2026-05-29: Gateway 文档同步。`docs/api/gateway-openapi.yaml` 成为 REST schema/参数/错误响应的权威文档；`docs/client_implement_instruction.md`、`docs/bot-developer-guide.md` 与 `references/api.md` 改为引用 OpenAPI 并同步好友标签、统一搜索、群管理员/群主转让接口。
