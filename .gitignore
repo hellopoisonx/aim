@@ -26,7 +26,5 @@ coverage*
 /deploy/env/*.secret.env
 /dev-tool/.venv
 *.venv
-# goctl 1.10.1 always regenerates this stub when gateway.api references
-# BotRateLimit. The real implementation lives in ratelimit_middleware.go.
-/app/gateway/api/internal/middleware/botratelimit_middleware.go
-
+docker-images/
+.pi/approval.json
