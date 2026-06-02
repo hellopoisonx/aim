@@ -20,9 +20,10 @@ import (
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/botservice"
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/conversationservice"
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/friendshipservice"
-	"github.com/hellopoisonx/aim/app/logic/rpc/client/userservice"
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/searchservice"
+	"github.com/hellopoisonx/aim/app/logic/rpc/client/userservice"
 	aimnacos "github.com/hellopoisonx/aim/app/shared/nacos"
+	"github.com/hellopoisonx/aim/app/shared/quota"
 	"github.com/hellopoisonx/aim/app/shared/tracing"
 
 	"github.com/redis/go-redis/v9"
@@ -179,16 +180,21 @@ type ServiceContext struct {
 	AttachmentClient        attachmentpb.AttachmentServiceClient
 	Auth                    rest.Middleware
 	BotAuth                 rest.Middleware
-	namingClient            aimnacos.NamingClient
-	coreNamingClient        aimnacos.NamingClient
-	logicNamingClient       aimnacos.NamingClient
-	attachmentNamingClient  aimnacos.NamingClient
-	RedisClient             *redis.Client
-	PresencePub             PresencePublisher
-	TypingPub               TypingPublisher
-	ReadReceiptPub          ReadReceiptPublisher
-	WsManager               *ws.Manager
-	reaperCancel            context.CancelFunc // cancels the presence reaper goroutine
+	RateLimit               rest.Middleware
+	BotRateLimit            rest.Middleware
+	RateLimitQuota          *quota.QuotaStore
+	BotRateLimitQuota       *quota.QuotaStore
+
+	namingClient           aimnacos.NamingClient
+	coreNamingClient       aimnacos.NamingClient
+	logicNamingClient      aimnacos.NamingClient
+	attachmentNamingClient aimnacos.NamingClient
+	RedisClient            *redis.Client
+	PresencePub            PresencePublisher
+	TypingPub              TypingPublisher
+	ReadReceiptPub         ReadReceiptPublisher
+	WsManager              *ws.Manager
+	reaperCancel           context.CancelFunc // cancels the presence reaper goroutine
 }
 
 func NewServiceContext(c config.Config) *ServiceContext {
@@ -260,6 +266,27 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		logx.WithContext(context.Background()).Infof("Redis connected at %s", c.Redis.Addr)
 	}
 
+	// Build rate-limit quota stores. The "aim:gateway:quota" namespace covers
+	// human (device_id, user_id) buckets; "aim:gateway:quota:bot" covers Bot
+	// per-TokenID buckets. Both stores are nil when MaxRequests <= 0, which
+	// makes the middlewares no-ops.
+	rateLimitQuota, err := quota.New(redisClient, quota.Options{
+		KeyPrefix:   "aim:gateway:quota",
+		Window:      time.Duration(c.RateLimitQuota.WindowSeconds) * time.Second,
+		MaxRequests: c.RateLimitQuota.MaxRequests,
+	})
+	if err != nil {
+		logx.WithContext(context.Background()).Errorf("failed to create gateway rate limit store: %v", err)
+	}
+	botRateLimitQuota, err := quota.New(redisClient, quota.Options{
+		KeyPrefix:   "aim:gateway:quota:bot",
+		Window:      time.Duration(c.BotRateLimitQuota.WindowSeconds) * time.Second,
+		MaxRequests: c.BotRateLimitQuota.MaxRequests,
+	})
+	if err != nil {
+		logx.WithContext(context.Background()).Errorf("failed to create bot rate limit store: %v", err)
+	}
+
 	// Create WebSocket connection manager shared by HTTP handler and gRPC server.
 	// Use presence-aware manager when Redis and node ID are available.
 	wsManager := ws.NewManagerWithPresence(redisClient, c.GatewayNodeID, c.Redis.PresenceTTL)
@@ -278,15 +305,20 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		AttachmentClient:        attachmentpb.NewAttachmentServiceClient(attachmentClient.Conn()),
 		Auth:                    middleware.NewAuthMiddleware(c.Auth.AccessSecret).Handle,
 		BotAuth:                 middleware.NewBotAuthMiddleware(logicBotClient).Handle,
-		namingClient:            namingClient,
-		coreNamingClient:        coreNamingClient,
-		logicNamingClient:       logicNamingClient,
-		attachmentNamingClient:  attachmentNamingClient,
-		RedisClient:             redisClient,
-		PresencePub:             newPresencePub(c, redisClient),
-		TypingPub:               newTypingPub(c, redisClient),
-		ReadReceiptPub:          newReadReceiptPub(c, redisClient),
-		WsManager:               wsManager,
+		RateLimit:               middleware.NewRateLimitMiddleware(rateLimitQuota).Handle,
+		BotRateLimit:            middleware.NewBotRateLimitMiddleware(botRateLimitQuota).Handle,
+		RateLimitQuota:          rateLimitQuota,
+		BotRateLimitQuota:       botRateLimitQuota,
+
+		namingClient:           namingClient,
+		coreNamingClient:       coreNamingClient,
+		logicNamingClient:      logicNamingClient,
+		attachmentNamingClient: attachmentNamingClient,
+		RedisClient:            redisClient,
+		PresencePub:            newPresencePub(c, redisClient),
+		TypingPub:              newTypingPub(c, redisClient),
+		ReadReceiptPub:         newReadReceiptPub(c, redisClient),
+		WsManager:              wsManager,
 	}
 }
 
@@ -368,6 +400,8 @@ func NewServiceContextWithAuth(c config.Config, authClient authservice.AuthServi
 		AuthClient:     authClient,
 		Auth:           middleware.NewAuthMiddleware(c.Auth.AccessSecret).Handle,
 		BotAuth:        middleware.NewBotAuthMiddleware(nil).Handle,
+		RateLimit:      middleware.NewRateLimitMiddleware(nil).Handle,
+		BotRateLimit:   middleware.NewBotRateLimitMiddleware(nil).Handle,
 		CoreClient:     nil,
 		RedisClient:    nil,
 		PresencePub:    nil,

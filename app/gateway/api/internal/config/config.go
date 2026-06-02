@@ -54,4 +54,23 @@ type Config struct {
 	// Populated from env AIM_GATEWAY_NODE_ID; startup fails if empty.
 	GatewayNodeID string `json:",optional"` //nolint:staticcheck // go-zero conf uses json tag options for defaults.
 	GatewayRpc    zrpc.RpcServerConf
+
+	// RateLimitQuota configures the per-(device_id, user_id) sliding-window
+	// rate limit applied at the gateway entry point.
+	RateLimitQuota RateLimitQuotaConf `json:",optional"`
+	// BotRateLimitQuota configures the per-TokenID rate limit applied to Bot
+	// OpenAPI endpoints. The two buckets are kept disjoint by KeyPrefix.
+	BotRateLimitQuota RateLimitQuotaConf `json:",optional"`
+}
+
+// RateLimitQuotaConf configures a Redis sliding-window rate limit applied at
+// the gateway entry point. MaxRequests <= 0 disables the limiter (the store
+// is constructed as nil and the middlewares pass through).
+type RateLimitQuotaConf struct {
+	// WindowSeconds is the rolling window in seconds. Values <= 0 disable
+	// the limiter.
+	WindowSeconds int `json:",default=60"` //nolint:staticcheck // go-zero conf uses json tag options for defaults.
+	// MaxRequests is the maximum number of allowed requests per Window per
+	// (device_id, user_id) bucket. Values <= 0 disable the limiter.
+	MaxRequests int64 `json:",default=100"` //nolint:staticcheck // go-zero conf uses json tag options for defaults.
 }

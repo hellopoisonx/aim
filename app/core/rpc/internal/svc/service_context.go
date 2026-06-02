@@ -30,7 +30,6 @@ type ServiceContext struct {
 	LogicUserClient         logicpb.UserServiceClient
 	GatewayClient           rpc.GatewayPusher
 	PresenceStore           cache.PresenceDirectory
-	TransferQuota           *cache.QuotaStore
 	AttachmentClient        attachmentpb.AttachmentServiceClient
 	namingClient            nacos.NamingClient
 	attachmentNamingClient  nacos.NamingClient
@@ -149,17 +148,6 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		}
 	}
 
-	// Transfer quota (nil when MaxRequests <= 0).
-	var transferQuota *cache.QuotaStore
-	if c.TransferQuota.MaxRequests > 0 {
-		window := c.TransferQuota.WindowSeconds
-		if window <= 0 {
-			window = 10
-		}
-		transferQuota = cache.NewQuotaStore(redisClient, window, c.TransferQuota.MaxRequests)
-		logx.WithContext(context.Background()).Infof("transfer quota enabled: %d req/%ds", c.TransferQuota.MaxRequests, window)
-	}
-
 	// Gateway RPC client (nil if not configured).
 	// Uses GatewayRouter to support both single-gateway and multi-gateway routing.
 	var gatewayClient rpc.GatewayPusher
@@ -193,7 +181,6 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		LogicUserClient:         logicUserClient,
 		GatewayClient:           gatewayClient,
 		PresenceStore:           presenceStore,
-		TransferQuota:           transferQuota,
 		AttachmentClient:        attachmentClient,
 		namingClient:            namingClient,
 		attachmentNamingClient:  attachmentNamingClient,

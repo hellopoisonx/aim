@@ -19,7 +19,6 @@ type Config struct {
 	ConversationEventProducerConf KqPusherConf       `json:",optional"`
 	CacheRedis                    RedisConf          `json:",optional"`
 	Cache                         sharedcache.Config `json:",optional"`
-	Quota                         QuotaConf          `json:",optional"`
 	Dev                           DevConf            `json:",optional"`
 	MachineID                     int64              `json:",default=1"`
 }
@@ -37,11 +36,6 @@ type RedisConf struct {
 	Addr     string `json:",default=127.0.0.1:6379"`
 	Password string `json:",optional"`
 	DB       int    `json:",default=0"`
-}
-
-type QuotaConf struct {
-	WindowSeconds int   `json:",default=60"`
-	MaxRequests   int64 `json:",default=100"`
 }
 
 // DevConf 用于开发/压测场景下的可调旋钮，生产配置请保持默认值。

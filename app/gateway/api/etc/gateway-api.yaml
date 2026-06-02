@@ -112,3 +112,16 @@ GatewayRpc:
     Sampler: 1.0
     Batcher: otlphttp
     OtlpHttpPath: /v1/traces
+
+# Per-(device_id, user_id) sliding-window rate limit applied to all
+# human-authenticated REST endpoints. MaxRequests <= 0 disables the
+# limiter.
+RateLimitQuota:
+  WindowSeconds: 60
+  MaxRequests: 100
+# Per-TokenID sliding-window rate limit applied to /api/bot/v1/messages.
+# Kept in a separate namespace (aim:gateway:quota:bot) so the bucket is
+# disjoint from human traffic.
+BotRateLimitQuota:
+  WindowSeconds: 60
+  MaxRequests: 100

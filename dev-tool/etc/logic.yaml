@@ -55,9 +55,6 @@ ConversationEventProducerConf:
   Brokers:
     - bench-kafka:9092
   Topic: aim.conversation.events
-Quota:
-  WindowSeconds: 60
-  MaxRequests: 100
 Dev:
   # 临时会话（非好友）单会话最多可发送的消息数。
   # 默认 10。当前 ServiceContext 会把 0 归一化为默认值；压测环境使用 -1 表示不限制。

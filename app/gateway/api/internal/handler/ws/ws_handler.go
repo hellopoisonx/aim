@@ -7,6 +7,7 @@ import (
 	"errors"
 	"math"
 	"net/http"
+	"strconv"
 	"sync/atomic"
 	"time"
 
@@ -541,6 +542,22 @@ func (h *WsHandler) handleSendMessage(ctx context.Context, conn *websocket.Conn,
 		return h.writeErrorAck(ctx, conn, frame.GetSeq(), sendPayload.GetClientMsgId(), pb.AckStatus_ACK_STATUS_REJECTED, codeErr.Code, codeErr.Message)
 	}
 
+	// Per-(device_id, user_id) sliding-window rate limit. Mirrors the REST
+	// RateLimitMiddleware; a nil store disables the limiter (e.g. when
+	// RateLimitQuota.MaxRequests <= 0).
+	if h.srv.RateLimitQuota != nil {
+		allowed, _, err := h.srv.RateLimitQuota.AllowPair(ctx, identity.DeviceID, strconv.FormatInt(identity.UserID, 10))
+		if err != nil {
+			logx.WithContext(ctx).Errorf("ws send rate limit check failed for user=%d device=%q: %v",
+				identity.UserID, identity.DeviceID, err)
+		} else if !allowed {
+			codeErr := errorx.NewCodeError(errorx.CodeRateLimit, "rate limit")
+			span.RecordError(codeErr)
+			span.SetStatus(codes.Error, codeErr.Message)
+			return h.writeErrorAck(ctx, conn, frame.GetSeq(), sendPayload.GetClientMsgId(), pb.AckStatus_ACK_STATUS_REJECTED, codeErr.Code, codeErr.Message)
+		}
+	}
+
 	span.SetAttributes(
 		attribute.Int64("ws.user_id", identity.UserID),
 		attribute.String("ws.device_id", identity.DeviceID),
@@ -679,7 +696,8 @@ func mapTransferToAck(ackSeq int64, clientMsgID string, seq int64, resp *corepb.
 // writeFrame writes a WsFrame to the WebSocket connection with a 5s timeout.
 func (h *WsHandler) writeFrame(ctx context.Context, conn *websocket.Conn, frame *pb.WsFrame) error {
 	tracer := otel.Tracer("github.com/hellopoisonx/aim/app/gateway/api")
-	ctx, span := tracer.Start(ctx, "ws.write_frame",
+	ctx, span := tracer.Start(
+		ctx, "ws.write_frame",
 		trace.WithAttributes(attribute.String("ws.frame_type", frame.GetType().String())),
 		trace.WithSpanKind(trace.SpanKindInternal),
 	)

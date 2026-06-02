@@ -85,12 +85,14 @@ shared/proto/
 - 调用方：业务（公告 / 维护 / 强制升级）通过 core `GatewayPusher.PushNotification`（或 `GatewayRouter.PushNotificationToNode`）调用网关；网关查找目标用户连接并写帧。
 
 ### 速率限流
-
-- core `Transfer` 在权限检查前调用 Redis 滑动窗口限流（`aim:transfer:quota:{sender_id}`）。
-- 配置：`TransferQuotaConf{ WindowSeconds, MaxRequests }`。`MaxRequests <= 0` 关闭限流。
-- 命中限流时返回 `errorx.CodeRateLimit (42900)` -> gRPC `ResourceExhausted` -> ws `ServerAckPayload` `ACK_STATUS_REJECTED`。
-- Redis 故障时 fail-open（仅记录日志），保证消息可用性优先。
-
+- 限流收敛在 gateway 一层,不再在 core/logic 重复实现。
+- gateway 人类路径:`RateLimitMiddleware` 挂载在 `AuthMiddleware` 之后,对所有受 `Auth` 保护的 REST 路由生效,key 命名空间 `aim:gateway:quota`,key 形如 `aim:gateway:quota:<deviceID>:<userID>`(空 device 渲染为 `unknown`)。
+- gateway Bot 路径:`BotRateLimitMiddleware` 仅对 `/api/bot/v1/messages` 生效,key 命名空间 `aim:gateway:quota:bot`,key 形如 `aim:gateway:quota:bot:<tokenID>`(单维 TokenID)。
+- 配置:`RateLimitQuotaConf{ WindowSeconds, MaxRequests }`(人类 / Bot 独立配置)。`MaxRequests <= 0` 关闭限流(store 置 nil,middleware 自动放行)。
+- WebSocket 路径:`/ws` 不走中间件;`handleSendMessage` 在调 `core.Transfer` 之前手动 `AllowPair(deviceID, userID)`,命中时通过 `ServerAckPayload` 返回 `ACK_STATUS_REJECTED + CodeRateLimit`。其它 WS 帧(HEARTBEAT/TYPING/READ_RECEIPT)不限流。
+- 命中限流时返回 `errorx.CodeRateLimit (42900)` -> HTTP 429 / ws `ServerAckPayload` `ACK_STATUS_REJECTED`。
+- Redis 故障时 fail-open(仅记录日志),保证消息可用性优先。
+- 历史 key:`aim:transfer:quota:*`(core 旧)/ `aim:logic:quota:*`(logic dead code 已删) 会随原 TTL 自然过期;如需立即释放可 `redis-cli --scan --pattern 'aim:transfer:quota:*' | xargs redis-cli DEL`。
 ## 一般规则
 
 - WebSocket 只使用 Protobuf binary frame；不要新增 JSON/text frame 协议。

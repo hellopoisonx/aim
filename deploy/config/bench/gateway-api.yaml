@@ -110,3 +110,14 @@ AttachmentRpc:
   LogDir: /app/log/nacos
   CacheDir: /tmp/nacos/cache
   LogLevel: info
+
+# Per-(device_id, user_id) sliding-window rate limit applied to all
+# human-authenticated REST endpoints. MaxRequests <= 0 disables the
+# limiter.
+RateLimitQuota:
+  WindowSeconds: 60
+  MaxRequests: 100
+# Per-TokenID sliding-window rate limit applied to /api/bot/v1/messages.
+BotRateLimitQuota:
+  WindowSeconds: 60
+  MaxRequests: 100

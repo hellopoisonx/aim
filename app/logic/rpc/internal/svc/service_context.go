@@ -4,15 +4,15 @@ import (
 	"context"
 	"time"
 
-	"github.com/hellopoisonx/aim/app/logic/rpc/internal/cache"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/config"
+
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/service"
 	"github.com/hellopoisonx/aim/app/logic/rpc/model"
 	sharedcache "github.com/hellopoisonx/aim/app/shared/cache"
+
 	"github.com/hellopoisonx/aim/app/shared/tools"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/redis/go-redis/v9"
 	"github.com/segmentio/kafka-go"
 	"github.com/zeromicro/go-queue/kq"
 	"github.com/zeromicro/go-zero/core/logx"
@@ -30,7 +30,6 @@ type ServiceContext struct {
 	DB                      model.DBTX
 	Pool                    *pgxpool.Pool
 	ConversationEventPusher *kq.Pusher
-	QuotaStore              *cache.QuotaStore
 	IDGen                   *tools.Snowflake
 	CacheManager            *sharedcache.CacheManager
 	ConvCache               *sharedcache.TypedCache[model.GetConversationRow]
@@ -41,6 +40,7 @@ type ServiceContext struct {
 	BotTokenCache           *sharedcache.TypedCache[model.GetBotTokenByHashRow]
 	queries                 *model.Queries
 }
+
 func NewServiceContext(c config.Config) *ServiceContext {
 	svcCtx := &ServiceContext{
 		Config:            c,
@@ -102,18 +102,6 @@ func NewServiceContext(c config.Config) *ServiceContext {
 			}
 		}
 	}
-
-	if c.CacheRedis.Addr != "" {
-		client := redis.NewClient(&redis.Options{
-			Addr:     c.CacheRedis.Addr,
-			Password: c.CacheRedis.Password,
-			DB:       c.CacheRedis.DB,
-		})
-		svcCtx.QuotaStore = cache.NewQuotaStore(client, c.Quota.WindowSeconds, c.Quota.MaxRequests)
-
-		logx.WithContext(context.Background()).Infof("Redis connected for quota store")
-	}
-
 	return svcCtx
 }
 

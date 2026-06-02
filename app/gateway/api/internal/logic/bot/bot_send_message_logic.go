@@ -15,8 +15,8 @@ import (
 )
 
 // botDeviceID is the device_id reported to core.Transfer for Bot OpenAPI
-// requests. It keeps Bot quotas separate from human WS quotas via the
-// (sender_id, device_id) key tuple in TransferLogic.
+// requests so that downstream services can attribute the source as
+// bot-api even though no physical device is involved.
 const botDeviceID = "bot-api"
 
 // botSendAction is the token action required to publish a message.

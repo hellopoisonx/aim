@@ -67,12 +67,8 @@ func (l *TransferLogic) Transfer(in *pb.TransferReq) (*pb.TransferResp, error) {
 		}, nil
 	}
 
-	// 3. Sliding-window rate limit before any expensive downstream call.
-	if err := l.checkQuota(in); err != nil {
-		return nil, err
-	}
+	// 3. Permission check: ask logic service if sender can send to conversation
 
-	// 4. Permission check: ask logic service if sender can send to conversation
 	if err := l.checkPermission(in); err != nil {
 		return nil, err
 	}
@@ -142,33 +138,6 @@ func (l *TransferLogic) validate(in *pb.TransferReq) error {
 	return nil
 }
 
-// checkQuota enforces the per-(sender_id, device_id) sliding-window limit.
-// Returns a rate-limit CodeError when the quota is exceeded; transient Redis
-// failures are logged and fail-open so messaging stays available even if Redis
-// is briefly unreachable.
-func (l *TransferLogic) checkQuota(in *pb.TransferReq) error {
-	if l.svcCtx.TransferQuota == nil {
-		return nil
-	}
-
-	allowed, _, err := l.svcCtx.TransferQuota.CheckQuota(l.ctx, in.SenderId, in.DeviceId)
-	if err != nil {
-		l.Errorf("transfer quota check failed for sender %d device %q: %v", in.SenderId, in.DeviceId, err)
-		return nil
-	}
-
-	if !allowed {
-		return errorx.NewCodeError(errorx.CodeRateLimit, "rate limit")
-	}
-	if sharedattachment.IsAttachmentMessageType(in.MessageType) {
-		if _, err := sharedattachment.ParseContent(in.Content); err != nil {
-			return errorx.NewCodeErrorf(errorx.CodeBadInput, "invalid attachment content: %v", err)
-		}
-	}
-
-	return nil
-}
-
 func (l *TransferLogic) checkAttachmentReference(in *pb.TransferReq) error {
 	if !sharedattachment.IsAttachmentMessageType(in.MessageType) {
 		return nil
@@ -178,6 +147,11 @@ func (l *TransferLogic) checkAttachmentReference(in *pb.TransferReq) error {
 	}
 	if err := l.attachments.ValidateReference(l.ctx, in.SenderId, in.ConversationId, in.MessageType, in.Content); err != nil {
 		return errorx.NewCodeErrorf(errorx.CodeBadInput, "invalid attachment reference: %v", err)
+	}
+	// Local content sanity check (was historically inlined in checkQuota; keep
+	// the validation order so attachment parsing errors still surface here).
+	if _, err := sharedattachment.ParseContent(in.Content); err != nil {
+		return errorx.NewCodeErrorf(errorx.CodeBadInput, "invalid attachment content: %v", err)
 	}
 	return nil
 }

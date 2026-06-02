@@ -17,6 +17,7 @@
 | `s3signer` | SeaweedFS S3 预签名工具 | attachment/data_parsing |
 | `tracing` | W3C trace context 经 Kafka payload 传播；Kafka producer/consumer span 与错误标记 helper | auth/core/logic/gateway/attachment/data_parsing |
 | `tools` | Snowflake ID 生成器 | auth/core |
+| `quota` | Redis ZSET 滑动窗口限流；`Allow` / `AllowPair` / `Enabled` 三入口 | gateway |
 | `moderation` | 内容审核 `Checker` 接口与 noop 实现 | core/ai 进程内调用 |
 
 ## 规则
