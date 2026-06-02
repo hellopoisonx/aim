@@ -378,7 +378,7 @@ service gateway-api {
 }
 
 @server (
-	middleware: Auth,RateLimit
+	middleware: Auth,UserRateLimit
 	prefix:     /api/attachments
 	group:      attachments
 )
@@ -397,7 +397,7 @@ service gateway-api {
 }
 
 @server (
-	middleware: Auth,RateLimit
+	middleware: Auth,UserRateLimit
 	prefix:     /api/users
 	group:      users
 )
@@ -413,7 +413,7 @@ service gateway-api {
 }
 
 @server (
-	middleware: Auth,RateLimit
+	middleware: Auth,UserRateLimit
 	prefix:     /api/conversations
 	group:      conversations
 )
@@ -459,7 +459,7 @@ service gateway-api {
 }
 
 @server (
-	middleware: Auth,RateLimit
+	middleware: Auth,UserRateLimit
 	prefix:     /api/friends
 	group:      friends
 )
@@ -507,7 +507,7 @@ type GetFriendsPresenceResponse {
 }
 
 @server (
-	middleware: Auth,RateLimit
+	middleware: Auth,UserRateLimit
 	prefix:     /api/presence
 	group:      presence
 )
@@ -841,7 +841,7 @@ type SearchResponse {
 }
 
 @server (
-	middleware: Auth,RateLimit
+	middleware: Auth,UserRateLimit
 	prefix:     /api/search
 	group:      search
 )
@@ -1035,7 +1035,7 @@ type ListBotEventsResponse {
 }
 
 @server (
-	middleware: Auth,RateLimit
+	middleware: Auth,UserRateLimit
 	prefix:     /api/user/bots
 	group:      userbots
 )
@@ -1084,7 +1084,7 @@ service gateway-api {
 }
 
 @server (
-	middleware: Auth,RateLimit
+	middleware: Auth,UserRateLimit
 	prefix:     /api/user
 	group:      userbots
 )

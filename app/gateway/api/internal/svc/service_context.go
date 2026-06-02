@@ -180,7 +180,7 @@ type ServiceContext struct {
 	AttachmentClient        attachmentpb.AttachmentServiceClient
 	Auth                    rest.Middleware
 	BotAuth                 rest.Middleware
-	RateLimit               rest.Middleware
+	UserRateLimit           rest.Middleware
 	BotRateLimit            rest.Middleware
 	RateLimitQuota          *quota.QuotaStore
 	BotRateLimitQuota       *quota.QuotaStore
@@ -305,7 +305,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		AttachmentClient:        attachmentpb.NewAttachmentServiceClient(attachmentClient.Conn()),
 		Auth:                    middleware.NewAuthMiddleware(c.Auth.AccessSecret).Handle,
 		BotAuth:                 middleware.NewBotAuthMiddleware(logicBotClient).Handle,
-		RateLimit:               middleware.NewRateLimitMiddleware(rateLimitQuota).Handle,
+		UserRateLimit:           middleware.NewUserRateLimitMiddleware(rateLimitQuota).Handle,
 		BotRateLimit:            middleware.NewBotRateLimitMiddleware(botRateLimitQuota).Handle,
 		RateLimitQuota:          rateLimitQuota,
 		BotRateLimitQuota:       botRateLimitQuota,
@@ -400,7 +400,7 @@ func NewServiceContextWithAuth(c config.Config, authClient authservice.AuthServi
 		AuthClient:     authClient,
 		Auth:           middleware.NewAuthMiddleware(c.Auth.AccessSecret).Handle,
 		BotAuth:        middleware.NewBotAuthMiddleware(nil).Handle,
-		RateLimit:      middleware.NewRateLimitMiddleware(nil).Handle,
+		UserRateLimit:  middleware.NewUserRateLimitMiddleware(nil).Handle,
 		BotRateLimit:   middleware.NewBotRateLimitMiddleware(nil).Handle,
 		CoreClient:     nil,
 		RedisClient:    nil,

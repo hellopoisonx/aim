@@ -23,7 +23,7 @@ import (
 func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 	server.AddRoutes(
 		rest.WithMiddlewares(
-			[]rest.Middleware{serverCtx.Auth, serverCtx.RateLimit},
+			[]rest.Middleware{serverCtx.Auth, serverCtx.UserRateLimit},
 			[]rest.Route{
 				{
 					Method:  http.MethodGet,
@@ -151,7 +151,7 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 
 	server.AddRoutes(
 		rest.WithMiddlewares(
-			[]rest.Middleware{serverCtx.Auth, serverCtx.RateLimit},
+			[]rest.Middleware{serverCtx.Auth, serverCtx.UserRateLimit},
 			[]rest.Route{
 				{
 					Method:  http.MethodPost,
@@ -225,7 +225,7 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 
 	server.AddRoutes(
 		rest.WithMiddlewares(
-			[]rest.Middleware{serverCtx.Auth, serverCtx.RateLimit},
+			[]rest.Middleware{serverCtx.Auth, serverCtx.UserRateLimit},
 			[]rest.Route{
 				{
 					Method:  http.MethodPut,
@@ -284,7 +284,7 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 
 	server.AddRoutes(
 		rest.WithMiddlewares(
-			[]rest.Middleware{serverCtx.Auth, serverCtx.RateLimit},
+			[]rest.Middleware{serverCtx.Auth, serverCtx.UserRateLimit},
 			[]rest.Route{
 				{
 					Method:  http.MethodGet,
@@ -298,7 +298,7 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 
 	server.AddRoutes(
 		rest.WithMiddlewares(
-			[]rest.Middleware{serverCtx.Auth, serverCtx.RateLimit},
+			[]rest.Middleware{serverCtx.Auth, serverCtx.UserRateLimit},
 			[]rest.Route{
 				{
 					Method:  http.MethodGet,
@@ -312,7 +312,7 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 
 	server.AddRoutes(
 		rest.WithMiddlewares(
-			[]rest.Middleware{serverCtx.Auth, serverCtx.RateLimit},
+			[]rest.Middleware{serverCtx.Auth, serverCtx.UserRateLimit},
 			[]rest.Route{
 				{
 					Method:  http.MethodPost,
@@ -391,7 +391,7 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 
 	server.AddRoutes(
 		rest.WithMiddlewares(
-			[]rest.Middleware{serverCtx.Auth, serverCtx.RateLimit},
+			[]rest.Middleware{serverCtx.Auth, serverCtx.UserRateLimit},
 			[]rest.Route{
 				{
 					Method:  http.MethodGet,
@@ -410,7 +410,7 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 
 	server.AddRoutes(
 		rest.WithMiddlewares(
-			[]rest.Middleware{serverCtx.Auth, serverCtx.RateLimit},
+			[]rest.Middleware{serverCtx.Auth, serverCtx.UserRateLimit},
 			[]rest.Route{
 				{
 					Method:  http.MethodGet,
