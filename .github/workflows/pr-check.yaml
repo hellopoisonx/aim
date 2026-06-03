@@ -1,16 +1,20 @@
-name: PR Check
-
 # 触发: 任何 PR + main 分支推送
 # 不依赖 docker, 3-5 分钟完成
 # 作用:
-#   1. 编译 + 单元测试
+#   1. 编译 + 单元测试 + 覆盖率软门禁
 #   2. .golangci.yaml lint
 #   3. goctl api go 重生成 + git diff (守住 gateway.api 契约)
+name: PR Check
 
 on:
   pull_request:
   push:
     branches: [main]
+
+# 同一 PR 反复 push 时, 自动取消旧的 in-progress run, 节省 CI 资源
+concurrency:
+  group: pr-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -19,6 +23,7 @@ jobs:
   build-test:
     name: Build + Test
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
@@ -28,18 +33,24 @@ jobs:
           go-version: "1.26"
           cache: true
 
-      - name: Download modules
-        run: go mod download
-
       - name: Build
         run: go build ./app/... ./shared/...
 
+      # AGENTS.md 要求 "代码更改后必须执行测试、覆盖率测试、lint"
+      # coverage 软门禁: < 50% 时仅 ::warning::, 不阻断 PR
+      # 等项目覆盖率基线稳定后再考虑升级为 hard-fail
       - name: Test (with coverage)
         run: |
           mkdir -p coverage
           go test -coverprofile=coverage/coverage.out ./app/... ./shared/...
-          go tool cover -func=coverage/coverage.out | tail -1
-        # AGENTS.md 要求 "代码更改后必须执行测试、覆盖率测试、lint"
+          total=$(go tool cover -func=coverage/coverage.out | tail -1)
+          echo "覆盖率: $total"
+          pct=$(echo "$total" | grep -oE '[0-9]+\.[0-9]+%' | head -1 | tr -d '%')
+          if awk -v p="$pct" 'BEGIN { exit !(p+0 < 50) }'; then
+            echo "::warning::覆盖率 ${pct}% 低于 50% 软门禁"
+          else
+            echo "✓ 覆盖率 ${pct}% ≥ 50% 软门禁"
+          fi
 
       - name: Upload coverage artifact
         if: always()
@@ -51,6 +62,7 @@ jobs:
   lint:
     name: Lint
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
@@ -59,9 +71,6 @@ jobs:
         with:
           go-version: "1.26"
           cache: true
-
-      - name: Download modules
-        run: go mod download
 
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v7
@@ -76,6 +85,7 @@ jobs:
     # 见 plans/gateway-ratelimit-spec-first.md (R2/R3/R4)。
     name: API Spec Contract (gateway.api)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
         with:
@@ -104,11 +114,11 @@ jobs:
         working-directory: app/gateway/api
         run: goctl api go -api gateway.api -dir . -style go_zero
 
+      # 期望: goctl 输出与提交完全一致 (.api 是 single source of truth)
+      # 若不一致, 说明有人手改 routes.go/types.go 而忘改 .api (或反之)
+      # 路径显式列出两个文件, 避免打错目录导致 git 退出码 128
+      # (128 会被 `!` 翻成 0 错误地跳过 diff 报错)
       - name: Diff generated handlers/types
-        # 期望: goctl 输出与提交完全一致 (.api 是 single source of truth)
-        # 若不一致, 说明有人手改 routes.go/types.go 而忘改 .api (或反之)
-        # 路径显式列出两个文件, 避免打错目录导致 git 退出码 128
-        # (128 会被 `!` 翻成 0 错误地跳过 diff 报错)
         run: |
           if ! git diff --exit-code \
               app/gateway/api/internal/handler/routes.go \

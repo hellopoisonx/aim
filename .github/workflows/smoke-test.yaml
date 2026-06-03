@@ -1,11 +1,10 @@
-name: Smoke Test (Rate Limit)
-
 # 手动触发的限流冒烟测试
 # 跑 dev-tool/rl_smoke.py 5 个端到端测试, 验证 REST/WS/Bot 限流契约
-# 需要起 docker compose, 耗时 ~6-8 分钟
+# 需要起 docker compose, 耗时 ~10-15 分钟 (含冷启动 build)
 #
 # 触发: Actions 页 → Smoke Test → Run workflow
 # 通常在: 改完 gateway-api 限流配置 / RateLimitQuota 调参 / 上游限流相关 PR 合并前
+name: Smoke Test (Rate Limit)
 
 on:
   workflow_dispatch:
@@ -16,6 +15,11 @@ on:
         default: "60"
         type: string
 
+# 同一时间只允许一个 smoke-test 运行, 避免互相争抢端口 / 数据库
+concurrency:
+  group: smoke-test
+  cancel-in-progress: false
+
 permissions:
   contents: read
 
@@ -23,7 +27,7 @@ jobs:
   rate-limit-smoke:
     name: Gateway 限流冒烟 (REST + WS + Bot)
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
         with:
@@ -49,9 +53,10 @@ jobs:
           python -m venv .venv
           .venv/bin/pip install -q -r requirements.txt
 
+      # AIM_ENV_FILE 由 deploy/env/local.env 内置 (默认 ../env/local.env),
+      # 兜底值由 base.yaml / observability.yaml 的 ${AIM_ENV_FILE:-...} 提供。
+      # 不在 step 上显式覆盖, 避免路径前缀错乱。
       - name: Bring up infra
-        env:
-          AIM_ENV_FILE: ../deploy/env/local.env
         run: |
           docker compose \
             --env-file deploy/env/local.env \
@@ -60,18 +65,22 @@ jobs:
             -f deploy/compose/dev.yaml \
             -f deploy/compose/tools.yaml \
             up -d --build
-          # 等所有容器 healthy
+          # 等所有容器 healthy (冷启动 + 6 服务 build 最多 ~10 分钟)
+          # 用 .State 字段判断 "running (healthy)", 不再用 .Status 的时间字符串
+          # (旧逻辑只匹配 "Up N minutes", 不匹配 seconds/hours, 是已知 bug)
           echo "等待基础设施 healthy ..."
-          for i in $(seq 1 60); do
-            unhealthy=$(docker ps --format '{{.Names}} {{.Status}}' | grep -E "aim-(gateway|auth|core|logic|postgres|redis|kafka|etcd)" | grep -v -E "healthy|Up [0-9]+ minutes" | wc -l)
+          for i in $(seq 1 120); do
+            unhealthy=$(docker ps --format '{{.Names}} {{.State}}' \
+              | grep -E "aim-(gateway|auth|core|logic|postgres|redis|kafka|etcd)" \
+              | grep -v "running (healthy)" | wc -l)
             if [ "$unhealthy" = "0" ]; then
               echo "  ✓ 基础设施就绪"
               break
             fi
-            echo "  ... 等待 $i/60"
+            echo "  ... 等待 $i/120"
             sleep 5
           done
-          docker ps --format "table {{.Names}}\t{{.Status}}" | head -25
+          docker ps --format "table {{.Names}}\t{{.State}}" | head -25
 
       - name: Register test users
         working-directory: dev-tool
@@ -81,10 +90,11 @@ jobs:
         run: |
           .venv/bin/python rl_smoke.py --setup t1
 
+      # RL 限流在 60s 窗口, 5 个测试串行约 5-8 分钟
+      # (含 token refresh / 桶重置等待)
       - name: Run rl_smoke.py all
         working-directory: dev-tool
-        # RL 限流在 60s 窗口, 5 个测试串行约 5 分钟
-        timeout-minutes: 10
+        timeout-minutes: 12
         run: |
           .venv/bin/python rl_smoke.py all --quota-window ${{ inputs.quota_window || '60' }}
         # 退出码非 0 时整个 job 失败
@@ -98,6 +108,20 @@ jobs:
           docker logs --tail 100 aim-logic
           echo "=== aim-redis keys ==="
           docker exec aim-redis redis-cli scan 0 match 'aim:gateway:quota:*' count 100
+
+      # 失败/成功都上传调试产物, 便于事后复盘
+      # .aim_state*.json 含 token / 登录态, 敏感, retention 7 天足够
+      - name: Upload debug artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-test-debug
+          if-no-files-found: ignore
+          retention-days: 7
+          path: |
+            dev-tool/.aim_state*.json
+            dev-tool/msg.txt
+            dev-tool/result.json
 
       - name: Tear down
         if: always()
