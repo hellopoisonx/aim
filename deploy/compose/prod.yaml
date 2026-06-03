@@ -1,6 +1,16 @@
 # 反向代理 / TLS 终止由宿主或集群侧（nginx / Caddy / 云 LB / k8s ingress）负责。
-# 本文件当前不引入任何服务，仅作为 prod 环境的覆盖钩子；如需新增 prod 专属
-# 服务（例如多实例 aim-gateway 副本、prod-only sidecar），请把 YAML 片段补到下方
-# services: 块下，并继续以 `expose:` 暴露端口，避免把内部端口直接映射到宿主机。
+# 宿主 nginx 通过 127.0.0.1 反代到容器内部端口 (仅 loopback 可见，安全)。
+#
+# 注意: seaweed-* 系列服务的 service key 不带 aim- 前缀,只有容器名 (container_name)
+#       才叫 aim-seaweed-*。下面 seaweed-s3 才是 base.yaml 里的真实服务名。
 
-services: {}
+services:
+  # gateway REST + WebSocket (8888)
+  aim-gateway:
+    ports:
+      - "127.0.0.1:8888:8888"
+
+  # 附件 SeaweedFS S3 (8333) — 客户端用预签名 URL 直连,绕过 gateway
+  seaweed-s3:
+    ports:
+      - "127.0.0.1:8333:8333"
