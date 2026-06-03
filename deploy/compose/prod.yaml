@@ -1,24 +1,6 @@
-services:
-  caddy:
-    image: caddy:2
-    container_name: aim-caddy
-    environment:
-      AIM_ENV_FILE: ${AIM_ENV_FILE:?set AIM_ENV_FILE to the production env file path, e.g. /etc/aim/aim.env}
-      AIM_CONFIG_DIR: ${AIM_CONFIG_DIR:?set AIM_CONFIG_DIR to the production config directory, e.g. /etc/aim/config}
-      AIM_API_HOST: ${AIM_API_HOST:?set AIM_API_HOST to the public API host}
-      AIM_FILES_HOST: ${AIM_FILES_HOST:-files.example.com}
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ../proxy/Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
-    depends_on:
-      - aim-gateway
-    networks:
-      - aim-network
+# 反向代理 / TLS 终止由宿主或集群侧（nginx / Caddy / 云 LB / k8s ingress）负责。
+# 本文件当前不引入任何服务，仅作为 prod 环境的覆盖钩子；如需新增 prod 专属
+# 服务（例如多实例 aim-gateway 副本、prod-only sidecar），请把 YAML 片段补到下方
+# services: 块下，并继续以 `expose:` 暴露端口，避免把内部端口直接映射到宿主机。
 
-volumes:
-  caddy_data:
-  caddy_config:
+services: {}

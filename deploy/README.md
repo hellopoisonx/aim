@@ -1,15 +1,16 @@
 # AIM 部署说明
 
-`deploy/` 将 Docker Compose、环境变量、部署配置、反向代理与初始化脚本从根目录拆开，避免本地开发、生产、安全配置、观测与工具混在同一个 Compose 文件中。
+`deploy/` 将 Docker Compose、环境变量、部署配置、初始化脚本与部署自动化从根目录拆开，避免本地开发、生产、安全配置、观测与工具混在同一个 Compose 文件中。AIM 容器不再内置反向代理 / TLS 终止，由宿主或集群侧（nginx / Caddy / 云 LB / k8s ingress）负责。
 
 ## 目录
 
 ```text
 deploy/
+├── deploy.sh           # 生产部署自动化（preflight / init / migrate / up / down / rollback 等）
 ├── compose/
 │   ├── base.yaml          # 核心服务 + 必需基础设施，不发布宿主机端口
 │   ├── dev.yaml           # 本地开发端口映射，全部绑定 127.0.0.1
-│   ├── prod.yaml          # 生产反向代理，只发布 80/443
+│   ├── prod.yaml          # 生产覆盖钩子（默认空，宿主或集群侧反代负责 80/443）
 │   ├── observability.yaml # Prometheus / Loki / Promtail / Grafana
 │   └── tools.yaml         # Kafbat UI 等调试工具
 ├── config/
@@ -19,14 +20,13 @@ deploy/
 ├── env/
 │   ├── local.env
 │   └── prod.example.env
-├── proxy/
-│   ├── Caddyfile
-│   └── nginx/aim.conf
-└── scripts/
-    ├── migrate-postgres.sh
-    ├── init-kafka-topics.sh
-    └── init-seaweed-bucket.sh
+├── scripts/
+│   ├── migrate-postgres.sh
+│   ├── init-kafka-topics.sh
+│   └── init-seaweed-bucket.sh
+├── grafana/  loki/  prometheus/  promtail/  tempo/   # 可观测性组件配置
 ```
+
 
 ## 本地开发
 
@@ -66,42 +66,61 @@ docker compose --env-file deploy/env/local.env \
 
 ## 生产部署
 
-1. 在服务器准备真实配置和 env：
+AIM 容器只暴露内部端口（`expose:`），不直接对外。生产环境的 TLS 终止、域名分发、限流与静态缓存由宿主或集群侧的反向代理（nginx / Caddy / 云 LB / k8s ingress 等）负责。
+
+### 1. 准备服务器目录结构
 
 ```bash
 sudo mkdir -p /etc/aim/config
 sudo cp -r deploy/config/prod.example/* /etc/aim/config/
 sudo cp deploy/env/prod.example.env /etc/aim/aim.env
 # 编辑 /etc/aim/config/*.yaml、/etc/aim/config/seaweed-s3.json、/etc/aim/aim.env
-# 替换 CHANGE_ME / example.com，并配置真实域名、强随机密钥和生产密码。
+# 替换所有 CHANGE_ME / example.com，配置真实域名、强随机密钥与生产密码。
 ```
 
-2. 启动生产栈：
+仓库自带 `deploy.sh` 会按这套约定校验目录与文件：
 
 ```bash
-docker compose --env-file /etc/aim/aim.env \
-  -f deploy/compose/base.yaml \
-  -f deploy/compose/prod.yaml \
-  up -d --build
+deploy/deploy.sh preflight   # 仅校验，不修改任何东西
+deploy/deploy.sh init        # 第一次部署时使用：不会覆盖已有 /etc/aim 内容
 ```
 
-生产默认只发布 Caddy 的 `80/443`；PostgreSQL、Redis、Kafka、etcd、gateway gRPC 等仅在 Docker 内部网络访问。
+### 2. 附件文件域名对齐
 
-### 附件文件域名
-
-`deploy/proxy/Caddyfile` 默认包含：
-
-- `AIM_API_HOST`：反代到 `aim-gateway:8888`，提供 REST / WebSocket。
-- `AIM_FILES_HOST`：反代到 `seaweed-s3:8333`，用于 attachment 服务返回给客户端的 S3 预签名上传/下载 URL。
-
-如果生产不希望直接暴露内置 SeaweedFS，请删除或替换 Caddyfile 中的 files 站点，并将 `/etc/aim/config/attachment.yaml` 的 `Seaweed.PublicEndpoint` 改为你的外部对象存储 / CDN 域名。无论使用哪种方式，都必须确保：
+`/etc/aim/config/attachment.yaml` 中的 `Seaweed.PublicEndpoint` 决定客户端拿到附件上传/下载 URL 时访问的域名。该值必须与客户端实际可访问的域名一致，否则会拿到错误 host 签名的预签名 URL。
 
 ```yaml
 Seaweed:
-  PublicEndpoint: https://<AIM_FILES_HOST 或外部对象存储域名>
+  PublicEndpoint: https://files.your-domain.com   # 与外部反代里给 seaweed-s3:8333 暴露的域名一致
 ```
 
-与客户端实际可访问的文件域名一致，并先确认 SeaweedFS/S3 鉴权、网络策略和密钥强度满足生产要求。
+如果使用外部对象存储 / CDN，请把 `Seaweed.Endpoint` 也切到对应端点，并保证：
+
+- 内部 `expose: 8333` 仍可被 aim-attachment 访问（如果继续走内置 SeaweedFS）。
+- 凭据 / 桶名 / region 与外部存储匹配，且 `Seaweed.SecretKey` 强度满足生产要求。
+- attachment 服务的 gRPC 端口 `8091` 不被反代或 ingress 暴露在公网。
+
+### 3. 启动 / 停止 / 回滚
+
+```bash
+deploy/deploy.sh migrate     # 显式跑一次 auth / logic 的 PostgreSQL 迁移 + Kafka topic + SeaweedFS bucket
+deploy/deploy.sh up          # docker compose up -d --build（自动包含 migrate）
+deploy/deploy.sh status      # 容器与 healthcheck 状态
+deploy/deploy.sh logs aim-gateway --tail 200
+deploy/deploy.sh down
+deploy/deploy.sh rollback    # 回滚到上一次 deploy 前的 /etc/aim 快照（详见脚本说明）
+```
+
+`up` / `down` / `rollback` 都会先在 `/var/backups/aim/YYYYmmdd-HHMMSS/` 留一份当前 `/etc/aim` 快照，`rollback [id]` 可按时间戳回退到任一历史快照。生产默认只暴露宿主或集群侧反代的 80/443；PostgreSQL、Redis、Kafka、etcd、gateway gRPC 等只在 Docker 内部网络访问。
+
+### 4. 自接反向代理
+
+外部反代至少需要把以下两条流量转到 `aim-gateway:8888` 与 `seaweed-s3:8333`（容器端口以 Compose 为准）：
+
+- 客户端 REST + WebSocket：建议路径 `/`（带 `Upgrade` / `Connection: upgrade` 头透传，长连接 idle 超时建议 ≥ 60s）。
+- 附件上传 / 下载：宿主机或 ingress 监听 `https://files.your-domain.com` 转 `seaweed-s3:8333`，保留 `Host` 头或显式改写为内部 S3 端点。
+
+> 注意：`AIM_CONFIG_DIR` / `AIM_ENV_FILE` 如果使用相对路径，会按 Compose 文件所在目录解析。本仓库的 `deploy/env/local.env` 已使用 `../config/local` 与 `../env/local.env`，建议直接通过 `--env-file deploy/env/local.env` 使用；生产环境请使用绝对路径（例如 `/etc/aim/aim.env`）。
 
 ## 初始化与迁移
 
