@@ -62,7 +62,7 @@ func (l *RejectFriendLogic) RejectFriend(in *pb.RejectFriendReq) (*pb.RejectFrie
 		return nil, FriendshipToGRPCError(err)
 	}
 
-	if pendingRecord.Status != FriendshipStatusPending {
+	if pendingRecord.Status != service.FriendshipStatusPending {
 		return nil, FriendshipToGRPCError(service.ErrNotPending)
 	}
 

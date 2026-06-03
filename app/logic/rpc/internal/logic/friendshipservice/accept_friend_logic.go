@@ -14,8 +14,6 @@ import (
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
-const FriendshipStatusAccepted = "accepted"
-
 type AcceptFriendLogic struct {
 	ctx    context.Context
 	svcCtx *svc.ServiceContext
@@ -65,7 +63,7 @@ func (l *AcceptFriendLogic) AcceptFriend(in *pb.AcceptFriendReq) (*pb.AcceptFrie
 		return nil, FriendshipToGRPCError(err)
 	}
 
-	if pendingRecord.Status != FriendshipStatusPending {
+	if pendingRecord.Status != service.FriendshipStatusPending {
 		return nil, FriendshipToGRPCError(service.ErrNotPending)
 	}
 
@@ -73,7 +71,7 @@ func (l *AcceptFriendLogic) AcceptFriend(in *pb.AcceptFriendReq) (*pb.AcceptFrie
 	acceptedRecord, err := queries.UpsertFriendship(l.ctx, model.UpsertFriendshipParams{
 		UserID:   friendID,
 		FriendID: userID,
-		Status:   FriendshipStatusAccepted,
+		Status:   service.FriendshipStatusAccepted,
 	})
 	if err != nil {
 		return nil, FriendshipToGRPCError(err)
@@ -83,7 +81,7 @@ func (l *AcceptFriendLogic) AcceptFriend(in *pb.AcceptFriendReq) (*pb.AcceptFrie
 	_, err = queries.UpsertFriendship(l.ctx, model.UpsertFriendshipParams{
 		UserID:   userID,
 		FriendID: friendID,
-		Status:   FriendshipStatusAccepted,
+		Status:   service.FriendshipStatusAccepted,
 	})
 	if err != nil {
 		return nil, FriendshipToGRPCError(err)

@@ -141,7 +141,7 @@ func (s *FriendshipTagService) ensureAcceptedFriend(ctx context.Context, userID,
 		return err
 	}
 	for _, row := range rows {
-		if row.Status == "accepted" {
+		if row.Status == FriendshipStatusAccepted {
 			return nil
 		}
 	}

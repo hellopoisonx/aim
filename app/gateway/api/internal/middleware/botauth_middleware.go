@@ -153,16 +153,16 @@ func unwrapCodeError(err error) *errorx.CodeError {
 // precise sub-code; relying on the category keeps the contract stable.
 func httpStatusForBotCode(code int) int {
 	category := code / 100
-	switch {
-	case category == 400:
+	switch category {
+	case 400:
 		return http.StatusBadRequest
-	case category == 401:
+	case 401:
 		return http.StatusUnauthorized
-	case category == 403:
+	case 403:
 		return http.StatusForbidden
-	case category == 404:
+	case 404:
 		return http.StatusNotFound
-	case category == 429:
+	case 429:
 		return http.StatusTooManyRequests
 	default:
 		return http.StatusInternalServerError

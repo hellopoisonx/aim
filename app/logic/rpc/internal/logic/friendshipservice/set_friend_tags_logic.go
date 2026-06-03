@@ -5,7 +5,6 @@ import (
 
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/service"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
-	"github.com/hellopoisonx/aim/app/logic/rpc/model"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 
@@ -42,11 +41,11 @@ func (l *SetFriendTagsLogic) SetFriendTags(in *pb.SetFriendTagsReq) (*pb.SetFrie
 	}
 
 	friendship := &pb.FriendshipResponse{
-		UserId:      in.GetUserId(),
-		FriendId:    in.GetFriendId(),
-		Status:      "accepted",
-		CreatedAt:   0,
-		UpdatedAt:   0,
+		UserId:    in.GetUserId(),
+		FriendId:  in.GetFriendId(),
+		Status:    service.FriendshipStatusAccepted,
+		CreatedAt: 0,
+		UpdatedAt: 0,
 	}
 
 	tags, _ := l.svcCtx.FriendTagService.GetFriendTags(l.ctx, in.GetUserId(), in.GetFriendId())
@@ -57,22 +56,4 @@ func (l *SetFriendTagsLogic) SetFriendTags(in *pb.SetFriendTagsReq) (*pb.SetFrie
 	friendship.Tags = pbTags
 
 	return &pb.SetFriendTagsResp{Friendship: friendship}, nil
-}
-
-func friendshipToProto(r model.ListFriendsRow, tags []*pb.FriendTagResponse) *pb.FriendshipResponse {
-	var friendID int64
-	switch v := r.FriendID.(type) {
-	case int64:
-		friendID = v
-	case float64:
-		friendID = int64(v)
-	}
-	return &pb.FriendshipResponse{
-		UserId:    r.UserID,
-		FriendId:  friendID,
-		Status:    r.Status,
-		CreatedAt: service.UnixFromPGTimestamptz(r.CreatedAt),
-		UpdatedAt: service.UnixFromPGTimestamptz(r.UpdatedAt),
-		Tags:      tags,
-	}
 }

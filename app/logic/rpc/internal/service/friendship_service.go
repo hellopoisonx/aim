@@ -7,6 +7,10 @@ const (
 	CodeBlocked        = 40310
 	CodeNotPending     = 40311
 	CodeFriendNotFound = 40410
+
+	FriendshipStatusPending  = "pending"
+	FriendshipStatusAccepted = "accepted"
+	FriendshipStatusBlocked  = "blocked"
 )
 
 var (

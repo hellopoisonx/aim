@@ -31,14 +31,14 @@ func (l *CreateConversationLogic) CreateConversation(in *pb.CreateConversationRe
 		return nil, errorx.NewCodeError(errorx.CodeBadInput, "creator_id is required and must be positive")
 	}
 
-	if in.GetConversationType() != "direct" && in.GetConversationType() != "group" {
+	if in.GetConversationType() != service.ConversationTypeDirect && in.GetConversationType() != service.ConversationTypeGroup {
 		return nil, errorx.NewCodeError(errorx.CodeBadInput, "conversation_type must be 'direct' or 'group'")
 	}
 
 	memberIDs := in.GetMemberIds()
 	var name string
 	var displayName string // the name to return to the caller
-	if in.GetConversationType() == "direct" {
+	if in.GetConversationType() == service.ConversationTypeDirect {
 		if len(memberIDs) != 1 {
 			return nil, errorx.NewCodeError(errorx.CodeBadInput, "direct conversation member_ids must contain exactly one peer user id")
 		}
@@ -99,7 +99,7 @@ func (l *CreateConversationLogic) CreateConversation(in *pb.CreateConversationRe
 	}
 
 	respName := conv.Name
-	if in.GetConversationType() == "direct" && displayName != "" {
+	if in.GetConversationType() == service.ConversationTypeDirect && displayName != "" {
 		respName = displayName
 	}
 	return &pb.CreateConversationResp{

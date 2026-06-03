@@ -65,7 +65,7 @@ func (l *GetUserConversationsLogic) GetUserConversations(in *pb.GetUserConversat
 
 		// For direct conversations, compute display name as the other member's nickname.
 		name := conv.Name
-		if conv.ConversationType == "direct" && callerNickname != "" {
+		if conv.ConversationType == service.ConversationTypeDirect && callerNickname != "" {
 			if parts := strings.SplitN(conv.Name, " | ", 2); len(parts) == 2 {
 				if parts[0] == callerNickname {
 					name = parts[1]

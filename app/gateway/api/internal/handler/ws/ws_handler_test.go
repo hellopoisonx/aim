@@ -1367,7 +1367,7 @@ func TestHandleHeartbeatPublishesPresenceEvent(t *testing.T) {
 
 	// Verify heartbeat did NOT publish a presence event.
 	calls := presencePub.getCalls()
-	require.Len(t, calls, 0)
+	require.Empty(t, calls)
 }
 
 // generateShortLivedToken creates a JWT token that expires in the specified duration.

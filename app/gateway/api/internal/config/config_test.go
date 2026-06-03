@@ -37,13 +37,20 @@ func TestConfigLoadsGatewayYAML(t *testing.T) {
 	require.Equal(t, "tempo:4318", c.GatewayRpc.Telemetry.Endpoint)
 	require.InEpsilon(t, 1.0, c.GatewayRpc.Telemetry.Sampler, 0.0001)
 	require.Equal(t, "otlphttp", c.GatewayRpc.Telemetry.Batcher)
+	require.Equal(t, "otlphttp", c.GatewayRpc.Telemetry.Batcher)
 	require.Equal(t, "/v1/traces", c.GatewayRpc.Telemetry.OtlpHttpPath)
 	// Prometheus top-level
+	//nolint:staticcheck
 	require.Equal(t, "0.0.0.0", c.Prometheus.Host)
+	//nolint:staticcheck
 	require.Equal(t, 9191, c.Prometheus.Port)
+	//nolint:staticcheck
 	require.Equal(t, "/metrics", c.Prometheus.Path)
 	// Prometheus GatewayRpc
+	//nolint:staticcheck
 	require.Equal(t, "0.0.0.0", c.GatewayRpc.Prometheus.Host)
+	//nolint:staticcheck
 	require.Equal(t, 9191, c.GatewayRpc.Prometheus.Port)
+	//nolint:staticcheck
 	require.Equal(t, "/metrics", c.GatewayRpc.Prometheus.Path)
 }

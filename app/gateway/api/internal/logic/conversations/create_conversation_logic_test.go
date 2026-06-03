@@ -11,7 +11,6 @@ import (
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/conversationservice"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -67,8 +66,6 @@ func (m *mockConversationService) TransferGroupOwner(ctx context.Context, in *co
 }
 
 func TestCreateConversation(t *testing.T) {
-	is := assert.New(t)
-
 	tests := []struct {
 		name      string
 		req       *types.CreateConversationRequest
@@ -317,13 +314,15 @@ func TestCreateConversation(t *testing.T) {
 			resp, err := logic.CreateConversation(tt.req)
 
 			if tt.wantErr != nil {
-				is.Error(err)
-				is.Equal(tt.wantErr.Code, err.(*errorx.CodeError).Code)
-				is.Equal(tt.wantErr.Message, err.(*errorx.CodeError).Message)
-				is.Nil(resp)
+				require.Error(t, err)
+				var codeErr *errorx.CodeError
+				require.ErrorAs(t, err, &codeErr)
+				require.Equal(t, tt.wantErr.Code, codeErr.Code)
+				require.Equal(t, tt.wantErr.Message, codeErr.Message)
+				require.Nil(t, resp)
 			} else {
-				is.NoError(err)
-				is.Equal(tt.wantResp, resp)
+				require.NoError(t, err)
+				require.Equal(t, tt.wantResp, resp)
 			}
 		})
 	}
@@ -332,24 +331,31 @@ func TestCreateConversation(t *testing.T) {
 func (m *mockConversationService) AddGroupMembers(ctx context.Context, in *pb.AddGroupMembersReq, opts ...grpc.CallOption) (*pb.AddGroupMembersResp, error) {
 	return nil, errors.New("AddGroupMembers not implemented")
 }
+
 func (m *mockConversationService) RemoveGroupMembers(ctx context.Context, in *pb.RemoveGroupMembersReq, opts ...grpc.CallOption) (*pb.RemoveGroupMembersResp, error) {
 	return nil, errors.New("RemoveGroupMembers not implemented")
 }
+
 func (m *mockConversationService) LeaveGroup(ctx context.Context, in *pb.LeaveGroupReq, opts ...grpc.CallOption) (*pb.LeaveGroupResp, error) {
 	return nil, errors.New("LeaveGroup not implemented")
 }
+
 func (m *mockConversationService) DismissGroup(ctx context.Context, in *pb.DismissGroupReq, opts ...grpc.CallOption) (*pb.DismissGroupResp, error) {
 	return nil, errors.New("DismissGroup not implemented")
 }
+
 func (m *mockConversationService) UpdateGroupInfo(ctx context.Context, in *pb.UpdateGroupInfoReq, opts ...grpc.CallOption) (*pb.UpdateGroupInfoResp, error) {
 	return nil, errors.New("UpdateGroupInfo not implemented")
 }
+
 func (m *mockConversationService) GetConversationMembersDetail(ctx context.Context, in *pb.GetConversationMembersDetailReq, opts ...grpc.CallOption) (*pb.GetConversationMembersDetailResp, error) {
 	return nil, errors.New("GetConversationMembersDetail not implemented")
 }
+
 func (m *mockConversationService) UpdateReadReceipt(ctx context.Context, in *pb.UpdateReadReceiptReq, opts ...grpc.CallOption) (*pb.UpdateReadReceiptResp, error) {
 	return nil, errors.New("UpdateReadReceipt not implemented")
 }
+
 func (m *mockConversationService) ListConversationReadStates(ctx context.Context, in *pb.ListConversationReadStatesReq, opts ...grpc.CallOption) (*pb.ListConversationReadStatesResp, error) {
 	return nil, errors.New("ListConversationReadStates not implemented")
 }

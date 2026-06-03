@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hellopoisonx/aim/app/logic/rpc/model"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/service"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
+	"github.com/hellopoisonx/aim/app/logic/rpc/model"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 	"github.com/jackc/pgx/v5"
@@ -106,11 +106,11 @@ func (r fakeFriendRow) Scan(dest ...any) error {
 		return r.err
 	}
 
-	*(dest[0].(*int64)) = r.friendship.UserID
-	*(dest[1].(*int64)) = r.friendship.FriendID
-	*(dest[2].(*string)) = r.friendship.Status
-	*(dest[3].(*pgtype.Timestamptz)) = r.friendship.CreatedAt
-	*(dest[4].(*pgtype.Timestamptz)) = r.friendship.UpdatedAt
+	*dest[0].(*int64) = r.friendship.UserID
+	*dest[1].(*int64) = r.friendship.FriendID
+	*dest[2].(*string) = r.friendship.Status
+	*dest[3].(*pgtype.Timestamptz) = r.friendship.CreatedAt
+	*dest[4].(*pgtype.Timestamptz) = r.friendship.UpdatedAt
 
 	return nil
 }
@@ -140,9 +140,9 @@ func (r *fakeFriendRows) Next() bool {
 
 func (r *fakeFriendRows) Scan(dest ...any) error {
 	row := r.rows[r.idx-1]
-	*(dest[0].(*int64)) = row.UserID
-	*(dest[1].(*int64)) = row.FriendID
-	*(dest[2].(*string)) = row.Status
+	*dest[0].(*int64) = row.UserID
+	*dest[1].(*int64) = row.FriendID
+	*dest[2].(*string) = row.Status
 
 	return nil
 }
@@ -320,7 +320,7 @@ func TestAddFriend_CreatesPendingFriendship(t *testing.T) {
 		UserInfoService: mockUserSvc,
 		DB: &fakeFriendDB{
 			directErr: pgx.ErrNoRows,
-			upserted:  newFriendship(1, 2, FriendshipStatusPending),
+			upserted:  newFriendship(1, 2, service.FriendshipStatusPending),
 		},
 	}
 
@@ -328,7 +328,7 @@ func TestAddFriend_CreatesPendingFriendship(t *testing.T) {
 
 	require.NoError(t, err)
 	require.NotNil(t, resp.GetFriendship())
-	assert.Equal(t, FriendshipStatusPending, resp.GetFriendship().GetStatus())
+	assert.Equal(t, service.FriendshipStatusPending, resp.GetFriendship().GetStatus())
 }
 
 func TestAddFriend_BlockedRelationship(t *testing.T) {

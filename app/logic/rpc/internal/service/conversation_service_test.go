@@ -49,15 +49,7 @@ func (f *fakeConversationStore) CreateConversation(ctx context.Context, arg mode
 		CreatorID: arg.CreatorID,
 	}
 	f.conversations[conv.ID] = conv
-	return model.CreateConversationRow{
-		ID:               conv.ID,
-		ConversationType: conv.ConversationType,
-		IsActive:         conv.IsActive,
-		Name:             conv.Name,
-		Avatar:           conv.Avatar,
-		CreatorID:        conv.CreatorID,
-		CreatedAt:        conv.CreatedAt,
-	}, nil
+	return model.CreateConversationRow(conv), nil
 }
 
 func (f *fakeConversationStore) GetConversation(ctx context.Context, id int64) (model.GetConversationRow, error) {
@@ -278,15 +270,7 @@ func (f *fakeConversationStore) GetConversationsByUserID(ctx context.Context, us
 	for convID, conv := range f.conversations {
 		for _, m := range f.members[convID] {
 			if m.UserID == userID {
-				result = append(result, model.GetConversationsByUserIDRow{
-					ID:               conv.ID,
-					ConversationType: conv.ConversationType,
-					IsActive:         conv.IsActive,
-					Name:             conv.Name,
-					Avatar:           conv.Avatar,
-					CreatorID:        conv.CreatorID,
-					CreatedAt:        conv.CreatedAt,
-				})
+				result = append(result, model.GetConversationsByUserIDRow(conv))
 				break
 			}
 		}
@@ -312,7 +296,7 @@ func (f *fakeConversationStore) ListMessagesByConversation(ctx context.Context, 
 			continue
 		}
 		result = append(result, msg)
-		if int32(len(result)) >= arg.Limit {
+		if int64(len(result)) >= int64(arg.Limit) {
 			break
 		}
 	}
@@ -330,7 +314,8 @@ func (f *fakeConversationStore) ListMessagesByConversationInitial(ctx context.Co
 	}
 
 	// Return first N messages
-	if int32(len(msgs)) <= arg.Limit {
+	limit := int64(arg.Limit)
+	if int64(len(msgs)) <= limit {
 		return msgs, nil
 	}
 	return msgs[:arg.Limit], nil
@@ -357,17 +342,10 @@ func (f *fakeConversationStore) GetDirectConversationByMembers(ctx context.Conte
 			memberSet[m.UserID] = true
 		}
 		if memberSet[arg.UserID] && memberSet[arg.UserID_2] {
-			return model.GetDirectConversationByMembersRow{
-				ID:               conv.ID,
-				ConversationType: conv.ConversationType,
-				IsActive:         conv.IsActive,
-				Name:             conv.Name,
-				Avatar:           conv.Avatar,
-				CreatorID:        conv.CreatorID,
-				CreatedAt:        conv.CreatedAt,
-			}, nil
+			return model.GetDirectConversationByMembersRow(conv), nil
 		}
 	}
+
 	return model.GetDirectConversationByMembersRow{}, pgx.ErrNoRows
 }
 
@@ -483,7 +461,7 @@ func TestConversationService_CreateConversation_DirectAllowsEmptyName(t *testing
 	// The service layer accepts whatever name is passed, including empty.
 	conv, err := svc.CreateConversation(context.Background(), "direct", 1, []int64{2}, "", "")
 	require.NoError(t, err)
-	assert.Equal(t, "", conv.Name)
+	assert.Empty(t, conv.Name)
 }
 
 func TestConversationService_CreateConversation_EmptyMembers(t *testing.T) {
@@ -574,7 +552,8 @@ func TestConversationService_RoleGuards(t *testing.T) {
 	err = svc.RemoveGroupMembers(context.Background(), conv.ID, 2, "u2", []int64{3})
 	require.ErrorIs(t, err, ErrNotAdmin)
 
-	_, err = svc.UpdateGroupInfo(context.Background(), conv.ID, 2, "u2", ptrString("n"), nil)
+	name := "n"
+	_, err = svc.UpdateGroupInfo(context.Background(), conv.ID, 2, "u2", &name, nil)
 	require.ErrorIs(t, err, ErrNotAdmin)
 
 	err = svc.DismissGroup(context.Background(), conv.ID, 2)
@@ -583,8 +562,6 @@ func TestConversationService_RoleGuards(t *testing.T) {
 	err = svc.LeaveGroup(context.Background(), conv.ID, 1, "u1")
 	require.ErrorIs(t, err, ErrNotOwner)
 }
-
-func ptrString(v string) *string { return &v }
 
 func testMemberRole(t *testing.T, store *fakeConversationStore, conversationID, userID int64) string {
 	t.Helper()
@@ -1049,7 +1026,7 @@ func TestConversationService_GetConversationMembers_EmptyMembers(t *testing.T) {
 
 	members, err := svc.GetConversationMembers(context.Background(), 1)
 	require.NoError(t, err)
-	assert.Len(t, members, 0)
+	assert.Empty(t, members)
 }
 
 // ---------------------------------------------------------------------------

@@ -33,10 +33,10 @@ func TestAuthMiddleware(t *testing.T) {
 	require.NoError(t, err)
 
 	tests := []struct {
-		name           string
-		authHeader     string
-		nextHandler    func(t *testing.T) http.HandlerFunc
-		checkResponse  func(t *testing.T, rr *httptest.ResponseRecorder)
+		name          string
+		authHeader    string
+		nextHandler   func(t *testing.T) http.HandlerFunc
+		checkResponse func(t *testing.T, rr *httptest.ResponseRecorder)
 	}{
 		{
 			name:       "missing Authorization header",
@@ -55,7 +55,7 @@ func TestAuthMiddleware(t *testing.T) {
 					Msg  string `json:"msg"`
 				}
 				err := json.Unmarshal(rr.Body.Bytes(), &errResp)
-				is.NoError(err)
+				require.NoError(t, err)
 				is.Equal(errorx.CodeTokenInvalid, errResp.Code)
 				is.Equal("missing token", errResp.Msg)
 			},
@@ -77,7 +77,7 @@ func TestAuthMiddleware(t *testing.T) {
 					Msg  string `json:"msg"`
 				}
 				err := json.Unmarshal(rr.Body.Bytes(), &errResp)
-				is.NoError(err)
+				require.NoError(t, err)
 				is.Equal(errorx.CodeTokenInvalid, errResp.Code)
 				is.Equal("invalid authorization", errResp.Msg)
 			},
@@ -99,7 +99,7 @@ func TestAuthMiddleware(t *testing.T) {
 					Msg  string `json:"msg"`
 				}
 				err := json.Unmarshal(rr.Body.Bytes(), &errResp)
-				is.NoError(err)
+				require.NoError(t, err)
 				is.Equal(errorx.CodeTokenInvalid, errResp.Code)
 				is.Equal("invalid authorization", errResp.Msg)
 			},
@@ -121,7 +121,7 @@ func TestAuthMiddleware(t *testing.T) {
 					Msg  string `json:"msg"`
 				}
 				err := json.Unmarshal(rr.Body.Bytes(), &errResp)
-				is.NoError(err)
+				require.NoError(t, err)
 				is.Equal(errorx.CodeTokenInvalid, errResp.Code)
 				is.Equal("missing token", errResp.Msg)
 			},
@@ -143,7 +143,7 @@ func TestAuthMiddleware(t *testing.T) {
 					Msg  string `json:"msg"`
 				}
 				err := json.Unmarshal(rr.Body.Bytes(), &errResp)
-				is.NoError(err)
+				require.NoError(t, err)
 				is.Equal(errorx.CodeTokenExpired, errResp.Code)
 				is.Equal("token expired", errResp.Msg)
 			},
@@ -165,7 +165,7 @@ func TestAuthMiddleware(t *testing.T) {
 					Msg  string `json:"msg"`
 				}
 				err := json.Unmarshal(rr.Body.Bytes(), &errResp)
-				is.NoError(err)
+				require.NoError(t, err)
 				is.Equal(errorx.CodeTokenInvalid, errResp.Code)
 				is.Equal("invalid token", errResp.Msg)
 			},
@@ -187,7 +187,7 @@ func TestAuthMiddleware(t *testing.T) {
 					Msg  string `json:"msg"`
 				}
 				err := json.Unmarshal(rr.Body.Bytes(), &errResp)
-				is.NoError(err)
+				require.NoError(t, err)
 				is.Equal(errorx.CodeTokenInvalid, errResp.Code)
 				is.Equal("invalid token", errResp.Msg)
 			},
@@ -273,7 +273,7 @@ func TestAuthMiddleware_WriteAuthError(t *testing.T) {
 		Msg  string `json:"msg"`
 	}
 	err := json.Unmarshal(rr.Body.Bytes(), &errResp)
-	is.NoError(err)
+	require.NoError(t, err)
 	is.Equal(errorx.CodeTokenInvalid, errResp.Code)
 	is.Equal("invalid token", errResp.Msg)
 }

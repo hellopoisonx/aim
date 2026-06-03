@@ -49,15 +49,7 @@ func (f *fakeConversationStore) CreateConversation(_ context.Context, arg model.
 		CreatorID:        arg.CreatorID,
 	}
 	f.conversations[arg.ID] = conv
-	return model.CreateConversationRow{
-		ID:               conv.ID,
-		ConversationType: conv.ConversationType,
-		IsActive:         conv.IsActive,
-		Name:             conv.Name,
-		Avatar:           conv.Avatar,
-		CreatorID:        conv.CreatorID,
-		CreatedAt:        conv.CreatedAt,
-	}, nil
+	return model.CreateConversationRow(conv), nil
 }
 
 func (f *fakeConversationStore) GetConversation(_ context.Context, id int64) (model.GetConversationRow, error) {
@@ -86,15 +78,7 @@ func (f *fakeConversationStore) GetConversationsByUserID(_ context.Context, user
 	for convID, conv := range f.conversations {
 		for _, m := range f.members[convID] {
 			if m.UserID == userID {
-				result = append(result, model.GetConversationsByUserIDRow{
-					ID:               conv.ID,
-					ConversationType: conv.ConversationType,
-					IsActive:         conv.IsActive,
-					Name:             conv.Name,
-					Avatar:           conv.Avatar,
-					CreatorID:        conv.CreatorID,
-					CreatedAt:        conv.CreatedAt,
-				})
+				result = append(result, model.GetConversationsByUserIDRow(conv))
 				break
 			}
 		}
@@ -124,15 +108,7 @@ func (f *fakeConversationStore) GetDirectConversationByMembers(_ context.Context
 			memberSet[m.UserID] = true
 		}
 		if memberSet[arg.UserID] && memberSet[arg.UserID_2] {
-			return model.GetDirectConversationByMembersRow{
-				ID:               conv.ID,
-				ConversationType: conv.ConversationType,
-				IsActive:         conv.IsActive,
-				Name:             conv.Name,
-				Avatar:           conv.Avatar,
-				CreatorID:        conv.CreatorID,
-				CreatedAt:        conv.CreatedAt,
-			}, nil
+			return model.GetDirectConversationByMembersRow(conv), nil
 		}
 	}
 	return model.GetDirectConversationByMembersRow{}, pgx.ErrNoRows
@@ -418,7 +394,7 @@ func TestCreateConversationLogic(t *testing.T) {
 			assert.NotNil(t, resp.Conversation)
 			assert.Equal(t, tt.req.GetConversationType(), resp.Conversation.GetConversationType())
 			assert.True(t, resp.Conversation.GetIsActive())
-			assert.Greater(t, resp.Conversation.GetId(), int64(0))
+			assert.Positive(t, resp.Conversation.GetId())
 		})
 	}
 }
@@ -511,7 +487,7 @@ func TestGetConversationHistoryLogic(t *testing.T) {
 				assert.Equal(t, []string{"2"}, resp.GetMessages()[0].GetMentions())
 				// Verify per-message read details exist and exclude the sender.
 				details := resp.GetMessages()[0].GetReadDetails()
-				assert.True(t, len(details) > 0, "expected read_details on each message")
+				assert.NotEmpty(t, details, "expected read_details on each message")
 				for _, rd := range details {
 					assert.NotEqual(t, int64(1), rd.GetUserId(), "sender should be excluded from read_details")
 				}
@@ -624,6 +600,7 @@ func TestCreateConversationLogic_NilService(t *testing.T) {
 	})
 	require.Error(t, err)
 }
+
 func TestGetConversationMembersLogic(t *testing.T) {
 	store := newFakeStore()
 	convID := generateTestConversationID()

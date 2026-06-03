@@ -151,9 +151,9 @@ func (c *DatabasePermissionChecker) checkDirectPermission(ctx context.Context, c
 
 	for _, f := range friendships {
 		switch f.Status {
-		case "blocked":
+		case FriendshipStatusBlocked:
 			hasBlocked = true
-		case "accepted":
+		case FriendshipStatusAccepted:
 			hasAccepted = true
 		}
 	}

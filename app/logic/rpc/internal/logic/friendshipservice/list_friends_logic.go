@@ -51,13 +51,7 @@ func (l *ListFriendsLogic) ListFriends(in *pb.ListFriendsReq) (*pb.ListFriendsRe
 			return nil, FriendshipToGRPCError(tagErr)
 		}
 		for _, r := range byTagRows {
-			records = append(records, model.ListFriendsRow{
-				UserID:    r.UserID,
-				FriendID:  r.FriendID,
-				Status:    r.Status,
-				CreatedAt: r.CreatedAt,
-				UpdatedAt: r.UpdatedAt,
-			})
+			records = append(records, model.ListFriendsRow(r))
 		}
 	case in.GetTagName() != "":
 		byTagNameRows, tagNameErr := queries.ListFriendsByTagName(l.ctx, model.ListFriendsByTagNameParams{
@@ -68,13 +62,7 @@ func (l *ListFriendsLogic) ListFriends(in *pb.ListFriendsReq) (*pb.ListFriendsRe
 			return nil, FriendshipToGRPCError(tagNameErr)
 		}
 		for _, r := range byTagNameRows {
-			records = append(records, model.ListFriendsRow{
-				UserID:    r.UserID,
-				FriendID:  r.FriendID,
-				Status:    r.Status,
-				CreatedAt: r.CreatedAt,
-				UpdatedAt: r.UpdatedAt,
-			})
+			records = append(records, model.ListFriendsRow(r))
 		}
 	default:
 		records, err = queries.ListFriends(l.ctx, userID)

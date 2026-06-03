@@ -81,7 +81,7 @@ func (l *GetConversationHistoryLogic) GetConversationHistory(in *pb.GetConversat
 			ClientMsgId:    clientMsgID,
 			CreatedAt:      service.UnixFromPGTimestamptz(msg.CreatedAt),
 			Mentions:       service.ParseMentionsJSON(msg.Mentions),
-			IsSystem:       msg.SenderID == 0 && msg.MessageType == "system",
+			IsSystem:       msg.SenderID == 0 && msg.MessageType == service.MessageTypeSystem,
 		})
 	}
 

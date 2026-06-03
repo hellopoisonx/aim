@@ -23,8 +23,11 @@ func TestConfigLoadsAuthYAML(t *testing.T) {
 	require.InEpsilon(t, 1.0, c.Telemetry.Sampler, 0.0001)
 	require.Equal(t, "otlphttp", c.Telemetry.Batcher)
 	require.Equal(t, "/v1/traces", c.Telemetry.OtlpHttpPath)
+	//nolint:staticcheck
 	require.Equal(t, "0.0.0.0", c.Prometheus.Host)
+	//nolint:staticcheck
 	require.Equal(t, 9192, c.Prometheus.Port)
+	//nolint:staticcheck
 	require.Equal(t, "/metrics", c.Prometheus.Path)
 }
 

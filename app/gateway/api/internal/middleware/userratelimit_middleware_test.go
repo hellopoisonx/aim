@@ -58,7 +58,7 @@ func TestUserRateLimitMiddleware_AllowsWithinBudget(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/conversations", nil)
 	req = req.WithContext(ws.WithIdentity(req.Context(), ws.Identity{UserID: 1, DeviceID: "device-a"}))
 
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		code, _ := fire(req)
 		assert.Equal(t, http.StatusOK, code, "request %d should pass", i+1)
 	}
@@ -74,7 +74,7 @@ func TestUserRateLimitMiddleware_RejectsOverBudget(t *testing.T) {
 		return req.WithContext(ws.WithIdentity(req.Context(), ws.Identity{UserID: 7, DeviceID: "phone"}))
 	}
 
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		code, _ := fire(mkReq())
 		require.Equal(t, http.StatusOK, code)
 	}
@@ -115,7 +115,7 @@ func TestUserRateLimitMiddleware_NilStorePassesThrough(t *testing.T) {
 	fire, calls := recorderAndHandler(t, nil, NewUserRateLimitMiddleware(nil).Handle)
 	req := httptest.NewRequest(http.MethodGet, "/x", nil)
 	req = req.WithContext(ws.WithIdentity(req.Context(), ws.Identity{UserID: 99, DeviceID: "d"}))
-	for i := 0; i < 50; i++ {
+	for range 50 {
 		code, _ := fire(req)
 		require.Equal(t, http.StatusOK, code)
 	}

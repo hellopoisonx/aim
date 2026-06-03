@@ -47,7 +47,7 @@ func (l *RemoveFriendTagLogic) RemoveFriendTag(in *pb.RemoveFriendTagReq) (*pb.R
 	friendship := &pb.FriendshipResponse{
 		UserId:   in.GetUserId(),
 		FriendId: in.GetFriendId(),
-		Status:   "accepted",
+		Status:   service.FriendshipStatusAccepted,
 	}
 
 	tags, _ := l.svcCtx.FriendTagService.GetFriendTags(l.ctx, in.GetUserId(), in.GetFriendId())

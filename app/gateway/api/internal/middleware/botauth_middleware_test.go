@@ -28,71 +28,91 @@ var _ botservice.BotService = (*fakeBotClient)(nil)
 func (f *fakeBotClient) ValidateBotToken(_ context.Context, _ *pb.ValidateBotTokenReq, _ ...grpc.CallOption) (*pb.ValidateBotTokenResp, error) {
 	return f.resp, f.err
 }
+
 func (f *fakeBotClient) GetBotProfile(_ context.Context, _ *pb.GetBotProfileReq, _ ...grpc.CallOption) (*pb.GetBotProfileResp, error) {
 	return nil, nil
 }
+
 func (f *fakeBotClient) ListBotConversations(_ context.Context, _ *pb.ListBotConversationsReq, _ ...grpc.CallOption) (*pb.ListBotConversationsResp, error) {
 	return nil, nil
 }
+
 func (f *fakeBotClient) GetBotWebhook(_ context.Context, _ *pb.GetBotWebhookReq, _ ...grpc.CallOption) (*pb.GetBotWebhookResp, error) {
 	return nil, nil
 }
+
 func (f *fakeBotClient) SetBotWebhook(_ context.Context, _ *pb.SetBotWebhookReq, _ ...grpc.CallOption) (*pb.SetBotWebhookResp, error) {
 	return nil, nil
 }
+
 func (f *fakeBotClient) DeleteBotWebhook(_ context.Context, _ *pb.DeleteBotWebhookReq, _ ...grpc.CallOption) (*pb.DeleteBotWebhookResp, error) {
 	return nil, nil
 }
+
 func (f *fakeBotClient) ResolveBotWebhookEventActions(_ context.Context, _ *pb.ResolveBotWebhookEventActionsReq, _ ...grpc.CallOption) (*pb.ResolveBotWebhookEventActionsResp, error) {
 	return &pb.ResolveBotWebhookEventActionsResp{}, nil
 }
 
-
 func (f *fakeBotClient) CreateUserBot(_ context.Context, _ *pb.CreateUserBotReq, _ ...grpc.CallOption) (*pb.CreateUserBotResp, error) {
 	return nil, nil
 }
+
 func (f *fakeBotClient) ListUserBots(_ context.Context, _ *pb.ListUserBotsReq, _ ...grpc.CallOption) (*pb.ListUserBotsResp, error) {
 	return nil, nil
 }
+
 func (f *fakeBotClient) GetUserBot(_ context.Context, _ *pb.GetUserBotReq, _ ...grpc.CallOption) (*pb.GetUserBotResp, error) {
 	return nil, nil
 }
+
 func (f *fakeBotClient) UpdateUserBotProfile(_ context.Context, _ *pb.UpdateUserBotProfileReq, _ ...grpc.CallOption) (*pb.UpdateUserBotProfileResp, error) {
 	return nil, nil
 }
+
 func (f *fakeBotClient) SetUserBotStatus(_ context.Context, _ *pb.SetUserBotStatusReq, _ ...grpc.CallOption) (*pb.SetUserBotStatusResp, error) {
 	return nil, nil
 }
+
 func (f *fakeBotClient) DeleteUserBot(_ context.Context, _ *pb.DeleteUserBotReq, _ ...grpc.CallOption) (*pb.DeleteUserBotResp, error) {
 	return nil, nil
 }
+
 func (f *fakeBotClient) CreateUserBotToken(_ context.Context, _ *pb.CreateUserBotTokenReq, _ ...grpc.CallOption) (*pb.CreateUserBotTokenResp, error) {
 	return nil, nil
 }
+
 func (f *fakeBotClient) ListUserBotTokens(_ context.Context, _ *pb.ListUserBotTokensReq, _ ...grpc.CallOption) (*pb.ListUserBotTokensResp, error) {
 	return nil, nil
 }
+
 func (f *fakeBotClient) UpdateUserBotToken(_ context.Context, _ *pb.UpdateUserBotTokenReq, _ ...grpc.CallOption) (*pb.UpdateUserBotTokenResp, error) {
 	return nil, nil
 }
+
 func (f *fakeBotClient) RotateUserBotToken(_ context.Context, _ *pb.RotateUserBotTokenReq, _ ...grpc.CallOption) (*pb.RotateUserBotTokenResp, error) {
 	return nil, nil
 }
+
 func (f *fakeBotClient) RevokeUserBotToken(_ context.Context, _ *pb.RevokeUserBotTokenReq, _ ...grpc.CallOption) (*pb.RevokeUserBotTokenResp, error) {
 	return nil, nil
 }
+
 func (f *fakeBotClient) AddUserBotToConversation(_ context.Context, _ *pb.AddUserBotToConversationReq, _ ...grpc.CallOption) (*pb.AddUserBotToConversationResp, error) {
 	return nil, nil
 }
+
 func (f *fakeBotClient) CreateUserBotDirectConversation(_ context.Context, _ *pb.CreateUserBotDirectConversationReq, _ ...grpc.CallOption) (*pb.CreateUserBotDirectConversationResp, error) {
 	return nil, nil
 }
+
 func (f *fakeBotClient) ListBotActions(_ context.Context, _ *pb.ListBotActionsReq, _ ...grpc.CallOption) (*pb.ListBotActionsResp, error) {
 	return nil, nil
 }
+
 func (f *fakeBotClient) ListBotEvents(_ context.Context, _ *pb.ListBotEventsReq, _ ...grpc.CallOption) (*pb.ListBotEventsResp, error) {
 	return nil, nil
 }
+
 func TestExtractBotToken(t *testing.T) {
 	cases := []struct {
 		name    string
@@ -111,8 +131,8 @@ func TestExtractBotToken(t *testing.T) {
 			tok, err := extractBotToken(c.header)
 			if c.wantErr != 0 {
 				require.Error(t, err)
-				ce, ok := err.(*errorx.CodeError)
-				require.True(t, ok)
+				var ce *errorx.CodeError
+				require.ErrorAs(t, err, &ce)
 				require.Equal(t, c.wantErr, ce.Code)
 				return
 			}

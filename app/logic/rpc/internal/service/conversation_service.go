@@ -38,6 +38,8 @@ const (
 	RoleMember = "member"
 	RoleAdmin  = "admin"
 	RoleOwner  = "owner"
+
+	MessageTypeSystem = "system"
 )
 
 var (
@@ -78,12 +80,12 @@ type ReadState struct {
 }
 
 type MemberDetail struct {
-	UserID      int64
-	Email       string
-	Avatar      string
-	Name        string
-	Role        string
-	JoinedAt    int64
+	UserID   int64
+	Email    string
+	Avatar   string
+	Name     string
+	Role     string
+	JoinedAt int64
 }
 
 type ConversationStore interface {
@@ -611,7 +613,7 @@ func (s ConversationService) AddGroupMembers(ctx context.Context, conversationID
 			ID:             messageID,
 			ConversationID: conversationID,
 			SenderID:       0,
-			MessageType:    "system",
+			MessageType:    MessageTypeSystem,
 			Content:        content,
 		})
 	})
@@ -623,7 +625,7 @@ func (s ConversationService) AddGroupMembers(ctx context.Context, conversationID
 		MessageID:      messageID,
 		ConversationID: conversationID,
 		SenderID:       0,
-		MessageType:    "system",
+		MessageType:    MessageTypeSystem,
 		Content:        string(s.buildSystemMessage("member_joined", operatorID, operatorName, newMemberIDs)),
 		TargetUserIDs:  targetUserIDs,
 		Timestamp:      time.Now().UnixMilli(),
@@ -699,7 +701,7 @@ func (s ConversationService) RemoveGroupMembers(ctx context.Context, conversatio
 			ID:             messageID,
 			ConversationID: conversationID,
 			SenderID:       0,
-			MessageType:    "system",
+			MessageType:    MessageTypeSystem,
 			Content:        content,
 		})
 	})
@@ -712,7 +714,7 @@ func (s ConversationService) RemoveGroupMembers(ctx context.Context, conversatio
 		MessageID:      messageID,
 		ConversationID: conversationID,
 		SenderID:       0,
-		MessageType:    "system",
+		MessageType:    MessageTypeSystem,
 		Content:        string(s.buildSystemMessage("member_removed", operatorID, operatorName, removeMemberIDs)),
 		TargetUserIDs:  targetUserIDs,
 		Timestamp:      time.Now().UnixMilli(),
@@ -767,7 +769,7 @@ func (s ConversationService) LeaveGroup(ctx context.Context, conversationID, use
 			ID:             messageID,
 			ConversationID: conversationID,
 			SenderID:       0,
-			MessageType:    "system",
+			MessageType:    MessageTypeSystem,
 			Content:        content,
 		})
 	})
@@ -780,7 +782,7 @@ func (s ConversationService) LeaveGroup(ctx context.Context, conversationID, use
 		MessageID:      messageID,
 		ConversationID: conversationID,
 		SenderID:       0,
-		MessageType:    "system",
+		MessageType:    MessageTypeSystem,
 		Content:        string(s.buildSystemMessage("member_left", userID, userName, []int64{userID})),
 		TargetUserIDs:  targetUserIDs,
 		Timestamp:      time.Now().UnixMilli(),
@@ -831,7 +833,7 @@ func (s ConversationService) DismissGroup(ctx context.Context, conversationID, o
 			ID:             messageID,
 			ConversationID: conversationID,
 			SenderID:       0,
-			MessageType:    "system",
+			MessageType:    MessageTypeSystem,
 			Content:        content,
 		})
 	})
@@ -844,7 +846,7 @@ func (s ConversationService) DismissGroup(ctx context.Context, conversationID, o
 		MessageID:      messageID,
 		ConversationID: conversationID,
 		SenderID:       0,
-		MessageType:    "system",
+		MessageType:    MessageTypeSystem,
 		Content:        string(s.buildSystemMessage("group_dismissed", operatorID, "", nil)),
 		TargetUserIDs:  targetUserIDs,
 		Timestamp:      time.Now().UnixMilli(),
@@ -927,7 +929,7 @@ func (s ConversationService) UpdateGroupInfo(ctx context.Context, conversationID
 			ID:             messageID,
 			ConversationID: conversationID,
 			SenderID:       0,
-			MessageType:    "system",
+			MessageType:    MessageTypeSystem,
 			Content:        content,
 		})
 	})
@@ -940,7 +942,7 @@ func (s ConversationService) UpdateGroupInfo(ctx context.Context, conversationID
 		MessageID:      messageID,
 		ConversationID: conversationID,
 		SenderID:       0,
-		MessageType:    "system",
+		MessageType:    MessageTypeSystem,
 		Content:        string(s.buildSystemMessage(eventType, operatorID, operatorName, nil)),
 		TargetUserIDs:  targetUserIDs,
 		Timestamp:      time.Now().UnixMilli(),
@@ -1112,12 +1114,12 @@ func (s ConversationService) GetConversationMembersDetail(ctx context.Context, c
 	details := make([]MemberDetail, len(rows))
 	for i, r := range rows {
 		details[i] = MemberDetail{
-			UserID:      r.UserID,
-			Email:       r.Email,
-			Avatar:      r.Avatar,
-			Name:        r.Name,
-			Role:        r.Role,
-			JoinedAt:    unixFromPGTimestamptz(r.JoinedAt),
+			UserID:   r.UserID,
+			Email:    r.Email,
+			Avatar:   r.Avatar,
+			Name:     r.Name,
+			Role:     r.Role,
+			JoinedAt: unixFromPGTimestamptz(r.JoinedAt),
 		}
 	}
 

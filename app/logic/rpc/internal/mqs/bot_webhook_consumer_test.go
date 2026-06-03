@@ -26,7 +26,7 @@ func TestSubscribesTo(t *testing.T) {
 }
 
 func TestBackoff_NeverExceedsCap(t *testing.T) {
-	for attempt := 0; attempt < 10; attempt++ {
+	for attempt := range 10 {
 		d := backoff(attempt)
 		if d > 16*time.Second {
 			t.Fatalf("attempt=%d returned %v, exceeds cap", attempt, d)

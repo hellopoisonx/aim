@@ -67,9 +67,9 @@ func (l *UnifiedSearchLogic) UnifiedSearch(in *pb.UnifiedSearchReq) (*pb.Unified
 		}
 		pbFriends = append(pbFriends, &pb.SearchFriendResult{
 			Friendship: &pb.FriendshipResponse{
-				UserId:    in.GetUserId(),
-				FriendId:  friendID,
-				Status:    "accepted",
+				UserId:   in.GetUserId(),
+				FriendId: friendID,
+				Status:   service.FriendshipStatusAccepted,
 			},
 			User:    userInfoToProto(f.UserInfo),
 			Snippet: f.Snippet,
@@ -126,7 +126,7 @@ func userInfoToProto(info model.UserInfo) *pb.UserInfoResponse {
 func messageToProto(m model.Message) *pb.MessageItem {
 	contentStr := string(m.Content)
 	// Try to compact JSON content.
-	var contentObj interface{}
+	var contentObj any
 	if err := json.Unmarshal(m.Content, &contentObj); err == nil {
 		if compact, err := json.Marshal(contentObj); err == nil {
 			contentStr = string(compact)

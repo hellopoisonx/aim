@@ -27,7 +27,7 @@ func TestBotRateLimitMiddleware_RejectsOverBudget(t *testing.T) {
 		}))
 	}
 
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		code, _ := fire(mkReq(100))
 		require.Equal(t, http.StatusOK, code)
 	}
@@ -60,7 +60,7 @@ func TestBotRateLimitMiddleware_NilStorePassesThrough(t *testing.T) {
 	fire, calls := recorderAndHandler(t, nil, NewBotRateLimitMiddleware(nil).Handle)
 	req := httptest.NewRequest(http.MethodPost, "/x", nil)
 	req = req.WithContext(botctx.WithBotIdentity(req.Context(), botctx.BotIdentity{TokenID: 1}))
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		code, _ := fire(req)
 		require.Equal(t, http.StatusOK, code)
 	}

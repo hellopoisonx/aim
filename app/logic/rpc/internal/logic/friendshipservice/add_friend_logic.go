@@ -14,8 +14,6 @@ import (
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
-const FriendshipStatusPending = "pending"
-
 // FriendshipToGRPCError converts domain errors to gRPC status errors.
 func FriendshipToGRPCError(err error) error {
 	switch {
@@ -94,7 +92,7 @@ func (l *AddFriendLogic) AddFriend(in *pb.AddFriendReq) (*pb.AddFriendResp, erro
 	}
 
 	for _, f := range existing {
-		if f.Status == "blocked" {
+		if f.Status == service.FriendshipStatusBlocked {
 			return nil, FriendshipToGRPCError(service.ErrBlocked)
 		}
 	}
@@ -109,7 +107,7 @@ func (l *AddFriendLogic) AddFriend(in *pb.AddFriendReq) (*pb.AddFriendResp, erro
 		return nil, FriendshipToGRPCError(err)
 	}
 
-	if !errors.Is(err, pgx.ErrNoRows) && (directRecord.Status == "accepted" || directRecord.Status == "pending") {
+	if !errors.Is(err, pgx.ErrNoRows) && (directRecord.Status == service.FriendshipStatusAccepted || directRecord.Status == service.FriendshipStatusPending) {
 		return &pb.AddFriendResp{
 			Friendship: &pb.FriendshipResponse{
 				UserId:    directRecord.UserID,
@@ -125,7 +123,7 @@ func (l *AddFriendLogic) AddFriend(in *pb.AddFriendReq) (*pb.AddFriendResp, erro
 	record, err := queries.UpsertFriendship(l.ctx, model.UpsertFriendshipParams{
 		UserID:   userID,
 		FriendID: friendID,
-		Status:   FriendshipStatusPending,
+		Status:   service.FriendshipStatusPending,
 	})
 	if err != nil {
 		return nil, FriendshipToGRPCError(err)

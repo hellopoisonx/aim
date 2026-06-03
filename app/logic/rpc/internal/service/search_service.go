@@ -19,9 +19,7 @@ const (
 	maxSearchLimit     = 100
 )
 
-var (
-	ErrSearchQueryEmpty = errors.New("search query must not be empty")
-)
+var ErrSearchQueryEmpty = errors.New("search query must not be empty")
 
 // SearchStore defines the sqlc queries needed by the search service.
 type SearchStore interface {
@@ -62,13 +60,6 @@ func bytesToString(b []byte) string {
 	return string(b)
 }
 
-func ptrToStr(s *string) string {
-	if s == nil {
-		return ""
-	}
-	return *s
-}
-
 func pgTimeToUnixMs(ts pgtype.Timestamptz) int64 {
 	if !ts.Valid {
 		return 0
@@ -103,8 +94,8 @@ type SearchConversationResult struct {
 
 // SearchMessageResult is a domain-level search result for messages.
 type SearchMessageResult struct {
-	Message  model.Message
-	Snippet  string
+	Message model.Message
+	Snippet string
 }
 
 // SearchResults holds all categories of search results plus pagination info.
@@ -244,7 +235,7 @@ func (s *SearchService) searchFriends(ctx context.Context, userID int64, query s
 			Friendship: model.GetFriendshipBidirectionalRow{
 				UserID:   row.UserID,
 				FriendID: friendID,
-				Status:   "accepted",
+				Status:   FriendshipStatusAccepted,
 			},
 			UserInfo: ui,
 			Snippet:  bytesToString(row.Snippet),
@@ -253,7 +244,7 @@ func (s *SearchService) searchFriends(ctx context.Context, userID int64, query s
 	return results, nil
 }
 
-func int64FromInterface(v interface{}) int64 {
+func int64FromInterface(v any) int64 {
 	if v == nil {
 		return 0
 	}
@@ -367,6 +358,7 @@ func (s *SearchService) searchMessagesInConv(
 	}
 	return buildMessageResultsInConv(rows, maxRows)
 }
+
 // buildMessageResultsGlobal converts SearchMessagesGlobalRow into domain results.
 func buildMessageResultsGlobal(rows []model.SearchMessagesGlobalRow, maxRows int32) ([]SearchMessageResult, int64, int64, bool, error) {
 	hasMore := len(rows) > int(maxRows)

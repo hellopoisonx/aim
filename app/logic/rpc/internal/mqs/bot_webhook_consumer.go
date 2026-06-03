@@ -137,7 +137,7 @@ func (c *BotWebhookConsumer) deliver(ctx context.Context, hook model.BotWebhook,
 
 	signature := signHMAC(body, hook.SecretHash)
 
-	for attempt := 0; attempt < botWebhookMaxRetries; attempt++ {
+	for attempt := range botWebhookMaxRetries {
 		if attempt > 0 {
 			delay := backoff(attempt)
 			select {
