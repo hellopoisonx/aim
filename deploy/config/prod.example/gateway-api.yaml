@@ -14,42 +14,18 @@ Telemetry:
 AuthRpc:
   Etcd:
     Hosts:
-      - CHANGE_ME_ETCD_HOST_1:2379
-      - CHANGE_ME_ETCD_HOST_2:2379
-      - CHANGE_ME_ETCD_HOST_3:2379
+      - etcd:2379
     Key: auth.rpc
-    # 生产建议开启 etcd 鉴权；未开启可删除以下 5 行。
-    User: CHANGE_ME_ETCD_USER
-    Pass: CHANGE_ME_ETCD_PASSWORD
-    CertFile: CHANGE_ME_ETCD_CERT_FILE
-    CertKeyFile: CHANGE_ME_ETCD_KEY_FILE
-    CACertFile: CHANGE_ME_ETCD_CA_FILE
 CoreRpc:
   Etcd:
     Hosts:
-      - CHANGE_ME_ETCD_HOST_1:2379
-      - CHANGE_ME_ETCD_HOST_2:2379
-      - CHANGE_ME_ETCD_HOST_3:2379
+      - etcd:2379
     Key: core.rpc
-    # 生产建议开启 etcd 鉴权；未开启可删除以下 5 行。
-    User: CHANGE_ME_ETCD_USER
-    Pass: CHANGE_ME_ETCD_PASSWORD
-    CertFile: CHANGE_ME_ETCD_CERT_FILE
-    CertKeyFile: CHANGE_ME_ETCD_KEY_FILE
-    CACertFile: CHANGE_ME_ETCD_CA_FILE
 LogicRpc:
   Etcd:
     Hosts:
-      - CHANGE_ME_ETCD_HOST_1:2379
-      - CHANGE_ME_ETCD_HOST_2:2379
-      - CHANGE_ME_ETCD_HOST_3:2379
+      - etcd:2379
     Key: logic.rpc
-    # 生产建议开启 etcd 鉴权；未开启可删除以下 5 行。
-    User: CHANGE_ME_ETCD_USER
-    Pass: CHANGE_ME_ETCD_PASSWORD
-    CertFile: CHANGE_ME_ETCD_CERT_FILE
-    CertKeyFile: CHANGE_ME_ETCD_KEY_FILE
-    CACertFile: CHANGE_ME_ETCD_CA_FILE
 Auth:
   AccessSecret: CHANGE_ME_RANDOM_48_BYTES
 WebSocket:
@@ -75,16 +51,8 @@ Kafka:
 AttachmentRpc:
   Etcd:
     Hosts:
-      - CHANGE_ME_ETCD_HOST_1:2379
-      - CHANGE_ME_ETCD_HOST_2:2379
-      - CHANGE_ME_ETCD_HOST_3:2379
+      - etcd:2379
     Key: attachment.rpc
-    # 生产建议开启 etcd 鉴权；未开启可删除以下 5 行。
-    User: CHANGE_ME_ETCD_USER
-    Pass: CHANGE_ME_ETCD_PASSWORD
-    CertFile: CHANGE_ME_ETCD_CERT_FILE
-    CertKeyFile: CHANGE_ME_ETCD_KEY_FILE
-    CACertFile: CHANGE_ME_ETCD_CA_FILE
 # Gateway 进程同时启动 REST 与内部 GatewayRpc。go-zero Prometheus agent
 # 在同一进程内通过 sync.Once 只启动一次，因此 REST/GatewayRpc 共用 9191。
 GatewayRpc:
@@ -92,16 +60,8 @@ GatewayRpc:
   ListenOn: 0.0.0.0:9091
   Etcd:
     Hosts:
-      - CHANGE_ME_ETCD_HOST_1:2379
-      - CHANGE_ME_ETCD_HOST_2:2379
-      - CHANGE_ME_ETCD_HOST_3:2379
+      - etcd:2379
     Key: gateway.rpc
-    # 生产建议开启 etcd 鉴权；未开启可删除以下 5 行。
-    User: CHANGE_ME_ETCD_USER
-    Pass: CHANGE_ME_ETCD_PASSWORD
-    CertFile: CHANGE_ME_ETCD_CERT_FILE
-    CertKeyFile: CHANGE_ME_ETCD_KEY_FILE
-    CACertFile: CHANGE_ME_ETCD_CA_FILE
   Prometheus:
     Host: 0.0.0.0
     Port: 9191

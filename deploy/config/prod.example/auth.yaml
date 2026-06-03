@@ -12,16 +12,8 @@ Telemetry:
   OtlpHttpPath: /v1/traces
 Etcd:
   Hosts:
-    - CHANGE_ME_ETCD_HOST_1:2379
-    - CHANGE_ME_ETCD_HOST_2:2379
-    - CHANGE_ME_ETCD_HOST_3:2379
+    - etcd:2379
   Key: auth.rpc
-  # 生产建议开启 etcd 鉴权，凭证从环境变量 / Secret 注入；未开启可删除以下 5 行。
-  User: CHANGE_ME_ETCD_USER
-  Pass: CHANGE_ME_ETCD_PASSWORD
-  CertFile: CHANGE_ME_ETCD_CERT_FILE
-  CertKeyFile: CHANGE_ME_ETCD_KEY_FILE
-  CACertFile: CHANGE_ME_ETCD_CA_FILE
 Postgres:
   DataSource: postgres://aim_user:CHANGE_ME_POSTGRES_PASSWORD@postgres:5432/aim_auth?sslmode=disable
 SessionRedis:

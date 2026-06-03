@@ -464,12 +464,14 @@ ask_etcd_hosts() {
           | sed -E 's/.*- ([^:]+):.*/\1/' || true)
   cur3=$( ( grep -hE 'CHANGE_ME_ETCD_HOST_3' "$AIM_CONFIG_DIR"/*.yaml 2>/dev/null || true ) | head -n1 \
           | sed -E 's/.*- ([^:]+):.*/\1/' || true)
-  [[ -z "$cur1" || "$cur1" =~ CHANGE_ME_ETCD_HOST_1 ]] && cur1="etcd1"
-  [[ -z "$cur2" || "$cur2" =~ CHANGE_ME_ETCD_HOST_2 ]] && cur2="etcd2"
-  [[ -z "$cur3" || "$cur3" =~ CHANGE_ME_ETCD_HOST_3 ]] && cur3="etcd3"
-  h1=$(prompt_text "etcd node 1 (host or IP)"        "$cur1")
-  h2=$(prompt_text "etcd node 2 (host or IP)"        "$cur2")
-  h3=$(prompt_text "etcd node 3 (host or IP, 单节点可与 node1 相同)" "$cur3")
+  # 默认指向 compose 内置 etcd 服务（base.yaml 服务名 etcd,端口 2379）。
+  # 走内置 etcd 时 3 个节点都填 etcd 即可；接外部 3 节点集群时手动改 h1/h2/h3。
+  [[ -z "$cur1" || "$cur1" =~ CHANGE_ME_ETCD_HOST_1 ]] && cur1="etcd"
+  [[ -z "$cur2" || "$cur2" =~ CHANGE_ME_ETCD_HOST_2 ]] && cur2="etcd"
+  [[ -z "$cur3" || "$cur3" =~ CHANGE_ME_ETCD_HOST_3 ]] && cur3="etcd"
+  h1=$(prompt_text "etcd node 1 (host or IP, 内置 etcd 直接回车)"        "$cur1")
+  h2=$(prompt_text "etcd node 2 (host or IP, 内置 etcd 直接回车)"        "$cur2")
+  h3=$(prompt_text "etcd node 3 (host or IP, 内置 etcd 直接回车)"        "$cur3")
   # 首次走占位符替换,重跑走 hosts 列表强制更新。
   replace_placeholder_in_dir "CHANGE_ME_ETCD_HOST_1:2379" "${h1}:2379"
   replace_placeholder_in_dir "CHANGE_ME_ETCD_HOST_2:2379" "${h2}:2379"
