@@ -72,12 +72,17 @@ jobs:
           go-version: "1.26"
           cache: true
 
+      # 限定 targets 跳过 skills/ (教学资料, 不是产品代码):
+      # skills/golang-cli/assets/examples/ 是 cobra/viper 教学示例,
+      # import 了本项目不依赖的 cobra/viper/fsnotify, 触发 typecheck 错误
+      # v2 的 linters.exclusions.paths 只抑制报告, 不跳过 typecheck 分析,
+      # 所以必须在 CLI 层面限定 targets, 让 lint 不加载 skills 目录
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v7
         with:
           version: v2.12.2
-          # 仓库根已有 .golangci.yaml
-          # 默认从仓库根跑, 不需要 working-directory
+          # 仓库根已有 .golangci.yaml, 不需要 --config
+          args: ./app/... ./shared/...
 
   spec-contract:
     # 守住 gateway.api 契约: 跑 goctl api go 重生成 routes.go,
