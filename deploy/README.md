@@ -60,7 +60,7 @@ docker compose --env-file deploy/env/local.env \
   up -d
 ```
 
-本地发布端口均绑定 `127.0.0.1`，避免在远程开发机上误暴露数据库、Redis、Kafka、Nacos 或管理 UI。
+本地发布端口均绑定 `127.0.0.1`，避免在远程开发机上误暴露数据库、Redis、Kafka、etcd 或管理 UI。
 
 > 注意：`AIM_CONFIG_DIR` / `AIM_ENV_FILE` 如果使用相对路径，会按 Compose 文件所在目录解析。本仓库的 `deploy/env/local.env` 已使用 `../config/local` 与 `../env/local.env`，建议直接通过 `--env-file deploy/env/local.env` 使用；生产环境建议使用绝对路径。
 
@@ -85,7 +85,7 @@ docker compose --env-file /etc/aim/aim.env \
   up -d --build
 ```
 
-生产默认只发布 Caddy 的 `80/443`；PostgreSQL、Redis、Kafka、Nacos、gateway gRPC 等仅在 Docker 内部网络访问。
+生产默认只发布 Caddy 的 `80/443`；PostgreSQL、Redis、Kafka、etcd、gateway gRPC 等仅在 Docker 内部网络访问。
 
 ### 附件文件域名
 
@@ -120,4 +120,4 @@ Seaweed:
 - `deploy/compose/observability.yaml`
 - `deploy/compose/tools.yaml`
 
-旧命令如 `docker compose up -d postgres redis kafka nacos tempo grafana` 仍可作为兼容入口启动部分本地依赖；完整服务、迁移与新增部署请直接使用上面的分层 Compose 命令。
+旧命令如 `docker compose up -d postgres redis kafka etcd tempo grafana` 仍可作为兼容入口启动部分本地依赖；完整服务、迁移与新增部署请直接使用上面的分层 Compose 命令。

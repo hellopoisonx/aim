@@ -26,8 +26,9 @@ services:
         condition: service_healthy
       kafka-init:
         condition: service_completed_successfully
-      nacos:
+      etcd:
         condition: service_healthy
+
       tempo:
         condition: service_started
     networks:
@@ -73,8 +74,9 @@ services:
         condition: service_healthy
       kafka-init:
         condition: service_completed_successfully
-      nacos:
+      etcd:
         condition: service_healthy
+
       tempo:
         condition: service_started
       aim-attachment:
@@ -103,8 +105,9 @@ services:
         condition: service_healthy
       kafka-init:
         condition: service_completed_successfully
-      nacos:
+      etcd:
         condition: service_healthy
+
       tempo:
         condition: service_started
     networks:
@@ -147,8 +150,9 @@ services:
         condition: service_healthy
       kafka-init:
         condition: service_completed_successfully
-      nacos:
+      etcd:
         condition: service_healthy
+
       tempo:
         condition: service_started
       aim-logic:
@@ -288,25 +292,24 @@ services:
     networks:
       - aim-network
 
-  nacos:
-    image: nacos/nacos-server:v2.5.1
-    container_name: aim-nacos
-    env_file: *aim-env-file
-    environment:
-      MODE: standalone
-      NACOS_AUTH_ENABLE: ${NACOS_AUTH_ENABLE:-false}
-      NACOS_AUTH_TOKEN: ${NACOS_AUTH_TOKEN:-}
-      NACOS_AUTH_IDENTITY_KEY: ${NACOS_AUTH_IDENTITY_KEY:-}
-      NACOS_AUTH_IDENTITY_VALUE: ${NACOS_AUTH_IDENTITY_VALUE:-}
+  etcd:
+    image: quay.io/coreos/etcd:v3.5.21
+    container_name: aim-etcd
+    command:
+      - etcd
+      - --data-dir=/etcd-data
+      - --listen-client-urls=http://0.0.0.0:2379
+      - --advertise-client-urls=http://etcd:2379
+      - --listen-peer-urls=http://0.0.0.0:2380
+      - --initial-advertise-peer-urls=http://etcd:2380
+      - --initial-cluster=etcd=http://etcd:2380
     expose:
-      - "8848"
-      - "9848"
-      - "9849"
+      - "2379"
+      - "2380"
     volumes:
-      - nacos_data:/home/nacos/data
-      - nacos_logs:/home/nacos/logs
+      - etcd_data:/etcd-data
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://127.0.0.1:8848/nacos/index.html"]
+      test: ["CMD", "etcdctl", "endpoint", "health"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -408,8 +411,7 @@ volumes:
   postgres_data:
   redis_data:
   kafka_data:
-  nacos_data:
-  nacos_logs:
+  etcd_data:
   gateway_log:
   auth_log:
   logic_log:

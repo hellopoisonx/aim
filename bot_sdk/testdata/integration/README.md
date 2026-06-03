@@ -20,9 +20,10 @@
 | SeaweedFS volume | 8088 | 11088 |
 | SeaweedFS filer | 8889 | 11889 |
 | SeaweedFS S3 | 8333 | 11333 |
-| Nacos HTTP | 8848 | 11848 |
-| Nacos client gRPC | 9848 | 12848 |
-| Nacos server gRPC | 9849 | 12849 |
+| etcd HTTP | 2379 | 5379 |
+
+| etcd peer | 2380 | 5380 |
+
 | Tempo HTTP API | 3200 | 6200 |
 | Tempo OTLP gRPC | 4317 | 7317 |
 | Tempo OTLP HTTP | 4318 | 7318 |
@@ -54,4 +55,4 @@ docker compose -f bot_sdk/testdata/integration/docker-compose.yaml down -v
 
 ## 配置说明
 
-`etc/` 下的 YAML 是从主环境配置复制出的集成测试专用配置。由于 Compose 内部服务名仍保持 `postgres`、`redis`、`kafka`、`nacos`、`aim-auth` 等，服务内部连接无需端口偏移。仅附件服务的 `Seaweed.PublicEndpoint` 改为宿主机可访问的 `http://localhost:11333`。
+`etc/` 下的 YAML 是从主环境配置复制出的集成测试专用配置。由于 Compose 内部服务名仍保持 `postgres`、`redis`、`kafka`、`etcd`、`aim-auth` 等，服务内部连接无需端口偏移。仅附件服务的 `Seaweed.PublicEndpoint` 改为宿主机可访问的 `http://localhost:11333`。

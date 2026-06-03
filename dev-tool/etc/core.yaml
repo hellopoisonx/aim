@@ -10,43 +10,20 @@ Telemetry:
   Sampler: 1.0
   Batcher: otlphttp
   OtlpHttpPath: /v1/traces
-Nacos:
-  ServerAddr: bench-nacos:8848
-  NamespaceID: ""
-  Group: DEFAULT_GROUP
-  Cluster: DEFAULT
-  ServiceName: core.rpc
-  AdvertiseIP: bench-core
-  AdvertisePort: 8080
-  Ephemeral: true
-  Weight: 1
-  TimeoutMs: 5000
-  Username: ""
-  Password: ""
-  LogDir: /app/log/nacos
-  CacheDir: /tmp/nacos/cache
-  LogLevel: info
+Etcd:
+  Hosts:
+    - bench-etcd:2379
+  Key: core.rpc
 SnowflakeMachineID: 1
 CacheRedis:
   Addr: bench-redis:6379
   Password: ""
   DB: 0
 LogicRpc:
-  ServerAddr: bench-nacos:8848
-  NamespaceID: ""
-  Group: DEFAULT_GROUP
-  Cluster: DEFAULT
-  ServiceName: logic.rpc
-  AdvertiseIP: ""
-  AdvertisePort: 0
-  Ephemeral: true
-  Weight: 1
-  TimeoutMs: 5000
-  Username: ""
-  Password: ""
-  LogDir: /app/log/nacos
-  CacheDir: /tmp/nacos/cache
-  LogLevel: info
+  Etcd:
+    Hosts:
+      - bench-etcd:2379
+    Key: logic.rpc
 KqPusherConf:
   Brokers:
     - bench-kafka:9092
@@ -101,20 +78,9 @@ GatewayRpc:
   ServiceName: gateway.rpc
   Target: bench-gateway:9091
 AttachmentRpc:
-  ServerAddr: bench-nacos:8848
-  NamespaceID: ""
-  Group: DEFAULT_GROUP
-  Cluster: DEFAULT
-  ServiceName: attachment.rpc
-  AdvertiseIP: ""
-  AdvertisePort: 0
-  Ephemeral: true
-  Weight: 1
-  TimeoutMs: 5000
-  Username: ""
-  Password: ""
-  LogDir: /app/log/nacos
-  CacheDir: /tmp/nacos/cache
-  LogLevel: info
+  Etcd:
+    Hosts:
+      - bench-etcd:2379
+    Key: attachment.rpc
 Presence:
   TTLSeconds: 30

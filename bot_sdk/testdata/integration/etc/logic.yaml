@@ -10,22 +10,10 @@ Telemetry:
   Sampler: 1.0
   Batcher: otlphttp
   OtlpHttpPath: /v1/traces
-Nacos:
-  ServerAddr: nacos:8848
-  NamespaceID: ""
-  Group: DEFAULT_GROUP
-  Cluster: DEFAULT
-  ServiceName: logic.rpc
-  AdvertiseIP: aim-logic
-  AdvertisePort: 8082
-  Ephemeral: true
-  Weight: 1
-  TimeoutMs: 5000
-  Username: ""
-  Password: ""
-  LogDir: /app/log/nacos
-  CacheDir: /tmp/nacos/cache
-  LogLevel: info
+Etcd:
+  Hosts:
+    - etcd:2379
+  Key: logic.rpc
 Postgres:
   DataSource: postgres://user:password@postgres:5432/aim_logic?sslmode=disable
 CacheRedis:

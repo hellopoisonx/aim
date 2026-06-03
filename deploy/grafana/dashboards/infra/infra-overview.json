@@ -776,7 +776,7 @@
       "gridPos": {"h": 1, "w": 24, "x": 0, "y": 51},
       "id": 400,
       "panels": [],
-      "title": "Nacos",
+      "title": "etcd",
       "type": "row"
     },
     {
@@ -817,8 +817,11 @@
       "steppedLine": false,
       "targets": [
         {
-          "expr": "nacos_monitor{name='pushTotal'}",
-          "legendFormat": "push total",
+          "expr": "etcd_network_client_grpc_received_bytes",
+
+          "legendFormat": "received bytes",
+
+
           "refId": "A"
         }
       ],
@@ -883,7 +886,7 @@
       "timeFrom": null,
       "timeRegions": [],
       "timeShift": null,
-      "title": "Nacos CPU Usage",
+      "title": "etcd CPU Usage",
       "tooltip": {"shared": true, "sort": 0, "value_type": "individual"},
       "type": "graph",
       "xaxis": {"buckets": null, "mode": "time", "name": null, "show": true, "values": []},

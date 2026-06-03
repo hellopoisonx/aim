@@ -10,43 +10,20 @@ Telemetry:
   Sampler: 1.0
   Batcher: otlphttp
   OtlpHttpPath: /v1/traces
-Nacos:
-  ServerAddr: nacos:8848
-  NamespaceID: ""
-  Group: DEFAULT_GROUP
-  Cluster: DEFAULT
-  ServiceName: core.rpc
-  AdvertiseIP: aim-core
-  AdvertisePort: 8080
-  Ephemeral: true
-  Weight: 1
-  TimeoutMs: 5000
-  Username: ""
-  Password: ""
-  LogDir: /app/log/nacos
-  CacheDir: /tmp/nacos/cache
-  LogLevel: info
+Etcd:
+  Hosts:
+    - etcd:2379
+  Key: core.rpc
 SnowflakeMachineID: 1
 CacheRedis:
   Addr: redis:6379
   Password: ""
   DB: 0
 LogicRpc:
-  ServerAddr: nacos:8848
-  NamespaceID: ""
-  Group: DEFAULT_GROUP
-  Cluster: DEFAULT
-  ServiceName: logic.rpc
-  AdvertiseIP: ""
-  AdvertisePort: 0
-  Ephemeral: true
-  Weight: 1
-  TimeoutMs: 5000
-  Username: ""
-  Password: ""
-  LogDir: /app/log/nacos
-  CacheDir: /tmp/nacos/cache
-  LogLevel: info
+  Etcd:
+    Hosts:
+      - etcd:2379
+    Key: logic.rpc
 KqPusherConf:
   Brokers:
     - kafka:9092
@@ -97,24 +74,24 @@ ConversationEventConsumerConf:
   Offset: first
   Consumers: 1
   Processors: 1
+# 附件解析完成消费者：消费 data_parsing 发布的 aim.attachment.parsed 事件，
+# 将解析结果（缩略图、尺寸等）以系统消息推送至会话成员。
+AttachmentParsedConsumerConf:
+  Name: core-attachment-parsed-consumer
+  Brokers:
+    - kafka:9092
+  Group: aim-core-attachment-parsed
+  Topic: aim.attachment.parsed
+  Offset: first
+  Consumers: 1
+  Processors: 1
 GatewayRpc:
   ServiceName: gateway.rpc
   Target: aim-gateway:9091
 AttachmentRpc:
-  ServerAddr: nacos:8848
-  NamespaceID: ""
-  Group: DEFAULT_GROUP
-  Cluster: DEFAULT
-  ServiceName: attachment.rpc
-  AdvertiseIP: ""
-  AdvertisePort: 0
-  Ephemeral: true
-  Weight: 1
-  TimeoutMs: 5000
-  Username: ""
-  Password: ""
-  LogDir: /app/log/nacos
-  CacheDir: /tmp/nacos/cache
-  LogLevel: info
+  Etcd:
+    Hosts:
+      - etcd:2379
+    Key: attachment.rpc
 Presence:
   TTLSeconds: 30

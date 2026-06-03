@@ -42,10 +42,11 @@ scrape_configs:
       - targets: ["aim-kafka-exporter:9308"]
 
   # ────────────────── Service Discovery ──────────────────
-  - job_name: "nacos"
-    metrics_path: "/nacos/actuator/prometheus"
-    static_configs:
-      - targets: ["nacos:8848"]
+  # etcd 自带 Prometheus 指标在 /metrics 端点；非集群环境可视需要启用。
+  # - job_name: "etcd"
+  #   static_configs:
+  #     - targets: ["etcd:2379"]
+
 
   # ────────────────── Object Storage ──────────────────
   - job_name: "seaweed-master"

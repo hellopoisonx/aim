@@ -36,8 +36,9 @@ services:
         condition: service_healthy
       bench-kafka-init:
         condition: service_completed_successfully
-      bench-nacos:
+      bench-etcd:
         condition: service_healthy
+
       bench-tempo:
         condition: service_started
     networks:
@@ -85,8 +86,9 @@ services:
         condition: service_healthy
       bench-kafka-init:
         condition: service_completed_successfully
-      bench-nacos:
+      bench-etcd:
         condition: service_healthy
+
       bench-tempo:
         condition: service_started
     networks:
@@ -111,8 +113,9 @@ services:
         condition: service_healthy
       bench-kafka-init:
         condition: service_completed_successfully
-      bench-nacos:
+      bench-etcd:
         condition: service_healthy
+
       bench-tempo:
         condition: service_started
     networks:
@@ -159,8 +162,9 @@ services:
         condition: service_healthy
       bench-kafka-init:
         condition: service_completed_successfully
-      bench-nacos:
+      bench-etcd:
         condition: service_healthy
+
       bench-tempo:
         condition: service_started
       bench-logic:
@@ -265,21 +269,24 @@ services:
     networks:
       - bench-network
 
-  bench-nacos:
-    image: nacos/nacos-server:v2.5.1
-    container_name: bench-nacos
-    environment:
-      - MODE=standalone
-      - NACOS_AUTH_ENABLE=false
+  bench-etcd:
+    image: quay.io/coreos/etcd:v3.5.21
+    container_name: bench-etcd
+    command:
+      - etcd
+      - --data-dir=/etcd-data
+      - --listen-client-urls=http://0.0.0.0:2379
+      - --advertise-client-urls=http://bench-etcd:2379
+      - --listen-peer-urls=http://0.0.0.0:2380
+      - --initial-advertise-peer-urls=http://bench-etcd:2380
+      - --initial-cluster=bench-etcd=http://bench-etcd:2380
     ports:
-      - "18848:8848"
-      - "19848:9848"
-      - "19849:9849"
+      - "12379:2379"
+      - "12380:2380"
     volumes:
-      - bench_nacos_data:/home/nacos/data
-      - bench_nacos_logs:/home/nacos/logs
+      - bench_etcd_data:/etcd-data
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://127.0.0.1:8848/nacos/index.html"]
+      test: ["CMD", "etcdctl", "endpoint", "health"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -370,9 +377,9 @@ volumes:
   bench_postgres_data:
   bench_redis_data:
   bench_kafka_data:
-  bench_nacos_data:
-  bench_nacos_logs:
+  bench_etcd_data:
   bench_gateway_log:
+
   bench_auth_log:
   bench_logic_log:
   bench_core_log:

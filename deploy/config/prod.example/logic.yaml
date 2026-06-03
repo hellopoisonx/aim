@@ -10,22 +10,18 @@ Telemetry:
   Sampler: 1.0
   Batcher: otlphttp
   OtlpHttpPath: /v1/traces
-Nacos:
-  ServerAddr: nacos:8848
-  NamespaceID: ""
-  Group: DEFAULT_GROUP
-  Cluster: DEFAULT
-  ServiceName: logic.rpc
-  AdvertiseIP: aim-logic
-  AdvertisePort: 8082
-  Ephemeral: true
-  Weight: 1
-  TimeoutMs: 5000
-  Username: "nacos"
-  Password: "CHANGE_ME_NACOS_PASSWORD"
-  LogDir: /app/log/nacos
-  CacheDir: /tmp/nacos/cache
-  LogLevel: info
+Etcd:
+  Hosts:
+    - CHANGE_ME_ETCD_HOST_1:2379
+    - CHANGE_ME_ETCD_HOST_2:2379
+    - CHANGE_ME_ETCD_HOST_3:2379
+  Key: logic.rpc
+  # 生产建议开启 etcd 鉴权，凭证从环境变量 / Secret 注入；未开启可删除以下 5 行。
+  User: CHANGE_ME_ETCD_USER
+  Pass: CHANGE_ME_ETCD_PASSWORD
+  CertFile: CHANGE_ME_ETCD_CERT_FILE
+  CertKeyFile: CHANGE_ME_ETCD_KEY_FILE
+  CACertFile: CHANGE_ME_ETCD_CA_FILE
 Postgres:
   DataSource: postgres://aim_user:CHANGE_ME_POSTGRES_PASSWORD@postgres:5432/aim_logic?sslmode=disable
 CacheRedis:

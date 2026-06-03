@@ -12,53 +12,20 @@ Telemetry:
   Batcher: otlphttp
   OtlpHttpPath: /v1/traces
 AuthRpc:
-  ServerAddr: bench-nacos:8848
-  NamespaceID: ""
-  Group: DEFAULT_GROUP
-  Cluster: DEFAULT
-  ServiceName: auth.rpc
-  AdvertiseIP: ""
-  AdvertisePort: 0
-  Ephemeral: true
-  Weight: 1
-  TimeoutMs: 5000
-  Username: ""
-  Password: ""
-  LogDir: /app/log/nacos
-  CacheDir: /tmp/nacos/cache
-  LogLevel: info
+  Etcd:
+    Hosts:
+      - bench-etcd:2379
+    Key: auth.rpc
 CoreRpc:
-  ServerAddr: bench-nacos:8848
-  NamespaceID: ""
-  Group: DEFAULT_GROUP
-  Cluster: DEFAULT
-  ServiceName: core.rpc
-  AdvertiseIP: ""
-  AdvertisePort: 0
-  Ephemeral: true
-  Weight: 1
-  TimeoutMs: 5000
-  Username: ""
-  Password: ""
-  LogDir: /app/log/nacos
-  CacheDir: /tmp/nacos/cache
-  LogLevel: info
+  Etcd:
+    Hosts:
+      - bench-etcd:2379
+    Key: core.rpc
 LogicRpc:
-  ServerAddr: bench-nacos:8848
-  NamespaceID: ""
-  Group: DEFAULT_GROUP
-  Cluster: DEFAULT
-  ServiceName: logic.rpc
-  AdvertiseIP: ""
-  AdvertisePort: 0
-  Ephemeral: true
-  Weight: 1
-  TimeoutMs: 5000
-  Username: ""
-  Password: ""
-  LogDir: /app/log/nacos
-  CacheDir: /tmp/nacos/cache
-  LogLevel: info
+  Etcd:
+    Hosts:
+      - bench-etcd:2379
+    Key: logic.rpc
 Auth:
   AccessSecret: aim-dev-access-secret
 WebSocket:
@@ -84,6 +51,10 @@ Kafka:
 GatewayRpc:
   Name: gateway.rpc
   ListenOn: 0.0.0.0:9091
+  Etcd:
+    Hosts:
+      - bench-etcd:2379
+    Key: gateway.rpc
   Prometheus:
     Host: 0.0.0.0
     Port: 19191
@@ -95,21 +66,10 @@ GatewayRpc:
     Batcher: otlphttp
     OtlpHttpPath: /v1/traces
 AttachmentRpc:
-  ServerAddr: bench-nacos:8848
-  NamespaceID: ""
-  Group: DEFAULT_GROUP
-  Cluster: DEFAULT
-  ServiceName: attachment.rpc
-  AdvertiseIP: ""
-  AdvertisePort: 0
-  Ephemeral: true
-  Weight: 1
-  TimeoutMs: 5000
-  Username: ""
-  Password: ""
-  LogDir: /app/log/nacos
-  CacheDir: /tmp/nacos/cache
-  LogLevel: info
+  Etcd:
+    Hosts:
+      - bench-etcd:2379
+    Key: attachment.rpc
 
 # Per-(device_id, user_id) sliding-window rate limit applied to all
 # human-authenticated REST endpoints. MaxRequests <= 0 disables the
