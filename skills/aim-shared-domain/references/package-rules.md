@@ -10,7 +10,7 @@
 | --- | --- | --- |
 | `errorx` | `CodeError`、业务错误码、gRPC/HTTP 映射 | 全模块 |
 | `rpc` | gRPC unary interceptor：panic 恢复、错误清洗、trace 记录 | auth/core/logic/gateway rpc |
-| `nacos` | Nacos v2 注册、注销、gRPC resolver | gateway/auth/core/logic |
+| `discov (go-zero)` | etcd 注册/发现（zrpc 内置，`etcd://` scheme） | gateway/auth/core/logic/attachment |
 | `jwt` | HS256 access token 签发/验证，claims 含 user_id/device_id | auth 签发，gateway 验证 |
 | `events` | Kafka 事件契约，如 `UserCreatedEvent`、`AttachmentUploadedEvent` | auth/attachment 生产，logic/data_parsing 消费 |
 | `attachment` | 附件内容 schema、JSON 解析与校验 | gateway/core/logic |
@@ -28,16 +28,8 @@
 - 业务错误统一走 `errorx.NewCodeError`；跨 gRPC 边界用 `errorx.FromGRPCError` 还原并清洗基础设施错误。
 - Kafka 事件结构需要携带 `tracing.TraceContextFields` 时直接嵌入字段，避免依赖 Kafka header。
 - Kafka producer 应先创建 producer span，再调用 `tracing.InjectTraceContext(ctx)` 写入事件 payload，确保消费侧 span 以 producer span 为父级。
-- Nacos resolver 注册是进程级全局动作；`RegisterResolver` 内部使用 `sync.Once`，**只首次调用生效**。
-  后续 `RegisterResolver` 调用被忽略，仅第一个 namingClient 被使用。
-  因此第一个注册的 naming client 必须能 Nacos 查到所有后续 `aimnacos:///<service>` target 对应的服务。
-  gateway 中 auth/core/logic/attachment 多个 `NewClientWithTarget(nacos.BuildTarget(serviceName))` 均使用相同的 resolver 实例。
-  如需每个 resolver 使用独立的 naming client，需重构 `registerOnce` 逻辑（如按 naming client 分 scheme 名）。
-- AIM 自定义 Nacos gRPC resolver 的 scheme 必须使用 `aimnacos`，不要使用 `nacos`。
-  Nacos SDK 会在内部直连 `nacos:9848`；如果自定义 resolver 抢占全局 `nacos` scheme，grpc-go 会把 `9848` 当成服务名反复触发
-  `nacos initial SelectInstances for "9848": instance list is empty!`。
-  看到该日志持续重复时，优先确认镜像是否仍运行旧代码并重建相关服务。
-  服务真实空实例日志应显示业务服务名（如 `auth.rpc`、`logic.rpc`），并只代表启动期订阅尚未收到健康实例。
+- 服务注册通过 `zrpc.RpcServerConf.Etcd` 字段；`zrpc.MustNewServer` 启动时调用 `internal.NewRpcPubServer` 自动 keepalive（lease 10s，watch 续期），进程退出由 `proc.AddWrapUpListener` 自动撤销 lease。客户端通过 `zrpc.MustNewClient(c.<X>Rpc)` 或 `zrpc.NewClient(c.<X>Rpc)` 创建，target 形如 `etcd://<hosts>/<key>`。YAML 只需加 `Etcd: { Hosts, Key }` 块，无需任何业务代码改动。参考 https://go-zero.dev/guides/microservice/service-discovery/。
+
 
 ## 修改检查
 

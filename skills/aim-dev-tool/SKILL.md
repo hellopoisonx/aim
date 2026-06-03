@@ -175,11 +175,8 @@ docker compose build --no-cache
 docker compose up -d --force-recreate aim-auth aim-core aim-gateway aim-logic
 ```
 
-### Gateway 日志大量 Nacos resolver 报错
-
-如果 gateway/core 持续重复：`nacos initial SelectInstances for "9848": instance list is empty!`，说明运行中的镜像仍使用旧版 `nacos` resolver scheme，抢占了 Nacos SDK 内部 `nacos:9848` 直连目标。
-需重建并重启相关服务；新版 AIM 自定义 resolver 使用 `aimnacos:///<service>`，真实启动期空实例日志应显示业务服务名（如 `auth.rpc`、`logic.rpc`），而不是 `9848`。
 判定 gateway HTTP 是否正常：`curl http://127.0.0.1:8888/api/auth/register` 返回 405（非连接拒绝）即 gateway HTTP 正常。
+
 
 ### 接口层测试编译失败（fake/querier 不满足接口）
 
@@ -210,7 +207,10 @@ func (f *fakeQuerier) ListFriends(ctx context.Context, userID int64) ([]model.Fr
 | PostgreSQL | 15432 | 5432 | +10000 |
 | Redis | 16379 | 6379 | +10000 |
 | Kafka | 19092 | 9092 | +10000 |
-| Nacos | 18848 | 8848 | +10000 |
+| etcd | 12379 | 2379 | +10000 |
+
+| etcd peer | 12380 | 2380 | +10000 |
+
 | Tempo HTTP API | 13200 | 3200 | +10000 |
 
 压测环境配置文件在 `dev-tool/etc/`，服务名均以 `bench-` 前缀，容器间通过 `bench-network` 通信。
@@ -248,7 +248,8 @@ python generate_fixtures.py --count 5000   # 自定义数量
 
 ## 最近变更
 
-- 2026-05-30: 用户侧 Bot 管理命令。新增 `RESTClient` 16 个方法（`create_user_bot`/`list_user_bots`/`get_user_bot`/`update_user_bot`/`enable_user_bot`/`disable_user_bot`/`delete_user_bot`/`create_bot_token`/`list_bot_tokens`/`update_bot_token`/`rotate_bot_token`/`revoke_bot_token`/`add_bot_to_conversation`/`create_bot_direct_conversation`/`list_bot_actions`/`list_bot_events`）；CLI 新增 `user-bot-create`/`user-bot-list`/`user-bot-get`/`user-bot-update`/`user-bot-enable`/`user-bot-disable`/`user-bot-delete`/`user-bot-token-create`/`user-bot-token-list`/`user-bot-token-update`/`user-bot-token-rotate`/`user-bot-token-revoke`/`user-bot-add-conv`/`user-bot-direct-conv`/`bot-actions`/`bot-events` 子命令；交互模式新增 `bot-create`/`bot-list`/`bot-get`/`bot-update`/`bot-enable`/`bot-disable`/`bot-delete`/`bot-token-create`/`bot-token-list`/`bot-token-revoke`/`bot-token-rotate`/`bot-add-conv`/`bot-direct-conv`/`bot-actions`/`bot-events` 命令。
+- 2026-06-03: 压测环境基础设施从 Nacos 切到 etcd。`dev-tool/docker-compose.yaml` 的 `bench-nacos` 服务改为 `bench-etcd`（`quay.io/coreos/etcd:v3.5.21`，端口 +10000 偏移到 12379/12380）；`dev-tool/etc/*.yaml` 的 `Nacos:` 块改为 `Etcd:` 块。
+
 - 2026-05-30: `WSClient` 自动跟踪已连续处理的白名单 pending 推送 `seq`，自动心跳携带 `HeartbeatPayload.last_seq` 以触发服务端 L1 pending 补发；`ws-heartbeat` 新增 `--last-seq` 覆盖参数，交互模式支持 `ws-heartbeat N`。
 - 2026-05-28: 压测配置统一 GatewayRpc 监听 `9091`（宿主机 `19091`），修复 `dev-tool/etc/core.yaml` 中重复 `Consumers` 与误缩进的 `Presence.TTLSeconds`；压测 Compose 迁移/Kafka topic 初始化改用 `deploy/scripts/`，避免遗漏新 migration 或 topic。
 - 2026-05-28: 压测 compose 的 `bench-tempo` 镜像固定为 `grafana/tempo:2.8.1`，避免 `latest` 拉到 Tempo v3 RC 后无法解析仓库共用的 `deploy/tempo/tempo.yaml`；压测 `etc/logic.yaml`/`etc/core.yaml` 已启用 `aim.conversation.events` 群管理系统消息链路。

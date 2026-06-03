@@ -6,8 +6,8 @@
 
 - AIM 的客户端入口统一收敛到 gateway：REST API 只在 `app/gateway/api/gateway.api` 声明并由 `app/gateway/api` 实现；WebSocket 只由 gateway 暴露 `/ws`。
 - 非 gateway 模块（auth/core/logic/attachment/data_parsing 等）不得面向客户端或宿主机新增 REST/WS 入口；需要客户端访问的能力必须通过 gateway 代理或编排内部 gRPC/Kafka 完成。
-- 服务间接口统一优先使用 gRPC：`aim-attachment` 暴露 `AttachmentService` gRPC（Nacos 服务名 `attachment.rpc`），gateway/core 通过 `AttachmentRpc` 调用；`docker-compose.yaml` 只能 `expose` 内部端口，不能 `ports` publish 到宿主机。
-- 排查边界时重点检查：非 gateway 目录是否新增 `.api`、`rest.MustNewServer`、`http.ListenAndServe`/`http.Server`、`websocket.Accept`，以及 Compose 是否将非 gateway REST/WS 端口映射到宿主机；服务间能力应落到 gRPC proto + Nacos 配置。
+- 服务间接口统一优先使用 gRPC：`aim-attachment` 暴露 `AttachmentService` gRPC（etcd key `attachment.rpc`），gateway/core 通过 `AttachmentRpc` 调用；`docker-compose.yaml` 只能 `expose` 内部端口，不能 `ports` publish 到宿主机。
+- 排查边界时重点检查：非 gateway 目录是否新增 `.api`、`rest.MustNewServer`、`http.ListenAndServe`/`http.Server`、`websocket.Accept`，以及 Compose 是否将非 gateway REST/WS 端口映射到宿主机；服务间能力应落到 gRPC proto + etcd 服务发现。
 
 - 有状态服务，根据 User_ID 做一致性哈希，确保同一用户落在固定网关节点
 - 使用 150+ 虚拟节点/物理节点，减少 rebalancing 影响
@@ -19,9 +19,10 @@
 - REST 规格：`app/gateway/api/gateway.api`。
 - 服务入口：`app/gateway/api/gateway.go`。
 - Auth RPC 客户端注入：`app/gateway/api/internal/svc/service_context.go`。
-- Auth RPC 服务发现：`app/gateway/api/internal/svc/service_context.go` 通过 `app/shared/nacos` 注册 Nacos 适配的 gRPC resolver（scheme `aimnacos`），创建 `zrpc` 客户端使用 `aimnacos.BuildTarget("auth.rpc")`（目标形如 `aimnacos:///auth.rpc`）。Resolver 订阅 Nacos 实例变更，auth 后启动不会导致 gateway panic，实例上线后自动发现；`app/gateway/api/etc/gateway-api.yaml` 的 `AuthRpc` 块是 Nacos 配置，不再使用 `AuthRpc.Etcd`。
-- Nacos gRPC resolver（scheme `aimnacos`）实现：`app/shared/nacos/resolver.go`，通过 `NamingClient.Subscribe` 监听服务实例变更并更新 gRPC address list；同一进程内只注册一次全局 scheme，但每个 `aimnacos:///<serviceName>` 客户端必须按 target endpoint 独立订阅对应服务名，避免 `auth.rpc`、`core.rpc`、`logic.rpc` 串线；scheme 不得使用 `nacos`，避免抢占 Nacos SDK 内部 `nacos:9848` 直连目标；支持空初始实例（auth 后启动不 panic）、实例上线动态添加、下线动态移除。
-- Docker Compose 配置：分层 Compose 通过 `${AIM_CONFIG_DIR:-../config/local}/gateway-api.yaml` 挂载到容器内 `/app/etc/gateway-api.yaml`，本地默认配置副本位于 `deploy/config/local/gateway-api.yaml`；`app/gateway/api/etc/gateway-api.yaml` 保留给本地 `go run` / 单服务调试。`AuthRpc.ServerAddr` 在 Compose 网络内使用 `nacos:8848`。
+- Auth RPC 服务发现：`app/gateway/api/internal/svc/service_context.go` 通过 `zrpc.NewClient(c.AuthRpc)` 创建 `authservice.AuthService` gRPC 客户端，客户端自动 watch `Etcd.Key: auth.rpc`。YAML 写 `AuthRpc.Etcd: { Hosts: [etcd:2379], Key: auth.rpc }`。
+- Etcd gRPC resolver：go-zero 内置 `etcd` scheme（`zrpc/resolver.BuildDiscovTarget`），无需 AIM 自定义。客户端 dial `etcd://<hosts>/<key>` 时自动订阅 etcd 中该 key 下的实例变更；etcd 通过 lease TTL 自动剔除失效实例，无需 AIM 额外实现健康检查。`zrpc.MustNewServer` 启动时自动调用 `internal.NewRpcPubServer` 把服务注册到 etcd。
+- Docker Compose 配置：分层 Compose 通过 `${AIM_CONFIG_DIR:-../config/local}/gateway-api.yaml` 挂载到容器内 `/app/etc/gateway-api.yaml`，本地默认配置副本位于 `deploy/config/local/gateway-api.yaml`；`app/gateway/api/etc/gateway-api.yaml` 保留给本地 `go run` / 单服务调试。`Etcd.Hosts` 在 Compose 网络内使用 `etcd:2379`。
+
 - JWT 本地验签：`app/shared/jwt`。
 - `Authorization` header 上下文传递：`app/gateway/api/internal/authctx`。
 - REST Auth 中间件：`app/gateway/api/internal/middleware/auth_middleware.go`，对 `/api/conversations` 和 `/api/users` 路由组生效。中间件通过 `wsauth.ExtractAndValidate` 验签 Bearer token，成功后将 `ws.Identity{UserID, DeviceID}` 注入 `ws.WithIdentity` 上下文。失败返回 401 JSON `{code, msg}`。
@@ -50,7 +51,8 @@
 - Logout JWT 测试：`app/gateway/api/internal/logic/auth/logout_logic_test.go`。
 - 统一响应测试：`app/gateway/api/internal/handler/response_test.go`。
 - 配置加载测试：`app/gateway/api/internal/config/config_test.go` 覆盖 REST Telemetry 字段和 `GatewayRpc` zrpc/Telemetry 字段。
-- Nacos 注册/发现适配测试：`app/shared/nacos`，包括 register、deregister、BuildDirectTarget、BuildTarget、gRPC resolver 构建、按 target 服务名订阅、空实例回调、实例上线/下线动态更新。
+- Etcd 注册/发现：go-zero 内置 `core/discov` 提供，无 AIM 自定义测试代码。端到端验证：`docker exec aim-etcd etcdctl get --prefix --keys-only /` 能看到 `auth.rpc`、`core.rpc`、`logic.rpc`、`attachment.rpc` 4 个 key。`app/gateway/api/internal/config/config_test.go` 覆盖 `AuthRpc.Etcd.Key` 等字段。
+
 - 关键覆盖率目标：`app/gateway/api/internal/logic/auth` 保持 80% 以上。
 - 用户代理测试：`app/gateway/api/internal/logic/users/get_user_by_name_logic_test.go` 覆盖 by-name 模糊列表响应与 by-id 详情响应；好友新增代理逻辑位于 `app/gateway/api/internal/logic/users/add_friend_logic.go`，需保持 `LogicFriendshipClient` 注入和 `ws.Identity` 鉴权路径可测。
 - 关键验证命令：`goctl api validate -api app/gateway/api/gateway.api`、`go mod tidy`、`go build ./...`、`go test -coverprofile=count.out ./...`、`go vet ./...`、`golangci-lint run ./...`。
@@ -102,7 +104,7 @@ Proto 定义：`shared/proto/gateway/gateway.proto`，生成的 pb 代码在 `sh
 | `PushPresence` | 推送用户在线状态变更通知给目标用户的好友 | aim-core/Presence Consumer |
 | `PushTyping` | 推送输入状态给目标用户 | aim-core/Typing Consumer |
 | `KickUser` | 踢下线指定用户设备（多设备管理/被迫下线） | aim-auth / 管理员后台 |
-| `DrainNotify` | 通知网关节点进行优雅迁移（会话 drain） | Nacos 服务发现 / 运维工具 |
+| `DrainNotify` | 通知网关节点进行优雅迁移（会话 drain） | 运维管理工具（K8s preStop、LB 摘除、CI teardown 等） |
 | `PushFriendApplication` | 推送好友申请通知给目标用户 | aim-logic/FriendshipService |
 
 ### PushMessage
@@ -145,9 +147,9 @@ Proto 定义：`shared/proto/gateway/gateway.proto`，生成的 pb 代码在 `sh
 
 ### CoreRpc 配置
 
-配置定义：`app/gateway/api/internal/config/config.go` 的 `CoreRpc aimnacos.Config` 字段。Docker Compose 部署使用 `deploy/config/<env>/gateway-api.yaml`（容器内 `/app/etc/gateway-api.yaml`），本地 `go run` / 单服务调试使用 `app/gateway/api/etc/gateway-api.yaml`。
+配置定义：`app/gateway/api/internal/config/config.go` 的 `CoreRpc zrpc.RpcClientConf` 字段。Docker Compose 部署使用 `deploy/config/<env>/gateway-api.yaml`（容器内 `/app/etc/gateway-api.yaml`），本地 `go run` / 单服务调试使用 `app/gateway/api/etc/gateway-api.yaml`。
 
-目标地址通过 AIM Nacos resolver 发现（目标形如 `aimnacos:///core.rpc`），`gateway-api.yaml` 的 `CoreRpc` 块配置 Nacos 注册中心地址、服务名 `core.rpc` 等发现参数。
+目标地址通过 etcd 服务发现自动获取（target 形如 `etcd://<hosts>/core.rpc`），`gateway-api.yaml` 的 `CoreRpc.Etcd: { Hosts, Key: core.rpc }` 块配置注册中心地址与发现 key。
 
 ### Transfer 调用流程
 

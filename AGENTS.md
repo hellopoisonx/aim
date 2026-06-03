@@ -9,7 +9,7 @@
 
 ## 概览
 
-AIM 是多人在线即时通讯系统，内置可自部署 AI 助手。后端为 go-zero 微服务（gateway/auth/core/logic），基础设施包含 Kafka、Redis/Redis Stack、PostgreSQL、Nacos、Grafana Tempo。
+AIM 是多人在线即时通讯系统，内置可自部署 AI 助手。后端为 go-zero 微服务（gateway/auth/core/logic），基础设施包含 Kafka、Redis/Redis Stack、PostgreSQL、etcd、Grafana Tempo。
 
 ## 工作流
 
@@ -73,5 +73,5 @@ aim/
 ```bash
 go mod tidy
 go build ./...
-docker compose up -d postgres redis kafka nacos tempo grafana
+docker compose up -d postgres redis kafka etcd tempo grafana
 ```

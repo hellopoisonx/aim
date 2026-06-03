@@ -14,7 +14,8 @@ description: aim 的网关域。对应 `gateway` 模块。
 
 - 只有 gateway 可以面向客户端/公网暴露 REST API 和 WebSocket 入口；客户端（含 Desktop、第三方 Bot）只能访问 `app/gateway/api` 下的 `/api/*` 与 `/ws`。
 - auth/core/logic/attachment/data_parsing 等非 gateway 模块不得新增对外 REST/WS 端口、`.api` 服务或 WebSocket handler；如需客户端能力，先在 `app/gateway/api/gateway.api` 声明，由 gateway 调内部 gRPC/Kafka。
-- 允许的例外仅限服务间内部接口（如 GatewayService gRPC、attachment.rpc gRPC），Docker Compose 中不得将这些内部端口 publish 到宿主机；使用内部网络 `expose` 或仅容器名/Nacos 访问。
+- 允许的例外仅限服务间内部接口（如 GatewayService gRPC、attachment.rpc gRPC），Docker Compose 中不得将这些内部端口 publish 到宿主机；使用内部网络 `expose` 或仅容器名/etcd 访问。
+
 
 ## 参考资料
 
@@ -23,6 +24,7 @@ description: aim 的网关域。对应 `gateway` 模块。
 - `references/ws-internals.md`
 
 ## 最近变更
+- 2026-06-03: 注册中心从 Nacos 切换到 etcd。`AuthRpc` / `CoreRpc` / `LogicRpc` / `AttachmentRpc` 改为 `zrpc.RpcClientConf`，YAML 写 `Etcd: { Hosts, Key }` 块；`zrpc.NewClient(c.X)` 客户端自动 watch。删除 `aimnacos` resolver 和 4 个 `namingClient` 字段，`Close()` 不再需要 4 个 `CloseClient`。
 
 - 2026-06-02: Gateway 限流与 `.api` spec 对齐。拆分 `/api/bot/v1` 服务块为 `bot-read` (BotAuth) + `bot-write` (BotAuth,BotRateLimit),为 8 个 `@server` 块追加 `, RateLimit`,routes.go 与 `.api` 一一对应,WS SEND_MESSAGE 限流与 REST 共享 `ServiceContext.RateLimitQuota`。goctl 1.10.1 会重新生成 `botratelimit_middleware.go` 脚手架,已在 `.gitignore` 排除。同步更新 `references/api.md` 「限流」章节。
 - 2026-05-30: WS 心跳触发服务端轻量重放。`ReplayStore` 复用 go-zero `collection.Cache` L1 内存缓存，按连接保存白名单 pending 帧（默认 128 帧、5 分钟）；`HeartbeatPayload.last_seq` 与 `FRAME_TYPE_ACK.ack_seq` 基于已连续处理的白名单 pending 推送帧推进 `LastAckedSeq` 并清理已确认帧，心跳 ACK 后补发 `seq > last_seq` 的白名单帧。
@@ -31,9 +33,9 @@ description: aim 的网关域。对应 `gateway` 模块。
 - 2026-05-29: 好友标签 REST。新增 `GET /api/friends/tags`（列出标签）、`POST /api/friends/tags`（创建标签）、`PUT /api/friends/tags/:id`（重命名）、`DELETE /api/friends/tags/:id`（删除标签）、`PUT /api/friends/:id/tags`（设置好友标签）、`DELETE /api/friends/:id/tags/:tag_id`（删除单个标签）。`FriendshipItem` 新增 `tags` 字段透出好友分组。
 - 2026-05-29: 统一搜索 REST。新增 `GET /api/search?q=&scope=&conversation_id=&cursor_created_at=&cursor_id=&limit=` 端点，scope 可组合 `users/friends/conversations/messages`，返回 snippet 高亮片段与游标分页；通过 `LogicSearchClient.UnifiedSearch` 调用 logic `SearchService`。
 - 2026-05-28: Docker/压测/Bot SDK 集成配置统一 GatewayRpc 监听端口为 `9091`；根 Compose 拆分为 `deploy/compose/base|dev|prod|observability|tools.yaml`，生产只通过反向代理发布 REST/WS。
-- 2026-05-28: Gateway/Core 的 Nacos gRPC client 目标改为 `aimnacos.BuildTarget(serviceName)`，避免自定义 resolver 使用 `nacos` scheme 抢占 Nacos SDK 内部 `nacos:9848` 连接并反复刷空实例错误。
+- 2026-05-28: （已废弃）原 Nacos gRPC client 目标改为 `aimnacos.BuildTarget(serviceName)`，避免自定义 resolver 使用 `nacos` scheme 抢占 Nacos SDK 内部 `nacos:9848` 连接。2026-06-03 切到 etcd 后该问题不再存在，`aimnacos` scheme 和 `app/shared/nacos` 包已删除。
 - 2026-05-25: 明确外部接口边界：只有 gateway 可对客户端/公网暴露 REST API 与 WebSocket；非 gateway 模块的 HTTP/REST 只能作为服务间内部接口，Docker Compose 不得 publish 内部 REST/WS 端口。
-- 2026-05-25: attachment 服务由内部 HTTP 改为 `AttachmentService` gRPC；gateway `/api/attachments` 和 core 附件引用校验统一通过 `AttachmentRpc`/Nacos 调用，不再使用 `/v1/attachments/*` 内部 HTTP。
+- 2026-05-25: attachment 服务由内部 HTTP 改为 `AttachmentService` gRPC；gateway `/api/attachments` 和 core 附件引用校验统一通过 `AttachmentRpc`（`Etcd.Key: attachment.rpc`）调用，不再使用 `/v1/attachments/*` 内部 HTTP。
 - 2026-05-25: Gateway 新增 `/api/attachments` 端点：`init`、`complete`、`download`、`get` 均受 Auth 中间件保护，通过 `AttachmentRpc` 调用 `aim-attachment`，客户端仍只面向 gateway 获取 SeaweedFS 直传/下载授权。
 - 2026-05-24: Gateway WS 输入状态和已读回执新增本节点即时 fan-out：收到 `FRAME_TYPE_TYPING` / `FRAME_TYPE_READ_RECEIPT` 后仍发布 Kafka 给 core 跨节点转发，同时查询会话成员并直接推送到本节点在线连接，降低单节点 Desktop 的输入状态缺失和已读刷新延迟；typing/read_receipt Kafka 事件携带 `gateway_node_id` 供 core 跳过源节点，避免本节点重复推送；配置显式补齐 `Kafka.ReadReceiptTopic`。
 - 2026-05-24: Gateway WS 连接新增 per-connection 写锁，`PushPresence`/`PushTyping`/`PushMessage`/`SERVER_ACK`/`TOKEN_EXPIRED` 等服务端写帧统一串行化，避免同一 WebSocket 上并发写导致推送帧丢失或连接异常。
@@ -45,5 +47,6 @@ description: aim 的网关域。对应 `gateway` 模块。
 - 2026-05-22: 修复 `PushPresence` 推送寻址 Bug：`PushPresenceReq` 改用 `TargetUserId` 查找目标用户连接，兼容 `TargetUserId == 0` 时回退到 `UserId`。新增 `TestGatewayServerPushPresenceFallbackToUserId` 测试覆盖回退兼容路径。参见 `references/ws-internals.md` §PushPresence。
 - 2026-05-22: 打通 presence/typing 推送链路：新增 `PushTyping` gRPC、`GET /api/presence/friends` 快照接口；Manager 维护 Redis Set 聚合多设备状态；用 kq.Pusher 真发 `aim.presence.events` 和 `aim.typing.events`；PresenceTTL 默认 45s，客户端心跳 20s。
 - 2026-05-21: 新增 `GET /api/conversations` 端点，返回当前用户参与的所有会话列表（包含会话基本信息和成员列表）；该端点受 `Auth` 中间件保护，调用 `LogicConversationClient.GetUserConversations` 获取数据。
-- 2026-05-19: gateway RPC 容器曾监听 `0.0.0.0:9090`（现已统一为 `0.0.0.0:9091`）；Nacos resolver 在服务列表为空时不上报空地址列表，避免启动期空服务列表失败。
+- 2026-05-19: gateway RPC 容器曾监听 `0.0.0.0:9090`（现已统一为 `0.0.0.0:9091`）。
+
 - 2026-05-19: 补齐 gateway 生产 WS 路由注册与 WS ACK 409 映射；接入 RPC 统一 unary 错误拦截器。

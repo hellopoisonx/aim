@@ -6,7 +6,7 @@
 - Delivery Consumer（投递消费者）：从 Kafka 消费消息，查找目标用户所在网关并投递
 - Presence Consumer：消费 `aim.presence.events`，查好友列表 → 查 `aim:user_gateway:{friend_id}` → 调 `gateway.PushPresence`
 - Typing Consumer：消费 `aim.typing.events`，查会话成员 → 查 `aim:user_gateway:{member_id}` → 调 `gateway.PushTyping`
-- GatewayRouter：按 `node_id` 路由 gRPC 请求到目标网关实例（Nacos 服务发现 + `node_id` 元数据）
+- GatewayRouter：按 `node_id` 路由 gRPC 请求到目标网关实例。Gateway 节点注册走 etcd（`Etcd.Key: gateway.rpc`），但 client 端不依赖 etcd 发现 —— 走 `GatewayRpcConf.Target` / `GatewayRpcConf.Nodes` 静态配置，部署期在 YAML 写死 `node_id` → `target` 映射。
 
 ## 关键修复：PresenceConsumer 推送寻址
 
@@ -77,10 +77,10 @@ message TransferResp {
 
 ### 部署配置
 
-- 服务注册：`app/core/rpc/core.go` 启动时通过 `app/shared/nacos` 注册 Nacos v2 临时实例；`app/core/rpc/etc/core.yaml` 的 `Nacos` 块维护 `ServerAddr`、`Group`、`Cluster`、`ServiceName`、`AdvertiseIP`、`AdvertisePort` 等注册参数。
-- Docker Compose 配置：分层 Compose 通过 `${AIM_CONFIG_DIR:-../config/local}/core.yaml` 挂载到 `/app/etc/core.yaml`，本地默认配置副本位于 `deploy/config/local/core.yaml`；`app/core/rpc/etc/core.yaml` 保留给本地 `go run` / 单服务调试。Compose 内 `ListenOn` 为 `0.0.0.0:8080`，`Nacos.ServerAddr` 为 `nacos:8848`，`Nacos.AdvertiseIP` 为 `aim-core`，业务缓存 Redis 使用 `CacheRedis.Addr: redis:6379`（不要命名为 `Redis`，该字段名会与 `zrpc.RpcServerConf.Redis` 冲突），Kafka 使用 `kafka:9092`，`GatewayRpc.Target` 为 `aim-gateway:9091`，`LogicRpc.ServerAddr` 为 `nacos:8848` 并通过 AIM Nacos resolver（`aimnacos:///logic.rpc`）发现 `logic.rpc`。本地 dev overlay 映射主机端口 `8081:8080`。
+- 服务注册：`app/core/rpc/core.go` 启动时 `zrpc.MustNewServer(c.RpcServerConf, ...)` 自动调用 `internal.NewRpcPubServer` 把 `Etcd.Key: core.rpc` + `ListenOn: 0.0.0.0:8080` 注册到 etcd（由 `figureOutListenOn` 自动把 `0.0.0.0` 解析为容器 IP / `POD_IP`）；`app/core/rpc/etc/core.yaml` 的 `Etcd` 块维护 `Hosts` / `Key` 两个字段。
+- Docker Compose 配置：分层 Compose 通过 `${AIM_CONFIG_DIR:-../config/local}/core.yaml` 挂载到 `/app/etc/core.yaml`，本地默认配置副本位于 `deploy/config/local/core.yaml`；`app/core/rpc/etc/core.yaml` 保留给本地 `go run` / 单服务调试。Compose 内 `ListenOn` 为 `0.0.0.0:8080`，`Etcd.Hosts` 为 `[etcd:2379]`，`Etcd.Key` 为 `core.rpc`，业务缓存 Redis 使用 `CacheRedis.Addr: redis:6379`（不要命名为 `Redis`，该字段名会与 `zrpc.RpcServerConf.Redis` 冲突），Kafka 使用 `kafka:9092`，`GatewayRpc.Target` 为 `aim-gateway:9091`，`LogicRpc` 通过 etcd 服务发现（`etcd://etcd:2379/logic.rpc`）。本地 dev overlay 映射主机端口 `8081:8080`。
 - go-zero OTel/Tempo：`app/core/rpc/etc/core.yaml` 的 `Telemetry` 块使用 `Name: core.rpc`、`Batcher: otlphttp`、`Endpoint: tempo:4318`、`OtlpHttpPath: /v1/traces`，由 `zrpc.RpcServerConf` 自动接入 RPC tracing。
-- 配置加载测试：`app/core/rpc/internal/config/config_test.go` 覆盖 `Telemetry`、`CacheRedis`、Kafka producer 和 Nacos client 配置。
+- 配置加载测试：`app/core/rpc/internal/config/config_test.go` 覆盖 `Telemetry`、`CacheRedis`、Kafka producer 和 Etcd client / `LogicRpc.Etcd.Key` / `AttachmentRpc.Etcd.Key` 配置。
 - Kafka tracing：`TransferLogic` 发布到 `aim-message-transfer` 的 JSON payload 包含 `traceparent`/`tracestate`；`DeliveryConsumer` 恢复 trace context 并创建 `core.kafka.delivery.consume` consumer span，然后用恢复后的 context 调用 GatewayService。
 
 ## ConversationEventConsumer

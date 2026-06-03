@@ -15,7 +15,7 @@ description: AIM 的附件域。涉及 `app/attachment`、AttachmentService gRPC
 
 ## 关键位置
 
-- `app/attachment/attachment.go`：服务入口，启动 go-zero `zrpc`，注册 Nacos 服务 `attachment.rpc`。
+- `app/attachment/attachment.go`：服务入口，启动 go-zero `zrpc` 并由 `zrpc.MustNewServer` 自动注册到 etcd（`Etcd.Key: attachment.rpc`）。
 - `app/attachment/rpc/attachment.proto`：AttachmentService 协议源。
 - `app/attachment/rpc/pb/`：protoc 生成代码，除重新生成外不要手改。
 - `app/attachment/internal/server/`：gRPC server 适配层，负责 pb 与业务 service DTO 转换、错误映射。

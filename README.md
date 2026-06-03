@@ -67,7 +67,8 @@ graph TB
         Redis[(Redis Stack)]
         PG[(PostgreSQL)]
         SeaweedFS[SeaweedFS]
-        Nacos[Nacos]
+        Etcd[etcd]
+
     end
     Web -->|WS/REST| GW
     Desktop -->|WS/REST| GW
@@ -118,7 +119,8 @@ graph TB
 | **缓存**       | Redis Stack                                 |
 | **持久化**     | PostgreSQL（sqlc）                          |
 | **文件存储**   | SeaweedFS（S3 协议）                        |
-| **注册中心**   | Nacos                                       |
+| **注册中心**   | etcd                                        |
+
 | **可观测性**   | OpenTelemetry + Prometheus + Loki → Grafana |
 
 ---

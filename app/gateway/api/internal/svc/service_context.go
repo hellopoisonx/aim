@@ -22,8 +22,9 @@ import (
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/friendshipservice"
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/searchservice"
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/userservice"
-	aimnacos "github.com/hellopoisonx/aim/app/shared/nacos"
 	"github.com/hellopoisonx/aim/app/shared/quota"
+
+
 	"github.com/hellopoisonx/aim/app/shared/tracing"
 
 	"github.com/redis/go-redis/v9"
@@ -185,11 +186,8 @@ type ServiceContext struct {
 	RateLimitQuota          *quota.QuotaStore
 	BotRateLimitQuota       *quota.QuotaStore
 
-	namingClient           aimnacos.NamingClient
-	coreNamingClient       aimnacos.NamingClient
-	logicNamingClient      aimnacos.NamingClient
-	attachmentNamingClient aimnacos.NamingClient
 	RedisClient            *redis.Client
+
 	PresencePub            PresencePublisher
 	TypingPub              TypingPublisher
 	ReadReceiptPub         ReadReceiptPublisher
@@ -210,48 +208,30 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		c.Auth.AccessSecret = "aim-dev-access-secret"
 	}
 
-	logx.Must(c.AuthRpc.ApplyDefaults("auth.rpc", "127.0.0.1:8989"))
+	client, err := zrpc.NewClient(c.AuthRpc)
 
-	namingClient, err := aimnacos.NewNamingClient(c.AuthRpc)
 	logx.Must(err)
 
-	// Register AIM's Nacos-backed gRPC resolver so auth instances are discovered dynamically.
-	// With this, the gateway no longer panics when auth starts after it.
-	aimnacos.RegisterResolver(namingClient, c.AuthRpc)
 
-	client, err := zrpc.NewClientWithTarget(aimnacos.BuildTarget(c.AuthRpc.ServiceName))
-	logx.Must(err)
 
 	// Core RPC client setup
-	logx.Must(c.CoreRpc.ApplyDefaults("core.rpc", "127.0.0.1:8080"))
 
-	coreNamingClient, err := aimnacos.NewNamingClient(c.CoreRpc)
+	coreClient, err := zrpc.NewClient(c.CoreRpc)
+
 	logx.Must(err)
 
-	aimnacos.RegisterResolver(coreNamingClient, c.CoreRpc)
 
-	coreClient, err := zrpc.NewClientWithTarget(aimnacos.BuildTarget(c.CoreRpc.ServiceName))
+
+	logicClient, err := zrpc.NewClient(c.LogicRpc)
+
 	logx.Must(err)
 
-	logx.Must(c.LogicRpc.ApplyDefaults("logic.rpc", "127.0.0.1:8082"))
 
-	logicNamingClient, err := aimnacos.NewNamingClient(c.LogicRpc)
+
+	attachmentClient, err := zrpc.NewClient(c.AttachmentRpc)
+
 	logx.Must(err)
 
-	aimnacos.RegisterResolver(logicNamingClient, c.LogicRpc)
-
-	logicClient, err := zrpc.NewClientWithTarget(aimnacos.BuildTarget(c.LogicRpc.ServiceName))
-	logx.Must(err)
-
-	logx.Must(c.AttachmentRpc.ApplyDefaults("attachment.rpc", "127.0.0.1:8091"))
-
-	attachmentNamingClient, err := aimnacos.NewNamingClient(c.AttachmentRpc)
-	logx.Must(err)
-
-	aimnacos.RegisterResolver(attachmentNamingClient, c.AttachmentRpc)
-
-	attachmentClient, err := zrpc.NewClientWithTarget(aimnacos.BuildTarget(c.AttachmentRpc.ServiceName))
-	logx.Must(err)
 
 	// Create Redis client for presence heartbeat state management.
 	redisClient := redis.NewClient(&redis.Options{
@@ -310,10 +290,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		RateLimitQuota:          rateLimitQuota,
 		BotRateLimitQuota:       botRateLimitQuota,
 
-		namingClient:           namingClient,
-		coreNamingClient:       coreNamingClient,
-		logicNamingClient:      logicNamingClient,
-		attachmentNamingClient: attachmentNamingClient,
+
 		RedisClient:            redisClient,
 		PresencePub:            newPresencePub(c, redisClient),
 		TypingPub:              newTypingPub(c, redisClient),
@@ -365,26 +342,16 @@ func newReadReceiptPub(c config.Config, redisClient *redis.Client) ReadReceiptPu
 	return &noopPublisher{}
 }
 
-// Close releases the underlying Nacos naming clients and Redis client.
+// Close releases the Redis client.
+
 // It should be called after the gRPC client connections are closed (i.e., after server.Stop).
+
 func (s *ServiceContext) Close() {
+
 	if s.reaperCancel != nil {
+
 		s.reaperCancel()
-	}
-	if s.namingClient != nil {
-		s.namingClient.CloseClient()
-	}
 
-	if s.coreNamingClient != nil {
-		s.coreNamingClient.CloseClient()
-	}
-
-	if s.logicNamingClient != nil {
-		s.logicNamingClient.CloseClient()
-	}
-
-	if s.attachmentNamingClient != nil {
-		s.attachmentNamingClient.CloseClient()
 	}
 
 	if s.RedisClient != nil {

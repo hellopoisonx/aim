@@ -87,7 +87,8 @@ protoc --python_out=../../../dev-tool gateway.proto
 | bench-postgres | `15432` | PostgreSQL |
 | bench-redis | `16379` | Redis |
 | bench-kafka | `19092` | Kafka |
-| bench-nacos | `18848` | Nacos HTTP |
+| bench-etcd | `12379` | etcd HTTP API（注册中心） |
+
 | bench-tempo | `13200` | Tempo HTTP API（Grafana 数据源） |
 
 

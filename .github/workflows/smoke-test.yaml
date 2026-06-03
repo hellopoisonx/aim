@@ -63,7 +63,7 @@ jobs:
           # 等所有容器 healthy
           echo "等待基础设施 healthy ..."
           for i in $(seq 1 60); do
-            unhealthy=$(docker ps --format '{{.Names}} {{.Status}}' | grep -E "aim-(gateway|auth|core|logic|postgres|redis|kafka|nacos)" | grep -v -E "healthy|Up [0-9]+ minutes" | wc -l)
+            unhealthy=$(docker ps --format '{{.Names}} {{.Status}}' | grep -E "aim-(gateway|auth|core|logic|postgres|redis|kafka|etcd)" | grep -v -E "healthy|Up [0-9]+ minutes" | wc -l)
             if [ "$unhealthy" = "0" ]; then
               echo "  ✓ 基础设施就绪"
               break

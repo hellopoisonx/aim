@@ -21,7 +21,10 @@ description: aim 的核心域。对应 `core` 模块。
 - 2026-05-28: Core PresenceStore 增加 L1 内存缓存包装 `CachedPresenceStore`，使用 go-zero Redis `Sadd/Smembers/Scard/Expire` 维护 Redis presence Set，并以 5s L1 TTL 降低投递/typing/read-receipt 查目录延迟。
 - 2026-05-28: 新增 `AttachmentParsedConsumer`：消费 `aim.attachment.parsed` 事件，将 data_parsing 解析完成的附件更新（缩略图、尺寸、时长）通过 `GatewayClient.PushMessage`（`is_system=true`）推送至会话所有成员。配置结构 `AttachmentParsedConsumerConf kq.KqConf`。详见 `references/detail.md` §AttachmentParsedConsumer。
 - 2026-05-28: `app/core/rpc/etc/core.yaml` 已启用 `ConversationEventConsumerConf`，消费 `aim.conversation.events` 并将群管理系统消息推送到目标用户所在 Gateway。
-- 2026-05-25: Core 附件引用校验改为调用 `AttachmentService.ValidateReference` gRPC，保留 `core.attachment.validate_reference` client span；配置改为 `AttachmentRpc` Nacos 服务发现。
+- 2026-06-03: 注册中心从 Nacos 切到 etcd。`core/rpc` 的 `Etcd` / `LogicRpc` / `AttachmentRpc` 全部走 `zrpc.RpcClientConf.Etcd` 字段；删除 `app/shared/nacos` 引用，4 个 `aimnacos.NewNamingClient + RegisterResolver + NewClientWithTarget` 块替换为 `zrpc.NewClient(conf)`。`app/shared/nacos` 与 `aimnacos` scheme 整包删除。
+
+- 2026-05-25: Core 附件引用校验改为调用 `AttachmentService.ValidateReference` gRPC，保留 `core.attachment.validate_reference` client span；配置改为 `AttachmentRpc` etcd 服务发现（`Etcd.Key: attachment.rpc`）。
+
 - 2026-05-25: Transfer 热路径新增附件消息校验：`image`/`video`/`audio`/`file` 的 `content` 必须符合 `aim.attachment.v1` JSON schema，并通过 attachment 服务校验上传完成、发送者、会话归属和类型匹配；配置新增 `AttachmentRpc`。
 - 2026-05-24: `core.yaml` 补齐 `ReadReceiptConsumerConf`，确保 `aim.read_receipt.events` 由 core 消费并通过 `PushReadReceipt` 跨节点转发；typing/read_receipt consumer 会跳过事件中的源 `gateway_node_id`，避免 Gateway 本节点即时推送后 Kafka 回流重复；`docker-compose.yaml` 的 kafka-init 同步创建 presence/typing/read_receipt topics，避免依赖 Kafka 自动建 topic。
 - 2026-05-23: 新增 `ReadReceiptConsumer`：消费 `aim.read_receipt.events`，查会话成员后通过 `GatewayClient.PushReadReceipt` 把已读游标推到除发送者外的成员所在网关节点。`GatewayPusher` 接口与 `GatewayRouter` 同步新增 `PushReadReceipt`。配置结构 `ReadReceiptConsumerConf kq.KqConf`。

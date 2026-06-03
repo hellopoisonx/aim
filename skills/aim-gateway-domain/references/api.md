@@ -63,8 +63,8 @@ Gateway 在 REST 入口与 WebSocket 入口均提供滑动窗口限流,基于 Re
 - `GET /api/users/by-name/:name` 通过 `LogicRpc` 连接 `aim-logic`，调用 `UserService.SearchUserInfoByNickname` 做昵称模糊查询，返回用户列表项 `id/email/avatar`。nickname 不唯一，不要在 REST 层把 by-name 当作单用户详情查询。
 - `GET /api/users/by-id/:id` 通过 `LogicRpc` 连接 `aim-logic`，调用 `UserService.GetUserInfo` 查询单个用户详情。
 - `POST /api/users/friends/:id` 通过 `LogicRpc` 连接 `aim-logic`，调用 `FriendshipService.AddFriend`，将认证用户 `user_id` 与路径参数 `id` 建立好友关系请求；认证用户来自 `ws.IdentityFromContext(l.ctx)`，路径 `id` 必须为正数。
-- `LogicRpc` 配置位于 `app/gateway/api/etc/gateway-api.yaml`，配置结构为 `app/gateway/api/internal/config/config.go` 的 `LogicRpc aimnacos.Config`。
-- `app/gateway/api/internal/svc/service_context.go` 通过 AIM Nacos resolver 使用 `aimnacos.BuildTarget("logic.rpc")`（目标形如 `aimnacos:///logic.rpc`）创建 `userservice.UserService`、`friendshipservice.FriendshipService` 客户端。
+- `LogicRpc` 配置位于 `app/gateway/api/etc/gateway-api.yaml`，配置结构为 `app/gateway/api/internal/config/config.go` 的 `LogicRpc zrpc.RpcClientConf`。
+- `app/gateway/api/internal/svc/service_context.go` 通过 `zrpc.NewClient(c.LogicRpc)`（由 `Etcd.Hosts` + `Etcd.Key` 自动生成 `etcd://<hosts>/<key>` target）创建 `userservice.UserService`、`friendshipservice.FriendshipService` 客户端。
 - 用户端点均受 `Auth` 中间件保护，需要有效的 Bearer JWT token。
 
 | Method | Path | Auth | Handler |
@@ -197,7 +197,7 @@ service GatewayService {
   rpc KickUser(KickUserReq) returns (KickUserResp);
 
   // DrainNotify 通知网关节点进行优雅迁移（会话 drain）。
-  // 调用方：Nacos 服务发现 / 运维管理工具，在网关节点下线前通知其推送 reconnect 帧给客户端。
+  // 调用方：运维管理工具（K8s preStop hook、负载均衡摘除、CI teardown 等），在网关节点下线前通知其推送 reconnect 帧给客户端。
   rpc DrainNotify(DrainNotifyReq) returns (DrainNotifyResp);
 
   // PushFriendApplication 推送好友申请通知给目标用户。
@@ -300,11 +300,12 @@ message PushFriendApplicationResp {
 
 ## CoreRpc 配置
 
-配置路径：Docker Compose 使用 `deploy/config/<env>/gateway-api.yaml`（容器内 `/app/etc/gateway-api.yaml`），本地 `go run` / 单服务调试使用 `app/gateway/api/etc/gateway-api.yaml`。配置结构定义在 `app/gateway/api/internal/config/config.go` 的 `CoreRpc aimnacos.Config` 字段。
+配置路径：Docker Compose 使用 `deploy/config/<env>/gateway-api.yaml`（容器内 `/app/etc/gateway-api.yaml`），本地 `go run` / 单服务调试使用 `app/gateway/api/etc/gateway-api.yaml`。配置结构定义在 `app/gateway/api/internal/config/config.go` 的 `CoreRpc zrpc.RpcClientConf` 字段。
 
-目标地址通过 AIM Nacos resolver 发现（目标形如 `aimnacos:///core.rpc`），需在 `CoreRpc` 配置块中指定 Nacos 注册中心地址、服务名 `core.rpc` 等发现参数（与 AuthRpc 配置方式一致）。
+目标地址通过 etcd 服务发现自动获取（target 形如 `etcd://<hosts>/core.rpc`），需在 `CoreRpc` 配置块中指定 etcd 注册中心地址与 `Etcd.Key: core.rpc`（与 AuthRpc 配置方式一致）。
 
-调用示例：`app/gateway/api/internal/svc/service_context.go` 使用 `zrpc.NewClientWithTarget(aimnacos.BuildTarget(c.CoreRpc.ServiceName))` 创建 core client，供 `Transfer` logic 使用。
+调用示例：`app/gateway/api/internal/svc/service_context.go` 使用 `zrpc.NewClient(c.CoreRpc)` 创建 core client，供 `Transfer` logic 使用。
+
 
 ## `ws` 通信
 ```protobuf

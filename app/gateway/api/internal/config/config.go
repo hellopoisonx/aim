@@ -5,17 +5,15 @@
 package config
 
 import (
-	aimnacos "github.com/hellopoisonx/aim/app/shared/nacos"
-
 	"github.com/zeromicro/go-zero/rest"
 	"github.com/zeromicro/go-zero/zrpc"
 )
 
 type Config struct {
 	rest.RestConf
-	AuthRpc  aimnacos.Config
-	CoreRpc  aimnacos.Config
-	LogicRpc aimnacos.Config
+	AuthRpc  zrpc.RpcClientConf
+	CoreRpc  zrpc.RpcClientConf
+	LogicRpc zrpc.RpcClientConf
 	Auth     struct {
 		AccessSecret string
 	}
@@ -49,7 +47,7 @@ type Config struct {
 		// ReadReceiptTopic is the Kafka topic for read receipt events.
 		ReadReceiptTopic string `json:",default=aim.read_receipt.events"` //nolint:staticcheck // go-zero conf uses json tag options for defaults.
 	}
-	AttachmentRpc aimnacos.Config
+	AttachmentRpc zrpc.RpcClientConf
 	// GatewayNodeID identifies this gateway instance for the directory service.
 	// Populated from env AIM_GATEWAY_NODE_ID; startup fails if empty.
 	GatewayNodeID string `json:",optional"` //nolint:staticcheck // go-zero conf uses json tag options for defaults.
