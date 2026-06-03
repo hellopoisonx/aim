@@ -5,14 +5,11 @@ package config
 import (
 	"time"
 
-	aimnacos "github.com/hellopoisonx/aim/app/shared/nacos"
-
 	"github.com/zeromicro/go-zero/zrpc"
 )
 
 type Config struct {
 	zrpc.RpcServerConf
-	Nacos    aimnacos.Config
 	Postgres struct {
 		DataSource string
 	}

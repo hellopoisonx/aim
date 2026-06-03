@@ -4,14 +4,12 @@ package config
 
 import (
 	sharedcache "github.com/hellopoisonx/aim/app/shared/cache"
-	"github.com/hellopoisonx/aim/app/shared/nacos"
 	"github.com/zeromicro/go-queue/kq"
 	"github.com/zeromicro/go-zero/zrpc"
 )
 
 type Config struct {
 	zrpc.RpcServerConf
-	Nacos                         nacos.Config       `json:",optional"`
 	Postgres                      PostgresConf       `json:",optional"`
 	KqConsumerConf                kq.KqConf          `json:",optional"`
 	UserCreatedConsumerConf       kq.KqConf          `json:",optional"`

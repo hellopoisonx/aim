@@ -16,7 +16,8 @@ func TestConfigLoadsAuthYAML(t *testing.T) {
 	require.Equal(t, "0.0.0.0:8989", c.ListenOn)
 	require.Equal(t, "redis:6379", c.SessionRedis.Host)
 	require.Equal(t, "aim-dev-access-secret", c.Token.AccessSecret)
-	require.Equal(t, "nacos:8848", c.Nacos.ServerAddr)
+	require.Equal(t, "auth.rpc", c.Etcd.Key)
+	require.Equal(t, []string{"etcd:2379"}, c.Etcd.Hosts)
 	require.Equal(t, "auth.rpc", c.Telemetry.Name)
 	require.Equal(t, "tempo:4318", c.Telemetry.Endpoint)
 	require.InEpsilon(t, 1.0, c.Telemetry.Sampler, 0.0001)
@@ -26,7 +27,6 @@ func TestConfigLoadsAuthYAML(t *testing.T) {
 	require.Equal(t, 9192, c.Prometheus.Port)
 	require.Equal(t, "/metrics", c.Prometheus.Path)
 }
-
 
 func TestConfigKqPusherConf(t *testing.T) {
 	t.Parallel()

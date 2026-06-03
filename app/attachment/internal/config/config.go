@@ -5,7 +5,6 @@ package config
 import (
 	"time"
 
-	"github.com/hellopoisonx/aim/app/shared/nacos"
 	"github.com/zeromicro/go-zero/zrpc"
 )
 
@@ -13,7 +12,6 @@ const MaxAttachmentSizeBytes = int64(5 * 1024 * 1024 * 1024)
 
 type Config struct {
 	zrpc.RpcServerConf
-	Nacos    nacos.Config `json:",optional"`
 	Postgres PostgresConf
 	Seaweed  SeaweedConf
 	Kafka    KqPusherConf `json:",optional"`

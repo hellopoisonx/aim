@@ -12,7 +12,6 @@ import (
 	"github.com/hellopoisonx/aim/app/attachment/internal/server"
 	attachmentservice "github.com/hellopoisonx/aim/app/attachment/internal/service"
 	"github.com/hellopoisonx/aim/app/attachment/rpc/pb"
-	aimnacos "github.com/hellopoisonx/aim/app/shared/nacos"
 	rpcutil "github.com/hellopoisonx/aim/app/shared/rpc"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/zeromicro/go-zero/core/conf"
@@ -30,18 +29,6 @@ func main() {
 	var c config.Config
 	conf.MustLoad(*configFile, &c)
 	applyDefaults(&c)
-	logx.Must(c.Nacos.ApplyDefaults(c.Name, c.ListenOn))
-
-	namingClient, err := aimnacos.NewNamingClient(c.Nacos)
-	logx.Must(err)
-
-	logx.Must(aimnacos.RegisterInstance(namingClient, c.Nacos))
-	defer namingClient.CloseClient()
-	defer func() {
-		if err := aimnacos.DeregisterInstance(namingClient, c.Nacos); err != nil {
-			logx.WithContext(context.Background()).Errorf("nacos deregister instance failed: %v", err)
-		}
-	}()
 
 	ctx := context.Background()
 	if err := runMigrations(ctx, c.Postgres.DataSource, "app/attachment/model/migrations"); err != nil {

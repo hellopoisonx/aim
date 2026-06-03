@@ -8,8 +8,9 @@ require (
 	github.com/golang-jwt/jwt/v4 v4.5.2
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.8.0
-	github.com/nacos-group/nacos-sdk-go/v2 v2.3.5
+
 	github.com/redis/go-redis/v9 v9.18.0
+
 	github.com/stretchr/testify v1.11.1
 	github.com/zeromicro/go-queue v1.2.2
 	github.com/zeromicro/go-zero v1.10.1

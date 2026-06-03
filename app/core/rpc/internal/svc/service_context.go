@@ -8,7 +8,6 @@ import (
 	"github.com/hellopoisonx/aim/app/core/rpc/internal/config"
 	"github.com/hellopoisonx/aim/app/core/rpc/internal/rpc"
 	logicpb "github.com/hellopoisonx/aim/app/logic/rpc/pb"
-	"github.com/hellopoisonx/aim/app/shared/nacos"
 	"github.com/hellopoisonx/aim/app/shared/tools"
 
 	"github.com/redis/go-redis/v9"
@@ -31,8 +30,6 @@ type ServiceContext struct {
 	GatewayClient           rpc.GatewayPusher
 	PresenceStore           cache.PresenceDirectory
 	AttachmentClient        attachmentpb.AttachmentServiceClient
-	namingClient            nacos.NamingClient
-	attachmentNamingClient  nacos.NamingClient
 }
 
 func (s *ServiceContext) Close() {
@@ -46,14 +43,6 @@ func (s *ServiceContext) Close() {
 		if err := closer.Close(); err != nil {
 			logx.WithContext(context.Background()).Errorf("failed to close gateway client: %v", err)
 		}
-	}
-
-	if s.namingClient != nil {
-		s.namingClient.CloseClient()
-	}
-
-	if s.attachmentNamingClient != nil {
-		s.attachmentNamingClient.CloseClient()
 	}
 }
 
@@ -86,52 +75,28 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	var logicClient logicpb.PermissionServiceClient
 	var logicConversationClient logicpb.ConversationServiceClient
 
-	var namingClient nacos.NamingClient
-
 	var logicFriendshipClient logicpb.FriendshipServiceClient
 	var logicUserClient logicpb.UserServiceClient
 
-	if c.LogicRpc.ServiceName != "" {
-		if err := c.LogicRpc.ApplyDefaults("logic.rpc", "127.0.0.1:8082"); err != nil {
-			logx.WithContext(context.Background()).Errorf("failed to apply LogicRpc defaults: %v", err)
+	if c.LogicRpc.Etcd.Key != "" || len(c.LogicRpc.Endpoints) > 0 || c.LogicRpc.Target != "" {
+		client, err := zrpc.NewClient(c.LogicRpc)
+		if err != nil {
+			logx.WithContext(context.Background()).Errorf("failed to create RPC client for LogicRpc: %v", err)
 		} else {
-			namingClient, err = nacos.NewNamingClient(c.LogicRpc)
-			if err != nil {
-				logx.WithContext(context.Background()).Errorf("failed to create NamingClient for LogicRpc: %v", err)
-			} else {
-				nacos.RegisterResolver(namingClient, c.LogicRpc)
-
-				client, err := zrpc.NewClientWithTarget(nacos.BuildTarget(c.LogicRpc.ServiceName))
-				if err != nil {
-					logx.WithContext(context.Background()).Errorf("failed to create RPC client for LogicRpc: %v", err)
-				} else {
-					logicClient = logicpb.NewPermissionServiceClient(client.Conn())
-					logicConversationClient = logicpb.NewConversationServiceClient(client.Conn())
-					logicFriendshipClient = logicpb.NewFriendshipServiceClient(client.Conn())
-					logicUserClient = logicpb.NewUserServiceClient(client.Conn())
-				}
-			}
+			logicClient = logicpb.NewPermissionServiceClient(client.Conn())
+			logicConversationClient = logicpb.NewConversationServiceClient(client.Conn())
+			logicFriendshipClient = logicpb.NewFriendshipServiceClient(client.Conn())
+			logicUserClient = logicpb.NewUserServiceClient(client.Conn())
 		}
 	}
 
 	var attachmentClient attachmentpb.AttachmentServiceClient
-	var attachmentNamingClient nacos.NamingClient
-	if c.AttachmentRpc.ServiceName != "" {
-		if err := c.AttachmentRpc.ApplyDefaults("attachment.rpc", "127.0.0.1:8091"); err != nil {
-			logx.WithContext(context.Background()).Errorf("failed to apply AttachmentRpc defaults: %v", err)
+	if c.AttachmentRpc.Etcd.Key != "" || len(c.AttachmentRpc.Endpoints) > 0 || c.AttachmentRpc.Target != "" {
+		client, err := zrpc.NewClient(c.AttachmentRpc)
+		if err != nil {
+			logx.WithContext(context.Background()).Errorf("failed to create RPC client for AttachmentRpc: %v", err)
 		} else {
-			attachmentNamingClient, err = nacos.NewNamingClient(c.AttachmentRpc)
-			if err != nil {
-				logx.WithContext(context.Background()).Errorf("failed to create NamingClient for AttachmentRpc: %v", err)
-			} else {
-				nacos.RegisterResolver(attachmentNamingClient, c.AttachmentRpc)
-				client, err := zrpc.NewClientWithTarget(nacos.BuildTarget(c.AttachmentRpc.ServiceName))
-				if err != nil {
-					logx.WithContext(context.Background()).Errorf("failed to create RPC client for AttachmentRpc: %v", err)
-				} else {
-					attachmentClient = attachmentpb.NewAttachmentServiceClient(client.Conn())
-				}
-			}
+			attachmentClient = attachmentpb.NewAttachmentServiceClient(client.Conn())
 		}
 	}
 
@@ -182,7 +147,5 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		GatewayClient:           gatewayClient,
 		PresenceStore:           presenceStore,
 		AttachmentClient:        attachmentClient,
-		namingClient:            namingClient,
-		attachmentNamingClient:  attachmentNamingClient,
 	}
 }

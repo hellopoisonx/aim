@@ -14,9 +14,8 @@ func TestConfigLoadsLogicYAML(t *testing.T) {
 	require.NoError(t, conf.Load("../../etc/logic.yaml", &c))
 	require.Equal(t, "logic.rpc", c.Name)
 	require.Equal(t, "0.0.0.0:8082", c.ListenOn)
-	require.Equal(t, "nacos:8848", c.Nacos.ServerAddr)
-	require.Equal(t, "aim-logic", c.Nacos.AdvertiseIP)
-	require.Equal(t, uint64(8082), c.Nacos.AdvertisePort)
+	require.Equal(t, "logic.rpc", c.Etcd.Key)
+	require.Equal(t, []string{"etcd:2379"}, c.Etcd.Hosts)
 	require.Equal(t, "postgres://user:password@postgres:5432/aim_logic?sslmode=disable", c.Postgres.DataSource)
 	require.Equal(t, "redis:6379", c.CacheRedis.Addr)
 	require.Equal(t, "logic.rpc", c.Telemetry.Name)
@@ -28,7 +27,6 @@ func TestConfigLoadsLogicYAML(t *testing.T) {
 	require.Equal(t, 9194, c.Prometheus.Port)
 	require.Equal(t, "/metrics", c.Prometheus.Path)
 }
-
 
 func TestConfigUserCreatedConsumerConf(t *testing.T) {
 	t.Parallel()

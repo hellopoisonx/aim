@@ -3,27 +3,26 @@ package config
 //lint:file-ignore SA5008 go-zero conf uses json tag options for defaults.
 
 import (
-	"github.com/hellopoisonx/aim/app/shared/nacos"
 	"github.com/zeromicro/go-queue/kq"
+
 	"github.com/zeromicro/go-zero/zrpc"
 )
 
 type Config struct {
 	zrpc.RpcServerConf
-	Nacos                         nacos.Config   `json:",optional"`
-	KqPusherConf                  KqPusherConf   `json:",optional"`
-	KqConsumerConf                kq.KqConf      `json:",optional"`
-	PresenceConsumerConf          kq.KqConf      `json:",optional"`
-	TypingConsumerConf            kq.KqConf      `json:",optional"`
-	ReadReceiptConsumerConf       kq.KqConf      `json:",optional"`
-	ConversationEventConsumerConf kq.KqConf      `json:",optional"`
-	AttachmentParsedConsumerConf  kq.KqConf      `json:",optional"`
-	LogicRpc                      nacos.Config   `json:",optional"`
-	GatewayRpc                    GatewayRpcConf `json:",optional"`
-	AttachmentRpc                 nacos.Config   `json:",optional"`
-	CacheRedis                    RedisConf      `json:",optional"`
-	SnowflakeMachineID            int64          `json:",default=1"`
-	Presence                      PresenceConf   `json:",optional"`
+	KqPusherConf                  KqPusherConf       `json:",optional"`
+	KqConsumerConf                kq.KqConf          `json:",optional"`
+	PresenceConsumerConf          kq.KqConf          `json:",optional"`
+	TypingConsumerConf            kq.KqConf          `json:",optional"`
+	ReadReceiptConsumerConf       kq.KqConf          `json:",optional"`
+	ConversationEventConsumerConf kq.KqConf          `json:",optional"`
+	AttachmentParsedConsumerConf  kq.KqConf          `json:",optional"`
+	LogicRpc                      zrpc.RpcClientConf `json:",optional"`
+	GatewayRpc                    GatewayRpcConf     `json:",optional"`
+	AttachmentRpc                 zrpc.RpcClientConf `json:",optional"`
+	CacheRedis                    RedisConf          `json:",optional"`
+	SnowflakeMachineID            int64              `json:",default=1"`
+	Presence                      PresenceConf       `json:",optional"`
 }
 
 type RedisConf struct {
