@@ -15,7 +15,7 @@ Etcd:
     - etcd:2379
   Key: attachment.rpc
 Postgres:
-  DataSource: postgres://user:password@postgres:5432/aim_logic?sslmode=disable
+  DataSource: postgres://user:password@postgres:5432/aim_attachment?sslmode=disable
 Seaweed:
   Endpoint: http://seaweed-s3:8333
   PublicEndpoint: http://localhost:8333

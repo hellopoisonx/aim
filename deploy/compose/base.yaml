@@ -130,6 +130,23 @@ services:
     networks:
       - aim-network
 
+  attachment-migrate:
+    image: postgres:17-alpine
+    container_name: aim-attachment-migrate
+    env_file: *aim-env-file
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      AIM_DATABASE: aim_attachment
+      AIM_MIGRATIONS_DIR: /migrations
+    volumes:
+      - ../../app/attachment/model/migrations:/migrations:ro
+      - ../scripts/migrate-postgres.sh:/scripts/migrate-postgres.sh:ro
+    command: ["/bin/sh", "/scripts/migrate-postgres.sh"]
+    networks:
+      - aim-network
+
   aim-core:
     build:
       context: ../..
@@ -173,6 +190,8 @@ services:
     volumes:
       - ${AIM_CONFIG_DIR:-../config/local}/attachment.yaml:/app/etc/attachment.yaml:ro
     depends_on:
+      attachment-migrate:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       kafka:

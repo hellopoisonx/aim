@@ -124,7 +124,7 @@ deploy/deploy.sh rollback    # 回滚到上一次 deploy 前的 /etc/aim 快照�
 
 ## 初始化与迁移
 
-- auth / logic 的 PostgreSQL 迁移由 `deploy/scripts/migrate-postgres.sh` 执行，按 `NNN_*.sql` 字典序自动执行目录内所有 SQL，避免在 Compose command 中硬编码迁移文件列表。attachment 迁移仍保留现有服务启动期逻辑，后续可继续迁入统一 migration runner。
+- auth / logic / attachment 的 PostgreSQL 迁移由 `deploy/scripts/migrate-postgres.sh` 执行，按 `NNN_*.sql` 字典序自动执行目录内所有 SQL，避免在 Compose command 中硬编码迁移文件列表。
 - Kafka topic 由 `deploy/scripts/init-kafka-topics.sh` 创建，使用 `--if-not-exists` 保证幂等。
 - SeaweedFS bucket 由 `deploy/scripts/init-seaweed-bucket.sh` 创建。
 

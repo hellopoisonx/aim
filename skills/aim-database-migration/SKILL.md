@@ -7,7 +7,7 @@ description: AIM 数据库迁移规范与 Docker Compose 集成。当修改 migr
 
 ## 背景
 
-AIM 使用 PostgreSQL + sqlc 栈，迁移文件在 `app/{auth,logic}/rpc/model/migrations/` 下，由 Docker Compose 的 `*-migrate` init 容器调用 `deploy/scripts/migrate-postgres.sh` 执行。脚本会显式创建数据库，并按 `NNN_*.sql` 字典序执行目录内所有 SQL，避免在 Compose command 中硬编码迁移文件列表。
+AIM 使用 PostgreSQL + sqlc 栈，迁移文件在 `app/{auth,logic}/rpc/model/migrations/` 以及 `app/attachment/model/migrations/` 下，由 Docker Compose 的 `*-migrate` init 容器调用 `deploy/scripts/migrate-postgres.sh` 执行。脚本会显式创建数据库，并按 `NNN_*.sql` 字典序执行目录内所有 SQL，避免在 Compose command 中硬编码迁移文件列表。
 
 ## 域特定参考
 
@@ -75,8 +75,9 @@ NNN_description.sql
 ### 当前架构
 
 ```
-auth-migrate  → deploy/scripts/migrate-postgres.sh → app/auth/rpc/model/migrations/*.sql
-logic-migrate → deploy/scripts/migrate-postgres.sh → app/logic/rpc/model/migrations/*.sql
+auth-migrate       → deploy/scripts/migrate-postgres.sh → app/auth/rpc/model/migrations/*.sql
+logic-migrate      → deploy/scripts/migrate-postgres.sh → app/logic/rpc/model/migrations/*.sql
+attachment-migrate → deploy/scripts/migrate-postgres.sh → app/attachment/model/migrations/*.sql
 ```
 
 `migrate-postgres.sh` 的关键约定：
