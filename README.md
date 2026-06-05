@@ -1,6 +1,6 @@
 # AIM — 分布式多人在线即时通讯系统
 
-> AIM 是一个基于 **go-zero** 微服务架构的分布式即时通讯系统，内置可自部署的 AI 助手（Bot OpenAPI），实现「通讯 + AI」的深度融合。
+> AIM 是一个基于 **go-zero** 微服务架构的分布式即时通讯系统，内置可自部署的 AI 助手（Bot OpenAPI）。
 
 ---
 
@@ -13,19 +13,44 @@
 - **多端同步**：基于 DeviceId 的多设备登录，消息一致投递
 - **断线重连**：WS 帧等待队列 + 重放机制
 
+### [雪花ID](app/shared/tools/snowflake.go)
+
+- 小回拨: 时间戳不变序列号递增
+- 大回拨: 等待系统时钟追赶/直接抛出错误
+
+### [发件箱模式](app/shared/outbox/outbox.go)
+
+- 通过本地数据库事务的原子性保证发往 kafka 的消息至少能被成功发送一次
+
+### [穿透 读/写 缓存模式](app/shared/cache/cache.go)
+
+- 由缓存组件负责读取数据库并回写缓存
+- 内存 + redis 双层缓存
+- 基于 [go-zero 缓存组件](https://go-zero.dev/components/cache/) 封装
+- 内置 singleflight 语义，防止缓存击穿
+- 内置 key ttl 随机抖动，防止缓存雪崩
+
+### [限流算法](app/shared/quota/quota.go)
+
+- 基于 redis zset(sorted set) 数据结构的滑动窗口算法
+
+### 熔断器
+
+- [go-zero 内置](https://go-zero.dev/zh-cn/components/resilience/circuit-breaker/)
+
+### Bot OpenAPI
+
+- **第三方 Bot 接入**：独立 `/api/bot/v1` 路由，Token 鉴权 + Webhook 事件推送
+- **Bot 会话操作**：发消息、查历史、获取成员、标记已读
+- **用户侧 Bot 管理**：创建/编辑/启用/禁用 Bot、Token 生命周期管理
+- 详见 [Bot SDK 文档](bot_sdk/README.md) 及 [aim-bot-domain Skill](skills/aim-bot-domain/SKILL.md)
+
 ### 社交功能
 
 - **好友管理**：申请/接受/拒绝 + 自定义标签体系
 - **群组管理**：创建、加人/踢人、群主转让、管理员授予/撤销、退群、解散
 - **聚合搜索**：统一搜索用户、好友、群组、消息内容
 - **在线状态**：Presence 状态广播
-
-### AI 深度集成 — Bot OpenAPI
-
-- **第三方 Bot 接入**：独立 `/api/bot/v1` 路由，Token 鉴权 + Webhook 事件推送
-- **Bot 会话操作**：发消息、查历史、获取成员、标记已读
-- **用户侧 Bot 管理**：创建/编辑/启用/禁用 Bot、Token 生命周期管理
-- 详见 [Bot SDK 文档](bot_sdk/README.md) 及 [aim-bot-domain Skill](skills/aim-bot-domain/SKILL.md)
 
 ### 附件系统
 
@@ -58,9 +83,11 @@ graph TB
     subgraph "Business Services"
         Auth[aim-auth<br/>认证服务]
         Logic[aim-logic<br/>业务逻辑服务]
+        Attachment[aim-attachment<br/>附件服务]
     end
     subgraph CoreDomain
         Core[aim-core<br/>消息投递域]
+        DataParsing[aim-data-parsing<br/>数据解析]
     end
     subgraph Infrastructure
         Kafka[(Kafka)]
@@ -68,28 +95,47 @@ graph TB
         PG[(PostgreSQL)]
         SeaweedFS[SeaweedFS]
         Etcd[etcd]
-
     end
+
     Web -->|WS/REST| GW
     Desktop -->|WS/REST| GW
     GW -->|gRPC| Auth
     GW -->|gRPC| Logic
     GW -->|gRPC| Core
+    GW -->|gRPC| Attachment
     Core -->|gRPC| Logic
+
     Core -->|produce| Kafka
     Kafka -->|consume| Core
-    Auth -->|produce| Kafka
+
+    Auth -.->|发件箱写入<br/>同 DB 事务| PG
+    Logic -.->|发件箱写入<br/>同 DB 事务| PG
+    Attachment -.->|发件箱写入<br/>同 DB 事务| PG
+
+    Auth -->|Poller 发布| Kafka
+    Logic -->|Poller 发布| Kafka
+    Attachment -->|Poller 发布| Kafka
+
     Kafka -->|consume| Logic
+    Kafka -->|consume| DataParsing
+
     Auth --> Redis & PG
     Logic --> Redis & PG
     Core --> Redis & PG
+    Attachment --> Redis & PG
+    DataParsing --> Redis & PG
+
     Web -.->|预签名直传| SeaweedFS
     Desktop -.->|预签名直传| SeaweedFS
     GW -->|签发预签名 URL| SeaweedFS
+    Attachment -->|签发预签名 URL| SeaweedFS
+
     style GW fill:#1a73e8,color:#fff
     style Core fill:#e8710a,color:#fff
     style Auth fill:#34a853,color:#fff
     style Logic fill:#9b59b6,color:#fff
+    style Attachment fill:#f9ab00,color:#fff
+    style DataParsing fill:#4285f4,color:#fff
 ```
 
 ### 微服务划分
@@ -120,8 +166,55 @@ graph TB
 | **持久化**     | PostgreSQL（sqlc）                          |
 | **文件存储**   | SeaweedFS（S3 协议）                        |
 | **注册中心**   | etcd                                        |
-
 | **可观测性**   | OpenTelemetry + Prometheus + Loki → Grafana |
+
+---
+
+## 压测
+
+```bash
+    # 启动压测环境
+    cd /home/hpxx/aim/dev-tool && docker compose up -d
+
+    # 500用户注册 + 限速50RPS + 10s渐进加压
+    python benchmark.py register --users 500 --rps 50 --ramp-up 10
+
+    # 50用户WS消息压测，每用户500条
+    python benchmark.py ws-message --users 50 --messages-per-user 500 --quiet
+
+    # 100用户混合负载60秒
+    python benchmark.py mixed --users 100 --duration 60 --rps 200 --output report.json
+```
+
+### 总体概况
+
+| 场景                  | 用户数 | 总请求 | 成功   | 失败 | 成功率 | 耗时  |
+| --------------------- | ------ | ------ | ------ | ---- | ------ | ----- |
+| register              | 100    | 100    | 100    | 0    | 100%   | 40.9s |
+| friend-chain (加好友) | 38 对  | 38     | 38     | 0    | 100%   | 0.0s  |
+| friend-chain (接受)   | 38 对  | 38     | 38     | 0    | 100%   | 0.0s  |
+| ws-message            | 19 对  | 380    | 380    | 0    | 100%   | 40.3s |
+| mixed                 | 100    | 41,094 | 41,094 | 0    | 100%   | 30.0s |
+
+### 吞吐量
+
+| 场景                  | 平均 QPS |
+| --------------------- | -------- |
+| register              | 2.4      |
+| friend-chain (加好友) | 937.9    |
+| friend-chain (接受)   | 1,045.1  |
+| ws-message            | 9.4      |
+| mixed                 | 1,368.9  |
+
+### 延迟分布 (ms)
+
+| 场景                  | Min   | Avg   | Max   | P50   | P90   | P95   | P99   |
+| --------------------- | ----- | ----- | ----- | ----- | ----- | ----- | ----- |
+| register              | 82.0  | 91.8  | 122.3 | 90.8  | 98.5  | 100.7 | 122.3 |
+| friend-chain (加好友) | 6.3   | 13.7  | 22.7  | 13.8  | 20.4  | 20.8  | 22.7  |
+| friend-chain (接受)   | 5.4   | 10.8  | 20.7  | 9.8   | 16.6  | 19.5  | 20.7  |
+| ws-message            | 1,470 | 2,020 | 2,270 | 2,240 | 2,260 | 2,260 | 2,260 |
+| mixed                 | 0.4   | 6.0   | 18.9  | 5.3   | 8.6   | 9.4   | 11.2  |
 
 ---
 
@@ -221,8 +314,7 @@ git config core.hooksPath .githooks
 钩子使用 `gofumpt`（优先）/ `gofmt`（fallback）格式化 staged Go 文件，
 并在 `go.mod` 变更时自动执行 `go mod tidy`。
 
-详见 [aim-dev-tool Skill](skills/aim-dev-tool/SKILL.md)。
----
+## 详见 [aim-dev-tool Skill](skills/aim-dev-tool/SKILL.md)。
 
 ## 开发指南
 
