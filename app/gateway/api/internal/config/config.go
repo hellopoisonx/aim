@@ -59,6 +59,8 @@ type Config struct {
 	// BotRateLimitQuota configures the per-TokenID rate limit applied to Bot
 	// OpenAPI endpoints. The two buckets are kept disjoint by KeyPrefix.
 	BotRateLimitQuota RateLimitQuotaConf `json:",optional"`
+	// Cors configures cross-origin resource sharing for the REST server.
+	Cors CorsConf `json:",optional"`
 }
 
 // RateLimitQuotaConf configures a Redis sliding-window rate limit applied at
@@ -71,4 +73,12 @@ type RateLimitQuotaConf struct {
 	// MaxRequests is the maximum number of allowed requests per Window per
 	// (device_id, user_id) bucket. Values <= 0 disable the limiter.
 	MaxRequests int64 `json:",default=100"` //nolint:staticcheck // go-zero conf uses json tag options for defaults.
+}
+
+// CorsConf configures CORS for the REST server.
+type CorsConf struct {
+	// Enabled enables CORS middleware. Defaults to false.
+	Enabled bool `json:",default=false"` //nolint:staticcheck // go-zero conf uses json tag options for defaults.
+	// Origins is the list of allowed origins. Defaults to ["*"] when empty.
+	Origins []string `json:",optional"`
 }

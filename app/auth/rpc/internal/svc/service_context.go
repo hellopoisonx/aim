@@ -2,12 +2,13 @@ package svc
 
 import (
 	"context"
-	"errors"
 	"time"
 
 	"github.com/hellopoisonx/aim/app/auth/rpc/internal/config"
 	"github.com/hellopoisonx/aim/app/auth/rpc/internal/service"
 	"github.com/hellopoisonx/aim/app/auth/rpc/model"
+	"github.com/hellopoisonx/aim/app/shared/outbox"
+	"github.com/hellopoisonx/aim/app/shared/tools"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
@@ -15,30 +16,14 @@ import (
 	"github.com/zeromicro/go-queue/kq"
 )
 
-// userEventPublisher publishes user events to Kafka.
-type userEventPublisher interface {
-	Publish(ctx context.Context, key string, value []byte) error
-}
-
-// kqPublisher wraps kq.Pusher to implement userEventPublisher.
-type kqPublisher struct {
-	pusher *kq.Pusher
-}
-
-func (p *kqPublisher) Publish(ctx context.Context, key string, value []byte) error {
-	if p.pusher == nil {
-		return errors.New("kafka pusher is not configured")
-	}
-
-	return p.pusher.PushWithKey(ctx, key, string(value))
-}
-
 type ServiceContext struct {
-	Config             config.Config
-	Users              service.UserStore
-	Sessions           service.SessionStore
-	TokenIssuer        service.TokenIssuer
-	UserEventPublisher userEventPublisher
+	Config       config.Config
+	DB           *pgxpool.Pool
+	Users        service.UserStore
+	Sessions     service.SessionStore
+	TokenIssuer  service.TokenIssuer
+	IDGen        *tools.Snowflake
+	OutboxPoller *outbox.Poller
 }
 
 func NewServiceContext(c config.Config) *ServiceContext {
@@ -49,21 +34,43 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		panic(err)
 	}
 
+	idGen, err := tools.NewSnowflake(c.Token.SnowflakeMachineID)
+	if err != nil {
+		panic(err)
+	}
+
 	redisClient := redis.NewClient(&redis.Options{Addr: c.SessionRedis.Host, Password: c.SessionRedis.Pass})
 
 	svcCtx := &ServiceContext{
 		Config:      c,
-		Users:       service.NewSQLUserStoreWithMachineID(model.New(pool), c.Token.SnowflakeMachineID),
+		DB:          pool,
+		Users:       service.NewSQLUserStoreWithIDGenerator(model.New(pool), idGen),
 		Sessions:    service.NewRedisSessionStore(redisClient, c.Token.RefreshTTL),
 		TokenIssuer: service.NewJWTIssuer(c.Token.AccessSecret, c.Token.AccessTTL),
+		IDGen:       idGen,
 	}
 
-	// Initialize Kafka publisher if configured
+	// Initialize outbox Poller if Kafka pusher is configured
 	if c.IsKqPusherConfigured() {
-		svcCtx.UserEventPublisher = &kqPublisher{pusher: kq.NewPusher(c.KqPusherConf.Brokers, c.KqPusherConf.Topic, kq.WithBalancer(&kafka.Murmur2Balancer{}))}
+		store := NewOutboxStore(model.New(pool))
+		publisher := newKafkaPublisher(c.KqPusherConf.Brokers, c.KqPusherConf.Topic)
+		svcCtx.OutboxPoller = outbox.NewPoller(store, publisher, outbox.Config{})
 	}
 
 	return svcCtx
+}
+
+// newKafkaPublisher creates an outbox.PublisherFunc using kq.Pusher.
+func newKafkaPublisher(brokers []string, topic string) outbox.PublisherFunc {
+	pusher := kq.NewPusher(brokers, topic, kq.WithBalancer(&kafka.Murmur2Balancer{}))
+	return func(ctx context.Context, _, key string, payload []byte) error {
+		return pusher.PushWithKey(ctx, key, string(payload))
+	}
+}
+
+// NewServiceContextWithStores allows tests to inject fake stores.
+func NewServiceContextWithStores(c config.Config, users service.UserStore, sessions service.SessionStore, issuer service.TokenIssuer) *ServiceContext {
+	return &ServiceContext{Config: c, Users: users, Sessions: sessions, TokenIssuer: issuer}
 }
 
 func applyDefaults(c *config.Config) {
@@ -86,9 +93,4 @@ func applyDefaults(c *config.Config) {
 	if c.Token.SnowflakeMachineID == 0 {
 		c.Token.SnowflakeMachineID = 1
 	}
-}
-
-// NewServiceContextWithStores allows tests to inject fake stores and a fake publisher.
-func NewServiceContextWithStores(c config.Config, users service.UserStore, sessions service.SessionStore, issuer service.TokenIssuer, publisher userEventPublisher) *ServiceContext {
-	return &ServiceContext{Config: c, Users: users, Sessions: sessions, TokenIssuer: issuer, UserEventPublisher: publisher}
 }

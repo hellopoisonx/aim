@@ -13,6 +13,7 @@ description: aim 的进程内共享包域。对应 `app/shared` 模块。
 - `references/package-rules.md`
 
 ## 最近变更
+- 2026-06-05: 新增 `app/shared/outbox`（事务发件箱模式）。`Store` 接口定义 outbox 表 CRUD；`Poller` 后台轮询 + 快速路径 `Wake()` 投递到 Kafka，保证至少一次投递。Nil-safe 构造（Store/PublisherFunc 为 nil 时 Poller 为 no-op）。配置 `Config.WithDefaults()` 与 cleanup 自动清理。
 - 2026-06-03: 弃用 Nacos v2，改用 go-zero 内置 etcd 作为服务注册中心。删除 `app/shared/nacos` 与 `aimnacos://` 自定义 resolver scheme；服务注册/发现由 `zrpc.RpcServerConf.Etcd` / `zrpc.RpcClientConf.Etcd` 接管，`zrpc.MustNewServer` 自动 keepalive，进程退出由 `proc.AddWrapUpListener` 自动撤销。YAML 加 `Etcd: { Hosts, Key }` 块即可，业务代码零改动。参考 https://go-zero.dev/guides/microservice/service-discovery/。
 
 

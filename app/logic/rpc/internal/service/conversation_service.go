@@ -13,12 +13,12 @@ import (
 	sharedcache "github.com/hellopoisonx/aim/app/shared/cache"
 	sharedconversation "github.com/hellopoisonx/aim/app/shared/conversation"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
+	"github.com/hellopoisonx/aim/app/shared/outbox"
 	"github.com/hellopoisonx/aim/app/shared/tools"
 	"github.com/hellopoisonx/aim/app/shared/tracing"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/zeromicro/go-queue/kq"
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
@@ -135,7 +135,8 @@ type ConversationService struct {
 	store        ConversationStore
 	idGen        *tools.Snowflake
 	pool         *pgxpool.Pool
-	pusher       *kq.Pusher
+	outboxTopic  string
+	outboxWakeFn func()
 	convCache    *sharedcache.TypedCache[model.GetConversationRow]
 	membersCache *sharedcache.TypedCache[[]model.GetConversationMembersRow]
 }
@@ -149,14 +150,21 @@ func WithConversationCaches(convCache *sharedcache.TypedCache[model.GetConversat
 	}
 }
 
-func NewConversationService(store ConversationStore, idGen *tools.Snowflake, pool *pgxpool.Pool, pusher *kq.Pusher, opts ...ConversationServiceOption) *ConversationService {
-	svc := &ConversationService{store: store, idGen: idGen, pool: pool, pusher: pusher}
+// WithOutbox configures the outbox topic and a wake function for the Poller.
+func WithOutbox(topic string, store outbox.Store, wakeFn func()) ConversationServiceOption {
+	return func(s *ConversationService) {
+		s.outboxTopic = topic
+		s.outboxWakeFn = wakeFn
+	}
+}
+
+func NewConversationService(store ConversationStore, idGen *tools.Snowflake, pool *pgxpool.Pool, opts ...ConversationServiceOption) *ConversationService {
+	svc := &ConversationService{store: store, idGen: idGen, pool: pool}
 	for _, opt := range opts {
 		if opt != nil {
 			opt(svc)
 		}
 	}
-
 	return svc
 }
 
@@ -175,23 +183,23 @@ func (s *ConversationService) InTx(ctx context.Context, fn func(txQueries *model
 	return tx.Commit(ctx)
 }
 
-func (s *ConversationService) publishConversationEvent(ctx context.Context, event conversationEventPayload) {
-	if s.pusher == nil {
-		logx.WithContext(ctx).Debugf("conversation event pusher not configured, skipping event: conv=%d", event.ConversationID)
-		return
-	}
-
+// recordConversationEvent inserts an outbox record using the given tx queries.
+// tx must be the transactional Queries from InTx.
+func (s *ConversationService) recordConversationEvent(ctx context.Context, tx *model.Queries, event conversationEventPayload) error {
 	event.TraceContextFields = tracing.InjectTraceContext(ctx)
 	data, err := json.Marshal(event)
 	if err != nil {
 		logx.WithContext(ctx).Errorf("failed to marshal conversation event: %v", err)
-		return
+		return err
 	}
 
 	key := strconv.FormatInt(event.ConversationID, 10)
-	if err := s.pusher.PushWithKey(ctx, key, string(data)); err != nil {
-		logx.WithContext(ctx).Errorf("failed to push conversation event to Kafka: %v", err)
-	}
+	_, err = tx.InsertOutboxRecord(ctx, model.InsertOutboxRecordParams{
+		Topic:   s.outboxTopic,
+		Key:     key,
+		Payload: data,
+	})
+	return err
 }
 
 func (s *ConversationService) getConversationRow(ctx context.Context, id int64) (model.GetConversationRow, error) {
@@ -609,27 +617,37 @@ func (s ConversationService) AddGroupMembers(ctx context.Context, conversationID
 		messageID = id
 
 		content := s.buildSystemMessage("member_joined", operatorID, operatorName, newMemberIDs)
-		return tx.InsertMessage(ctx, model.InsertMessageParams{
+		if err := tx.InsertMessage(ctx, model.InsertMessageParams{
 			ID:             messageID,
 			ConversationID: conversationID,
 			SenderID:       0,
 			MessageType:    MessageTypeSystem,
 			Content:        content,
-		})
+		}); err != nil {
+			return err
+		}
+
+		// Record outbox event inside the transaction
+		if s.outboxTopic != "" {
+			return s.recordConversationEvent(ctx, tx, conversationEventPayload{
+				MessageID:      messageID,
+				ConversationID: conversationID,
+				SenderID:       0,
+				MessageType:    MessageTypeSystem,
+				Content:        string(s.buildSystemMessage("member_joined", operatorID, operatorName, newMemberIDs)),
+				TargetUserIDs:  targetUserIDs,
+				Timestamp:      time.Now().UnixMilli(),
+			})
+		}
+		return nil
 	})
 	if err != nil {
 		return model.Conversation{}, err
 	}
 
-	s.publishConversationEvent(ctx, conversationEventPayload{
-		MessageID:      messageID,
-		ConversationID: conversationID,
-		SenderID:       0,
-		MessageType:    MessageTypeSystem,
-		Content:        string(s.buildSystemMessage("member_joined", operatorID, operatorName, newMemberIDs)),
-		TargetUserIDs:  targetUserIDs,
-		Timestamp:      time.Now().UnixMilli(),
-	})
+	if s.outboxWakeFn != nil {
+		s.outboxWakeFn()
+	}
 
 	s.invalidateConversationMembers(ctx, conversationID)
 	conv, _ = s.GetConversationByID(ctx, conversationID)
@@ -697,29 +715,38 @@ func (s ConversationService) RemoveGroupMembers(ctx context.Context, conversatio
 		messageID = id
 
 		content := s.buildSystemMessage("member_removed", operatorID, operatorName, removeMemberIDs)
-		return tx.InsertMessage(ctx, model.InsertMessageParams{
+		if err := tx.InsertMessage(ctx, model.InsertMessageParams{
 			ID:             messageID,
 			ConversationID: conversationID,
 			SenderID:       0,
 			MessageType:    MessageTypeSystem,
 			Content:        content,
-		})
+		}); err != nil {
+			return err
+		}
+
+		if s.outboxTopic != "" {
+			return s.recordConversationEvent(ctx, tx, conversationEventPayload{
+				MessageID:      messageID,
+				ConversationID: conversationID,
+				SenderID:       0,
+				MessageType:    MessageTypeSystem,
+				Content:        string(s.buildSystemMessage("member_removed", operatorID, operatorName, removeMemberIDs)),
+				TargetUserIDs:  targetUserIDs,
+				Timestamp:      time.Now().UnixMilli(),
+			})
+		}
+		return nil
 	})
 	if err != nil {
 		return err
 	}
 
-	s.invalidateConversationMembers(ctx, conversationID)
-	s.publishConversationEvent(ctx, conversationEventPayload{
-		MessageID:      messageID,
-		ConversationID: conversationID,
-		SenderID:       0,
-		MessageType:    MessageTypeSystem,
-		Content:        string(s.buildSystemMessage("member_removed", operatorID, operatorName, removeMemberIDs)),
-		TargetUserIDs:  targetUserIDs,
-		Timestamp:      time.Now().UnixMilli(),
-	})
+	if s.outboxWakeFn != nil {
+		s.outboxWakeFn()
+	}
 
+	s.invalidateConversationMembers(ctx, conversationID)
 	return nil
 }
 
@@ -765,29 +792,38 @@ func (s ConversationService) LeaveGroup(ctx context.Context, conversationID, use
 		messageID = id
 
 		content := s.buildSystemMessage("member_left", userID, userName, []int64{userID})
-		return tx.InsertMessage(ctx, model.InsertMessageParams{
+		if err := tx.InsertMessage(ctx, model.InsertMessageParams{
 			ID:             messageID,
 			ConversationID: conversationID,
 			SenderID:       0,
 			MessageType:    MessageTypeSystem,
 			Content:        content,
-		})
+		}); err != nil {
+			return err
+		}
+
+		if s.outboxTopic != "" {
+			return s.recordConversationEvent(ctx, tx, conversationEventPayload{
+				MessageID:      messageID,
+				ConversationID: conversationID,
+				SenderID:       0,
+				MessageType:    MessageTypeSystem,
+				Content:        string(s.buildSystemMessage("member_left", userID, userName, []int64{userID})),
+				TargetUserIDs:  targetUserIDs,
+				Timestamp:      time.Now().UnixMilli(),
+			})
+		}
+		return nil
 	})
 	if err != nil {
 		return err
 	}
 
-	s.invalidateConversationMembers(ctx, conversationID)
-	s.publishConversationEvent(ctx, conversationEventPayload{
-		MessageID:      messageID,
-		ConversationID: conversationID,
-		SenderID:       0,
-		MessageType:    MessageTypeSystem,
-		Content:        string(s.buildSystemMessage("member_left", userID, userName, []int64{userID})),
-		TargetUserIDs:  targetUserIDs,
-		Timestamp:      time.Now().UnixMilli(),
-	})
+	if s.outboxWakeFn != nil {
+		s.outboxWakeFn()
+	}
 
+	s.invalidateConversationMembers(ctx, conversationID)
 	return nil
 }
 
@@ -829,29 +865,38 @@ func (s ConversationService) DismissGroup(ctx context.Context, conversationID, o
 		messageID = id
 
 		content := s.buildSystemMessage("group_dismissed", operatorID, "", nil)
-		return tx.InsertMessage(ctx, model.InsertMessageParams{
+		if err := tx.InsertMessage(ctx, model.InsertMessageParams{
 			ID:             messageID,
 			ConversationID: conversationID,
 			SenderID:       0,
 			MessageType:    MessageTypeSystem,
 			Content:        content,
-		})
+		}); err != nil {
+			return err
+		}
+
+		if s.outboxTopic != "" {
+			return s.recordConversationEvent(ctx, tx, conversationEventPayload{
+				MessageID:      messageID,
+				ConversationID: conversationID,
+				SenderID:       0,
+				MessageType:    MessageTypeSystem,
+				Content:        string(s.buildSystemMessage("group_dismissed", operatorID, "", nil)),
+				TargetUserIDs:  targetUserIDs,
+				Timestamp:      time.Now().UnixMilli(),
+			})
+		}
+		return nil
 	})
 	if err != nil {
 		return err
 	}
 
-	s.invalidateConversationAll(ctx, conversationID)
-	s.publishConversationEvent(ctx, conversationEventPayload{
-		MessageID:      messageID,
-		ConversationID: conversationID,
-		SenderID:       0,
-		MessageType:    MessageTypeSystem,
-		Content:        string(s.buildSystemMessage("group_dismissed", operatorID, "", nil)),
-		TargetUserIDs:  targetUserIDs,
-		Timestamp:      time.Now().UnixMilli(),
-	})
+	if s.outboxWakeFn != nil {
+		s.outboxWakeFn()
+	}
 
+	s.invalidateConversationAll(ctx, conversationID)
 	return nil
 }
 
@@ -925,29 +970,38 @@ func (s ConversationService) UpdateGroupInfo(ctx context.Context, conversationID
 		messageID = id
 
 		content := s.buildSystemMessage(eventType, operatorID, operatorName, nil)
-		return tx.InsertMessage(ctx, model.InsertMessageParams{
+		if err := tx.InsertMessage(ctx, model.InsertMessageParams{
 			ID:             messageID,
 			ConversationID: conversationID,
 			SenderID:       0,
 			MessageType:    MessageTypeSystem,
 			Content:        content,
-		})
+		}); err != nil {
+			return err
+		}
+
+		if s.outboxTopic != "" {
+			return s.recordConversationEvent(ctx, tx, conversationEventPayload{
+				MessageID:      messageID,
+				ConversationID: conversationID,
+				SenderID:       0,
+				MessageType:    MessageTypeSystem,
+				Content:        string(s.buildSystemMessage(eventType, operatorID, operatorName, nil)),
+				TargetUserIDs:  targetUserIDs,
+				Timestamp:      time.Now().UnixMilli(),
+			})
+		}
+		return nil
 	})
 	if err != nil {
 		return model.Conversation{}, err
 	}
 
-	s.invalidateConversation(ctx, conversationID)
-	s.publishConversationEvent(ctx, conversationEventPayload{
-		MessageID:      messageID,
-		ConversationID: conversationID,
-		SenderID:       0,
-		MessageType:    MessageTypeSystem,
-		Content:        string(s.buildSystemMessage(eventType, operatorID, operatorName, nil)),
-		TargetUserIDs:  targetUserIDs,
-		Timestamp:      time.Now().UnixMilli(),
-	})
+	if s.outboxWakeFn != nil {
+		s.outboxWakeFn()
+	}
 
+	s.invalidateConversation(ctx, conversationID)
 	conv, _ = s.GetConversationByID(ctx, conversationID)
 	return conv, nil
 }
@@ -1126,16 +1180,6 @@ func (s ConversationService) GetConversationMembersDetail(ctx context.Context, c
 	return details, nil
 }
 
-// UpdateReadReceipt upserts the caller's last-read cursor for a conversation.
-//
-// Validates that:
-//   - conversation_id > 0, user_id > 0, last_read_message_id > 0
-//   - the conversation exists
-//   - the user is a member of the conversation
-//
-// The underlying SQL uses GREATEST(...) so the cursor only advances
-// monotonically; a stale or out-of-order receipt is treated as a no-op
-// while still returning the latest stored state.
 func (s ConversationService) UpdateReadReceipt(ctx context.Context, conversationID, userID, lastReadMessageID int64) (ReadState, error) {
 	if conversationID <= 0 {
 		return ReadState{}, errorx.NewCodeError(errorx.CodeBadInput, "conversation_id is required and must be positive")
@@ -1176,7 +1220,6 @@ func (s ConversationService) UpdateReadReceipt(ctx context.Context, conversation
 	}, nil
 }
 
-// ListConversationReadStates returns the per-member last-read cursors for a conversation.
 func (s ConversationService) ListConversationReadStates(ctx context.Context, conversationID int64) ([]ReadState, error) {
 	if conversationID <= 0 {
 		return nil, errorx.NewCodeError(errorx.CodeBadInput, "conversation_id is required and must be positive")

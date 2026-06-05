@@ -300,51 +300,67 @@ func (f *fakeQuerier) GetDirectConversationByMembers(ctx context.Context, arg mo
 func (f *fakeQuerier) CreateFriendTag(ctx context.Context, arg model.CreateFriendTagParams) (model.FriendTag, error) {
 	return model.FriendTag{}, nil
 }
+
 func (f *fakeQuerier) GetFriendTagByID(ctx context.Context, arg model.GetFriendTagByIDParams) (model.FriendTag, error) {
 	return model.FriendTag{}, pgx.ErrNoRows
 }
+
 func (f *fakeQuerier) GetFriendTagsByIDs(ctx context.Context, arg model.GetFriendTagsByIDsParams) ([]model.FriendTag, error) {
 	return nil, nil
 }
+
 func (f *fakeQuerier) ListFriendTags(ctx context.Context, userID int64) ([]model.FriendTag, error) {
 	return nil, nil
 }
+
 func (f *fakeQuerier) ListFriendTagsForFriend(ctx context.Context, arg model.ListFriendTagsForFriendParams) ([]model.FriendTag, error) {
 	return nil, nil
 }
+
 func (f *fakeQuerier) RenameFriendTag(ctx context.Context, arg model.RenameFriendTagParams) (model.FriendTag, error) {
 	return model.FriendTag{}, nil
 }
+
 func (f *fakeQuerier) DeleteFriendTag(ctx context.Context, arg model.DeleteFriendTagParams) (int64, error) {
 	return 1, nil
 }
+
 func (f *fakeQuerier) ReplaceFriendTags(ctx context.Context, arg model.ReplaceFriendTagsParams) error {
 	return nil
 }
+
 func (f *fakeQuerier) RemoveFriendTagAssignment(ctx context.Context, arg model.RemoveFriendTagAssignmentParams) (int64, error) {
 	return 1, nil
 }
+
 func (f *fakeQuerier) ListFriendsByTagID(ctx context.Context, arg model.ListFriendsByTagIDParams) ([]model.ListFriendsByTagIDRow, error) {
 	return nil, nil
 }
+
 func (f *fakeQuerier) ListFriendsByTagName(ctx context.Context, arg model.ListFriendsByTagNameParams) ([]model.ListFriendsByTagNameRow, error) {
 	return nil, nil
 }
+
 func (f *fakeQuerier) SearchFriendsByQuery(ctx context.Context, arg model.SearchFriendsByQueryParams) ([]model.SearchFriendsByQueryRow, error) {
 	return nil, nil
 }
+
 func (f *fakeQuerier) SearchUserInfoByQuery(ctx context.Context, arg model.SearchUserInfoByQueryParams) ([]model.SearchUserInfoByQueryRow, error) {
 	return nil, nil
 }
+
 func (f *fakeQuerier) SearchConversationsByName(ctx context.Context, arg model.SearchConversationsByNameParams) ([]model.SearchConversationsByNameRow, error) {
 	return nil, nil
 }
+
 func (f *fakeQuerier) SearchMessagesGlobal(ctx context.Context, arg model.SearchMessagesGlobalParams) ([]model.SearchMessagesGlobalRow, error) {
 	return nil, nil
 }
+
 func (f *fakeQuerier) SearchMessagesInConversation(ctx context.Context, arg model.SearchMessagesInConversationParams) ([]model.SearchMessagesInConversationRow, error) {
 	return nil, nil
 }
+
 func (f *fakeQuerier) ListFriendTagAssignmentsForUser(ctx context.Context, userID int64) ([]model.ListFriendTagAssignmentsForUserRow, error) {
 	return nil, nil
 }
@@ -912,18 +928,78 @@ func TestFilterMentionsByMemberIDs(t *testing.T) {
 
 // --- Bot management stubs (required by expanded model.Querier) ---
 
-func (f *fakeQuerier) ClearBotTokenActions(ctx context.Context, tokenID int64) (int64, error) { return 0, nil }
-func (f *fakeQuerier) CreateUserBotOwnership(ctx context.Context, arg model.CreateUserBotOwnershipParams) (model.UserBot, error) { return model.UserBot{}, nil }
-func (f *fakeQuerier) CreateUserBotProfile(ctx context.Context, arg model.CreateUserBotProfileParams) (model.UserInfo, error) { return model.UserInfo{}, nil }
-func (f *fakeQuerier) GetManagedBotToken(ctx context.Context, arg model.GetManagedBotTokenParams) (model.BotToken, error) { return model.BotToken{}, nil }
-func (f *fakeQuerier) GetManagedUserBot(ctx context.Context, arg model.GetManagedUserBotParams) (model.GetManagedUserBotRow, error) { return model.GetManagedUserBotRow{}, nil }
-func (f *fakeQuerier) ListEnabledBotActions(ctx context.Context) ([]model.BotAction, error) { return nil, nil }
-func (f *fakeQuerier) ListEnabledBotActionsByNames(ctx context.Context, names []string) ([]model.BotAction, error) { return nil, nil }
-func (f *fakeQuerier) ListEnabledBotEvents(ctx context.Context) ([]model.ListEnabledBotEventsRow, error) { return nil, nil }
-func (f *fakeQuerier) ListManagedUserBots(ctx context.Context, ownerUserID int64) ([]model.ListManagedUserBotsRow, error) { return nil, nil }
-func (f *fakeQuerier) RevokeAllBotTokensByBot(ctx context.Context, botUserID int64) (int64, error) { return 0, nil }
-func (f *fakeQuerier) RevokeManagedBotToken(ctx context.Context, arg model.RevokeManagedBotTokenParams) (int64, error) { return 0, nil }
-func (f *fakeQuerier) SoftDeleteManagedUserBot(ctx context.Context, arg model.SoftDeleteManagedUserBotParams) (int64, error) { return 0, nil }
-func (f *fakeQuerier) UpdateManagedBotToken(ctx context.Context, arg model.UpdateManagedBotTokenParams) (model.BotToken, error) { return model.BotToken{}, nil }
-func (f *fakeQuerier) UpdateManagedUserBotProfile(ctx context.Context, arg model.UpdateManagedUserBotProfileParams) (model.UserInfo, error) { return model.UserInfo{}, nil }
-func (f *fakeQuerier) UpdateManagedUserBotStatus(ctx context.Context, arg model.UpdateManagedUserBotStatusParams) (model.UserInfo, error) { return model.UserInfo{}, nil }
+func (f *fakeQuerier) ClearBotTokenActions(ctx context.Context, tokenID int64) (int64, error) {
+	return 0, nil
+}
+
+func (f *fakeQuerier) CreateUserBotOwnership(ctx context.Context, arg model.CreateUserBotOwnershipParams) (model.UserBot, error) {
+	return model.UserBot{}, nil
+}
+
+func (f *fakeQuerier) CreateUserBotProfile(ctx context.Context, arg model.CreateUserBotProfileParams) (model.UserInfo, error) {
+	return model.UserInfo{}, nil
+}
+
+func (f *fakeQuerier) GetManagedBotToken(ctx context.Context, arg model.GetManagedBotTokenParams) (model.BotToken, error) {
+	return model.BotToken{}, nil
+}
+
+func (f *fakeQuerier) GetManagedUserBot(ctx context.Context, arg model.GetManagedUserBotParams) (model.GetManagedUserBotRow, error) {
+	return model.GetManagedUserBotRow{}, nil
+}
+
+func (f *fakeQuerier) ListEnabledBotActions(ctx context.Context) ([]model.BotAction, error) {
+	return nil, nil
+}
+
+func (f *fakeQuerier) ListEnabledBotActionsByNames(ctx context.Context, names []string) ([]model.BotAction, error) {
+	return nil, nil
+}
+
+func (f *fakeQuerier) ListEnabledBotEvents(ctx context.Context) ([]model.ListEnabledBotEventsRow, error) {
+	return nil, nil
+}
+
+func (f *fakeQuerier) ListManagedUserBots(ctx context.Context, ownerUserID int64) ([]model.ListManagedUserBotsRow, error) {
+	return nil, nil
+}
+
+func (f *fakeQuerier) RevokeAllBotTokensByBot(ctx context.Context, botUserID int64) (int64, error) {
+	return 0, nil
+}
+
+func (f *fakeQuerier) RevokeManagedBotToken(ctx context.Context, arg model.RevokeManagedBotTokenParams) (int64, error) {
+	return 0, nil
+}
+
+func (f *fakeQuerier) SoftDeleteManagedUserBot(ctx context.Context, arg model.SoftDeleteManagedUserBotParams) (int64, error) {
+	return 0, nil
+}
+
+func (f *fakeQuerier) UpdateManagedBotToken(ctx context.Context, arg model.UpdateManagedBotTokenParams) (model.BotToken, error) {
+	return model.BotToken{}, nil
+}
+
+func (f *fakeQuerier) UpdateManagedUserBotProfile(ctx context.Context, arg model.UpdateManagedUserBotProfileParams) (model.UserInfo, error) {
+	return model.UserInfo{}, nil
+}
+
+func (f *fakeQuerier) UpdateManagedUserBotStatus(ctx context.Context, arg model.UpdateManagedUserBotStatusParams) (model.UserInfo, error) {
+	return model.UserInfo{}, nil
+}
+
+func (f *fakeQuerier) InsertOutboxRecord(ctx context.Context, arg model.InsertOutboxRecordParams) (int64, error) {
+	return 0, nil
+}
+
+func (f *fakeQuerier) FetchPendingOutboxRecords(ctx context.Context, limit int32) ([]model.FetchPendingOutboxRecordsRow, error) {
+	return nil, nil
+}
+
+func (f *fakeQuerier) MarkOutboxRecordsProcessed(ctx context.Context, dollar_1 []int64) (int64, error) {
+	return 0, nil
+}
+
+func (f *fakeQuerier) DeleteOutboxRecordsBefore(ctx context.Context, processedAt pgtype.Timestamptz) (int64, error) {
+	return 0, nil
+}

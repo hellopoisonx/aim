@@ -274,6 +274,7 @@ services:
     container_name: bench-etcd
     command:
       - etcd
+      - --name=bench-etcd
       - --data-dir=/etcd-data
       - --listen-client-urls=http://0.0.0.0:2379
       - --advertise-client-urls=http://bench-etcd:2379

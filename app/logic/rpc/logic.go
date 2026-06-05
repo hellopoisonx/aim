@@ -18,6 +18,7 @@ import (
 	rpcutil "github.com/hellopoisonx/aim/app/shared/rpc"
 
 	"github.com/zeromicro/go-zero/core/conf"
+	"github.com/zeromicro/go-zero/core/proc"
 	"github.com/zeromicro/go-zero/core/service"
 	"github.com/zeromicro/go-zero/zrpc"
 	"google.golang.org/grpc"
@@ -34,6 +35,14 @@ func main() {
 
 	ctx := svc.NewServiceContext(c)
 	defer ctx.Close()
+
+	// Start outbox poller if configured
+	if ctx.OutboxPoller != nil {
+		ctx.OutboxPoller.Start(context.Background())
+		proc.AddWrapUpListener(func() {
+			ctx.OutboxPoller.Stop()
+		})
+	}
 
 	s := zrpc.MustNewServer(c.RpcServerConf, func(grpcServer *grpc.Server) {
 		registerLogicServers(grpcServer, ctx, c.Mode)

@@ -15,8 +15,11 @@ import (
 	"github.com/hellopoisonx/aim/app/attachment/internal/config"
 	sharedattachment "github.com/hellopoisonx/aim/app/shared/attachment"
 	"github.com/hellopoisonx/aim/app/shared/events"
+	"github.com/hellopoisonx/aim/app/shared/outbox"
 	"github.com/hellopoisonx/aim/app/shared/tracing"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/segmentio/kafka-go"
 	"github.com/zeromicro/go-queue/kq"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -27,10 +30,10 @@ import (
 var ErrNotFound = errors.New("attachment not found")
 
 type Service struct {
-	cfg    config.Config
-	db     *pgxpool.Pool
-	signer S3Signer
-	pusher *kq.Pusher
+	cfg          config.Config
+	db           *pgxpool.Pool
+	signer       S3Signer
+	outboxPoller *outbox.Poller
 }
 
 type InitUploadRequest struct {
@@ -97,11 +100,8 @@ func New(ctx context.Context, cfg config.Config) (*Service, error) {
 			return nil, err
 		}
 	}
-	var pusher *kq.Pusher
-	if len(cfg.Kafka.Brokers) > 0 && cfg.Kafka.Topic != "" {
-		pusher = kq.NewPusher(cfg.Kafka.Brokers, cfg.Kafka.Topic)
-	}
-	return &Service{
+
+	svc := &Service{
 		cfg: cfg,
 		db:  pool,
 		signer: S3Signer{
@@ -112,8 +112,28 @@ func New(ctx context.Context, cfg config.Config) (*Service, error) {
 			SecretKey:      cfg.Seaweed.SecretKey,
 			Bucket:         cfg.Seaweed.Bucket,
 		},
-		pusher: pusher,
-	}, nil
+	}
+
+	// Initialize outbox Poller if Kafka is configured
+	if pool != nil && len(cfg.Kafka.Brokers) > 0 && cfg.Kafka.Topic != "" {
+		store := newRawOutboxStore(pool)
+		publisher := newOutboxPublisher(cfg.Kafka.Brokers, cfg.Kafka.Topic)
+		svc.outboxPoller = outbox.NewPoller(store, publisher, outbox.Config{})
+	}
+
+	return svc, nil
+}
+
+func (s *Service) OutboxPoller() *outbox.Poller {
+	return s.outboxPoller
+}
+
+// newOutboxPublisher creates an outbox.PublisherFunc using kq.Pusher.
+func newOutboxPublisher(brokers []string, topic string) outbox.PublisherFunc {
+	pusher := kq.NewPusher(brokers, topic, kq.WithBalancer(&kafka.Murmur2Balancer{}))
+	return func(ctx context.Context, _, key string, payload []byte) error {
+		return pusher.PushWithKey(ctx, key, string(payload))
+	}
 }
 
 func (s *Service) Close() {
@@ -169,7 +189,15 @@ func (s *Service) CompleteUpload(ctx context.Context, userID int64, fileID strin
 		if err := s.verifyObject(ctx, pending.ObjectKey, pending.Size); err != nil {
 			return nil, err
 		}
-		cmd, err := s.db.Exec(ctx, `UPDATE attachment_files
+
+		// Use transaction: update status + insert outbox record atomically
+		tx, err := s.db.Begin(ctx)
+		if err != nil {
+			return nil, err
+		}
+		defer func() { _ = tx.Rollback(ctx) }()
+
+		cmd, err := tx.Exec(ctx, `UPDATE attachment_files
 			SET status='uploaded', uploaded_at=NOW(), updated_at=NOW(),
 				sha256=COALESCE(NULLIF($3,''), sha256),
 				parse_status=CASE WHEN kind=$4 THEN 'ready' ELSE parse_status END
@@ -180,15 +208,58 @@ func (s *Service) CompleteUpload(ctx context.Context, userID int64, fileID strin
 		if cmd.RowsAffected() == 0 {
 			return nil, ErrNotFound
 		}
+
+		// Insert outbox event atomically if enabled
+		if s.outboxPoller != nil {
+			if err := s.insertOutboxEvent(ctx, tx, pending); err != nil {
+				return nil, err
+			}
+		}
+
+		if err := tx.Commit(ctx); err != nil {
+			return nil, err
+		}
+
+		// Fast path: wake the poller immediately
+		if s.outboxPoller != nil {
+			s.outboxPoller.Wake()
+		}
 	}
 	info, err := s.GetFile(ctx, userID, fileID)
 	if err != nil {
 		return nil, err
 	}
-	if sharedattachment.RequiresDataParsing(info.Kind) {
-		_ = s.publishUploaded(ctx, info)
-	}
 	return info, nil
+}
+
+// insertOutboxEvent inserts an AttachmentUploadedEvent into the outbox table
+// using the given transaction.
+func (s *Service) insertOutboxEvent(ctx context.Context, tx pgx.Tx, info *FileInfo) error {
+	e := events.AttachmentUploadedEvent{
+		TraceContextFields: tracing.InjectTraceContext(ctx),
+		FileID:             info.FileID,
+		OwnerID:            info.OwnerID,
+		ConversationID:     info.ConversationID,
+		Kind:               info.Kind,
+		ObjectKey:          info.ObjectKey,
+		Bucket:             info.Bucket,
+		OriginalName:       info.OriginalName,
+		Mime:               info.Mime,
+		Size:               info.Size,
+		SHA256:             info.SHA256,
+		UploadedAt:         time.Now().UnixMilli(),
+	}
+	payload, err := json.Marshal(e)
+	if err != nil {
+		return fmt.Errorf("marshal outbox event: %w", err)
+	}
+
+	_, err = tx.Exec(
+		ctx,
+		`INSERT INTO outbox_records (topic, key, payload) VALUES ($1, $2, $3)`,
+		s.cfg.Kafka.Topic, info.FileID, payload,
+	)
+	return err
 }
 
 func (s *Service) getPendingOriginal(ctx context.Context, userID int64, fileID uuid.UUID) (*FileInfo, error) {
@@ -295,26 +366,6 @@ func (s *Service) ValidateReference(ctx context.Context, userID, conversationID 
 		return nil, fmt.Errorf("attachment reference denied")
 	}
 	return info, nil
-}
-
-func (s *Service) publishUploaded(ctx context.Context, info *FileInfo) error {
-	if s.pusher == nil || info == nil {
-		return nil
-	}
-	ctx, span := tracing.StartKafkaProducerSpan(ctx, "attachment.kafka.attachment_uploaded.publish", attribute.String("attachment.file_id", info.FileID))
-	defer span.End()
-
-	e := events.AttachmentUploadedEvent{TraceContextFields: tracing.InjectTraceContext(ctx), FileID: info.FileID, OwnerID: info.OwnerID, ConversationID: info.ConversationID, Kind: info.Kind, ObjectKey: info.ObjectKey, Bucket: info.Bucket, OriginalName: info.OriginalName, Mime: info.Mime, Size: info.Size, SHA256: info.SHA256, UploadedAt: time.Now().UnixMilli()}
-	b, err := json.Marshal(e)
-	if err != nil {
-		tracing.RecordSpanError(span, err)
-		return err
-	}
-	err = s.pusher.PushWithKey(ctx, info.FileID, string(b))
-	if err != nil {
-		tracing.RecordSpanError(span, err)
-	}
-	return err
 }
 
 func objectKey(conversationID int64, fileID, role string) string {

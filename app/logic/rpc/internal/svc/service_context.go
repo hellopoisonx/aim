@@ -5,11 +5,10 @@ import (
 	"time"
 
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/config"
-
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/service"
 	"github.com/hellopoisonx/aim/app/logic/rpc/model"
 	sharedcache "github.com/hellopoisonx/aim/app/shared/cache"
-
+	"github.com/hellopoisonx/aim/app/shared/outbox"
 	"github.com/hellopoisonx/aim/app/shared/tools"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -20,25 +19,25 @@ import (
 )
 
 type ServiceContext struct {
-	Config                  config.Config
-	PermissionChecker       service.PermissionChecker
-	UserInfoService         service.UserInfoQuerier
-	ConversationService     service.ConversationQuerier
-	BotService              *service.BotService
-	FriendTagService        *service.FriendshipTagService
-	SearchService           *service.SearchService
-	DB                      model.DBTX
-	Pool                    *pgxpool.Pool
-	ConversationEventPusher *kq.Pusher
-	IDGen                   *tools.Snowflake
-	CacheManager            *sharedcache.CacheManager
-	ConvCache               *sharedcache.TypedCache[model.GetConversationRow]
-	ConvMembersCache        *sharedcache.TypedCache[[]model.GetConversationMembersRow]
-	UserCache               *sharedcache.TypedCache[model.UserInfo]
-	UserTypeCache           *sharedcache.TypedCache[string]
-	FriendshipCache         *sharedcache.TypedCache[[]model.GetFriendshipBidirectionalRow]
-	BotTokenCache           *sharedcache.TypedCache[model.GetBotTokenByHashRow]
-	queries                 *model.Queries
+	Config              config.Config
+	PermissionChecker   service.PermissionChecker
+	UserInfoService     service.UserInfoQuerier
+	ConversationService service.ConversationQuerier
+	BotService          *service.BotService
+	FriendTagService    *service.FriendshipTagService
+	SearchService       *service.SearchService
+	DB                  model.DBTX
+	Pool                *pgxpool.Pool
+	IDGen               *tools.Snowflake
+	CacheManager        *sharedcache.CacheManager
+	ConvCache           *sharedcache.TypedCache[model.GetConversationRow]
+	ConvMembersCache    *sharedcache.TypedCache[[]model.GetConversationMembersRow]
+	UserCache           *sharedcache.TypedCache[model.UserInfo]
+	UserTypeCache       *sharedcache.TypedCache[string]
+	FriendshipCache     *sharedcache.TypedCache[[]model.GetFriendshipBidirectionalRow]
+	BotTokenCache       *sharedcache.TypedCache[model.GetBotTokenByHashRow]
+	OutboxPoller        *outbox.Poller
+	queries             *model.Queries
 }
 
 func NewServiceContext(c config.Config) *ServiceContext {
@@ -87,13 +86,24 @@ func NewServiceContext(c config.Config) *ServiceContext {
 			svcCtx.FriendTagService = service.NewFriendshipTagService(queries, snowflake)
 			svcCtx.SearchService = service.NewSearchService(queries)
 
-			var conversationEventPusher *kq.Pusher
-			if len(c.ConversationEventProducerConf.Brokers) > 0 && c.ConversationEventProducerConf.Topic != "" {
-				conversationEventPusher = kq.NewPusher(c.ConversationEventProducerConf.Brokers, c.ConversationEventProducerConf.Topic, kq.WithBalancer(&kafka.Murmur2Balancer{}))
-				logx.WithContext(context.Background()).Infof("conversation event producer initialized: topic=%s (balancer: murmur2)", c.ConversationEventProducerConf.Topic)
+			// Build ConversationService with optional outbox support
+			var convOpts []service.ConversationServiceOption
+
+			hasProducer := len(c.ConversationEventProducerConf.Brokers) > 0 && c.ConversationEventProducerConf.Topic != ""
+			if hasProducer {
+				store := NewOutboxStore(queries)
+				publisher := newConversationEventPublisher(c.ConversationEventProducerConf.Brokers, c.ConversationEventProducerConf.Topic)
+				svcCtx.OutboxPoller = outbox.NewPoller(store, publisher, outbox.Config{})
+				convOpts = append(convOpts, service.WithOutbox(
+					c.ConversationEventProducerConf.Topic,
+					store,
+					func() { svcCtx.OutboxPoller.Wake() },
+				))
+				logx.WithContext(context.Background()).Infof("conversation event outbox initialized: topic=%s", c.ConversationEventProducerConf.Topic)
 			}
 
-			svcCtx.ConversationService = service.NewConversationService(queries, snowflake, pool, conversationEventPusher, service.WithConversationCaches(svcCtx.ConvCache, svcCtx.ConvMembersCache))
+			convOpts = append(convOpts, service.WithConversationCaches(svcCtx.ConvCache, svcCtx.ConvMembersCache))
+			svcCtx.ConversationService = service.NewConversationService(queries, snowflake, pool, convOpts...)
 
 			if limit != service.DefaultTemporaryConversationMessageLimit {
 				logx.WithContext(context.Background()).Infof("Postgres connected, using DatabasePermissionChecker (temporary conversation message limit=%d), UserInfoService and ConversationService", limit)
@@ -103,6 +113,14 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		}
 	}
 	return svcCtx
+}
+
+// newConversationEventPublisher creates an outbox.PublisherFunc using kq.Pusher.
+func newConversationEventPublisher(brokers []string, topic string) outbox.PublisherFunc {
+	pusher := kq.NewPusher(brokers, topic, kq.WithBalancer(&kafka.Murmur2Balancer{}))
+	return func(ctx context.Context, _, key string, payload []byte) error {
+		return pusher.PushWithKey(ctx, key, string(payload))
+	}
 }
 
 func (s *ServiceContext) Close() {

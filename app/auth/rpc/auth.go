@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 
@@ -11,9 +12,8 @@ import (
 	rpcutil "github.com/hellopoisonx/aim/app/shared/rpc"
 
 	"github.com/zeromicro/go-zero/core/conf"
-
+	"github.com/zeromicro/go-zero/core/proc"
 	"github.com/zeromicro/go-zero/core/service"
-
 	"github.com/zeromicro/go-zero/zrpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
@@ -28,6 +28,14 @@ func main() {
 	conf.MustLoad(*configFile, &c)
 
 	ctx := svc.NewServiceContext(c)
+
+	// Start outbox poller if configured
+	if ctx.OutboxPoller != nil {
+		ctx.OutboxPoller.Start(context.Background())
+		proc.AddWrapUpListener(func() {
+			ctx.OutboxPoller.Stop()
+		})
+	}
 
 	s := zrpc.MustNewServer(c.RpcServerConf, func(grpcServer *grpc.Server) {
 		pb.RegisterAuthServiceServer(grpcServer, server.NewAuthServiceServer(ctx))

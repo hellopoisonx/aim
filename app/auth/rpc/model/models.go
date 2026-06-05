@@ -8,6 +8,15 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type OutboxRecord struct {
+	ID          int64              `json:"id"`
+	Topic       string             `json:"topic"`
+	Key         string             `json:"key"`
+	Payload     []byte             `json:"payload"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	ProcessedAt pgtype.Timestamptz `json:"processed_at"`
+}
+
 type UserCredential struct {
 	ID           int64              `json:"id"`
 	Email        string             `json:"email"`

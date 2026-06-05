@@ -113,6 +113,15 @@ type Message struct {
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 }
 
+type OutboxRecord struct {
+	ID          int64              `json:"id"`
+	Topic       string             `json:"topic"`
+	Key         string             `json:"key"`
+	Payload     []byte             `json:"payload"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	ProcessedAt pgtype.Timestamptz `json:"processed_at"`
+}
+
 type UserBot struct {
 	BotUserID   int64              `json:"bot_user_id"`
 	OwnerUserID int64              `json:"owner_user_id"`

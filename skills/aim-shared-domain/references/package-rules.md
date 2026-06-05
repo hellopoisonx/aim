@@ -19,6 +19,7 @@
 | `tools` | Snowflake ID 生成器 | auth/core |
 | `quota` | Redis ZSET 滑动窗口限流；`Allow` / `AllowPair` / `Enabled` 三入口 | gateway |
 | `moderation` | 内容审核 `Checker` 接口与 noop 实现 | core/ai 进程内调用 |
+| `outbox` | 事务发件箱模式：DB 事务内写事件、后台 Poller 投递到 Kafka，保证至少一次投递 | logic（群管理事件）/ auth（用户创建事件）
 
 ## 规则
 

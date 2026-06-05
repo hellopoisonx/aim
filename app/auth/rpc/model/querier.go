@@ -6,13 +6,19 @@ package model
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type Querier interface {
 	CreateBotCredential(ctx context.Context, arg CreateBotCredentialParams) (CreateBotCredentialRow, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (CreateUserRow, error)
+	DeleteOutboxRecordsBefore(ctx context.Context, processedAt pgtype.Timestamptz) (int64, error)
+	FetchPendingOutboxRecords(ctx context.Context, limit int32) ([]FetchPendingOutboxRecordsRow, error)
 	GetUserByEmail(ctx context.Context, email string) (GetUserByEmailRow, error)
 	GetUserByID(ctx context.Context, id int64) (GetUserByIDRow, error)
+	InsertOutboxRecord(ctx context.Context, arg InsertOutboxRecordParams) (int64, error)
+	MarkOutboxRecordsProcessed(ctx context.Context, dollar_1 []int64) (int64, error)
 	UpdatePassword(ctx context.Context, arg UpdatePasswordParams) (UpdatePasswordRow, error)
 	UpdateStatus(ctx context.Context, arg UpdateStatusParams) (UpdateStatusRow, error)
 }

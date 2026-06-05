@@ -6,6 +6,8 @@ package model
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type Querier interface {
@@ -22,6 +24,8 @@ type Querier interface {
 	DeactivateConversation(ctx context.Context, id int64) error
 	DeleteBotWebhook(ctx context.Context, botUserID int64) (int64, error)
 	DeleteFriendTag(ctx context.Context, arg DeleteFriendTagParams) (int64, error)
+	DeleteOutboxRecordsBefore(ctx context.Context, processedAt pgtype.Timestamptz) (int64, error)
+	FetchPendingOutboxRecords(ctx context.Context, limit int32) ([]FetchPendingOutboxRecordsRow, error)
 	GetBotActionByName(ctx context.Context, action string) (BotAction, error)
 	// Returns the token entry plus the owner's user_type / status / nickname so
 	// the BotAuth middleware can validate the bot identity in a single query.
@@ -49,6 +53,7 @@ type Querier interface {
 	GetUserType(ctx context.Context, id int64) (string, error)
 	GrantBotTokenAction(ctx context.Context, arg GrantBotTokenActionParams) error
 	InsertMessage(ctx context.Context, arg InsertMessageParams) error
+	InsertOutboxRecord(ctx context.Context, arg InsertOutboxRecordParams) (int64, error)
 	IsConversationMember(ctx context.Context, arg IsConversationMemberParams) (bool, error)
 	IsMemberMuted(ctx context.Context, arg IsMemberMutedParams) (IsMemberMutedRow, error)
 	// Returns enabled webhooks for bots that are members of the given conversation.
@@ -70,6 +75,7 @@ type Querier interface {
 	ListMessagesByConversation(ctx context.Context, arg ListMessagesByConversationParams) ([]Message, error)
 	ListMessagesByConversationInitial(ctx context.Context, arg ListMessagesByConversationInitialParams) ([]Message, error)
 	ListPendingFriendApplications(ctx context.Context, friendID int64) ([]Friendship, error)
+	MarkOutboxRecordsProcessed(ctx context.Context, dollar_1 []int64) (int64, error)
 	RemoveConversationMembers(ctx context.Context, arg RemoveConversationMembersParams) (int64, error)
 	RemoveFriendTagAssignment(ctx context.Context, arg RemoveFriendTagAssignmentParams) (int64, error)
 	RenameFriendTag(ctx context.Context, arg RenameFriendTagParams) (FriendTag, error)

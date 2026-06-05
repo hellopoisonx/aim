@@ -83,3 +83,10 @@ RateLimitQuota:
 BotRateLimitQuota:
   WindowSeconds: 60
   MaxRequests: 100
+
+# Cross-origin resource sharing for the REST server.
+# Enabled = false by default; set to true for local dev with browser clients.
+Cors:
+  Enabled: true
+  Origins:
+    - "*"

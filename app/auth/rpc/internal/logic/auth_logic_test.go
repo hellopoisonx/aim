@@ -2,7 +2,6 @@ package logic
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"strconv"
 	"testing"
@@ -12,39 +11,15 @@ import (
 	"github.com/hellopoisonx/aim/app/auth/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/auth/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
-	"github.com/hellopoisonx/aim/app/shared/events"
 	"github.com/stretchr/testify/require"
-	"go.opentelemetry.io/otel/trace"
 )
-
-// --- Fake publisher ---
-
-type fakePublisher struct {
-	calls []publishedEvent
-	err   error
-}
-
-type publishedEvent struct {
-	key   string
-	value []byte
-}
-
-func (p *fakePublisher) Publish(_ context.Context, key string, value []byte) error {
-	if p.err != nil {
-		return p.err
-	}
-
-	p.calls = append(p.calls, publishedEvent{key: key, value: value})
-
-	return nil
-}
 
 func TestAuthClosedLoop(t *testing.T) {
 	ctx := context.Background()
 	users := newMemoryUserStore(t)
 	sessions := newMemorySessionStore()
 	issuer := fixedIssuer{}
-	svcCtx := svc.NewServiceContextWithStores(config.Config{}, users, sessions, issuer, nil) // nil publisher = no-op
+	svcCtx := svc.NewServiceContextWithStores(config.Config{}, users, sessions, issuer)
 
 	registered, err := NewRegisterLogic(ctx, svcCtx).Register(&pb.RegisterReq{
 		Email:    "Ada@Example.COM",
@@ -84,7 +59,7 @@ func TestLoginRejectsWrongPassword(t *testing.T) {
 	ctx := context.Background()
 	users := newMemoryUserStore(t)
 	sessions := newMemorySessionStore()
-	svcCtx := svc.NewServiceContextWithStores(config.Config{}, users, sessions, fixedIssuer{}, nil)
+	svcCtx := svc.NewServiceContextWithStores(config.Config{}, users, sessions, fixedIssuer{})
 
 	_, err := NewRegisterLogic(ctx, svcCtx).Register(&pb.RegisterReq{Email: "ada@example.com", Password: "password123", Username: "Ada", DeviceId: "desktop-1"})
 	require.NoError(t, err)
@@ -97,7 +72,7 @@ func TestRepeatedLoginCleansUpOldRefreshToken(t *testing.T) {
 	ctx := context.Background()
 	users := newMemoryUserStore(t)
 	sessions := newMemorySessionStore()
-	svcCtx := svc.NewServiceContextWithStores(config.Config{}, users, sessions, fixedIssuer{}, nil)
+	svcCtx := svc.NewServiceContextWithStores(config.Config{}, users, sessions, fixedIssuer{})
 
 	_, err := NewRegisterLogic(ctx, svcCtx).Register(&pb.RegisterReq{
 		Email:    "ada@example.com",
@@ -136,7 +111,7 @@ func TestRepeatedLoginCleansUpOldRefreshToken(t *testing.T) {
 
 func TestAuthValidationErrors(t *testing.T) {
 	ctx := context.Background()
-	svcCtx := svc.NewServiceContextWithStores(config.Config{}, newMemoryUserStore(t), newMemorySessionStore(), fixedIssuer{}, nil)
+	svcCtx := svc.NewServiceContextWithStores(config.Config{}, newMemoryUserStore(t), newMemorySessionStore(), fixedIssuer{})
 
 	_, err := NewRegisterLogic(ctx, svcCtx).Register(&pb.RegisterReq{Email: "ada@example.com", Password: "password123"})
 	require.Error(t, err)
@@ -158,7 +133,7 @@ func TestAuthLogicInternalErrorBranches(t *testing.T) {
 	ctx := context.Background()
 	users := newMemoryUserStore(t)
 	sessions := newMemorySessionStore()
-	svcCtx := svc.NewServiceContextWithStores(config.Config{}, users, sessions, fixedIssuer{}, nil)
+	svcCtx := svc.NewServiceContextWithStores(config.Config{}, users, sessions, fixedIssuer{})
 
 	_, err := NewRegisterLogic(ctx, svcCtx).Register(&pb.RegisterReq{Email: "ada@example.com", Password: "password123", Username: "Ada", DeviceId: "desktop-1"})
 	require.NoError(t, err)
@@ -231,7 +206,6 @@ func (s *memoryUserStore) GetUserByEmail(_ context.Context, email string) (auths
 
 	return user, nil
 }
-
 
 // CreateBotCredential is a stub to satisfy the UserStore interface;
 // bot-specific tests can override this.
@@ -317,107 +291,4 @@ func must(token string, err error) string {
 	}
 
 	return token
-}
-
-// --- User event publisher tests ---
-
-func TestRegister_PublishesCorrectEvent(t *testing.T) {
-	traceID, err := trace.TraceIDFromHex("4bf92f3577b34da6a3ce929d0e0e4736")
-	require.NoError(t, err)
-	spanID, err := trace.SpanIDFromHex("00f067aa0ba902b7")
-	require.NoError(t, err)
-
-	ctx := trace.ContextWithSpanContext(context.Background(), trace.NewSpanContext(trace.SpanContextConfig{
-		TraceID:    traceID,
-		SpanID:     spanID,
-		TraceFlags: trace.FlagsSampled,
-	}))
-	users := newMemoryUserStore(t)
-	sessions := newMemorySessionStore()
-	publisher := &fakePublisher{}
-	svcCtx := svc.NewServiceContextWithStores(config.Config{}, users, sessions, fixedIssuer{}, publisher)
-
-	_, err = NewRegisterLogic(ctx, svcCtx).Register(&pb.RegisterReq{
-		Email:    "Ada@Example.COM",
-		Password: "password123",
-		DeviceId: "desktop-1",
-		Username: "Ada",
-		Avatar:   "https://example.com/avatar.png",
-	})
-	require.NoError(t, err)
-	require.Len(t, publisher.calls, 1)
-	require.Equal(t, "1", publisher.calls[0].key)
-
-	var event events.UserCreatedEvent
-
-	err = json.Unmarshal(publisher.calls[0].value, &event)
-	require.NoError(t, err)
-	require.Equal(t, int64(1), event.UserID)
-	require.Equal(t, "ada@example.com", event.Email)
-	require.Equal(t, "Ada", event.Nickname)
-	require.Equal(t, "https://example.com/avatar.png", event.Avatar)
-	require.NotZero(t, event.CreatedAt)
-	require.Equal(t, "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01", event.TraceParent)
-}
-
-func TestRegister_DoesNotPublishWhenCreateFails(t *testing.T) {
-	ctx := context.Background()
-	users := newMemoryUserStore(t)
-	sessions := newMemorySessionStore()
-	publisher := &fakePublisher{}
-	svcCtx := svc.NewServiceContextWithStores(config.Config{}, users, sessions, fixedIssuer{}, publisher)
-
-	users.err = errors.New("database error")
-	_, err := NewRegisterLogic(ctx, svcCtx).Register(&pb.RegisterReq{
-		Email:    "ada@example.com",
-		Password: "password123",
-		Username: "Ada",
-		DeviceId: "desktop-1",
-	})
-	require.Error(t, err)
-	require.Empty(t, publisher.calls)
-}
-
-func TestRegister_DoesNotPublishOnDuplicateEmail(t *testing.T) {
-	ctx := context.Background()
-	users := newMemoryUserStore(t)
-	sessions := newMemorySessionStore()
-	publisher := &fakePublisher{}
-	svcCtx := svc.NewServiceContextWithStores(config.Config{}, users, sessions, fixedIssuer{}, publisher)
-
-	_, err := NewRegisterLogic(ctx, svcCtx).Register(&pb.RegisterReq{
-		Email:    "ada@example.com",
-		Password: "password123",
-		Username: "Ada",
-		DeviceId: "desktop-1",
-	})
-	require.NoError(t, err)
-	require.Len(t, publisher.calls, 1)
-
-	// Duplicate registration
-	_, err = NewRegisterLogic(ctx, svcCtx).Register(&pb.RegisterReq{
-		Email:    "ada@example.com",
-		Password: "password456",
-		Username: "Ada",
-		DeviceId: "desktop-2",
-	})
-	require.Error(t, err)
-	require.Len(t, publisher.calls, 1) // Should not publish again
-}
-
-func TestRegister_ReturnsErrorWhenPublisherFails(t *testing.T) {
-	ctx := context.Background()
-	users := newMemoryUserStore(t)
-	sessions := newMemorySessionStore()
-	publisher := &fakePublisher{err: errors.New("kafka error")}
-	svcCtx := svc.NewServiceContextWithStores(config.Config{}, users, sessions, fixedIssuer{}, publisher)
-
-	_, err := NewRegisterLogic(ctx, svcCtx).Register(&pb.RegisterReq{
-		Email:    "ada@example.com",
-		Password: "password123",
-		Username: "Ada",
-		DeviceId: "desktop-1",
-	})
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "publish user created event failed")
 }

@@ -44,7 +44,7 @@ func main() {
 	// Start presence reaper for stale connection and token-refresh grace detection.
 	ctx.StartPresenceReaper()
 
-	restServer := rest.MustNewServer(c.RestConf)
+	restServer := rest.MustNewServer(c.RestConf, corsOptions(c.Cors)...)
 	defer restServer.Stop()
 
 	handler.RegisterHandlers(restServer, ctx)
@@ -79,4 +79,15 @@ func main() {
 
 	fmt.Printf("Starting REST server at %s:%d and GatewayService RPC server at %s...\n", c.Host, c.Port, c.GatewayRpc.ListenOn)
 	group.Start()
+}
+
+// corsOptions builds rest.RunOption list from CorsConf.
+func corsOptions(corsConf config.CorsConf) []rest.RunOption {
+	if !corsConf.Enabled {
+		return nil
+	}
+	if len(corsConf.Origins) == 0 {
+		return []rest.RunOption{rest.WithCors("*")}
+	}
+	return []rest.RunOption{rest.WithCors(corsConf.Origins...)}
 }
