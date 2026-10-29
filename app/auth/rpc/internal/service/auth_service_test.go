@@ -6,11 +6,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hellopoisonx/aim/app/auth/rpc/model"
+	"github.com/hellopoisonx/aim/app/auth/rpc/model/dao"
+	"github.com/hellopoisonx/aim/app/auth/rpc/model/orm"
 	"github.com/hellopoisonx/aim/app/shared/jwt"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/hellopoisonx/aim/app/shared/tools"
 	"github.com/stretchr/testify/require"
 )
 
@@ -46,26 +45,18 @@ func TestParseSessionValueRejectsInvalidData(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestSQLUserStore(t *testing.T) {
-	db := &stubDB{row: stubRow{values: []any{
-		int64(11),
-		"ada@example.com",
-		"hash",
-		"Ada",
-		int16(StatusNormal),
-		pgtype.Timestamptz{},
-		pgtype.Timestamptz{},
-	}}}
-	store := NewSQLUserStore(model.New(db))
+func TestDAOUserStore(t *testing.T) {
+	fake := &fakeUserDAO{user: orm.UserCredential{ID: 11, Email: "ada@example.com", PasswordHash: "hash", Name: "Ada", Status: StatusNormal}}
+	ids, err := tools.NewSnowflake(1)
+	require.NoError(t, err)
+	store := NewDAOUserStoreWithIDGenerator(fake, ids)
 
 	created, err := store.CreateUser(context.Background(), "ada@example.com", "hash", "Ada")
 	require.NoError(t, err)
-	require.Len(t, db.args, 4)
-	require.IsType(t, int64(0), db.args[0])
-	require.Positive(t, db.args[0].(int64))
-	require.Equal(t, "ada@example.com", db.args[1])
-	require.Equal(t, "hash", db.args[2])
-	require.Equal(t, "Ada", db.args[3])
+	require.Positive(t, fake.createdID)
+	require.Equal(t, "ada@example.com", fake.email)
+	require.Equal(t, "hash", fake.passwordHash)
+	require.Equal(t, "Ada", fake.name)
 	require.Equal(t, int64(11), created.ID)
 	require.Equal(t, "ada@example.com", created.Email)
 	require.Equal(t, "Ada", created.Name)
@@ -75,10 +66,13 @@ func TestSQLUserStore(t *testing.T) {
 	require.Equal(t, int64(11), found.ID)
 }
 
-func TestSQLUserStorePropagatesQueryErrors(t *testing.T) {
-	store := NewSQLUserStore(model.New(&stubDB{row: stubRow{err: errQuery}}))
+func TestDAOUserStorePropagatesQueryErrors(t *testing.T) {
+	fake := &fakeUserDAO{err: errQuery}
+	ids, err := tools.NewSnowflake(1)
+	require.NoError(t, err)
+	store := NewDAOUserStoreWithIDGenerator(fake, ids)
 
-	_, err := store.CreateUser(context.Background(), "ada@example.com", "hash", "Ada")
+	_, err = store.CreateUser(context.Background(), "ada@example.com", "hash", "Ada")
 	require.ErrorIs(t, err, errQuery)
 
 	_, err = store.GetUserByEmail(context.Background(), "ada@example.com")
@@ -86,52 +80,47 @@ func TestSQLUserStorePropagatesQueryErrors(t *testing.T) {
 }
 
 func TestDatabaseErrorHelpers(t *testing.T) {
-	require.True(t, IsDuplicateEmail(&pgconn.PgError{Code: "23505"}))
+	require.True(t, IsDuplicateEmail(dao.ErrDuplicateKey))
 	require.False(t, IsDuplicateEmail(errors.New("other")))
-	require.True(t, IsNotFound(pgx.ErrNoRows))
+	require.True(t, IsNotFound(dao.ErrNotFound))
 	require.False(t, IsNotFound(errors.New("other")))
 }
 
-type stubDB struct {
-	row  stubRow
-	args []any
+type fakeUserDAO struct {
+	user         orm.UserCredential
+	err          error
+	createdID    int64
+	email        string
+	passwordHash string
+	name         string
 }
 
-func (db *stubDB) Exec(context.Context, string, ...any) (pgconn.CommandTag, error) {
-	return pgconn.CommandTag{}, nil
-}
-
-func (db *stubDB) Query(context.Context, string, ...any) (pgx.Rows, error) {
-	return nil, nil
-}
-
-func (db *stubDB) QueryRow(_ context.Context, _ string, args ...any) pgx.Row {
-	db.args = args
-	return db.row
-}
-
-type stubRow struct {
-	values []any
-	err    error
-}
-
-func (r stubRow) Scan(dest ...any) error {
-	if r.err != nil {
-		return r.err
+func (f *fakeUserDAO) CreateUser(_ context.Context, id int64, email, passwordHash, name string) (orm.UserCredential, error) {
+	f.createdID = id
+	f.email = email
+	f.passwordHash = passwordHash
+	f.name = name
+	if f.err != nil {
+		return orm.UserCredential{}, f.err
 	}
+	return f.user, nil
+}
 
-	for i := range dest {
-		switch target := dest[i].(type) {
-		case *int64:
-			*target = r.values[i].(int64)
-		case *string:
-			*target = r.values[i].(string)
-		case *int16:
-			*target = r.values[i].(int16)
-		case *pgtype.Timestamptz:
-			*target = r.values[i].(pgtype.Timestamptz)
-		}
+func (f *fakeUserDAO) CreateBotCredential(_ context.Context, id int64, email, passwordHash, name string) (orm.UserCredential, error) {
+	f.createdID = id
+	f.email = email
+	f.passwordHash = passwordHash
+	f.name = name
+	if f.err != nil {
+		return orm.UserCredential{}, f.err
 	}
+	return f.user, nil
+}
 
-	return nil
+func (f *fakeUserDAO) GetUserByEmail(_ context.Context, email string) (orm.UserCredential, error) {
+	f.email = email
+	if f.err != nil {
+		return orm.UserCredential{}, f.err
+	}
+	return f.user, nil
 }

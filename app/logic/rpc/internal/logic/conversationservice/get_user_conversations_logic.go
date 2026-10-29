@@ -79,7 +79,7 @@ func (l *GetUserConversationsLogic) GetUserConversations(in *pb.GetUserConversat
 			Id:               conv.ID,
 			ConversationType: conv.ConversationType,
 			IsActive:         conv.IsActive,
-			CreatedAt:        service.UnixFromPGTimestamptz(conv.CreatedAt),
+			CreatedAt:        conv.CreatedAt.UnixMilli(),
 			MemberIds:        memberIDs,
 			Name:             name,
 			Avatar:           conv.Avatar,

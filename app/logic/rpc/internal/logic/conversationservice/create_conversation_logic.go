@@ -107,7 +107,7 @@ func (l *CreateConversationLogic) CreateConversation(in *pb.CreateConversationRe
 			Id:               conv.ID,
 			ConversationType: conv.ConversationType,
 			IsActive:         conv.IsActive,
-			CreatedAt:        service.UnixFromPGTimestamptz(conv.CreatedAt),
+			CreatedAt:        conv.CreatedAt.UnixMilli(),
 			MemberIds:        respMemberIDs,
 			Name:             respName,
 			Avatar:           conv.Avatar,

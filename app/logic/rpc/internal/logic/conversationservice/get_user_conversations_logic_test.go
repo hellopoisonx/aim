@@ -6,7 +6,7 @@ import (
 
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/service"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
-	"github.com/hellopoisonx/aim/app/logic/rpc/model"
+	"github.com/hellopoisonx/aim/app/logic/rpc/model/orm"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -106,8 +106,8 @@ func TestGetUserConversationsLogic_NilService(t *testing.T) {
 
 // Helper functions updated for member creation
 
-func newConv(id int64, convType string) model.GetConversationRow {
-	return model.GetConversationRow{
+func newConv(id int64, convType string) orm.Conversation {
+	return orm.Conversation{
 		ID:               id,
 		ConversationType: convType,
 		IsActive:         true,
@@ -115,10 +115,10 @@ func newConv(id int64, convType string) model.GetConversationRow {
 	}
 }
 
-func newMember(convID int64, userIDs ...int64) []model.GetConversationMembersRow {
-	members := make([]model.GetConversationMembersRow, len(userIDs))
+func newMember(convID int64, userIDs ...int64) []orm.ConversationMember {
+	members := make([]orm.ConversationMember, len(userIDs))
 	for i, uid := range userIDs {
-		members[i] = model.GetConversationMembersRow{
+		members[i] = orm.ConversationMember{
 			ConversationID: convID,
 			UserID:         uid,
 			JoinedAt:       newTS(),

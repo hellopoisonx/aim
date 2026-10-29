@@ -6,10 +6,9 @@ import (
 
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/service"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
-	"github.com/hellopoisonx/aim/app/logic/rpc/model"
+	"github.com/hellopoisonx/aim/app/logic/rpc/model/dao"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
-	"github.com/jackc/pgx/v5"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -75,18 +74,13 @@ func (l *AddFriendLogic) AddFriend(in *pb.AddFriendReq) (*pb.AddFriendResp, erro
 		return nil, FriendshipToGRPCError(err)
 	}
 
-	db := l.svcCtx.DB
-	if db == nil {
+	store := l.svcCtx.FriendshipDAO
+	if store == nil {
 		return nil, errorx.NewCodeError(errorx.CodeInternal, "database is not configured")
 	}
 
-	queries := model.New(db)
-
 	// Check if either direction has a blocked relationship.
-	existing, err := queries.GetFriendshipBidirectional(l.ctx, model.GetFriendshipBidirectionalParams{
-		UserID:   userID,
-		FriendID: friendID,
-	})
+	existing, err := store.GetFriendshipBidirectional(l.ctx, userID, friendID)
 	if err != nil {
 		return nil, FriendshipToGRPCError(err)
 	}
@@ -99,32 +93,25 @@ func (l *AddFriendLogic) AddFriend(in *pb.AddFriendReq) (*pb.AddFriendResp, erro
 
 	// Check if a direct friendship record already exists (user_id → friend_id).
 	// If it exists with accepted or pending status, return it unchanged (idempotent).
-	directRecord, err := queries.GetFriendshipByPair(l.ctx, model.GetFriendshipByPairParams{
-		UserID:   userID,
-		FriendID: friendID,
-	})
-	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+	directRecord, err := store.GetFriendshipByPair(l.ctx, userID, friendID)
+	if err != nil && !errors.Is(err, dao.ErrNotFound) {
 		return nil, FriendshipToGRPCError(err)
 	}
 
-	if !errors.Is(err, pgx.ErrNoRows) && (directRecord.Status == service.FriendshipStatusAccepted || directRecord.Status == service.FriendshipStatusPending) {
+	if !errors.Is(err, dao.ErrNotFound) && (directRecord.Status == service.FriendshipStatusAccepted || directRecord.Status == service.FriendshipStatusPending) {
 		return &pb.AddFriendResp{
 			Friendship: &pb.FriendshipResponse{
 				UserId:    directRecord.UserID,
 				FriendId:  directRecord.FriendID,
 				Status:    directRecord.Status,
-				CreatedAt: service.UnixFromPGTimestamptz(directRecord.CreatedAt),
-				UpdatedAt: service.UnixFromPGTimestamptz(directRecord.UpdatedAt),
+				CreatedAt: directRecord.CreatedAt.UnixMilli(),
+				UpdatedAt: directRecord.UpdatedAt.UnixMilli(),
 			},
 		}, nil
 	}
 
 	// No direct record exists; insert a new pending friendship.
-	record, err := queries.UpsertFriendship(l.ctx, model.UpsertFriendshipParams{
-		UserID:   userID,
-		FriendID: friendID,
-		Status:   service.FriendshipStatusPending,
-	})
+	record, err := store.UpsertFriendship(l.ctx, userID, friendID, service.FriendshipStatusPending)
 	if err != nil {
 		return nil, FriendshipToGRPCError(err)
 	}
@@ -135,8 +122,8 @@ func (l *AddFriendLogic) AddFriend(in *pb.AddFriendReq) (*pb.AddFriendResp, erro
 			UserId:    record.UserID,
 			FriendId:  record.FriendID,
 			Status:    record.Status,
-			CreatedAt: service.UnixFromPGTimestamptz(record.CreatedAt),
-			UpdatedAt: service.UnixFromPGTimestamptz(record.UpdatedAt),
+			CreatedAt: record.CreatedAt.UnixMilli(),
+			UpdatedAt: record.UpdatedAt.UnixMilli(),
 		},
 	}, nil
 }

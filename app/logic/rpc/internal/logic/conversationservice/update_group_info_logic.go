@@ -73,7 +73,7 @@ func (l *UpdateGroupInfoLogic) UpdateGroupInfo(in *pb.UpdateGroupInfoReq) (*pb.U
 			Id:               conv.ID,
 			ConversationType: conv.ConversationType,
 			IsActive:         conv.IsActive,
-			CreatedAt:        service.UnixFromPGTimestamptz(conv.CreatedAt),
+			CreatedAt:        conv.CreatedAt.UnixMilli(),
 			MemberIds:        memberIDs,
 			Name:             conv.Name,
 			Avatar:           conv.Avatar,

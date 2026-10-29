@@ -3,18 +3,15 @@ package friendshipservicelogic
 import (
 	"context"
 	"errors"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/service"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
-	"github.com/hellopoisonx/aim/app/logic/rpc/model"
+	"github.com/hellopoisonx/aim/app/logic/rpc/model/dao"
+	"github.com/hellopoisonx/aim/app/logic/rpc/model/orm"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -26,137 +23,86 @@ type MockUserInfoService struct {
 	mock.Mock
 }
 
-func (m *MockUserInfoService) GetUserInfo(ctx context.Context, id int64) (model.UserInfo, error) {
+func (m *MockUserInfoService) GetUserInfo(ctx context.Context, id int64) (orm.UserInfo, error) {
 	args := m.Called(ctx, id)
-	return args.Get(0).(model.UserInfo), args.Error(1)
+	return args.Get(0).(orm.UserInfo), args.Error(1)
 }
 
-func (m *MockUserInfoService) GetUserInfoByEmail(ctx context.Context, email string) (model.UserInfo, error) {
+func (m *MockUserInfoService) GetUserInfoByEmail(ctx context.Context, email string) (orm.UserInfo, error) {
 	args := m.Called(ctx, email)
-	return args.Get(0).(model.UserInfo), args.Error(1)
+	return args.Get(0).(orm.UserInfo), args.Error(1)
 }
 
-func (m *MockUserInfoService) GetUserInfoByNickname(ctx context.Context, nickname string) (model.UserInfo, error) {
+func (m *MockUserInfoService) GetUserInfoByNickname(ctx context.Context, nickname string) (orm.UserInfo, error) {
 	args := m.Called(ctx, nickname)
-	return args.Get(0).(model.UserInfo), args.Error(1)
+	return args.Get(0).(orm.UserInfo), args.Error(1)
 }
 
-func (m *MockUserInfoService) CreateUserInfo(ctx context.Context, id int64, email, nickname, avatar string) (model.UserInfo, error) {
+func (m *MockUserInfoService) CreateUserInfo(ctx context.Context, id int64, email, nickname, avatar string) (orm.UserInfo, error) {
 	args := m.Called(ctx, id, email, nickname, avatar)
-	return args.Get(0).(model.UserInfo), args.Error(1)
+	return args.Get(0).(orm.UserInfo), args.Error(1)
 }
 
-func (m *MockUserInfoService) UpdateUserInfoProfile(ctx context.Context, id int64, nickname, avatar string) (model.UserInfo, error) {
+func (m *MockUserInfoService) UpdateUserInfoProfile(ctx context.Context, id int64, nickname, avatar string) (orm.UserInfo, error) {
 	args := m.Called(ctx, id, nickname, avatar)
-	return args.Get(0).(model.UserInfo), args.Error(1)
+	return args.Get(0).(orm.UserInfo), args.Error(1)
 }
 
-func (m *MockUserInfoService) UpdateUserInfoStatus(ctx context.Context, id int64, status int16) (model.UserInfo, error) {
+func (m *MockUserInfoService) UpdateUserInfoStatus(ctx context.Context, id int64, status int16) (orm.UserInfo, error) {
 	args := m.Called(ctx, id, status)
-	return args.Get(0).(model.UserInfo), args.Error(1)
+	return args.Get(0).(orm.UserInfo), args.Error(1)
 }
 
-func (m *MockUserInfoService) SearchUserInfoByNickname(ctx context.Context, nickname string, limit int32) ([]model.UserInfo, error) {
+func (m *MockUserInfoService) SearchUserInfoByNickname(ctx context.Context, nickname string, limit int32) ([]orm.UserInfo, error) {
 	args := m.Called(ctx, nickname, limit)
-	return args.Get(0).([]model.UserInfo), args.Error(1)
+	return args.Get(0).([]orm.UserInfo), args.Error(1)
 }
 
 func newTestCtx() context.Context {
 	return context.Background()
 }
 
-type fakeFriendDB struct {
-	bidirectional []model.GetFriendshipBidirectionalRow
-	direct        model.Friendship
+type fakeFriendDAO struct {
+	bidirectional []orm.Friendship
+	direct        orm.Friendship
 	directErr     error
-	upserted      model.Friendship
+	upserted      orm.Friendship
 }
 
-func (f *fakeFriendDB) Exec(context.Context, string, ...any) (pgconn.CommandTag, error) {
-	return pgconn.CommandTag{}, nil
+func (f *fakeFriendDAO) GetFriendshipBidirectional(context.Context, int64, int64) ([]orm.Friendship, error) {
+	return f.bidirectional, nil
 }
 
-func (f *fakeFriendDB) Query(_ context.Context, _ string, _ ...any) (pgx.Rows, error) {
-	return &fakeFriendRows{rows: f.bidirectional}, nil
+func (f *fakeFriendDAO) GetFriendshipByPair(context.Context, int64, int64) (orm.Friendship, error) {
+	return f.direct, f.directErr
 }
 
-func (f *fakeFriendDB) QueryRow(_ context.Context, query string, args ...any) pgx.Row {
-	switch {
-	case strings.Contains(query, "GetFriendshipByPair"):
-		return fakeFriendRow{friendship: f.direct, err: f.directErr}
-	case strings.Contains(query, "UpsertFriendship"):
-		friendship := f.upserted
-		if friendship.UserID == 0 && len(args) >= 3 {
-			friendship = newFriendship(args[0].(int64), args[1].(int64), args[2].(string))
-		}
-
-		return fakeFriendRow{friendship: friendship}
-	default:
-		return fakeFriendRow{err: pgx.ErrNoRows}
+func (f *fakeFriendDAO) UpsertFriendship(_ context.Context, userID, friendID int64, status string) (orm.Friendship, error) {
+	if f.upserted.UserID != 0 {
+		return f.upserted, nil
 	}
+	return newFriendship(userID, friendID, status), nil
 }
 
-type fakeFriendRow struct {
-	friendship model.Friendship
-	err        error
+func (f *fakeFriendDAO) ListPendingFriendApplications(context.Context, int64) ([]orm.Friendship, error) {
+	return nil, nil
 }
 
-func (r fakeFriendRow) Scan(dest ...any) error {
-	if r.err != nil {
-		return r.err
-	}
-
-	*dest[0].(*int64) = r.friendship.UserID
-	*dest[1].(*int64) = r.friendship.FriendID
-	*dest[2].(*string) = r.friendship.Status
-	*dest[3].(*pgtype.Timestamptz) = r.friendship.CreatedAt
-	*dest[4].(*pgtype.Timestamptz) = r.friendship.UpdatedAt
-
-	return nil
+func (f *fakeFriendDAO) ListFriends(context.Context, int64) ([]orm.Friendship, error) {
+	return nil, nil
 }
 
-type fakeFriendRows struct {
-	rows []model.GetFriendshipBidirectionalRow
-	idx  int
+func (f *fakeFriendDAO) ListFriendsByTagID(context.Context, int64, int64) ([]orm.Friendship, error) {
+	return nil, nil
 }
 
-func (r *fakeFriendRows) Close() {}
-
-func (r *fakeFriendRows) Err() error { return nil }
-
-func (r *fakeFriendRows) CommandTag() pgconn.CommandTag { return pgconn.CommandTag{} }
-
-func (r *fakeFriendRows) FieldDescriptions() []pgconn.FieldDescription { return nil }
-
-func (r *fakeFriendRows) Next() bool {
-	if r.idx >= len(r.rows) {
-		return false
-	}
-
-	r.idx++
-
-	return true
+func (f *fakeFriendDAO) ListFriendsByTagName(context.Context, int64, string) ([]orm.Friendship, error) {
+	return nil, nil
 }
 
-func (r *fakeFriendRows) Scan(dest ...any) error {
-	row := r.rows[r.idx-1]
-	*dest[0].(*int64) = row.UserID
-	*dest[1].(*int64) = row.FriendID
-	*dest[2].(*string) = row.Status
-
-	return nil
-}
-
-func (r *fakeFriendRows) Values() ([]any, error) { return nil, nil }
-
-func (r *fakeFriendRows) RawValues() [][]byte { return nil }
-
-func (r *fakeFriendRows) Conn() *pgx.Conn { return nil }
-
-func newFriendship(userID int64, friendID int64, status string) model.Friendship {
-	now := pgtype.Timestamptz{Time: time.UnixMilli(123), Valid: true}
-
-	return model.Friendship{
+func newFriendship(userID int64, friendID int64, status string) orm.Friendship {
+	now := time.UnixMilli(123)
+	return orm.Friendship{
 		UserID:    userID,
 		FriendID:  friendID,
 		Status:    status,
@@ -250,11 +196,11 @@ func TestAddFriend_UserServiceNotConfigured(t *testing.T) {
 func TestAddFriend_TargetUserNotFound(t *testing.T) {
 	ctx := newTestCtx()
 	mockUserSvc := new(MockUserInfoService)
-	mockUserSvc.On("GetUserInfo", ctx, int64(999)).Return(model.UserInfo{}, service.ErrUserNotFound)
+	mockUserSvc.On("GetUserInfo", ctx, int64(999)).Return(orm.UserInfo{}, service.ErrUserNotFound)
 
 	svcCtx := &svc.ServiceContext{
 		UserInfoService: mockUserSvc,
-		DB:              nil,
+		FriendshipDAO:   nil,
 	}
 
 	l := NewAddFriendLogic(ctx, svcCtx)
@@ -272,11 +218,11 @@ func TestAddFriend_TargetUserNotFound(t *testing.T) {
 func TestAddFriend_DatabaseNotConfigured(t *testing.T) {
 	ctx := newTestCtx()
 	mockUserSvc := new(MockUserInfoService)
-	mockUserSvc.On("GetUserInfo", ctx, int64(2)).Return(model.UserInfo{ID: 2, Nickname: "user2"}, nil)
+	mockUserSvc.On("GetUserInfo", ctx, int64(2)).Return(orm.UserInfo{ID: 2, Nickname: "user2"}, nil)
 
 	svcCtx := &svc.ServiceContext{
 		UserInfoService: mockUserSvc,
-		DB:              nil,
+		FriendshipDAO:   nil,
 	}
 
 	l := NewAddFriendLogic(ctx, svcCtx)
@@ -294,11 +240,11 @@ func TestAddFriend_DatabaseNotConfigured(t *testing.T) {
 func TestAddFriend_ReturnsExistingAcceptedFriendship(t *testing.T) {
 	ctx := newTestCtx()
 	mockUserSvc := new(MockUserInfoService)
-	mockUserSvc.On("GetUserInfo", ctx, int64(2)).Return(model.UserInfo{ID: 2, Nickname: "user2"}, nil)
+	mockUserSvc.On("GetUserInfo", ctx, int64(2)).Return(orm.UserInfo{ID: 2, Nickname: "user2"}, nil)
 
 	svcCtx := &svc.ServiceContext{
 		UserInfoService: mockUserSvc,
-		DB: &fakeFriendDB{
+		FriendshipDAO: &fakeFriendDAO{
 			direct: newFriendship(1, 2, "accepted"),
 		},
 	}
@@ -314,12 +260,12 @@ func TestAddFriend_ReturnsExistingAcceptedFriendship(t *testing.T) {
 func TestAddFriend_CreatesPendingFriendship(t *testing.T) {
 	ctx := newTestCtx()
 	mockUserSvc := new(MockUserInfoService)
-	mockUserSvc.On("GetUserInfo", ctx, int64(2)).Return(model.UserInfo{ID: 2, Nickname: "user2"}, nil)
+	mockUserSvc.On("GetUserInfo", ctx, int64(2)).Return(orm.UserInfo{ID: 2, Nickname: "user2"}, nil)
 
 	svcCtx := &svc.ServiceContext{
 		UserInfoService: mockUserSvc,
-		DB: &fakeFriendDB{
-			directErr: pgx.ErrNoRows,
+		FriendshipDAO: &fakeFriendDAO{
+			directErr: dao.ErrNotFound,
 			upserted:  newFriendship(1, 2, service.FriendshipStatusPending),
 		},
 	}
@@ -334,12 +280,12 @@ func TestAddFriend_CreatesPendingFriendship(t *testing.T) {
 func TestAddFriend_BlockedRelationship(t *testing.T) {
 	ctx := newTestCtx()
 	mockUserSvc := new(MockUserInfoService)
-	mockUserSvc.On("GetUserInfo", ctx, int64(2)).Return(model.UserInfo{ID: 2, Nickname: "user2"}, nil)
+	mockUserSvc.On("GetUserInfo", ctx, int64(2)).Return(orm.UserInfo{ID: 2, Nickname: "user2"}, nil)
 
 	svcCtx := &svc.ServiceContext{
 		UserInfoService: mockUserSvc,
-		DB: &fakeFriendDB{
-			bidirectional: []model.GetFriendshipBidirectionalRow{{UserID: 2, FriendID: 1, Status: "blocked"}},
+		FriendshipDAO: &fakeFriendDAO{
+			bidirectional: []orm.Friendship{{UserID: 2, FriendID: 1, Status: "blocked"}},
 		},
 	}
 

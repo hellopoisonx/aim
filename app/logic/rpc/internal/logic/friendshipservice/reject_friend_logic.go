@@ -6,10 +6,9 @@ import (
 
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/service"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
-	"github.com/hellopoisonx/aim/app/logic/rpc/model"
+	"github.com/hellopoisonx/aim/app/logic/rpc/model/dao"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
-	"github.com/jackc/pgx/v5"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -42,21 +41,16 @@ func (l *RejectFriendLogic) RejectFriend(in *pb.RejectFriendReq) (*pb.RejectFrie
 		return nil, FriendshipToGRPCError(service.ErrSelfAdd)
 	}
 
-	db := l.svcCtx.DB
-	if db == nil {
+	store := l.svcCtx.FriendshipDAO
+	if store == nil {
 		return nil, errorx.NewCodeError(errorx.CodeInternal, "database is not configured")
 	}
 
-	queries := model.New(db)
-
 	// Verify that a pending request exists (friend_id→user_id, status="pending").
 	// friend_id is the requester, user_id is the rejecter.
-	pendingRecord, err := queries.GetFriendshipByPair(l.ctx, model.GetFriendshipByPairParams{
-		UserID:   friendID,
-		FriendID: userID,
-	})
+	pendingRecord, err := store.GetFriendshipByPair(l.ctx, friendID, userID)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
+		if errors.Is(err, dao.ErrNotFound) {
 			return nil, FriendshipToGRPCError(service.ErrFriendNotFound)
 		}
 		return nil, FriendshipToGRPCError(err)
@@ -67,11 +61,7 @@ func (l *RejectFriendLogic) RejectFriend(in *pb.RejectFriendReq) (*pb.RejectFrie
 	}
 
 	// Update the pending record to "blocked".
-	blockedRecord, err := queries.UpsertFriendship(l.ctx, model.UpsertFriendshipParams{
-		UserID:   friendID,
-		FriendID: userID,
-		Status:   "blocked",
-	})
+	blockedRecord, err := store.UpsertFriendship(l.ctx, friendID, userID, "blocked")
 	if err != nil {
 		return nil, FriendshipToGRPCError(err)
 	}
@@ -82,8 +72,8 @@ func (l *RejectFriendLogic) RejectFriend(in *pb.RejectFriendReq) (*pb.RejectFrie
 			UserId:    blockedRecord.UserID,
 			FriendId:  blockedRecord.FriendID,
 			Status:    blockedRecord.Status,
-			CreatedAt: service.UnixFromPGTimestamptz(blockedRecord.CreatedAt),
-			UpdatedAt: service.UnixFromPGTimestamptz(blockedRecord.UpdatedAt),
+			CreatedAt: blockedRecord.CreatedAt.UnixMilli(),
+			UpdatedAt: blockedRecord.UpdatedAt.UnixMilli(),
 		},
 	}, nil
 }

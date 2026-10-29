@@ -6,7 +6,7 @@ import (
 
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/service"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
-	"github.com/hellopoisonx/aim/app/logic/rpc/model"
+	"github.com/hellopoisonx/aim/app/logic/rpc/model/orm"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 
@@ -111,19 +111,19 @@ func (l *UnifiedSearchLogic) UnifiedSearch(in *pb.UnifiedSearchReq) (*pb.Unified
 	}, nil
 }
 
-func userInfoToProto(info model.UserInfo) *pb.UserInfoResponse {
+func userInfoToProto(info orm.UserInfo) *pb.UserInfoResponse {
 	return &pb.UserInfoResponse{
 		Id:        info.ID,
 		Email:     info.Email,
 		Status:    int32(info.Status),
 		Nickname:  info.Nickname,
 		Avatar:    info.Avatar,
-		CreatedAt: service.UnixFromPGTimestamptz(info.CreatedAt),
-		UpdatedAt: service.UnixFromPGTimestamptz(info.UpdatedAt),
+		CreatedAt: info.CreatedAt.UnixMilli(),
+		UpdatedAt: info.UpdatedAt.UnixMilli(),
 	}
 }
 
-func messageToProto(m model.Message) *pb.MessageItem {
+func messageToProto(m orm.Message) *pb.MessageItem {
 	contentStr := string(m.Content)
 	// Try to compact JSON content.
 	var contentObj any
@@ -145,6 +145,6 @@ func messageToProto(m model.Message) *pb.MessageItem {
 		MessageType:    m.MessageType,
 		Content:        contentStr,
 		ClientMsgId:    clientMsgID,
-		CreatedAt:      service.UnixFromPGTimestamptz(m.CreatedAt),
+		CreatedAt:      m.CreatedAt.UnixMilli(),
 	}
 }

@@ -3,11 +3,9 @@ package friendshipservicelogic
 import (
 	"context"
 
-	"github.com/hellopoisonx/aim/app/logic/rpc/model"
-	"github.com/hellopoisonx/aim/app/logic/rpc/internal/service"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
-	"github.com/hellopoisonx/aim/app/shared/errorx"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
+	"github.com/hellopoisonx/aim/app/shared/errorx"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -33,11 +31,11 @@ func (l *ListFriendApplicationsLogic) ListFriendApplications(in *pb.ListFriendAp
 		return nil, errorx.NewCodeError(errorx.CodeBadInput, "user_id must be positive")
 	}
 
-	if l.svcCtx.DB == nil {
+	if l.svcCtx.FriendshipDAO == nil {
 		return nil, errorx.NewCodeError(errorx.CodeInternal, "database is not configured")
 	}
 
-	records, err := model.New(l.svcCtx.DB).ListPendingFriendApplications(l.ctx, userID)
+	records, err := l.svcCtx.FriendshipDAO.ListPendingFriendApplications(l.ctx, userID)
 	if err != nil {
 		return nil, FriendshipToGRPCError(err)
 	}
@@ -48,8 +46,8 @@ func (l *ListFriendApplicationsLogic) ListFriendApplications(in *pb.ListFriendAp
 			UserId:    record.UserID,
 			FriendId:  record.FriendID,
 			Status:    record.Status,
-			CreatedAt: service.UnixFromPGTimestamptz(record.CreatedAt),
-			UpdatedAt: service.UnixFromPGTimestamptz(record.UpdatedAt),
+			CreatedAt: record.CreatedAt.UnixMilli(),
+			UpdatedAt: record.UpdatedAt.UnixMilli(),
 		})
 	}
 

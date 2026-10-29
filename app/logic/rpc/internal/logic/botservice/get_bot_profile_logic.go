@@ -47,8 +47,8 @@ func (l *GetBotProfileLogic) GetBotProfile(in *pb.GetBotProfileReq) (*pb.GetBotP
 			Status:    int32(info.Status),
 			Nickname:  info.Nickname,
 			Avatar:    info.Avatar,
-			CreatedAt: info.CreatedAt.Time.UnixMilli(),
-			UpdatedAt: info.UpdatedAt.Time.UnixMilli(),
+			CreatedAt: info.CreatedAt.UnixMilli(),
+			UpdatedAt: info.UpdatedAt.UnixMilli(),
 		},
 	}, nil
 }

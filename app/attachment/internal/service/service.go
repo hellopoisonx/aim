@@ -13,12 +13,13 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/hellopoisonx/aim/app/attachment/internal/config"
+	"github.com/hellopoisonx/aim/app/attachment/model/dao"
+	"github.com/hellopoisonx/aim/app/attachment/model/orm"
 	sharedattachment "github.com/hellopoisonx/aim/app/shared/attachment"
 	"github.com/hellopoisonx/aim/app/shared/events"
+	"github.com/hellopoisonx/aim/app/shared/gormdb"
 	"github.com/hellopoisonx/aim/app/shared/outbox"
 	"github.com/hellopoisonx/aim/app/shared/tracing"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/segmentio/kafka-go"
 	"github.com/zeromicro/go-queue/kq"
 	"go.opentelemetry.io/otel"
@@ -31,7 +32,7 @@ var ErrNotFound = errors.New("attachment not found")
 
 type Service struct {
 	cfg          config.Config
-	db           *pgxpool.Pool
+	store        *dao.Store
 	signer       S3Signer
 	outboxPoller *outbox.Poller
 }
@@ -88,22 +89,18 @@ type DownloadResponse struct {
 }
 
 func New(ctx context.Context, cfg config.Config) (*Service, error) {
-	var pool *pgxpool.Pool
-	var err error
+	var store *dao.Store
 	if cfg.Postgres.DataSource != "" {
-		pool, err = pgxpool.New(ctx, cfg.Postgres.DataSource)
+		db, err := gormdb.Open(cfg.Postgres.DataSource)
 		if err != nil {
 			return nil, err
 		}
-		if err := pool.Ping(ctx); err != nil {
-			pool.Close()
-			return nil, err
-		}
+		store = dao.New(db)
 	}
 
 	svc := &Service{
-		cfg: cfg,
-		db:  pool,
+		cfg:   cfg,
+		store: store,
 		signer: S3Signer{
 			Endpoint:       cfg.Seaweed.Endpoint,
 			PublicEndpoint: cfg.Seaweed.PublicEndpoint,
@@ -115,10 +112,10 @@ func New(ctx context.Context, cfg config.Config) (*Service, error) {
 	}
 
 	// Initialize outbox Poller if Kafka is configured
-	if pool != nil && len(cfg.Kafka.Brokers) > 0 && cfg.Kafka.Topic != "" {
-		store := newRawOutboxStore(pool)
+	if store != nil && len(cfg.Kafka.Brokers) > 0 && cfg.Kafka.Topic != "" {
+		outboxStore := newDAOOutboxStore(store)
 		publisher := newOutboxPublisher(cfg.Kafka.Brokers, cfg.Kafka.Topic)
-		svc.outboxPoller = outbox.NewPoller(store, publisher, outbox.Config{})
+		svc.outboxPoller = outbox.NewPoller(outboxStore, publisher, outbox.Config{})
 	}
 
 	return svc, nil
@@ -137,8 +134,13 @@ func newOutboxPublisher(brokers []string, topic string) outbox.PublisherFunc {
 }
 
 func (s *Service) Close() {
-	if s.db != nil {
-		s.db.Close()
+	if s.store == nil {
+		return
+	}
+	if db := s.store.DB(); db != nil {
+		if sqlDB, err := db.DB(); err == nil {
+			_ = sqlDB.Close()
+		}
 	}
 }
 
@@ -161,15 +163,36 @@ func (s *Service) InitUpload(ctx context.Context, req InitUploadRequest) (*InitU
 	if err != nil {
 		return nil, err
 	}
-	if s.db != nil {
-		_, err = s.db.Exec(ctx, `INSERT INTO attachment_files(file_id, owner_id, conversation_id, kind, original_name, mime, size_bytes, sha256, status, parse_status)
-VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'pending','pending')`, fileID, req.OwnerID, req.ConversationID, req.Kind, req.OriginalName, req.Mime, req.Size, nilIfEmpty(req.SHA256))
-		if err != nil {
+	if s.store != nil {
+		var sha256 *string
+		if req.SHA256 != "" {
+			sha256 = &req.SHA256
+		}
+		file := orm.AttachmentFile{
+			FileID:         fileID,
+			OwnerID:        req.OwnerID,
+			ConversationID: req.ConversationID,
+			Kind:           req.Kind,
+			OriginalName:   req.OriginalName,
+			Mime:           req.Mime,
+			SizeBytes:      req.Size,
+			Sha256:         sha256,
+			Status:         "pending",
+			ParseStatus:    "pending",
+		}
+		if err := s.store.CreateAttachmentFile(ctx, file); err != nil {
 			return nil, err
 		}
-		_, err = s.db.Exec(ctx, `INSERT INTO attachment_objects(file_id, object_role, bucket, object_key, mime, size_bytes, sha256)
-VALUES ($1,'original',$2,$3,$4,$5,$6)`, fileID, s.cfg.Seaweed.Bucket, key, req.Mime, req.Size, nilIfEmpty(req.SHA256))
-		if err != nil {
+		object := orm.AttachmentObject{
+			FileID:     fileID,
+			ObjectRole: "original",
+			Bucket:     s.cfg.Seaweed.Bucket,
+			ObjectKey:  key,
+			Mime:       req.Mime,
+			SizeBytes:  &req.Size,
+			Sha256:     sha256,
+		}
+		if err := s.store.CreateAttachmentObject(ctx, object); err != nil {
 			return nil, err
 		}
 	}
@@ -181,7 +204,7 @@ func (s *Service) CompleteUpload(ctx context.Context, userID int64, fileID strin
 	if err != nil {
 		return nil, err
 	}
-	if s.db != nil {
+	if s.store != nil {
 		pending, err := s.getPendingOriginal(ctx, userID, id)
 		if err != nil {
 			return nil, err
@@ -191,32 +214,22 @@ func (s *Service) CompleteUpload(ctx context.Context, userID int64, fileID strin
 		}
 
 		// Use transaction: update status + insert outbox record atomically
-		tx, err := s.db.Begin(ctx)
-		if err != nil {
-			return nil, err
-		}
-		defer func() { _ = tx.Rollback(ctx) }()
-
-		cmd, err := tx.Exec(ctx, `UPDATE attachment_files
-			SET status='uploaded', uploaded_at=NOW(), updated_at=NOW(),
-				sha256=COALESCE(NULLIF($3,''), sha256),
-				parse_status=CASE WHEN kind=$4 THEN 'ready' ELSE parse_status END
-			WHERE file_id=$1 AND owner_id=$2 AND status='pending'`, id, userID, req.SHA256, sharedattachment.KindFile)
-		if err != nil {
-			return nil, err
-		}
-		if cmd.RowsAffected() == 0 {
-			return nil, ErrNotFound
-		}
-
-		// Insert outbox event atomically if enabled
-		if s.outboxPoller != nil {
-			if err := s.insertOutboxEvent(ctx, tx, pending); err != nil {
-				return nil, err
+		err = s.store.WithTx(ctx, func(tx *dao.Store) error {
+			rows, err := tx.MarkUploaded(ctx, id, userID, req.SHA256, sharedattachment.KindFile)
+			if err != nil {
+				return err
 			}
-		}
+			if rows == 0 {
+				return ErrNotFound
+			}
 
-		if err := tx.Commit(ctx); err != nil {
+			// Insert outbox event atomically if enabled
+			if s.outboxPoller != nil {
+				return s.insertOutboxEvent(ctx, tx, pending)
+			}
+			return nil
+		})
+		if err != nil {
 			return nil, err
 		}
 
@@ -234,7 +247,7 @@ func (s *Service) CompleteUpload(ctx context.Context, userID int64, fileID strin
 
 // insertOutboxEvent inserts an AttachmentUploadedEvent into the outbox table
 // using the given transaction.
-func (s *Service) insertOutboxEvent(ctx context.Context, tx pgx.Tx, info *FileInfo) error {
+func (s *Service) insertOutboxEvent(ctx context.Context, tx *dao.Store, info *FileInfo) error {
 	e := events.AttachmentUploadedEvent{
 		TraceContextFields: tracing.InjectTraceContext(ctx),
 		FileID:             info.FileID,
@@ -254,24 +267,32 @@ func (s *Service) insertOutboxEvent(ctx context.Context, tx pgx.Tx, info *FileIn
 		return fmt.Errorf("marshal outbox event: %w", err)
 	}
 
-	_, err = tx.Exec(
-		ctx,
-		`INSERT INTO outbox_records (topic, key, payload) VALUES ($1, $2, $3)`,
-		s.cfg.Kafka.Topic, info.FileID, payload,
-	)
+	_, err = tx.InsertOutboxRecord(ctx, s.cfg.Kafka.Topic, info.FileID, payload)
 	return err
 }
 
 func (s *Service) getPendingOriginal(ctx context.Context, userID int64, fileID uuid.UUID) (*FileInfo, error) {
-	row := s.db.QueryRow(ctx, `SELECT f.file_id::text, f.owner_id, f.conversation_id, f.kind, f.original_name, f.mime, f.size_bytes, COALESCE(f.sha256,''), f.status, f.parse_status, o.bucket, o.object_key
-FROM attachment_files f
-JOIN attachment_objects o ON o.file_id=f.file_id AND o.object_role='original'
-WHERE f.file_id=$1 AND f.owner_id=$2 AND f.status='pending'`, fileID, userID)
-	info := FileInfo{}
-	if err := row.Scan(&info.FileID, &info.OwnerID, &info.ConversationID, &info.Kind, &info.OriginalName, &info.Mime, &info.Size, &info.SHA256, &info.Status, &info.ParseStatus, &info.Bucket, &info.ObjectKey); err != nil {
+	row, err := s.store.GetPendingOriginal(ctx, fileID, userID)
+	if err != nil {
+		if errors.Is(err, dao.ErrNotFound) {
+			return nil, ErrNotFound
+		}
 		return nil, err
 	}
-	return &info, nil
+	return &FileInfo{
+		FileID:         row.FileID.String(),
+		OwnerID:        row.OwnerID,
+		ConversationID: row.ConversationID,
+		Kind:           row.Kind,
+		OriginalName:   row.OriginalName,
+		Mime:           row.Mime,
+		Size:           row.SizeBytes,
+		SHA256:         row.Sha256,
+		Status:         row.Status,
+		ParseStatus:    row.ParseStatus,
+		Bucket:         row.Bucket,
+		ObjectKey:      row.ObjectKey,
+	}, nil
 }
 
 func (s *Service) verifyObject(ctx context.Context, key string, expectedSize int64) error {
@@ -323,23 +344,37 @@ func (s *Service) GetFile(ctx context.Context, userID int64, fileID string) (*Fi
 	if err != nil {
 		return nil, err
 	}
-	if s.db == nil {
+	if s.store == nil {
 		return nil, ErrNotFound
 	}
-	row := s.db.QueryRow(ctx, `SELECT f.file_id::text, f.owner_id, f.conversation_id, f.kind, f.original_name, f.mime, f.size_bytes, COALESCE(f.sha256,''), f.status, f.parse_status, o.bucket, o.object_key,
-COALESCE(t.object_key,''), COALESCE(r.duration_ms,0), COALESCE(r.width,0), COALESCE(r.height,0), COALESCE(r.metadata,'{}'::jsonb)
-FROM attachment_files f
-JOIN attachment_objects o ON o.file_id=f.file_id AND o.object_role='original'
-LEFT JOIN attachment_objects t ON t.file_id=f.file_id AND t.object_role='thumbnail'
-LEFT JOIN attachment_parse_results r ON r.file_id=f.file_id
-WHERE f.file_id=$1 AND (f.owner_id=$2 OR f.status='uploaded')`, id, userID)
-	var rawMeta []byte
-	info := FileInfo{}
-	if err := row.Scan(&info.FileID, &info.OwnerID, &info.ConversationID, &info.Kind, &info.OriginalName, &info.Mime, &info.Size, &info.SHA256, &info.Status, &info.ParseStatus, &info.Bucket, &info.ObjectKey, &info.ThumbnailObjectKey, &info.DurationMS, &info.Width, &info.Height, &rawMeta); err != nil {
+	row, err := s.store.GetFile(ctx, id, userID)
+	if err != nil {
+		if errors.Is(err, dao.ErrNotFound) {
+			return nil, ErrNotFound
+		}
 		return nil, err
 	}
-	_ = json.Unmarshal(rawMeta, &info.Metadata)
-	return &info, nil
+
+	info := &FileInfo{
+		FileID:             row.FileID.String(),
+		OwnerID:            row.OwnerID,
+		ConversationID:     row.ConversationID,
+		Kind:               row.Kind,
+		OriginalName:       row.OriginalName,
+		Mime:               row.Mime,
+		Size:               row.SizeBytes,
+		SHA256:             row.Sha256,
+		Status:             row.Status,
+		ParseStatus:        row.ParseStatus,
+		Bucket:             row.Bucket,
+		ObjectKey:          row.ObjectKey,
+		ThumbnailObjectKey: row.ThumbnailObjectKey,
+		DurationMS:         row.DurationMS,
+		Width:              int(row.Width),
+		Height:             int(row.Height),
+	}
+	_ = json.Unmarshal(row.Metadata, &info.Metadata)
+	return info, nil
 }
 
 func (s *Service) Download(ctx context.Context, userID int64, fileID string) (*DownloadResponse, error) {
@@ -390,13 +425,6 @@ func allowedMime(kind, mime string) bool {
 	default:
 		return false
 	}
-}
-
-func nilIfEmpty(v string) any {
-	if v == "" {
-		return nil
-	}
-	return v
 }
 
 func ContentFromFile(info *FileInfo) (string, error) {

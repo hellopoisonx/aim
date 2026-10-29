@@ -7,363 +7,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hellopoisonx/aim/app/logic/rpc/model"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/hellopoisonx/aim/app/logic/rpc/model/orm"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-// --- Fake querier ---
-
-type fakeQuerier struct {
-	conversations    map[int64]model.GetConversationRow
-	members          map[string]model.GetMemberRow // key: "convID:userID"
-	friendships      map[string][]model.GetFriendshipBidirectionalRow
-	messageCounts    map[int64]int64
-	userTypes        map[int64]string
-	getConvErr       error
-	getMemberErr     error
-	getFriendshipErr error
-}
-
-func (f *fakeQuerier) GetConversation(ctx context.Context, id int64) (model.GetConversationRow, error) {
-	if f.getConvErr != nil {
-		return model.GetConversationRow{}, f.getConvErr
-	}
-
-	conv, ok := f.conversations[id]
-	if !ok {
-		return model.GetConversationRow{}, pgx.ErrNoRows
-	}
-
-	return conv, nil
-}
-
-func (f *fakeQuerier) GetMember(ctx context.Context, arg model.GetMemberParams) (model.GetMemberRow, error) {
-	if f.getMemberErr != nil {
-		return model.GetMemberRow{}, f.getMemberErr
-	}
-
-	key := convUserKey(arg.ConversationID, arg.UserID)
-
-	member, ok := f.members[key]
-	if !ok {
-		return model.GetMemberRow{}, pgx.ErrNoRows
-	}
-
-	return member, nil
-}
-
-func (f *fakeQuerier) GetFriendshipBidirectional(ctx context.Context, arg model.GetFriendshipBidirectionalParams) ([]model.GetFriendshipBidirectionalRow, error) {
-	if f.getFriendshipErr != nil {
-		return nil, f.getFriendshipErr
-	}
-
-	key := friendshipKey(arg.UserID, arg.FriendID)
-
-	return f.friendships[key], nil
-}
-
-// Unused methods - implement to satisfy interface
-func (f *fakeQuerier) GetFriendship(ctx context.Context, arg model.GetFriendshipParams) (model.GetFriendshipRow, error) {
-	return model.GetFriendshipRow{}, nil
-}
-
-func (f *fakeQuerier) GetFriendshipByPair(ctx context.Context, arg model.GetFriendshipByPairParams) (model.Friendship, error) {
-	return model.Friendship{}, nil
-}
-
-func (f *fakeQuerier) UpsertFriendship(ctx context.Context, arg model.UpsertFriendshipParams) (model.Friendship, error) {
-	return model.Friendship{}, nil
-}
-
-func (f *fakeQuerier) IsMemberMuted(ctx context.Context, arg model.IsMemberMutedParams) (model.IsMemberMutedRow, error) {
-	return model.IsMemberMutedRow{}, nil
-}
-
-func (f *fakeQuerier) InsertMessage(ctx context.Context, arg model.InsertMessageParams) error {
-	return nil
-}
-
-func (f *fakeQuerier) CreateUserInfo(ctx context.Context, arg model.CreateUserInfoParams) (model.UserInfo, error) {
-	return model.UserInfo{}, nil
-}
-
-func (f *fakeQuerier) GetUserInfoByID(ctx context.Context, id int64) (model.UserInfo, error) {
-	return model.UserInfo{}, nil
-}
-
-func (f *fakeQuerier) GetUserInfoByEmail(ctx context.Context, email string) (model.UserInfo, error) {
-	return model.UserInfo{}, nil
-}
-
-func (f *fakeQuerier) GetUserInfoByNickname(ctx context.Context, nickname string) (model.UserInfo, error) {
-	return model.UserInfo{}, nil
-}
-
-func (f *fakeQuerier) UpdateUserInfoProfile(ctx context.Context, arg model.UpdateUserInfoProfileParams) (model.UserInfo, error) {
-	return model.UserInfo{}, nil
-}
-
-func (f *fakeQuerier) UpdateUserInfoStatus(ctx context.Context, arg model.UpdateUserInfoStatusParams) (model.UserInfo, error) {
-	return model.UserInfo{}, nil
-}
-
-func (f *fakeQuerier) SearchUserInfoByNickname(ctx context.Context, arg model.SearchUserInfoByNicknameParams) ([]model.UserInfo, error) {
-	return nil, nil
-}
-
-func (f *fakeQuerier) CreateConversation(ctx context.Context, arg model.CreateConversationParams) (model.CreateConversationRow, error) {
-	return model.CreateConversationRow{}, nil
-}
-
-func (f *fakeQuerier) AddConversationMembers(ctx context.Context, arg model.AddConversationMembersParams) (int64, error) {
-	return 0, nil
-}
-
-func (f *fakeQuerier) GetConversationMembers(ctx context.Context, conversationID int64) ([]model.GetConversationMembersRow, error) {
-	rows := make([]model.GetConversationMembersRow, 0)
-
-	for _, member := range f.members {
-		if member.ConversationID != conversationID {
-			continue
-		}
-
-		rows = append(rows, model.GetConversationMembersRow{
-			ConversationID: member.ConversationID,
-			UserID:         member.UserID,
-			IsMuted:        member.IsMuted,
-			MutedUntil:     member.MutedUntil,
-		})
-	}
-
-	return rows, nil
-}
-
-func (f *fakeQuerier) GetConversationsByUserID(ctx context.Context, userID int64) ([]model.GetConversationsByUserIDRow, error) {
-	return nil, nil
-}
-
-func (f *fakeQuerier) ListMessagesByConversation(ctx context.Context, arg model.ListMessagesByConversationParams) ([]model.Message, error) {
-	return nil, nil
-}
-
-func (f *fakeQuerier) ListMessagesByConversationInitial(ctx context.Context, arg model.ListMessagesByConversationInitialParams) ([]model.Message, error) {
-	return nil, nil
-}
-
-func (f *fakeQuerier) ListPendingFriendApplications(ctx context.Context, friendID int64) ([]model.Friendship, error) {
-	return nil, nil
-}
-
-func (f *fakeQuerier) ListFriends(ctx context.Context, userID int64) ([]model.ListFriendsRow, error) {
-	return nil, nil
-}
-
-func (f *fakeQuerier) CountMessagesByConversation(ctx context.Context, conversationID int64) (int64, error) {
-	return f.messageCounts[conversationID], nil
-}
-
-func (f *fakeQuerier) AddConversationMemberWithRole(ctx context.Context, arg model.AddConversationMemberWithRoleParams) (int64, error) {
-	return 0, nil
-}
-
-func (f *fakeQuerier) RemoveConversationMembers(ctx context.Context, arg model.RemoveConversationMembersParams) (int64, error) {
-	return 0, nil
-}
-
-func (f *fakeQuerier) UpdateConversation(ctx context.Context, arg model.UpdateConversationParams) error {
-	return nil
-}
-
-func (f *fakeQuerier) UpdateConversationCreator(ctx context.Context, arg model.UpdateConversationCreatorParams) error {
-	return nil
-}
-
-func (f *fakeQuerier) UpdateConversationMemberRole(ctx context.Context, arg model.UpdateConversationMemberRoleParams) (int64, error) {
-	return 0, nil
-}
-
-func (f *fakeQuerier) DeactivateConversation(ctx context.Context, id int64) error {
-	return nil
-}
-
-func (f *fakeQuerier) GetConversationCreator(ctx context.Context, id int64) (int64, error) {
-	return 0, nil
-}
-
-func (f *fakeQuerier) IsConversationMember(ctx context.Context, arg model.IsConversationMemberParams) (bool, error) {
-	return false, nil
-}
-
-func (f *fakeQuerier) GetConversationMembersDetail(ctx context.Context, conversationID int64) ([]model.GetConversationMembersDetailRow, error) {
-	return nil, nil
-}
-
-func (f *fakeQuerier) UpsertConversationReadState(ctx context.Context, arg model.UpsertConversationReadStateParams) (model.ConversationReadState, error) {
-	return model.ConversationReadState{}, nil
-}
-
-func (f *fakeQuerier) GetConversationReadState(ctx context.Context, arg model.GetConversationReadStateParams) (model.ConversationReadState, error) {
-	return model.ConversationReadState{}, nil
-}
-
-func (f *fakeQuerier) ListConversationReadStates(ctx context.Context, conversationID int64) ([]model.ConversationReadState, error) {
-	return nil, nil
-}
-
-func (f *fakeQuerier) GetUserType(ctx context.Context, id int64) (string, error) {
-	if userType, ok := f.userTypes[id]; ok {
-		return userType, nil
-	}
-
-	return "human", nil
-}
-
-func (f *fakeQuerier) UpdateUserInfoType(ctx context.Context, arg model.UpdateUserInfoTypeParams) (int64, error) {
-	return 0, nil
-}
-
-func (f *fakeQuerier) CreateBotToken(ctx context.Context, arg model.CreateBotTokenParams) (model.BotToken, error) {
-	return model.BotToken{}, nil
-}
-
-func (f *fakeQuerier) GetBotTokenByHash(ctx context.Context, tokenHash string) (model.GetBotTokenByHashRow, error) {
-	return model.GetBotTokenByHashRow{}, pgx.ErrNoRows
-}
-
-func (f *fakeQuerier) ListEnabledActionsByToken(ctx context.Context, tokenID int64) ([]string, error) {
-	return nil, nil
-}
-
-func (f *fakeQuerier) GetBotActionByName(ctx context.Context, action string) (model.BotAction, error) {
-	return model.BotAction{}, pgx.ErrNoRows
-}
-
-func (f *fakeQuerier) GrantBotTokenAction(ctx context.Context, arg model.GrantBotTokenActionParams) error {
-	return nil
-}
-
-func (f *fakeQuerier) GetEnabledActionByWebhookEvent(ctx context.Context, event string) (string, error) {
-	return "", pgx.ErrNoRows
-}
-
-func (f *fakeQuerier) ListBotTokensByBot(ctx context.Context, botUserID int64) ([]model.BotToken, error) {
-	return nil, nil
-}
-
-func (f *fakeQuerier) RevokeBotToken(ctx context.Context, arg model.RevokeBotTokenParams) (int64, error) {
-	return 0, nil
-}
-
-func (f *fakeQuerier) UpsertBotWebhook(ctx context.Context, arg model.UpsertBotWebhookParams) (model.BotWebhook, error) {
-	return model.BotWebhook{}, nil
-}
-
-func (f *fakeQuerier) GetBotWebhook(ctx context.Context, botUserID int64) (model.BotWebhook, error) {
-	return model.BotWebhook{}, pgx.ErrNoRows
-}
-
-func (f *fakeQuerier) DeleteBotWebhook(ctx context.Context, botUserID int64) (int64, error) {
-	return 0, nil
-}
-
-func (f *fakeQuerier) ListActiveBotWebhooksForConversation(ctx context.Context, conversationID int64) ([]model.BotWebhook, error) {
-	return nil, nil
-}
-
-func (f *fakeQuerier) GetDirectConversationByMembers(ctx context.Context, arg model.GetDirectConversationByMembersParams) (model.GetDirectConversationByMembersRow, error) {
-	if f.getConvErr != nil {
-		return model.GetDirectConversationByMembersRow{}, f.getConvErr
-	}
-
-	for _, conv := range f.conversations {
-		if conv.ConversationType != "direct" || !conv.IsActive {
-			continue
-		}
-
-		key1 := convUserKey(conv.ID, arg.UserID)
-		key2 := convUserKey(conv.ID, arg.UserID_2)
-		_, ok1 := f.members[key1]
-		_, ok2 := f.members[key2]
-
-		if ok1 && ok2 {
-			return model.GetDirectConversationByMembersRow(conv), nil
-		}
-	}
-
-	return model.GetDirectConversationByMembersRow{}, pgx.ErrNoRows
-}
-
-// --- stub methods for new sqlc queries (friend tags + search) ---
-func (f *fakeQuerier) CreateFriendTag(ctx context.Context, arg model.CreateFriendTagParams) (model.FriendTag, error) {
-	return model.FriendTag{}, nil
-}
-
-func (f *fakeQuerier) GetFriendTagByID(ctx context.Context, arg model.GetFriendTagByIDParams) (model.FriendTag, error) {
-	return model.FriendTag{}, pgx.ErrNoRows
-}
-
-func (f *fakeQuerier) GetFriendTagsByIDs(ctx context.Context, arg model.GetFriendTagsByIDsParams) ([]model.FriendTag, error) {
-	return nil, nil
-}
-
-func (f *fakeQuerier) ListFriendTags(ctx context.Context, userID int64) ([]model.FriendTag, error) {
-	return nil, nil
-}
-
-func (f *fakeQuerier) ListFriendTagsForFriend(ctx context.Context, arg model.ListFriendTagsForFriendParams) ([]model.FriendTag, error) {
-	return nil, nil
-}
-
-func (f *fakeQuerier) RenameFriendTag(ctx context.Context, arg model.RenameFriendTagParams) (model.FriendTag, error) {
-	return model.FriendTag{}, nil
-}
-
-func (f *fakeQuerier) DeleteFriendTag(ctx context.Context, arg model.DeleteFriendTagParams) (int64, error) {
-	return 1, nil
-}
-
-func (f *fakeQuerier) ReplaceFriendTags(ctx context.Context, arg model.ReplaceFriendTagsParams) error {
-	return nil
-}
-
-func (f *fakeQuerier) RemoveFriendTagAssignment(ctx context.Context, arg model.RemoveFriendTagAssignmentParams) (int64, error) {
-	return 1, nil
-}
-
-func (f *fakeQuerier) ListFriendsByTagID(ctx context.Context, arg model.ListFriendsByTagIDParams) ([]model.ListFriendsByTagIDRow, error) {
-	return nil, nil
-}
-
-func (f *fakeQuerier) ListFriendsByTagName(ctx context.Context, arg model.ListFriendsByTagNameParams) ([]model.ListFriendsByTagNameRow, error) {
-	return nil, nil
-}
-
-func (f *fakeQuerier) SearchFriendsByQuery(ctx context.Context, arg model.SearchFriendsByQueryParams) ([]model.SearchFriendsByQueryRow, error) {
-	return nil, nil
-}
-
-func (f *fakeQuerier) SearchUserInfoByQuery(ctx context.Context, arg model.SearchUserInfoByQueryParams) ([]model.SearchUserInfoByQueryRow, error) {
-	return nil, nil
-}
-
-func (f *fakeQuerier) SearchConversationsByName(ctx context.Context, arg model.SearchConversationsByNameParams) ([]model.SearchConversationsByNameRow, error) {
-	return nil, nil
-}
-
-func (f *fakeQuerier) SearchMessagesGlobal(ctx context.Context, arg model.SearchMessagesGlobalParams) ([]model.SearchMessagesGlobalRow, error) {
-	return nil, nil
-}
-
-func (f *fakeQuerier) SearchMessagesInConversation(ctx context.Context, arg model.SearchMessagesInConversationParams) ([]model.SearchMessagesInConversationRow, error) {
-	return nil, nil
-}
-
-func (f *fakeQuerier) ListFriendTagAssignmentsForUser(ctx context.Context, userID int64) ([]model.ListFriendTagAssignmentsForUserRow, error) {
-	return nil, nil
-}
 
 func convUserKey(convID, userID int64) string {
 	return fmt.Sprintf("%d:%d", convID, userID)
@@ -373,8 +20,8 @@ func friendshipKey(userID, friendID int64) string {
 	return fmt.Sprintf("%d:%d", userID, friendID)
 }
 
-func memberMap(members ...model.GetMemberRow) map[string]model.GetMemberRow {
-	result := make(map[string]model.GetMemberRow, len(members))
+func memberMap(members ...orm.ConversationMember) map[string]orm.ConversationMember {
+	result := make(map[string]orm.ConversationMember, len(members))
 	for _, member := range members {
 		result[convUserKey(member.ConversationID, member.UserID)] = member
 	}
@@ -382,32 +29,34 @@ func memberMap(members ...model.GetMemberRow) map[string]model.GetMemberRow {
 	return result
 }
 
-func directMembers(conversationID, userID, peerID int64) map[string]model.GetMemberRow {
+func directMembers(conversationID, userID, peerID int64) map[string]orm.ConversationMember {
 	return memberMap(
-		model.GetMemberRow{ConversationID: conversationID, UserID: userID},
-		model.GetMemberRow{ConversationID: conversationID, UserID: peerID},
+		orm.ConversationMember{ConversationID: conversationID, UserID: userID},
+		orm.ConversationMember{ConversationID: conversationID, UserID: peerID},
 	)
 }
 
-func newPastTime() pgtype.Timestamptz {
-	return pgtype.Timestamptz{Time: time.Now().Add(-1 * time.Hour), Valid: true}
+func newPastTime() *time.Time {
+	t := time.Now().Add(-time.Hour)
+	return &t
 }
 
-func newFutureTime() pgtype.Timestamptz {
-	return pgtype.Timestamptz{Time: time.Now().Add(1 * time.Hour), Valid: true}
+func newFutureTime() *time.Time {
+	t := time.Now().Add(time.Hour)
+	return &t
 }
 
 // --- Test cases ---
 
 func TestDatabasePermissionChecker_GroupMember(t *testing.T) {
 	fq := &fakeQuerier{
-		conversations: map[int64]model.GetConversationRow{
+		conversations: map[int64]orm.Conversation{
 			1: {ID: 1, ConversationType: "group", IsActive: true},
 		},
-		members: map[string]model.GetMemberRow{
+		members: map[string]orm.ConversationMember{
 			convUserKey(1, 100): {ConversationID: 1, UserID: 100, IsMuted: false},
 		},
-		friendships: map[string][]model.GetFriendshipBidirectionalRow{},
+		friendships: map[string][]orm.Friendship{},
 	}
 	checker := NewDatabasePermissionChecker(fq)
 
@@ -423,11 +72,11 @@ func TestDatabasePermissionChecker_GroupMember(t *testing.T) {
 
 func TestDatabasePermissionChecker_GroupNotMember(t *testing.T) {
 	fq := &fakeQuerier{
-		conversations: map[int64]model.GetConversationRow{
+		conversations: map[int64]orm.Conversation{
 			1: {ID: 1, ConversationType: "group", IsActive: true},
 		},
-		members:     map[string]model.GetMemberRow{},
-		friendships: map[string][]model.GetFriendshipBidirectionalRow{},
+		members:     map[string]orm.ConversationMember{},
+		friendships: map[string][]orm.Friendship{},
 	}
 	checker := NewDatabasePermissionChecker(fq)
 
@@ -444,13 +93,13 @@ func TestDatabasePermissionChecker_GroupNotMember(t *testing.T) {
 
 func TestDatabasePermissionChecker_GroupMuted(t *testing.T) {
 	fq := &fakeQuerier{
-		conversations: map[int64]model.GetConversationRow{
+		conversations: map[int64]orm.Conversation{
 			1: {ID: 1, ConversationType: "group", IsActive: true},
 		},
-		members: map[string]model.GetMemberRow{
-			convUserKey(1, 100): {ConversationID: 1, UserID: 100, IsMuted: true, MutedUntil: pgtype.Timestamptz{Valid: false}}, // permanent mute
+		members: map[string]orm.ConversationMember{
+			convUserKey(1, 100): {ConversationID: 1, UserID: 100, IsMuted: true, MutedUntil: nil}, // permanent mute
 		},
-		friendships: map[string][]model.GetFriendshipBidirectionalRow{},
+		friendships: map[string][]orm.Friendship{},
 	}
 	checker := NewDatabasePermissionChecker(fq)
 
@@ -467,13 +116,13 @@ func TestDatabasePermissionChecker_GroupMuted(t *testing.T) {
 
 func TestDatabasePermissionChecker_GroupMuteExpired(t *testing.T) {
 	fq := &fakeQuerier{
-		conversations: map[int64]model.GetConversationRow{
+		conversations: map[int64]orm.Conversation{
 			1: {ID: 1, ConversationType: "group", IsActive: true},
 		},
-		members: map[string]model.GetMemberRow{
+		members: map[string]orm.ConversationMember{
 			convUserKey(1, 100): {ConversationID: 1, UserID: 100, IsMuted: true, MutedUntil: newPastTime()},
 		},
-		friendships: map[string][]model.GetFriendshipBidirectionalRow{},
+		friendships: map[string][]orm.Friendship{},
 	}
 	checker := NewDatabasePermissionChecker(fq)
 
@@ -489,13 +138,13 @@ func TestDatabasePermissionChecker_GroupMuteExpired(t *testing.T) {
 
 func TestDatabasePermissionChecker_GroupMuteNotExpired(t *testing.T) {
 	fq := &fakeQuerier{
-		conversations: map[int64]model.GetConversationRow{
+		conversations: map[int64]orm.Conversation{
 			1: {ID: 1, ConversationType: "group", IsActive: true},
 		},
-		members: map[string]model.GetMemberRow{
+		members: map[string]orm.ConversationMember{
 			convUserKey(1, 100): {ConversationID: 1, UserID: 100, IsMuted: true, MutedUntil: newFutureTime()},
 		},
-		friendships: map[string][]model.GetFriendshipBidirectionalRow{},
+		friendships: map[string][]orm.Friendship{},
 	}
 	checker := NewDatabasePermissionChecker(fq)
 
@@ -512,11 +161,11 @@ func TestDatabasePermissionChecker_GroupMuteNotExpired(t *testing.T) {
 
 func TestDatabasePermissionChecker_DirectFriend(t *testing.T) {
 	fq := &fakeQuerier{
-		conversations: map[int64]model.GetConversationRow{
+		conversations: map[int64]orm.Conversation{
 			200: {ID: 200, ConversationType: "direct", IsActive: true},
 		},
 		members: directMembers(200, 100, 200),
-		friendships: map[string][]model.GetFriendshipBidirectionalRow{
+		friendships: map[string][]orm.Friendship{
 			friendshipKey(100, 200): {
 				{UserID: 100, FriendID: 200, Status: "accepted"},
 			},
@@ -536,11 +185,11 @@ func TestDatabasePermissionChecker_DirectFriend(t *testing.T) {
 
 func TestDatabasePermissionChecker_DirectFriendUsesPeerMemberNotConversationID(t *testing.T) {
 	fq := &fakeQuerier{
-		conversations: map[int64]model.GetConversationRow{
+		conversations: map[int64]orm.Conversation{
 			300: {ID: 300, ConversationType: "direct", IsActive: true},
 		},
 		members: directMembers(300, 100, 200),
-		friendships: map[string][]model.GetFriendshipBidirectionalRow{
+		friendships: map[string][]orm.Friendship{
 			friendshipKey(100, 200): {
 				{UserID: 100, FriendID: 200, Status: "accepted"},
 			},
@@ -560,11 +209,11 @@ func TestDatabasePermissionChecker_DirectFriendUsesPeerMemberNotConversationID(t
 
 func TestDatabasePermissionChecker_DirectNotFriendUsesTemporaryConversation(t *testing.T) {
 	fq := &fakeQuerier{
-		conversations: map[int64]model.GetConversationRow{
+		conversations: map[int64]orm.Conversation{
 			200: {ID: 200, ConversationType: "direct", IsActive: true},
 		},
 		members: directMembers(200, 100, 200),
-		friendships: map[string][]model.GetFriendshipBidirectionalRow{
+		friendships: map[string][]orm.Friendship{
 			friendshipKey(100, 200): {
 				{UserID: 100, FriendID: 200, Status: "pending"},
 			},
@@ -585,11 +234,11 @@ func TestDatabasePermissionChecker_DirectNotFriendUsesTemporaryConversation(t *t
 
 func TestDatabasePermissionChecker_DirectTemporaryConversationLimitReached(t *testing.T) {
 	fq := &fakeQuerier{
-		conversations: map[int64]model.GetConversationRow{
+		conversations: map[int64]orm.Conversation{
 			200: {ID: 200, ConversationType: "direct", IsActive: true},
 		},
 		members: directMembers(200, 100, 200),
-		friendships: map[string][]model.GetFriendshipBidirectionalRow{
+		friendships: map[string][]orm.Friendship{
 			friendshipKey(100, 200): {
 				{UserID: 100, FriendID: 200, Status: "pending"},
 			},
@@ -630,11 +279,11 @@ func TestDatabasePermissionChecker_DirectBotConversationSkipsTemporaryLimit(t *t
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			fq := &fakeQuerier{
-				conversations: map[int64]model.GetConversationRow{
+				conversations: map[int64]orm.Conversation{
 					200: {ID: 200, ConversationType: "direct", IsActive: true},
 				},
 				members: directMembers(200, tt.senderID, tt.peerID),
-				friendships: map[string][]model.GetFriendshipBidirectionalRow{
+				friendships: map[string][]orm.Friendship{
 					friendshipKey(tt.senderID, tt.peerID): {
 						{UserID: tt.senderID, FriendID: tt.peerID, Status: "pending"},
 					},
@@ -659,11 +308,11 @@ func TestDatabasePermissionChecker_DirectBotConversationSkipsTemporaryLimit(t *t
 
 func TestDatabasePermissionChecker_DirectTemporaryConversationCustomLimit(t *testing.T) {
 	fq := &fakeQuerier{
-		conversations: map[int64]model.GetConversationRow{
+		conversations: map[int64]orm.Conversation{
 			200: {ID: 200, ConversationType: "direct", IsActive: true},
 		},
 		members: directMembers(200, 100, 200),
-		friendships: map[string][]model.GetFriendshipBidirectionalRow{
+		friendships: map[string][]orm.Friendship{
 			friendshipKey(100, 200): {
 				{UserID: 100, FriendID: 200, Status: "pending"},
 			},
@@ -700,11 +349,11 @@ func TestDatabasePermissionChecker_DirectTemporaryConversationCustomLimit(t *tes
 
 func TestDatabasePermissionChecker_DirectBlocked(t *testing.T) {
 	fq := &fakeQuerier{
-		conversations: map[int64]model.GetConversationRow{
+		conversations: map[int64]orm.Conversation{
 			200: {ID: 200, ConversationType: "direct", IsActive: true},
 		},
 		members: directMembers(200, 100, 200),
-		friendships: map[string][]model.GetFriendshipBidirectionalRow{
+		friendships: map[string][]orm.Friendship{
 			friendshipKey(100, 200): {
 				{UserID: 100, FriendID: 200, Status: "blocked"},
 			},
@@ -725,9 +374,9 @@ func TestDatabasePermissionChecker_DirectBlocked(t *testing.T) {
 
 func TestDatabasePermissionChecker_ConversationNotFound(t *testing.T) {
 	fq := &fakeQuerier{
-		conversations: map[int64]model.GetConversationRow{},
-		members:       map[string]model.GetMemberRow{},
-		friendships:   map[string][]model.GetFriendshipBidirectionalRow{},
+		conversations: map[int64]orm.Conversation{},
+		members:       map[string]orm.ConversationMember{},
+		friendships:   map[string][]orm.Friendship{},
 	}
 	checker := NewDatabasePermissionChecker(fq)
 
@@ -744,11 +393,11 @@ func TestDatabasePermissionChecker_ConversationNotFound(t *testing.T) {
 
 func TestDatabasePermissionChecker_ConversationInactive(t *testing.T) {
 	fq := &fakeQuerier{
-		conversations: map[int64]model.GetConversationRow{
+		conversations: map[int64]orm.Conversation{
 			1: {ID: 1, ConversationType: "group", IsActive: false},
 		},
-		members:     map[string]model.GetMemberRow{},
-		friendships: map[string][]model.GetFriendshipBidirectionalRow{},
+		members:     map[string]orm.ConversationMember{},
+		friendships: map[string][]orm.Friendship{},
 	}
 	checker := NewDatabasePermissionChecker(fq)
 
@@ -765,9 +414,9 @@ func TestDatabasePermissionChecker_ConversationInactive(t *testing.T) {
 
 func TestDatabasePermissionChecker_DBError(t *testing.T) {
 	fq := &fakeQuerier{
-		conversations: map[int64]model.GetConversationRow{},
-		members:       map[string]model.GetMemberRow{},
-		friendships:   map[string][]model.GetFriendshipBidirectionalRow{},
+		conversations: map[int64]orm.Conversation{},
+		members:       map[string]orm.ConversationMember{},
+		friendships:   map[string][]orm.Friendship{},
 		getConvErr:    errors.New("database connection error"),
 	}
 	checker := NewDatabasePermissionChecker(fq)
@@ -784,11 +433,11 @@ func TestDatabasePermissionChecker_DBError(t *testing.T) {
 
 func TestDatabasePermissionChecker_DirectBidirectionalFriendship(t *testing.T) {
 	fq := &fakeQuerier{
-		conversations: map[int64]model.GetConversationRow{
+		conversations: map[int64]orm.Conversation{
 			200: {ID: 200, ConversationType: "direct", IsActive: true},
 		},
 		members: directMembers(200, 100, 200),
-		friendships: map[string][]model.GetFriendshipBidirectionalRow{
+		friendships: map[string][]orm.Friendship{
 			friendshipKey(100, 200): {
 				{UserID: 100, FriendID: 200, Status: "accepted"},
 				{UserID: 200, FriendID: 100, Status: "accepted"},
@@ -809,15 +458,15 @@ func TestDatabasePermissionChecker_DirectBidirectionalFriendship(t *testing.T) {
 
 func TestDatabasePermissionChecker_GroupMentionsFilteredToMembers(t *testing.T) {
 	fq := &fakeQuerier{
-		conversations: map[int64]model.GetConversationRow{
+		conversations: map[int64]orm.Conversation{
 			1: {ID: 1, ConversationType: "group", IsActive: true},
 		},
-		members: map[string]model.GetMemberRow{
+		members: map[string]orm.ConversationMember{
 			convUserKey(1, 100): {ConversationID: 1, UserID: 100, IsMuted: false},
 			convUserKey(1, 200): {ConversationID: 1, UserID: 200, IsMuted: false},
 			convUserKey(1, 300): {ConversationID: 1, UserID: 300, IsMuted: false},
 		},
-		friendships: map[string][]model.GetFriendshipBidirectionalRow{},
+		friendships: map[string][]orm.Friendship{},
 	}
 	checker := NewDatabasePermissionChecker(fq)
 
@@ -837,13 +486,13 @@ func TestDatabasePermissionChecker_GroupMentionsFilteredToMembers(t *testing.T) 
 
 func TestDatabasePermissionChecker_GroupAllMentionsNonMember(t *testing.T) {
 	fq := &fakeQuerier{
-		conversations: map[int64]model.GetConversationRow{
+		conversations: map[int64]orm.Conversation{
 			1: {ID: 1, ConversationType: "group", IsActive: true},
 		},
-		members: map[string]model.GetMemberRow{
+		members: map[string]orm.ConversationMember{
 			convUserKey(1, 100): {ConversationID: 1, UserID: 100, IsMuted: false},
 		},
-		friendships: map[string][]model.GetFriendshipBidirectionalRow{},
+		friendships: map[string][]orm.Friendship{},
 	}
 	checker := NewDatabasePermissionChecker(fq)
 
@@ -863,13 +512,13 @@ func TestDatabasePermissionChecker_GroupAllMentionsNonMember(t *testing.T) {
 
 func TestDatabasePermissionChecker_GroupNoMentions(t *testing.T) {
 	fq := &fakeQuerier{
-		conversations: map[int64]model.GetConversationRow{
+		conversations: map[int64]orm.Conversation{
 			1: {ID: 1, ConversationType: "group", IsActive: true},
 		},
-		members: map[string]model.GetMemberRow{
+		members: map[string]orm.ConversationMember{
 			convUserKey(1, 100): {ConversationID: 1, UserID: 100, IsMuted: false},
 		},
-		friendships: map[string][]model.GetFriendshipBidirectionalRow{},
+		friendships: map[string][]orm.Friendship{},
 	}
 	checker := NewDatabasePermissionChecker(fq)
 
@@ -885,11 +534,11 @@ func TestDatabasePermissionChecker_GroupNoMentions(t *testing.T) {
 
 func TestDatabasePermissionChecker_DirectMentionsFilteredToMembers(t *testing.T) {
 	fq := &fakeQuerier{
-		conversations: map[int64]model.GetConversationRow{
+		conversations: map[int64]orm.Conversation{
 			200: {ID: 200, ConversationType: "direct", IsActive: true},
 		},
 		members: directMembers(200, 100, 200),
-		friendships: map[string][]model.GetFriendshipBidirectionalRow{
+		friendships: map[string][]orm.Friendship{
 			friendshipKey(100, 200): {
 				{UserID: 100, FriendID: 200, Status: "accepted"},
 			},
@@ -924,82 +573,4 @@ func TestFilterMentionsByMemberIDs(t *testing.T) {
 
 	// No overlap
 	assert.Empty(t, filterMentionsByMemberIDs([]int64{5, 6}, []int64{1, 2}))
-}
-
-// --- Bot management stubs (required by expanded model.Querier) ---
-
-func (f *fakeQuerier) ClearBotTokenActions(ctx context.Context, tokenID int64) (int64, error) {
-	return 0, nil
-}
-
-func (f *fakeQuerier) CreateUserBotOwnership(ctx context.Context, arg model.CreateUserBotOwnershipParams) (model.UserBot, error) {
-	return model.UserBot{}, nil
-}
-
-func (f *fakeQuerier) CreateUserBotProfile(ctx context.Context, arg model.CreateUserBotProfileParams) (model.UserInfo, error) {
-	return model.UserInfo{}, nil
-}
-
-func (f *fakeQuerier) GetManagedBotToken(ctx context.Context, arg model.GetManagedBotTokenParams) (model.BotToken, error) {
-	return model.BotToken{}, nil
-}
-
-func (f *fakeQuerier) GetManagedUserBot(ctx context.Context, arg model.GetManagedUserBotParams) (model.GetManagedUserBotRow, error) {
-	return model.GetManagedUserBotRow{}, nil
-}
-
-func (f *fakeQuerier) ListEnabledBotActions(ctx context.Context) ([]model.BotAction, error) {
-	return nil, nil
-}
-
-func (f *fakeQuerier) ListEnabledBotActionsByNames(ctx context.Context, names []string) ([]model.BotAction, error) {
-	return nil, nil
-}
-
-func (f *fakeQuerier) ListEnabledBotEvents(ctx context.Context) ([]model.ListEnabledBotEventsRow, error) {
-	return nil, nil
-}
-
-func (f *fakeQuerier) ListManagedUserBots(ctx context.Context, ownerUserID int64) ([]model.ListManagedUserBotsRow, error) {
-	return nil, nil
-}
-
-func (f *fakeQuerier) RevokeAllBotTokensByBot(ctx context.Context, botUserID int64) (int64, error) {
-	return 0, nil
-}
-
-func (f *fakeQuerier) RevokeManagedBotToken(ctx context.Context, arg model.RevokeManagedBotTokenParams) (int64, error) {
-	return 0, nil
-}
-
-func (f *fakeQuerier) SoftDeleteManagedUserBot(ctx context.Context, arg model.SoftDeleteManagedUserBotParams) (int64, error) {
-	return 0, nil
-}
-
-func (f *fakeQuerier) UpdateManagedBotToken(ctx context.Context, arg model.UpdateManagedBotTokenParams) (model.BotToken, error) {
-	return model.BotToken{}, nil
-}
-
-func (f *fakeQuerier) UpdateManagedUserBotProfile(ctx context.Context, arg model.UpdateManagedUserBotProfileParams) (model.UserInfo, error) {
-	return model.UserInfo{}, nil
-}
-
-func (f *fakeQuerier) UpdateManagedUserBotStatus(ctx context.Context, arg model.UpdateManagedUserBotStatusParams) (model.UserInfo, error) {
-	return model.UserInfo{}, nil
-}
-
-func (f *fakeQuerier) InsertOutboxRecord(ctx context.Context, arg model.InsertOutboxRecordParams) (int64, error) {
-	return 0, nil
-}
-
-func (f *fakeQuerier) FetchPendingOutboxRecords(ctx context.Context, limit int32) ([]model.FetchPendingOutboxRecordsRow, error) {
-	return nil, nil
-}
-
-func (f *fakeQuerier) MarkOutboxRecordsProcessed(ctx context.Context, dollar_1 []int64) (int64, error) {
-	return 0, nil
-}
-
-func (f *fakeQuerier) DeleteOutboxRecordsBefore(ctx context.Context, processedAt pgtype.Timestamptz) (int64, error) {
-	return 0, nil
 }

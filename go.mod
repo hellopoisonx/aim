@@ -7,10 +7,8 @@ require (
 	github.com/coder/websocket v1.8.14
 	github.com/golang-jwt/jwt/v4 v4.5.2
 	github.com/google/uuid v1.6.0
-	github.com/jackc/pgx/v5 v5.8.0
-
+	github.com/lib/pq v1.12.3
 	github.com/redis/go-redis/v9 v9.18.0
-
 	github.com/stretchr/testify v1.11.1
 	github.com/zeromicro/go-queue v1.2.2
 	github.com/zeromicro/go-zero v1.10.1
@@ -21,11 +19,20 @@ require (
 	golang.org/x/crypto v0.48.0
 	google.golang.org/grpc v1.79.3
 	google.golang.org/protobuf v1.36.11
+	gorm.io/datatypes v1.2.7
+	gorm.io/driver/postgres v1.6.3
+	gorm.io/gorm v1.31.2
 )
 
 require (
+	filippo.io/edwards25519 v1.1.0 // indirect
+	github.com/go-sql-driver/mysql v1.9.3 // indirect
 	github.com/google/pprof v0.0.0-20250317173921-a4b03ec1a45e // indirect
+	github.com/jackc/pgx/v5 v5.10.0 // indirect
+	github.com/jinzhu/inflection v1.0.0 // indirect
+	github.com/jinzhu/now v1.1.5 // indirect
 	golang.org/x/tools v0.42.0 // indirect
+	gorm.io/driver/mysql v1.5.6 // indirect
 )
 
 require (

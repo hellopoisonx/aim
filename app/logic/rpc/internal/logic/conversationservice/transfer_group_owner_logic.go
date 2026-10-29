@@ -58,7 +58,7 @@ func (l *TransferGroupOwnerLogic) TransferGroupOwner(in *pb.TransferGroupOwnerRe
 		Id:               conv.ID,
 		ConversationType: conv.ConversationType,
 		IsActive:         conv.IsActive,
-		CreatedAt:        service.UnixFromPGTimestamptz(conv.CreatedAt),
+		CreatedAt:        conv.CreatedAt.UnixMilli(),
 		MemberIds:        memberIDs,
 		Name:             conv.Name,
 		Avatar:           conv.Avatar,

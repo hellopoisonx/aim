@@ -86,7 +86,7 @@ message GetUserConversationsResp {
 - 请求：`CreateConversationReq`（conversation_type: "direct" 或 "group"、creator_id、member_ids 列表）
 - 响应：`CreateConversationResp`（包含 `ConversationResponse`：id, conversation_type, is_active, created_at, member_ids）
 - 业务逻辑：验证对话类型（direct 必须 2 人、group 可多人）、自动将 creator 加入成员列表。**对于 direct 类型，先查找是否已有两名成员相同的活跃会话（Find-or-Create）**，存在则直接返回已有会话；不存在才创建新会话。group 类型不做去重（成员可动态变化）。
-- 服务层：`ConversationService.CreateConversation` → `GetDirectConversationByMembers`（direct 去重） → sqlc `CreateConversation` + `AddConversationMembers`
+- 服务层：`ConversationService.CreateConversation` → `GetDirectConversationByMembers`（direct 去重） → DAO `CreateConversation` + `AddConversationMemberWithRole`
 - 错误码：40000（参数错误，如无效类型、空成员列表、direct 非 2 人）、40400（会话不存在）、40300（非成员）、50000（基础设施错误）
 
 ### GetConversationHistory
@@ -94,14 +94,14 @@ message GetUserConversationsResp {
 - 请求：`GetConversationHistoryReq`（conversation_id、cursor_created_at 游标、cursor_id 游标、limit 分页大小）
 - 响应：`GetConversationHistoryResp`（messages 列表、next_cursor_created_at、next_cursor_id、has_more）
 - 分页规则：当 `cursor_created_at=0 && cursor_id=0` 时返回最新一页；否则按 `(created_at, id)` 游标向前翻页；limit 默认 50，最大 100
-- 服务层：`ConversationService.GetConversationHistory` → sqlc `ListMessagesByConversationInitial` 或 `ListMessagesByConversation`
+- 服务层：`ConversationService.GetConversationHistory` → DAO `ListMessagesByConversationInitial` 或 `ListMessagesByConversation`
 - 错误码：40000（conversation_id 必须正数）、40400（会话不存在）、50000（基础设施错误）
 
 ### GetUserConversations
 
 - 请求：`GetUserConversationsReq`（user_id）
 - 响应：`GetUserConversationsResp`（conversations 列表，每个元素为 `ConversationResponse` 类型）
-- 服务层：`ConversationService.GetUserConversations` → sqlc `GetConversationsByUserID`
+- 服务层：`ConversationService.GetUserConversations` → DAO `GetConversationsByUserID`
 - 行为：查询 `conversation_members` 表关联 `conversations` 表，返回用户参与的所有会话（按 `created_at DESC` 排序）
 - 错误码：40000（user_id 必须正数）、50000（基础设施错误）
 
@@ -109,7 +109,7 @@ message GetUserConversationsResp {
 
 - 请求：`GetConversationMembersReq`（conversation_id）
 - 响应：`GetConversationMembersResp`（conversation_id 和 member_ids 列表）
-- 服务层：`ConversationService.GetConversationMembers` → sqlc `GetConversationMembers`
+- 服务层：`ConversationService.GetConversationMembers` → DAO `GetConversationMembers`
 - 行为：查询指定会话的成员列表
 - 错误码：40000（conversation_id 必须正数）、40400（会话不存在）、50000（基础设施错误）
 
@@ -117,7 +117,7 @@ message GetUserConversationsResp {
 
 - 对话创建：`app/logic/rpc/model/queries/conversation.sql` 包含 `CreateConversation`、`AddConversationMembers`、`GetConversationMembers`、`GetConversationsByUserID`、`GetDirectConversationByMembers`（direct 去重查询）
 - 消息历史：`app/logic/rpc/model/queries/message.sql` 包含 `ListMessagesByConversation`（游标分页）、`ListMessagesByConversationInitial`（首页）、`CountMessagesByConversation`
-- 服务封装：`app/logic/rpc/internal/service/conversation_service.go` 提供 `ConversationQuerier` 接口，封装 sqlc 查询和业务逻辑（验证、错误映射、分页规范化）
+- 服务封装：`app/logic/rpc/internal/service/conversation_service.go` 提供 `ConversationQuerier` 接口，封装 DAO 调用和业务逻辑（验证、错误映射、分页规范化）
 - ID 生成：`app/logic/rpc/internal/service/conversation_helpers.go` 提供 `GenerateConversationID()`（时间戳+原子计数器，TODO: 替换为 snowflake）、`PGTimestamptzFromUnix`/`UnixFromPGTimestamptz` 时间戳转换
 
 ### 返回码约定
@@ -156,7 +156,7 @@ service UserService {
 
 - 表：`app/logic/rpc/model/migrations/003_user_info.sql` 中的 `user_info(id, email, status, nickname, avatar, created_at, updated_at)`。
 - 扩展：`app/logic/rpc/model/migrations/000_extensions.sql` 中的 `pg_trgm`，用于 `idx_user_info_nickname_trgm` 和昵称相似度排序。
-- 查询：`app/logic/rpc/model/queries/user_info.sql`，通过 `sqlc generate` 生成到 `app/logic/rpc/model`。
+- 查询：`app/logic/rpc/model/dao/user.go`。
 - `GetUserInfoByNickname` 是内部昵称精确查询；由于 nickname 不唯一，gateway `GET /api/users/by-name/:name` 必须调用 `SearchUserInfoByNickname`，使用 `pg_trgm`/GIN 支撑的模糊查询并返回列表。gateway `GET /api/users/by-id/:id` 调用 `GetUserInfo` 返回用户详情。
 
 ### 返回码约定
@@ -253,7 +253,7 @@ message ListFriendsResp {
 - 请求：`AddFriendReq`（`user_id` 为认证用户 ID，由 gateway 从 JWT 上下文传入；`friend_id` 为 REST 路径参数 `:id`）。
 - 响应：`AddFriendResp.friendship`，返回 `user_id/friend_id/status/created_at/updated_at`，时间戳为 Unix milliseconds。
 - 行为：`user_id` 和 `friend_id` 必须为正数且不能相等；先通过 `UserInfoService.GetUserInfo(friend_id)` 校验目标用户存在；如双向任一关系为 `blocked`，返回 403；如正向关系已为 `pending` 或 `accepted`，幂等返回原记录，避免将 `accepted` 降级为 `pending`；否则写入 `pending` 关系。
-- 数据：`app/logic/rpc/model/migrations/001_initial_permission.sql` 的 `friendships(user_id, friend_id, status, created_at, updated_at)`；查询位于 `app/logic/rpc/model/queries/friendship.sql`，通过 `sqlc generate` 生成 `UpsertFriendship`、`GetFriendshipByPair` 等方法到 `app/logic/rpc/model`。
+- 数据：`app/logic/rpc/model/migrations/001_initial_permission.sql` 的 `friendships(user_id, friend_id, status, created_at, updated_at)`；DAO 位于 `app/logic/rpc/model/dao/friendship.go`，提供 `UpsertFriendship`、`GetFriendshipByPair` 等方法。
 - RPC 逻辑：`app/logic/rpc/internal/logic/friendshipservice/add_friend_logic.go`；server/client 由 `goctl rpc protoc ... -m` 生成到 `internal/server/friendshipservice` 与 `client/friendshipservice`。
 
 ### ListFriendApplications
@@ -261,7 +261,7 @@ message ListFriendsResp {
 - 请求：`ListFriendApplicationsReq`（`user_id` 为认证用户 ID，作为接收方查询 pending 申请）。
 - 响应：`ListFriendApplicationsResp.applications`，返回 `FriendshipResponse` 列表（`user_id/friend_id/status/created_at/updated_at`），时间戳为 Unix milliseconds。
 - 行为：查询 `friendships` 表中 `friend_id=user_id AND status=pending` 的记录，按 `created_at DESC` 排序。
-- 数据：sqlc 查询 `ListPendingFriendApplications` 位于 `app/logic/rpc/model/queries/friendship.sql`。
+- 数据：DAO `ListPendingFriendApplications` 位于 `app/logic/rpc/model/dao/friendship.go`。
 - 错误码：40000（user_id 必须正数）、50000（基础设施错误）。
 
 ### AcceptFriend
@@ -284,7 +284,7 @@ message ListFriendsResp {
 - 响应：`ListFriendsResp.friends`，返回 `FriendshipResponse` 列表（`user_id/friend_id/status/created_at/updated_at`），时间戳为 Unix milliseconds。
 - 行为：查询 `friendships` 表中 `user_id=$1 AND status=accepted` 的记录，按 `created_at DESC` 排序。
 - Gateway REST 端点：`GET /api/friends/me`（受 `Auth` 中间件保护，从 JWT 提取 `user_id`）。
-- 数据：sqlc 查询 `ListFriends` 位于 `app/logic/rpc/model/queries/friendship.sql`。
+- 数据：DAO `ListFriends` 位于 `app/logic/rpc/model/dao/friendship.go`。
 - RPC 逻辑：`app/logic/rpc/internal/logic/friendshipservice/list_friends_logic.go`。
 
 ### 返回码约定

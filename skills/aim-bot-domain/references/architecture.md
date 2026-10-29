@@ -107,8 +107,8 @@ sequenceDiagram
 | `app/logic/rpc/model/migrations/007_bot_tokens.sql` | `bot_tokens` |
 | `app/logic/rpc/model/migrations/008_bot_webhooks.sql` | `bot_webhooks` |
 | `app/logic/rpc/model/migrations/009_bot_actions.sql` | `bot_actions` / `bot_token_permissions` / `bot_event_actions` |
-| `app/logic/rpc/model/queries/bot_token.sql` | sqlc Bot Token 查询 |
-| `app/logic/rpc/model/queries/bot_webhook.sql` | sqlc Bot Webhook 查询 |
+| `app/logic/rpc/model/dao/bot.go` | Bot Token GORM DAO |
+| `app/logic/rpc/model/dao/bot.go` | Bot Webhook GORM DAO |
 | `app/logic/rpc/logic.proto` | `BotService` RPC 定义 |
 | `app/logic/rpc/internal/service/bot_service.go` | 业务逻辑（token 校验、webhook CRUD） |
 | `app/logic/rpc/internal/mqs/bot_webhook_consumer.go` | Kafka consumer + HTTP 投递 |

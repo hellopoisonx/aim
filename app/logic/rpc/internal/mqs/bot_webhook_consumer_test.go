@@ -12,9 +12,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hellopoisonx/aim/app/logic/rpc/internal/config"
-	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
-
 	"github.com/stretchr/testify/require"
 )
 
@@ -145,6 +142,6 @@ func TestBuildPayload_ContainsAllFields(t *testing.T) {
 }
 
 func TestConsume_NoDB_ReturnsNil(t *testing.T) {
-	c := &BotWebhookConsumer{svcCtx: &svc.ServiceContext{Config: config.Config{}}}
+	c := &BotWebhookConsumer{}
 	require.NoError(t, c.Consume(t.Context(), "", `{"message_id":1}`))
 }

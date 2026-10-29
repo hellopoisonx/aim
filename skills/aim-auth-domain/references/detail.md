@@ -29,7 +29,7 @@
 - 接口规格：`app/auth/rpc/auth.proto`，通过 `goctl rpc protoc ... --style go_zero` 生成。
 - 业务逻辑：`app/auth/rpc/internal/logic`。
 - 领域服务：`app/auth/rpc/internal/service/auth_service.go`。
-- 数据访问：`app/auth/rpc/model`，由 `sqlc` 根据 `model/migrations/` 和 `model/queries/` 生成。
+- 数据访问：`app/auth/rpc/model/dao`（GORM DAO），结构体位于 `app/auth/rpc/model/orm`。
 - 网关调用客户端：`app/auth/rpc/authservice`。
 - 服务注册：`app/auth/rpc/auth.go` 启动时 `zrpc.MustNewServer(c.RpcServerConf, ...)` 自动调用 `internal.NewRpcPubServer` 把 `Etcd.Key: auth.rpc` + `ListenOn: 0.0.0.0:8989` 注册到 etcd（由 `figureOutListenOn` 自动把 `0.0.0.0` 解析为容器 IP / `POD_IP`）；`app/auth/rpc/etc/auth.yaml` 的 `Etcd` 块维护 `Hosts` / `Key` 两个字段。
 - Docker Compose 配置：分层 Compose 通过 `${AIM_CONFIG_DIR:-../config/local}/auth.yaml` 挂载到 `/app/etc/auth.yaml`，本地默认配置副本位于 `deploy/config/local/auth.yaml`；`app/auth/rpc/etc/auth.yaml` 保留给本地 `go run` / 单服务调试。Compose 内 `ListenOn` 为 `0.0.0.0:8989`，`Etcd.Hosts` 为 `[etcd:2379]`，`Etcd.Key` 为 `auth.rpc`，PostgreSQL 使用 `postgres:5432`，Redis 使用 `redis:6379`。

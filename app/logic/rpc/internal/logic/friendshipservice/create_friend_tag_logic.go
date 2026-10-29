@@ -5,7 +5,7 @@ import (
 
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/service"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
-	"github.com/hellopoisonx/aim/app/logic/rpc/model"
+	"github.com/hellopoisonx/aim/app/logic/rpc/model/orm"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 
@@ -42,12 +42,12 @@ func (l *CreateFriendTagLogic) CreateFriendTag(in *pb.CreateFriendTagReq) (*pb.C
 	return &pb.CreateFriendTagResp{Tag: friendTagToProto(tag)}, nil
 }
 
-func friendTagToProto(tag model.FriendTag) *pb.FriendTagResponse {
+func friendTagToProto(tag orm.FriendTag) *pb.FriendTagResponse {
 	return &pb.FriendTagResponse{
 		Id:        tag.ID,
 		UserId:    tag.UserID,
 		Name:      tag.Name,
-		CreatedAt: service.UnixFromPGTimestamptz(tag.CreatedAt),
-		UpdatedAt: service.UnixFromPGTimestamptz(tag.UpdatedAt),
+		CreatedAt: tag.CreatedAt.UnixMilli(),
+		UpdatedAt: tag.UpdatedAt.UnixMilli(),
 	}
 }

@@ -18,22 +18,20 @@
 //	CREATE INDEX IF NOT EXISTS idx_outbox_pending
 //	    ON outbox_records (created_at) WHERE processed_at IS NULL;
 //
-// The service then implements Store via sqlc-generated Queries.
+// The service then implements Store via its GORM DAO.
 //
 // # Usage
 //
-//	outboxStore := newOutboxStoreAdapter(queries) // wraps sqlc Queries
+//	outboxStore := newOutboxStoreAdapter(store) // wraps the GORM DAO
 //	poller := outbox.NewPoller(outboxStore, pubFunc, cfg)
 //	poller.Start(ctx)
 //	defer poller.Stop()
 //
 //	// Inside a transaction:
-//	err := tx.Begin(ctx, func(tx pgx.Tx) error {
-//	    q := model.New(tx)
+//	err := store.WithTx(ctx, func(tx *dao.Store) error {
 //	    // ... business writes ...
-//	    q.InsertOutboxRecord(ctx, model.InsertOutboxRecordParams{
-//	        Topic: "aim.conversation.events", Key: "42", Payload: eventJSON,
-//	    })
+//	    _, err := tx.InsertOutboxRecord(ctx, "aim.conversation.events", "42", eventJSON)
+//	    return err
 //	})
 //	if err == nil {
 //	    poller.Wake() // fast path: wake the poller immediately
@@ -61,7 +59,7 @@ type Record struct {
 }
 
 // Store is the persistence interface for outbox records.
-// Each service implements this via an adapter over its sqlc-generated Queries.
+// Each service implements this via an adapter over its GORM DAO.
 type Store interface {
 	// Insert inserts a record into the outbox table. Callers must invoke this
 	// inside a database transaction together with their business writes.

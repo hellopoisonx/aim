@@ -5,9 +5,9 @@ import (
 	"errors"
 	"time"
 
-	"github.com/hellopoisonx/aim/app/logic/rpc/model"
+	"github.com/hellopoisonx/aim/app/logic/rpc/model/dao"
+	"github.com/hellopoisonx/aim/app/logic/rpc/model/orm"
 	sharedcache "github.com/hellopoisonx/aim/app/shared/cache"
-	"github.com/jackc/pgx/v5"
 )
 
 const DefaultTemporaryConversationMessageLimit int64 = 10
@@ -17,33 +17,42 @@ const DefaultTemporaryConversationMessageLimit int64 = 10
 //nolint:unused // package tests reference this constant when golangci-lint runs with tests enabled.
 const temporaryConversationMessageLimit = DefaultTemporaryConversationMessageLimit
 
+// PermissionQuerier is the DAO slice used by the permission checker.
+type PermissionQuerier interface {
+	GetConversation(ctx context.Context, id int64) (orm.Conversation, error)
+	GetConversationMembers(ctx context.Context, conversationID int64) ([]orm.ConversationMember, error)
+	GetFriendshipBidirectional(ctx context.Context, userID, friendID int64) ([]orm.Friendship, error)
+	CountMessagesByConversation(ctx context.Context, conversationID int64) (int64, error)
+	GetUserType(ctx context.Context, id int64) (string, error)
+}
+
 type DatabasePermissionChecker struct {
-	queries                           model.Querier
+	queries                           PermissionQuerier
 	temporaryConversationMessageLimit int64
-	convCache                         *sharedcache.TypedCache[model.GetConversationRow]
-	membersCache                      *sharedcache.TypedCache[[]model.GetConversationMembersRow]
-	friendshipCache                   *sharedcache.TypedCache[[]model.GetFriendshipBidirectionalRow]
+	convCache                         *sharedcache.TypedCache[orm.Conversation]
+	membersCache                      *sharedcache.TypedCache[[]orm.ConversationMember]
+	friendshipCache                   *sharedcache.TypedCache[[]orm.Friendship]
 	userTypeCache                     *sharedcache.TypedCache[string]
 }
 
 type DatabasePermissionCheckerCaches struct {
-	Conversation *sharedcache.TypedCache[model.GetConversationRow]
-	Members      *sharedcache.TypedCache[[]model.GetConversationMembersRow]
-	Friendship   *sharedcache.TypedCache[[]model.GetFriendshipBidirectionalRow]
+	Conversation *sharedcache.TypedCache[orm.Conversation]
+	Members      *sharedcache.TypedCache[[]orm.ConversationMember]
+	Friendship   *sharedcache.TypedCache[[]orm.Friendship]
 	UserType     *sharedcache.TypedCache[string]
 }
 
-func NewDatabasePermissionChecker(queries model.Querier) *DatabasePermissionChecker {
+func NewDatabasePermissionChecker(queries PermissionQuerier) *DatabasePermissionChecker {
 	return NewDatabasePermissionCheckerWithLimit(queries, DefaultTemporaryConversationMessageLimit)
 }
 
 // NewDatabasePermissionCheckerWithLimit 允许调用方自定义临时会话消息上限。
 // limit <= 0 表示不限制（仅供开发/压测使用）。
-func NewDatabasePermissionCheckerWithLimit(queries model.Querier, limit int64) *DatabasePermissionChecker {
+func NewDatabasePermissionCheckerWithLimit(queries PermissionQuerier, limit int64) *DatabasePermissionChecker {
 	return NewDatabasePermissionCheckerWithLimitAndCaches(queries, limit, DatabasePermissionCheckerCaches{})
 }
 
-func NewDatabasePermissionCheckerWithLimitAndCaches(queries model.Querier, limit int64, caches DatabasePermissionCheckerCaches) *DatabasePermissionChecker {
+func NewDatabasePermissionCheckerWithLimitAndCaches(queries PermissionQuerier, limit int64, caches DatabasePermissionCheckerCaches) *DatabasePermissionChecker {
 	return &DatabasePermissionChecker{
 		queries:                           queries,
 		temporaryConversationMessageLimit: limit,
@@ -58,7 +67,7 @@ func (c *DatabasePermissionChecker) CheckMessagePermission(ctx context.Context, 
 	// 1. Get conversation
 	conv, err := c.getConversation(ctx, check.ConversationID)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
+		if errors.Is(err, dao.ErrNotFound) {
 			return PermissionDecision{Allowed: false, Code: CodeNotFound, Reason: "conversation not found"}, nil
 		}
 
@@ -82,7 +91,7 @@ func (c *DatabasePermissionChecker) checkGroupPermission(ctx context.Context, ch
 	if err != nil {
 		return PermissionDecision{}, err
 	}
-	var member model.GetConversationMembersRow
+	var member orm.ConversationMember
 	found := false
 	for _, m := range members {
 		if m.UserID == check.SenderID {
@@ -104,17 +113,17 @@ func (c *DatabasePermissionChecker) checkGroupPermission(ctx context.Context, ch
 	// Check mute status
 	if member.IsMuted {
 		// Check if mute has expired
-		if member.MutedUntil.Valid && member.MutedUntil.Time.Before(time.Now()) {
+		if member.MutedUntil != nil && member.MutedUntil.Before(time.Now()) {
 			// Mute expired, allow
 			return PermissionDecision{Allowed: true, Code: CodeOK, FilteredMentions: filtered}, nil
 		}
 
-		if !member.MutedUntil.Valid {
+		if member.MutedUntil == nil {
 			// Permanent mute
 			return PermissionDecision{Allowed: false, Code: CodePermissionDenied, Reason: "sender is muted"}, nil
 		}
 
-		if member.MutedUntil.Time.After(time.Now()) {
+		if member.MutedUntil.After(time.Now()) {
 			return PermissionDecision{Allowed: false, Code: CodePermissionDenied, Reason: "sender is muted"}, nil
 		}
 	}
@@ -195,7 +204,7 @@ func (c *DatabasePermissionChecker) directConversationHasBot(ctx context.Context
 	for _, userID := range []int64{senderID, peerID} {
 		userType, err := c.getUserType(ctx, userID)
 		if err != nil {
-			if errors.Is(err, pgx.ErrNoRows) {
+			if errors.Is(err, dao.ErrNotFound) {
 				continue
 			}
 
@@ -210,33 +219,33 @@ func (c *DatabasePermissionChecker) directConversationHasBot(ctx context.Context
 	return false, nil
 }
 
-func (c *DatabasePermissionChecker) getConversation(ctx context.Context, conversationID int64) (model.GetConversationRow, error) {
+func (c *DatabasePermissionChecker) getConversation(ctx context.Context, conversationID int64) (orm.Conversation, error) {
 	if c.convCache == nil {
 		return c.queries.GetConversation(ctx, conversationID)
 	}
 
-	return c.convCache.Take(ctx, sharedcache.ConvKey(conversationID), func() (model.GetConversationRow, error) {
+	return c.convCache.Take(ctx, sharedcache.ConvKey(conversationID), func() (orm.Conversation, error) {
 		return c.queries.GetConversation(ctx, conversationID)
 	})
 }
 
-func (c *DatabasePermissionChecker) getConversationMembers(ctx context.Context, conversationID int64) ([]model.GetConversationMembersRow, error) {
+func (c *DatabasePermissionChecker) getConversationMembers(ctx context.Context, conversationID int64) ([]orm.ConversationMember, error) {
 	if c.membersCache == nil {
 		return c.queries.GetConversationMembers(ctx, conversationID)
 	}
 
-	return c.membersCache.Take(ctx, sharedcache.ConvMembersKey(conversationID), func() ([]model.GetConversationMembersRow, error) {
+	return c.membersCache.Take(ctx, sharedcache.ConvMembersKey(conversationID), func() ([]orm.ConversationMember, error) {
 		return c.queries.GetConversationMembers(ctx, conversationID)
 	})
 }
 
-func (c *DatabasePermissionChecker) getFriendships(ctx context.Context, userID, friendID int64) ([]model.GetFriendshipBidirectionalRow, error) {
+func (c *DatabasePermissionChecker) getFriendships(ctx context.Context, userID, friendID int64) ([]orm.Friendship, error) {
 	if c.friendshipCache == nil {
-		return c.queries.GetFriendshipBidirectional(ctx, model.GetFriendshipBidirectionalParams{UserID: userID, FriendID: friendID})
+		return c.queries.GetFriendshipBidirectional(ctx, userID, friendID)
 	}
 
-	return c.friendshipCache.Take(ctx, sharedcache.FriendshipKey(userID, friendID), func() ([]model.GetFriendshipBidirectionalRow, error) {
-		return c.queries.GetFriendshipBidirectional(ctx, model.GetFriendshipBidirectionalParams{UserID: userID, FriendID: friendID})
+	return c.friendshipCache.Take(ctx, sharedcache.FriendshipKey(userID, friendID), func() ([]orm.Friendship, error) {
+		return c.queries.GetFriendshipBidirectional(ctx, userID, friendID)
 	})
 }
 
@@ -250,7 +259,7 @@ func (c *DatabasePermissionChecker) getUserType(ctx context.Context, userID int6
 	})
 }
 
-func directConversationPeerID(members []model.GetConversationMembersRow, senderID int64) (peerID int64, senderIsMember bool, ok bool) {
+func directConversationPeerID(members []orm.ConversationMember, senderID int64) (peerID int64, senderIsMember bool, ok bool) {
 	peerCount := 0
 
 	for _, member := range members {
@@ -304,7 +313,7 @@ func filterMentionsByMemberIDs(mentions, memberIDs []int64) []int64 {
 	return filtered
 }
 
-func memberIDsFromGetConversationMembersRow(rows []model.GetConversationMembersRow) []int64 {
+func memberIDsFromGetConversationMembersRow(rows []orm.ConversationMember) []int64 {
 	if len(rows) == 0 {
 		return nil
 	}

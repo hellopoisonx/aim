@@ -52,7 +52,7 @@ aim/
 
 - Spec-first：REST 先改 `.api` 并 `goctl api validate`；RPC 先改 `.proto` 并用 goctl/protoc 生成。
 - go-zero 代码生成使用 `--style go_zero`；不要手写 scaffold，不要让生成路径出现冗余 `github.com/hellopoisonx/aim`。
-- 数据模型使用 `sqlc`；SQL 源文件在 `model/{migrations,queries}`，生成代码在 `model/`。
+- 数据模型使用 GORM：迁移 SQL 在 `app/*/model/migrations`，结构体在 `model/orm`，查询在 `model/dao`；禁止 `AutoMigrate`。
 - API/RPC 业务错误使用 `errorx.NewCodeError` / `NewCodeErrorf`；对外基础设施错误清洗为 `internal error`。
 - Request 类型必须带 `validate` tag；配置结构体用 `json:",default=value"` / `json:",optional"`。
 - core 可以通过 gRPC 调 logic；logic 绝不导入 core，也不负责消息投递。
@@ -61,7 +61,7 @@ aim/
 
 ## 反模式
 
-- 不要编辑 `*.pb.go`、sqlc 生成文件、goctl 生成的 routes/types/server/client 文件，除非重新生成。
+- 不要编辑 `*.pb.go`、goctl 生成的 routes/types/server/client 文件，除非重新生成；DAO 查询只写在 `model/dao`。
 - 不要把内容审核拆成独立微服务；它是 `app/shared/moderation` 进程内共享库。
 - 不要用 PostgreSQL 做实时配额拦截；热路径使用 Redis 滑动窗口。
 - 不要假设 Redis/RedisBloom 返回类型固定；RESP2/RESP3 可能不同，必须类型分支并加回归测试。

@@ -163,7 +163,7 @@ graph TB
 | **RPC**        | Protobuf / gRPC                             |
 | **消息队列**   | Kafka（`conversation_id` 分区保序）         |
 | **缓存**       | Redis Stack                                 |
-| **持久化**     | PostgreSQL（sqlc）                          |
+| **持久化**     | PostgreSQL（GORM DAO）                      |
 | **文件存储**   | SeaweedFS（S3 协议）                        |
 | **注册中心**   | etcd                                        |
 | **可观测性**   | OpenTelemetry + Prometheus + Loki → Grafana |
@@ -266,7 +266,6 @@ aim/
 ├── shared/proto/          # Protobuf 协议定义
 ├── skills/                # 领域 Skill 文档
 ├── deploy/                # 部署编排
-├── model/                 # sqlc 全局数据模型
 └── docker-compose.yaml    # 本地兼容入口
 ```
 
@@ -320,7 +319,7 @@ git config core.hooksPath .githooks
 
 - **Spec-first**：REST 先改 `.api`，RPC 先改 `.proto`，再 goctl/protoc 生成
 - **Skill 驱动开发**：领域知识文档化为 Skill，Agent 渐进式加载
-- **数据模型**：使用 sqlc，SQL 源文件在 `model/{migrations,queries}`
+- **数据模型**：使用 GORM DAO；schema 源文件在 `app/*/model/migrations`，结构体在 `model/orm`，查询在 `model/dao`
 - **错误处理**：业务错误使用 `errorx.NewCodeError`
 - 详细约定见 [AGENTS.md](AGENTS.md)
 

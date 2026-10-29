@@ -6,9 +6,9 @@ import (
 	"testing"
 
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/config"
-	"github.com/hellopoisonx/aim/app/logic/rpc/model"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/service"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
+	"github.com/hellopoisonx/aim/app/logic/rpc/model/orm"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
 
 	"github.com/stretchr/testify/require"
@@ -17,60 +17,60 @@ import (
 )
 
 type fakeUserInfoService struct {
-	info   model.UserInfo
+	info   orm.UserInfo
 	err    error
-	search []model.UserInfo
+	search []orm.UserInfo
 }
 
-func (f *fakeUserInfoService) GetUserInfo(ctx context.Context, id int64) (model.UserInfo, error) {
+func (f *fakeUserInfoService) GetUserInfo(ctx context.Context, id int64) (orm.UserInfo, error) {
 	if f.err != nil {
-		return model.UserInfo{}, f.err
+		return orm.UserInfo{}, f.err
 	}
 
 	return f.info, nil
 }
 
-func (f *fakeUserInfoService) GetUserInfoByEmail(ctx context.Context, email string) (model.UserInfo, error) {
+func (f *fakeUserInfoService) GetUserInfoByEmail(ctx context.Context, email string) (orm.UserInfo, error) {
 	if f.err != nil {
-		return model.UserInfo{}, f.err
+		return orm.UserInfo{}, f.err
 	}
 
 	return f.info, nil
 }
 
-func (f *fakeUserInfoService) GetUserInfoByNickname(ctx context.Context, nickname string) (model.UserInfo, error) {
+func (f *fakeUserInfoService) GetUserInfoByNickname(ctx context.Context, nickname string) (orm.UserInfo, error) {
 	if f.err != nil {
-		return model.UserInfo{}, f.err
+		return orm.UserInfo{}, f.err
 	}
 
 	return f.info, nil
 }
 
-func (f *fakeUserInfoService) CreateUserInfo(ctx context.Context, id int64, email, nickname, avatar string) (model.UserInfo, error) {
+func (f *fakeUserInfoService) CreateUserInfo(ctx context.Context, id int64, email, nickname, avatar string) (orm.UserInfo, error) {
 	if f.err != nil {
-		return model.UserInfo{}, f.err
+		return orm.UserInfo{}, f.err
 	}
 
-	return model.UserInfo{ID: id, Email: email, Nickname: nickname, Avatar: avatar, Status: 1}, nil
+	return orm.UserInfo{ID: id, Email: email, Nickname: nickname, Avatar: avatar, Status: 1}, nil
 }
 
-func (f *fakeUserInfoService) UpdateUserInfoProfile(ctx context.Context, id int64, nickname, avatar string) (model.UserInfo, error) {
+func (f *fakeUserInfoService) UpdateUserInfoProfile(ctx context.Context, id int64, nickname, avatar string) (orm.UserInfo, error) {
 	if f.err != nil {
-		return model.UserInfo{}, f.err
-	}
-
-	return f.info, nil
-}
-
-func (f *fakeUserInfoService) UpdateUserInfoStatus(ctx context.Context, id int64, status int16) (model.UserInfo, error) {
-	if f.err != nil {
-		return model.UserInfo{}, f.err
+		return orm.UserInfo{}, f.err
 	}
 
 	return f.info, nil
 }
 
-func (f *fakeUserInfoService) SearchUserInfoByNickname(ctx context.Context, nickname string, limit int32) ([]model.UserInfo, error) {
+func (f *fakeUserInfoService) UpdateUserInfoStatus(ctx context.Context, id int64, status int16) (orm.UserInfo, error) {
+	if f.err != nil {
+		return orm.UserInfo{}, f.err
+	}
+
+	return f.info, nil
+}
+
+func (f *fakeUserInfoService) SearchUserInfoByNickname(ctx context.Context, nickname string, limit int32) ([]orm.UserInfo, error) {
 	if f.err != nil {
 		return nil, f.err
 	}
@@ -93,7 +93,7 @@ func TestCreateUserInfo(t *testing.T) {
 		{
 			name: "success",
 			userSvc: &fakeUserInfoService{
-				info: model.UserInfo{ID: 1, Email: "test@example.com", Nickname: "Test User", Status: 1},
+				info: orm.UserInfo{ID: 1, Email: "test@example.com", Nickname: "Test User", Status: 1},
 			},
 			req: &pb.CreateUserInfoReq{
 				Id:       1,
@@ -166,7 +166,7 @@ func TestGetUserInfo(t *testing.T) {
 		{
 			name: "success",
 			userSvc: &fakeUserInfoService{
-				info: model.UserInfo{ID: 1, Email: "test@example.com", Nickname: "Test", Status: 1},
+				info: orm.UserInfo{ID: 1, Email: "test@example.com", Nickname: "Test", Status: 1},
 			},
 			req:      &pb.GetUserInfoReq{Id: 1},
 			wantResp: &pb.UserInfoResponse{Id: 1, Email: "test@example.com"},
@@ -220,7 +220,7 @@ func TestGetUserInfoByEmail(t *testing.T) {
 		{
 			name: "success",
 			userSvc: &fakeUserInfoService{
-				info: model.UserInfo{ID: 1, Email: "test@example.com", Nickname: "Test", Status: 1},
+				info: orm.UserInfo{ID: 1, Email: "test@example.com", Nickname: "Test", Status: 1},
 			},
 			req:      &pb.GetUserInfoByEmailReq{Email: "test@example.com"},
 			wantResp: &pb.UserInfoResponse{Id: 1, Email: "test@example.com"},
@@ -274,7 +274,7 @@ func TestGetUserInfoByNickname(t *testing.T) {
 		{
 			name: "success",
 			userSvc: &fakeUserInfoService{
-				info: model.UserInfo{ID: 1, Email: "alice@example.com", Nickname: "Alice", Status: 1},
+				info: orm.UserInfo{ID: 1, Email: "alice@example.com", Nickname: "Alice", Status: 1},
 			},
 			req:      &pb.GetUserInfoByNicknameReq{Nickname: "Alice"},
 			wantResp: &pb.UserInfoResponse{Id: 1, Nickname: "Alice"},
@@ -327,7 +327,7 @@ func TestUpdateUserInfoProfile(t *testing.T) {
 		{
 			name: "success",
 			userSvc: &fakeUserInfoService{
-				info: model.UserInfo{ID: 1, Nickname: "New Name", Status: 1},
+				info: orm.UserInfo{ID: 1, Nickname: "New Name", Status: 1},
 			},
 			req:      &pb.UpdateUserInfoProfileReq{Id: 1, Nickname: "New Name", Avatar: "https://newavatar.com/1.png"},
 			wantCode: codes.OK,
@@ -386,7 +386,7 @@ func TestUpdateUserInfoStatus(t *testing.T) {
 		{
 			name: "success",
 			userSvc: &fakeUserInfoService{
-				info: model.UserInfo{ID: 1, Status: 2},
+				info: orm.UserInfo{ID: 1, Status: 2},
 			},
 			req:      &pb.UpdateUserInfoStatusReq{Id: 1, Status: 2},
 			wantCode: codes.OK,
@@ -440,7 +440,7 @@ func TestSearchUserInfoByNickname(t *testing.T) {
 		{
 			name: "success",
 			userSvc: &fakeUserInfoService{
-				search: []model.UserInfo{
+				search: []orm.UserInfo{
 					{ID: 1, Nickname: "Alice"},
 					{ID: 2, Nickname: "Bob"},
 				},
@@ -456,7 +456,7 @@ func TestSearchUserInfoByNickname(t *testing.T) {
 		},
 		{
 			name:     "empty results",
-			userSvc:  &fakeUserInfoService{search: []model.UserInfo{}},
+			userSvc:  &fakeUserInfoService{search: []orm.UserInfo{}},
 			req:      &pb.SearchUserInfoByNicknameReq{Nickname: "xyz"},
 			wantCode: codes.OK,
 			wantLen:  0,
@@ -496,7 +496,7 @@ func TestSearchUserInfoByNickname(t *testing.T) {
 }
 
 func TestUserInfoToResponse(t *testing.T) {
-	info := model.UserInfo{
+	info := orm.UserInfo{
 		ID:       1,
 		Email:    "test@example.com",
 		Status:   1,

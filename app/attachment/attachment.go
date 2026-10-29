@@ -8,12 +8,14 @@ import (
 	"path/filepath"
 	"strings"
 
+	"database/sql"
 	"github.com/hellopoisonx/aim/app/attachment/internal/config"
 	"github.com/hellopoisonx/aim/app/attachment/internal/server"
 	attachmentservice "github.com/hellopoisonx/aim/app/attachment/internal/service"
 	"github.com/hellopoisonx/aim/app/attachment/rpc/pb"
 	rpcutil "github.com/hellopoisonx/aim/app/shared/rpc"
-	"github.com/jackc/pgx/v5/pgxpool"
+
+	_ "github.com/lib/pq"
 	"github.com/zeromicro/go-zero/core/conf"
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/core/proc"
@@ -99,11 +101,11 @@ func runMigrations(ctx context.Context, dsn, dir string) error {
 	if dsn == "" {
 		return nil
 	}
-	pool, err := pgxpool.New(ctx, dsn)
+	db, err := sql.Open("postgres", dsn)
 	if err != nil {
 		return err
 	}
-	defer pool.Close()
+	defer db.Close()
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		// Container working directory is /app, where migrations are copied under /app/model/migrations.
@@ -123,7 +125,7 @@ func runMigrations(ctx context.Context, dsn, dir string) error {
 		if err != nil {
 			return err
 		}
-		if _, err := pool.Exec(ctx, string(b)); err != nil {
+		if _, err := db.ExecContext(ctx, string(b)); err != nil {
 			return err
 		}
 	}

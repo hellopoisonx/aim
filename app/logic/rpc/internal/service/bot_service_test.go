@@ -6,21 +6,20 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hellopoisonx/aim/app/logic/rpc/model"
+	"github.com/hellopoisonx/aim/app/logic/rpc/model/dao"
+	"github.com/hellopoisonx/aim/app/logic/rpc/model/orm"
 	"github.com/hellopoisonx/aim/app/shared/bottoken"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/stretchr/testify/require"
 )
 
 type fakeBotQuerier struct {
-	tokenRow       model.GetBotTokenByHashRow
+	tokenRow       dao.BotTokenWithUser
 	tokenErr       error
-	users          map[int64]model.UserInfo
-	convs          map[int64][]model.GetConversationsByUserIDRow
-	webhook        *model.BotWebhook
+	users          map[int64]orm.UserInfo
+	convs          map[int64][]orm.Conversation
+	webhook        *orm.BotWebhook
 	upsertErr      error
 	deleteRows     int64
 	deleteErr      error
@@ -29,9 +28,9 @@ type fakeBotQuerier struct {
 	eventActionErr error
 }
 
-func (f *fakeBotQuerier) GetBotTokenByHash(ctx context.Context, _ string) (model.GetBotTokenByHashRow, error) {
+func (f *fakeBotQuerier) GetBotTokenByHash(ctx context.Context, _ string) (dao.BotTokenWithUser, error) {
 	if f.tokenErr != nil {
-		return model.GetBotTokenByHashRow{}, f.tokenErr
+		return dao.BotTokenWithUser{}, f.tokenErr
 	}
 	return f.tokenRow, nil
 }
@@ -44,36 +43,36 @@ func (f *fakeBotQuerier) GetEnabledActionByWebhookEvent(_ context.Context, _ str
 	return f.eventAction, f.eventActionErr
 }
 
-func (f *fakeBotQuerier) GetUserInfoByID(_ context.Context, id int64) (model.UserInfo, error) {
+func (f *fakeBotQuerier) GetUserInfoByID(_ context.Context, id int64) (orm.UserInfo, error) {
 	u, ok := f.users[id]
 	if !ok {
-		return model.UserInfo{}, pgx.ErrNoRows
+		return orm.UserInfo{}, dao.ErrNotFound
 	}
 	return u, nil
 }
 
-func (f *fakeBotQuerier) GetConversationsByUserID(_ context.Context, id int64) ([]model.GetConversationsByUserIDRow, error) {
+func (f *fakeBotQuerier) GetConversationsByUserID(_ context.Context, id int64) ([]orm.Conversation, error) {
 	return f.convs[id], nil
 }
 
-func (f *fakeBotQuerier) GetBotWebhook(_ context.Context, _ int64) (model.BotWebhook, error) {
+func (f *fakeBotQuerier) GetBotWebhook(_ context.Context, _ int64) (orm.BotWebhook, error) {
 	if f.webhook == nil {
-		return model.BotWebhook{}, pgx.ErrNoRows
+		return orm.BotWebhook{}, dao.ErrNotFound
 	}
 	return *f.webhook, nil
 }
 
-func (f *fakeBotQuerier) UpsertBotWebhook(_ context.Context, arg model.UpsertBotWebhookParams) (model.BotWebhook, error) {
+func (f *fakeBotQuerier) UpsertBotWebhook(_ context.Context, botUserID int64, url, secretHash string, events []string, enabled bool) (orm.BotWebhook, error) {
 	if f.upsertErr != nil {
-		return model.BotWebhook{}, f.upsertErr
+		return orm.BotWebhook{}, f.upsertErr
 	}
-	row := model.BotWebhook{
-		BotUserID:  arg.BotUserID,
-		Url:        arg.Url,
-		SecretHash: arg.SecretHash,
-		Events:     arg.Events,
-		Enabled:    arg.Enabled,
-		UpdatedAt:  pgtype.Timestamptz{Time: time.Now(), Valid: true},
+	row := orm.BotWebhook{
+		BotUserID:  botUserID,
+		Url:        url,
+		SecretHash: secretHash,
+		Events:     events,
+		Enabled:    enabled,
+		UpdatedAt:  time.Now(),
 	}
 	f.webhook = &row
 	return row, nil
@@ -86,15 +85,19 @@ func (f *fakeBotQuerier) DeleteBotWebhook(_ context.Context, _ int64) (int64, er
 	return f.deleteRows, nil
 }
 
+func ptrTime(t time.Time) *time.Time { return &t }
+
 func TestBotService_ValidateBotToken_Success(t *testing.T) {
 	tok, err := bottoken.Generate()
 	require.NoError(t, err)
 
 	q := &fakeBotQuerier{
-		tokenRow: model.GetBotTokenByHashRow{
-			ID:         42,
-			BotUserID:  1001,
-			TokenHash:  bottoken.Hash(tok),
+		tokenRow: dao.BotTokenWithUser{
+			BotToken: orm.BotToken{
+				ID:        42,
+				BotUserID: 1001,
+				TokenHash: bottoken.Hash(tok),
+			},
 			UserType:   UserTypeBot,
 			UserStatus: 1,
 			Nickname:   "alice-bot",
@@ -124,7 +127,7 @@ func TestBotService_ValidateBotToken_NotFound(t *testing.T) {
 	tok, err := bottoken.Generate()
 	require.NoError(t, err)
 
-	_, err = NewBotService(&fakeBotQuerier{tokenErr: pgx.ErrNoRows}).ValidateBotToken(context.Background(), tok)
+	_, err = NewBotService(&fakeBotQuerier{tokenErr: dao.ErrNotFound}).ValidateBotToken(context.Background(), tok)
 	require.Error(t, err)
 
 	var ce *errorx.CodeError
@@ -137,11 +140,13 @@ func TestBotService_ValidateBotToken_Revoked(t *testing.T) {
 	require.NoError(t, err)
 
 	q := &fakeBotQuerier{
-		tokenRow: model.GetBotTokenByHashRow{
-			ID:         42,
-			BotUserID:  1001,
-			TokenHash:  bottoken.Hash(tok),
-			RevokedAt:  pgtype.Timestamptz{Time: time.Now().Add(-time.Hour), Valid: true},
+		tokenRow: dao.BotTokenWithUser{
+			BotToken: orm.BotToken{
+				ID:        42,
+				BotUserID: 1001,
+				TokenHash: bottoken.Hash(tok),
+				RevokedAt: ptrTime(time.Now().Add(-time.Hour)),
+			},
 			UserType:   UserTypeBot,
 			UserStatus: 1,
 		},
@@ -159,11 +164,13 @@ func TestBotService_ValidateBotToken_Expired(t *testing.T) {
 	require.NoError(t, err)
 
 	q := &fakeBotQuerier{
-		tokenRow: model.GetBotTokenByHashRow{
-			ID:         42,
-			BotUserID:  1001,
-			TokenHash:  bottoken.Hash(tok),
-			ExpiresAt:  pgtype.Timestamptz{Time: time.Now().Add(-time.Minute), Valid: true},
+		tokenRow: dao.BotTokenWithUser{
+			BotToken: orm.BotToken{
+				ID:        42,
+				BotUserID: 1001,
+				TokenHash: bottoken.Hash(tok),
+				ExpiresAt: ptrTime(time.Now().Add(-time.Minute)),
+			},
 			UserType:   UserTypeBot,
 			UserStatus: 1,
 		},
@@ -181,10 +188,12 @@ func TestBotService_ValidateBotToken_NotABot(t *testing.T) {
 	require.NoError(t, err)
 
 	q := &fakeBotQuerier{
-		tokenRow: model.GetBotTokenByHashRow{
-			ID:         42,
-			BotUserID:  1001,
-			TokenHash:  bottoken.Hash(tok),
+		tokenRow: dao.BotTokenWithUser{
+			BotToken: orm.BotToken{
+				ID:        42,
+				BotUserID: 1001,
+				TokenHash: bottoken.Hash(tok),
+			},
 			UserType:   "human",
 			UserStatus: 1,
 		},
@@ -202,10 +211,12 @@ func TestBotService_ValidateBotToken_Disabled(t *testing.T) {
 	require.NoError(t, err)
 
 	q := &fakeBotQuerier{
-		tokenRow: model.GetBotTokenByHashRow{
-			ID:         42,
-			BotUserID:  1001,
-			TokenHash:  bottoken.Hash(tok),
+		tokenRow: dao.BotTokenWithUser{
+			BotToken: orm.BotToken{
+				ID:        42,
+				BotUserID: 1001,
+				TokenHash: bottoken.Hash(tok),
+			},
 			UserType:   UserTypeBot,
 			UserStatus: 0,
 		},
@@ -220,7 +231,7 @@ func TestBotService_ValidateBotToken_Disabled(t *testing.T) {
 
 func TestBotService_GetBotProfile(t *testing.T) {
 	q := &fakeBotQuerier{
-		users: map[int64]model.UserInfo{
+		users: map[int64]orm.UserInfo{
 			1001: {ID: 1001, Email: "alice-bot@aim", Nickname: "alice-bot", Status: 1, UserType: UserTypeBot},
 		},
 	}
@@ -240,7 +251,7 @@ func TestBotService_ResolveWebhookEventActions(t *testing.T) {
 }
 
 func TestBotService_ResolveWebhookEventActions_Unknown(t *testing.T) {
-	q := &fakeBotQuerier{eventActionErr: pgx.ErrNoRows}
+	q := &fakeBotQuerier{eventActionErr: dao.ErrNotFound}
 	_, err := NewBotService(q).ResolveWebhookEventActions(context.Background(), []string{"unknown.event"})
 	require.Error(t, err)
 
@@ -262,7 +273,7 @@ func TestBotService_SetBotWebhook_RequiresSecretWhenCreating(t *testing.T) {
 func TestBotService_SetBotWebhook_KeepsExistingSecret(t *testing.T) {
 	q := &fakeBotQuerier{
 		eventAction: "bot.webhook.subscribe.message_created",
-		webhook: &model.BotWebhook{
+		webhook: &orm.BotWebhook{
 			BotUserID:  1001,
 			Url:        "https://old.test",
 			SecretHash: "ABCDEF",

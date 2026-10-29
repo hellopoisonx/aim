@@ -16,6 +16,7 @@ description: aim 的逻辑域。对应 `logic` 模块。
 
 ## 最近变更
 
+- 2026-10-29: 数据访问从 sqlc 迁移到 GORM DAO。`app/logic/rpc/model/dao` 按聚合提供用户、会话、消息、好友/标签、Bot、已读游标、outbox 方法；服务与 Kafka consumer 只依赖 DAO/ORM 类型，事务统一走 `WithTx`。sqlc 生成代码、`queries/`、`sqlc.yaml` 已删除。
 - 2026-05-29: 修复统一搜索 gRPC 注册。`app/logic/rpc/logic.go` 现在注册 `SearchServiceServer`，避免 gateway `GET /api/search` 调用 `UnifiedSearch` 时收到 gRPC `Unimplemented`。新增注册回归测试覆盖 `logic.SearchService`。
 - 2026-05-29: 好友多标签管理。新增 `friend_tags` / `friend_tag_assignments` 表（迁移 `012_friend_tags_and_search.sql`）；`FriendshipService` 新增 `CreateFriendTag/RenameFriendTag/DeleteFriendTag/ListFriendTags/SetFriendTags/RemoveFriendTag` 六个 RPC；`ListFriends` 查询支持按 `tag_id/tag_name` 过滤，响应新增 `tags` 字段。详见 `references/api.md` §好友标签 RPC。
 - 2026-05-29: 统一搜索落地。新增 `SearchService` 及 `UnifiedSearch` RPC，支持按用户/好友/会话/消息多 scope 搜索，消息按游标分页、返回高亮 snippet；搜索通过 SQL `pg_trgm`/`tsvector` 与 `ILIKE` 兜底上实现中文短词匹配。消息搜索通过 JOIN `conversation_members` 做访问控制。详见 `references/api.md` §搜索服务。

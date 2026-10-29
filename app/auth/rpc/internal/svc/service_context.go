@@ -6,11 +6,11 @@ import (
 
 	"github.com/hellopoisonx/aim/app/auth/rpc/internal/config"
 	"github.com/hellopoisonx/aim/app/auth/rpc/internal/service"
-	"github.com/hellopoisonx/aim/app/auth/rpc/model"
+	"github.com/hellopoisonx/aim/app/auth/rpc/model/dao"
+	"github.com/hellopoisonx/aim/app/shared/gormdb"
 	"github.com/hellopoisonx/aim/app/shared/outbox"
 	"github.com/hellopoisonx/aim/app/shared/tools"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 	"github.com/segmentio/kafka-go"
 	"github.com/zeromicro/go-queue/kq"
@@ -18,7 +18,7 @@ import (
 
 type ServiceContext struct {
 	Config       config.Config
-	DB           *pgxpool.Pool
+	DAO          *dao.Store
 	Users        service.UserStore
 	Sessions     service.SessionStore
 	TokenIssuer  service.TokenIssuer
@@ -29,10 +29,11 @@ type ServiceContext struct {
 func NewServiceContext(c config.Config) *ServiceContext {
 	applyDefaults(&c)
 
-	pool, err := pgxpool.New(context.Background(), c.Postgres.DataSource)
+	db, err := gormdb.Open(c.Postgres.DataSource)
 	if err != nil {
 		panic(err)
 	}
+	store := dao.New(db)
 
 	idGen, err := tools.NewSnowflake(c.Token.SnowflakeMachineID)
 	if err != nil {
@@ -43,8 +44,8 @@ func NewServiceContext(c config.Config) *ServiceContext {
 
 	svcCtx := &ServiceContext{
 		Config:      c,
-		DB:          pool,
-		Users:       service.NewSQLUserStoreWithIDGenerator(model.New(pool), idGen),
+		DAO:         store,
+		Users:       service.NewDAOUserStoreWithIDGenerator(store, idGen),
 		Sessions:    service.NewRedisSessionStore(redisClient, c.Token.RefreshTTL),
 		TokenIssuer: service.NewJWTIssuer(c.Token.AccessSecret, c.Token.AccessTTL),
 		IDGen:       idGen,
@@ -52,9 +53,9 @@ func NewServiceContext(c config.Config) *ServiceContext {
 
 	// Initialize outbox Poller if Kafka pusher is configured
 	if c.IsKqPusherConfigured() {
-		store := NewOutboxStore(model.New(pool))
+		outboxStore := NewOutboxStore(store)
 		publisher := newKafkaPublisher(c.KqPusherConf.Brokers, c.KqPusherConf.Topic)
-		svcCtx.OutboxPoller = outbox.NewPoller(store, publisher, outbox.Config{})
+		svcCtx.OutboxPoller = outbox.NewPoller(outboxStore, publisher, outbox.Config{})
 	}
 
 	return svcCtx

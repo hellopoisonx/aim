@@ -9,7 +9,6 @@ import (
 	attachmentservice "github.com/hellopoisonx/aim/app/attachment/internal/service"
 	"github.com/hellopoisonx/aim/app/attachment/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
-	"github.com/jackc/pgx/v5"
 )
 
 type AttachmentServiceServer struct {
@@ -112,7 +111,7 @@ func toRPCError(err error) error {
 	if err == nil {
 		return nil
 	}
-	if errors.Is(err, attachmentservice.ErrNotFound) || errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, attachmentservice.ErrNotFound) {
 		return errorx.NewCodeError(errorx.CodeNotFound, "attachment not found")
 	}
 	msg := err.Error()

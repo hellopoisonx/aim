@@ -9,7 +9,7 @@ import (
 
 	"github.com/hellopoisonx/aim/app/auth/rpc/internal/service"
 	"github.com/hellopoisonx/aim/app/auth/rpc/internal/svc"
-	"github.com/hellopoisonx/aim/app/auth/rpc/model"
+	"github.com/hellopoisonx/aim/app/auth/rpc/model/dao"
 	"github.com/hellopoisonx/aim/app/auth/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 	"github.com/hellopoisonx/aim/app/shared/events"
@@ -47,7 +47,7 @@ func (l *RegisterLogic) Register(in *pb.RegisterReq) (*pb.RegisterResp, error) {
 
 	// Publish event via outbox if configured
 	topic := l.svcCtx.Config.KqPusherConf.Topic
-	hasOutbox := l.svcCtx.OutboxPoller != nil && topic != "" && l.svcCtx.IDGen != nil && l.svcCtx.DB != nil
+	hasOutbox := l.svcCtx.OutboxPoller != nil && topic != "" && l.svcCtx.IDGen != nil && l.svcCtx.DAO != nil
 
 	var user service.UserCredential
 
@@ -72,44 +72,37 @@ func (l *RegisterLogic) createUserWithOutbox(
 	email, passwordHash, name string,
 	topic string,
 ) (service.UserCredential, error) {
-	tx, err := l.svcCtx.DB.Begin(ctx)
-	if err != nil {
-		return service.UserCredential{}, err
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
+	var user service.UserCredential
+	err := l.svcCtx.DAO.WithTx(ctx, func(tx *dao.Store) error {
+		txStore := service.NewDAOUserStoreWithIDGenerator(tx, l.svcCtx.IDGen)
 
-	txQueries := model.New(tx)
-	txStore := service.NewSQLUserStoreWithIDGenerator(txQueries, l.svcCtx.IDGen)
+		created, err := txStore.CreateUser(ctx, email, passwordHash, name)
+		if err != nil {
+			return err
+		}
 
-	user, err := txStore.CreateUser(ctx, email, passwordHash, name)
-	if err != nil {
-		return service.UserCredential{}, err
-	}
+		// Build and insert outbox event
+		event := events.UserCreatedEvent{
+			TraceContextFields: tracing.InjectTraceContext(ctx),
+			UserID:             created.ID,
+			Email:              email,
+			Nickname:           name,
+			CreatedAt:          time.Now().UnixMilli(),
+		}
 
-	// Build and insert outbox event
-	event := events.UserCreatedEvent{
-		TraceContextFields: tracing.InjectTraceContext(ctx),
-		UserID:             user.ID,
-		Email:              email,
-		Nickname:           name,
-		CreatedAt:          time.Now().UnixMilli(),
-	}
+		eventBytes, err := json.Marshal(event)
+		if err != nil {
+			return err
+		}
 
-	eventBytes, err := json.Marshal(event)
-	if err != nil {
-		return service.UserCredential{}, err
-	}
+		if _, err := tx.InsertOutboxRecord(ctx, topic, strconv.FormatInt(created.ID, 10), eventBytes); err != nil {
+			return err
+		}
 
-	_, err = txQueries.InsertOutboxRecord(ctx, model.InsertOutboxRecordParams{
-		Topic:   topic,
-		Key:     strconv.FormatInt(user.ID, 10),
-		Payload: eventBytes,
+		user = created
+		return nil
 	})
 	if err != nil {
-		return service.UserCredential{}, err
-	}
-
-	if err := tx.Commit(ctx); err != nil {
 		return service.UserCredential{}, err
 	}
 

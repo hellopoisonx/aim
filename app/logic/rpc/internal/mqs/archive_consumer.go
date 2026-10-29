@@ -5,8 +5,9 @@ import (
 	"encoding/json"
 
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
-	"github.com/hellopoisonx/aim/app/logic/rpc/model"
+	"github.com/hellopoisonx/aim/app/logic/rpc/model/orm"
 	"github.com/hellopoisonx/aim/app/shared/tracing"
+	"gorm.io/datatypes"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -26,18 +27,26 @@ type transferEvent struct {
 	Timestamp      int64    `json:"timestamp"`
 }
 
+type archiveStore interface {
+	InsertMessage(ctx context.Context, message orm.Message) error
+}
+
 type ArchiveConsumer struct {
-	ctx    context.Context
-	svcCtx *svc.ServiceContext
+	ctx   context.Context
+	store archiveStore
 }
 
 func NewArchiveConsumer(ctx context.Context, svcCtx *svc.ServiceContext) *ArchiveConsumer {
-	return &ArchiveConsumer{ctx: ctx, svcCtx: svcCtx}
+	var store archiveStore
+	if svcCtx.DAO != nil {
+		store = svcCtx.DAO
+	}
+	return &ArchiveConsumer{ctx: ctx, store: store}
 }
 
 // Consume implements the kq.ConsumeHandler interface.
 func (c *ArchiveConsumer) Consume(ctx context.Context, key string, value string) error {
-	if c.svcCtx.DB == nil {
+	if c.store == nil {
 		logx.WithContext(ctx).Debugf("no database configured, skipping archive (topic=archive)")
 		return nil
 	}
@@ -74,16 +83,14 @@ func (c *ArchiveConsumer) Consume(ctx context.Context, key string, value string)
 		clientMsgID = &event.ClientMsgID
 	}
 
-	queries := model.New(c.svcCtx.DB)
-
-	err = queries.InsertMessage(ctx, model.InsertMessageParams{
+	err = c.store.InsertMessage(ctx, orm.Message{
 		ID:             event.MessageID,
 		ConversationID: event.ConversationID,
 		SenderID:       event.SenderID,
 		MessageType:    event.MessageType,
-		Content:        contentJSON,
+		Content:        datatypes.JSON(contentJSON),
 		ClientMsgID:    clientMsgID,
-		Mentions:       mentionsJSON,
+		Mentions:       datatypes.JSON(mentionsJSON),
 	})
 	if err != nil {
 		span.RecordError(err)

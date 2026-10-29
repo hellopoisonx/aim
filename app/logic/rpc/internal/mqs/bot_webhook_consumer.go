@@ -16,7 +16,7 @@ import (
 	"time"
 
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
-	"github.com/hellopoisonx/aim/app/logic/rpc/model"
+	"github.com/hellopoisonx/aim/app/logic/rpc/model/orm"
 	"github.com/hellopoisonx/aim/app/shared/tracing"
 
 	"github.com/zeromicro/go-zero/core/logx"
@@ -48,18 +48,27 @@ const botWebhookMaxRetries = 5
 //     `sender_type` (human/bot/system) — bots can filter accordingly.
 //  4. Fans out HTTP POSTs in parallel with HMAC-SHA256 signatures and
 //     exponential backoff retries.
+type botWebhookStore interface {
+	ListActiveBotWebhooksForConversation(ctx context.Context, conversationID int64) ([]orm.BotWebhook, error)
+	GetUserType(ctx context.Context, id int64) (string, error)
+}
+
 type BotWebhookConsumer struct {
 	ctx        context.Context
-	svcCtx     *svc.ServiceContext
+	store      botWebhookStore
 	httpClient *http.Client
 	now        func() time.Time
 }
 
 // NewBotWebhookConsumer wires the consumer to the given service context.
 func NewBotWebhookConsumer(ctx context.Context, svcCtx *svc.ServiceContext) *BotWebhookConsumer {
+	var store botWebhookStore
+	if svcCtx.DAO != nil {
+		store = svcCtx.DAO
+	}
 	return &BotWebhookConsumer{
-		ctx:    ctx,
-		svcCtx: svcCtx,
+		ctx:   ctx,
+		store: store,
 		httpClient: &http.Client{
 			Timeout: botWebhookHTTPTimeout,
 		},
@@ -69,7 +78,7 @@ func NewBotWebhookConsumer(ctx context.Context, svcCtx *svc.ServiceContext) *Bot
 
 // Consume implements the kq.ConsumeHandler interface.
 func (c *BotWebhookConsumer) Consume(ctx context.Context, _ string, value string) error {
-	if c.svcCtx.DB == nil {
+	if c.store == nil {
 		// No DB means nothing to look up; skip cleanly so the consumer
 		// stays drainable in degraded environments.
 		return nil
@@ -86,9 +95,7 @@ func (c *BotWebhookConsumer) Consume(ctx context.Context, _ string, value string
 	ctx, span := tracing.StartKafkaConsumerSpan(ctx, "logic.kafka.bot_webhook.consume")
 	defer span.End()
 
-	queries := model.New(c.svcCtx.DB)
-
-	hooks, err := queries.ListActiveBotWebhooksForConversation(ctx, event.ConversationID)
+	hooks, err := c.store.ListActiveBotWebhooksForConversation(ctx, event.ConversationID)
 	if err != nil {
 		logx.WithContext(ctx).Errorf("bot-webhook: list webhooks for conv %d: %v", event.ConversationID, err)
 		// Transient DB error — surface to the broker so it retries.
@@ -100,7 +107,7 @@ func (c *BotWebhookConsumer) Consume(ctx context.Context, _ string, value string
 	}
 
 	senderType := ""
-	if t, err := queries.GetUserType(ctx, event.SenderID); err == nil {
+	if t, err := c.store.GetUserType(ctx, event.SenderID); err == nil {
 		senderType = t
 	}
 
@@ -111,12 +118,12 @@ func (c *BotWebhookConsumer) Consume(ctx context.Context, _ string, value string
 			continue
 		}
 		// Filter: respect per-bot subscribed event list.
-		if !subscribesTo(hook.Events, botWebhookEventType) {
+		if !subscribesTo([]string(hook.Events), botWebhookEventType) {
 			continue
 		}
 
 		wg.Add(1)
-		go func(h model.BotWebhook) {
+		go func(h orm.BotWebhook) {
 			defer wg.Done()
 			c.deliver(ctx, h, event, senderType)
 		}(hook)
@@ -128,7 +135,7 @@ func (c *BotWebhookConsumer) Consume(ctx context.Context, _ string, value string
 
 // deliver attempts the HTTP POST with retries. It never returns an error
 // because per-bot failures must not stall the consumer.
-func (c *BotWebhookConsumer) deliver(ctx context.Context, hook model.BotWebhook, event transferEvent, senderType string) {
+func (c *BotWebhookConsumer) deliver(ctx context.Context, hook orm.BotWebhook, event transferEvent, senderType string) {
 	body, eventID, err := c.buildPayload(event, senderType)
 	if err != nil {
 		logx.WithContext(ctx).Errorf("bot-webhook: build payload bot=%d msg=%d: %v", hook.BotUserID, event.MessageID, err)

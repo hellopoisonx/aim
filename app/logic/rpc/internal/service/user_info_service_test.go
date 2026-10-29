@@ -5,112 +5,111 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/hellopoisonx/aim/app/logic/rpc/model"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/hellopoisonx/aim/app/logic/rpc/model/dao"
+	"github.com/hellopoisonx/aim/app/logic/rpc/model/orm"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 type fakeUserInfoQuerier struct {
-	users           map[int64]model.UserInfo
-	usersByEmail    map[string]model.UserInfo
-	usersByNickname map[string]model.UserInfo
+	users           map[int64]orm.UserInfo
+	usersByEmail    map[string]orm.UserInfo
+	usersByNickname map[string]orm.UserInfo
 	createErr       error
 	getByIDErr      error
 	getByEmailErr   error
 	getByNickErr    error
 	updateProfErr   error
 	updateStatusErr error
-	searchResults   []model.UserInfo
+	searchResults   []orm.UserInfo
 	searchErr       error
 }
 
-func (f *fakeUserInfoQuerier) CreateUserInfo(ctx context.Context, arg model.CreateUserInfoParams) (model.UserInfo, error) {
+func (f *fakeUserInfoQuerier) CreateUserInfo(ctx context.Context, id int64, email, nickname, avatar string) (orm.UserInfo, error) {
 	if f.createErr != nil {
-		return model.UserInfo{}, f.createErr
+		return orm.UserInfo{}, f.createErr
 	}
 
-	return model.UserInfo{
-		ID:       arg.ID,
-		Email:    arg.Email,
-		Nickname: arg.Nickname,
-		Avatar:   arg.Avatar,
+	return orm.UserInfo{
+		ID:       id,
+		Email:    email,
+		Nickname: nickname,
+		Avatar:   avatar,
 		Status:   1,
 	}, nil
 }
 
-func (f *fakeUserInfoQuerier) GetUserInfoByID(ctx context.Context, id int64) (model.UserInfo, error) {
+func (f *fakeUserInfoQuerier) GetUserInfoByID(ctx context.Context, id int64) (orm.UserInfo, error) {
 	if f.getByIDErr != nil {
-		return model.UserInfo{}, f.getByIDErr
+		return orm.UserInfo{}, f.getByIDErr
 	}
 
 	user, ok := f.users[id]
 	if !ok {
-		return model.UserInfo{}, pgx.ErrNoRows
+		return orm.UserInfo{}, dao.ErrNotFound
 	}
 
 	return user, nil
 }
 
-func (f *fakeUserInfoQuerier) GetUserInfoByEmail(ctx context.Context, email string) (model.UserInfo, error) {
+func (f *fakeUserInfoQuerier) GetUserInfoByEmail(ctx context.Context, email string) (orm.UserInfo, error) {
 	if f.getByEmailErr != nil {
-		return model.UserInfo{}, f.getByEmailErr
+		return orm.UserInfo{}, f.getByEmailErr
 	}
 
 	user, ok := f.usersByEmail[email]
 	if !ok {
-		return model.UserInfo{}, pgx.ErrNoRows
+		return orm.UserInfo{}, dao.ErrNotFound
 	}
 
 	return user, nil
 }
 
-func (f *fakeUserInfoQuerier) GetUserInfoByNickname(ctx context.Context, nickname string) (model.UserInfo, error) {
+func (f *fakeUserInfoQuerier) GetUserInfoByNickname(ctx context.Context, nickname string) (orm.UserInfo, error) {
 	if f.getByNickErr != nil {
-		return model.UserInfo{}, f.getByNickErr
+		return orm.UserInfo{}, f.getByNickErr
 	}
 
 	user, ok := f.usersByNickname[nickname]
 	if !ok {
-		return model.UserInfo{}, pgx.ErrNoRows
+		return orm.UserInfo{}, dao.ErrNotFound
 	}
 
 	return user, nil
 }
 
-func (f *fakeUserInfoQuerier) UpdateUserInfoProfile(ctx context.Context, arg model.UpdateUserInfoProfileParams) (model.UserInfo, error) {
+func (f *fakeUserInfoQuerier) UpdateUserInfoProfile(ctx context.Context, id int64, nickname, avatar string) (orm.UserInfo, error) {
 	if f.updateProfErr != nil {
-		return model.UserInfo{}, f.updateProfErr
+		return orm.UserInfo{}, f.updateProfErr
 	}
 
-	user, ok := f.users[arg.ID]
+	user, ok := f.users[id]
 	if !ok {
-		return model.UserInfo{}, pgx.ErrNoRows
+		return orm.UserInfo{}, dao.ErrNotFound
 	}
 
-	user.Nickname = arg.Nickname
-	user.Avatar = arg.Avatar
+	user.Nickname = nickname
+	user.Avatar = avatar
 
 	return user, nil
 }
 
-func (f *fakeUserInfoQuerier) UpdateUserInfoStatus(ctx context.Context, arg model.UpdateUserInfoStatusParams) (model.UserInfo, error) {
+func (f *fakeUserInfoQuerier) UpdateUserInfoStatus(ctx context.Context, id int64, status int16) (orm.UserInfo, error) {
 	if f.updateStatusErr != nil {
-		return model.UserInfo{}, f.updateStatusErr
+		return orm.UserInfo{}, f.updateStatusErr
 	}
 
-	user, ok := f.users[arg.ID]
+	user, ok := f.users[id]
 	if !ok {
-		return model.UserInfo{}, pgx.ErrNoRows
+		return orm.UserInfo{}, dao.ErrNotFound
 	}
 
-	user.Status = arg.Status
+	user.Status = status
 
 	return user, nil
 }
 
-func (f *fakeUserInfoQuerier) SearchUserInfoByNickname(ctx context.Context, arg model.SearchUserInfoByNicknameParams) ([]model.UserInfo, error) {
+func (f *fakeUserInfoQuerier) SearchUserInfoByNickname(ctx context.Context, nickname string, limit int32) ([]orm.UserInfo, error) {
 	if f.searchErr != nil {
 		return nil, f.searchErr
 	}
@@ -120,7 +119,7 @@ func (f *fakeUserInfoQuerier) SearchUserInfoByNickname(ctx context.Context, arg 
 
 func TestUserInfoService_GetUserInfo(t *testing.T) {
 	fq := &fakeUserInfoQuerier{
-		users: map[int64]model.UserInfo{
+		users: map[int64]orm.UserInfo{
 			1: {ID: 1, Email: "test@example.com", Nickname: "Test User", Status: 1},
 		},
 	}
@@ -134,7 +133,7 @@ func TestUserInfoService_GetUserInfo(t *testing.T) {
 
 func TestUserInfoService_GetUserInfo_NotFound(t *testing.T) {
 	fq := &fakeUserInfoQuerier{
-		users: map[int64]model.UserInfo{},
+		users: map[int64]orm.UserInfo{},
 	}
 	svc := NewUserInfoService(fq)
 
@@ -156,7 +155,7 @@ func TestUserInfoService_GetUserInfo_DBError(t *testing.T) {
 
 func TestUserInfoService_GetUserInfoByEmail(t *testing.T) {
 	fq := &fakeUserInfoQuerier{
-		usersByEmail: map[string]model.UserInfo{
+		usersByEmail: map[string]orm.UserInfo{
 			"test@example.com": {ID: 1, Email: "test@example.com", Nickname: "Test User", Status: 1},
 		},
 	}
@@ -169,7 +168,7 @@ func TestUserInfoService_GetUserInfoByEmail(t *testing.T) {
 
 func TestUserInfoService_GetUserInfoByEmail_NotFound(t *testing.T) {
 	fq := &fakeUserInfoQuerier{
-		usersByEmail: map[string]model.UserInfo{},
+		usersByEmail: map[string]orm.UserInfo{},
 	}
 	svc := NewUserInfoService(fq)
 
@@ -180,7 +179,7 @@ func TestUserInfoService_GetUserInfoByEmail_NotFound(t *testing.T) {
 
 func TestUserInfoService_CreateUserInfo(t *testing.T) {
 	fq := &fakeUserInfoQuerier{
-		users: map[int64]model.UserInfo{},
+		users: map[int64]orm.UserInfo{},
 	}
 	svc := NewUserInfoService(fq)
 
@@ -193,7 +192,7 @@ func TestUserInfoService_CreateUserInfo(t *testing.T) {
 
 func TestUserInfoService_CreateUserInfo_DefaultAvatar(t *testing.T) {
 	fq := &fakeUserInfoQuerier{
-		users: map[int64]model.UserInfo{},
+		users: map[int64]orm.UserInfo{},
 	}
 	svc := NewUserInfoService(fq)
 
@@ -204,7 +203,7 @@ func TestUserInfoService_CreateUserInfo_DefaultAvatar(t *testing.T) {
 
 func TestUserInfoService_CreateUserInfo_DuplicateEmail(t *testing.T) {
 	fq := &fakeUserInfoQuerier{
-		createErr: &pgconn.PgError{Code: "23505"},
+		createErr: dao.ErrDuplicateKey,
 	}
 	svc := NewUserInfoService(fq)
 
@@ -226,7 +225,7 @@ func TestUserInfoService_CreateUserInfo_DBError(t *testing.T) {
 
 func TestUserInfoService_UpdateUserInfoProfile(t *testing.T) {
 	fq := &fakeUserInfoQuerier{
-		users: map[int64]model.UserInfo{
+		users: map[int64]orm.UserInfo{
 			1: {ID: 1, Email: "test@example.com", Nickname: "Old Nickname", Status: 1},
 		},
 	}
@@ -239,7 +238,7 @@ func TestUserInfoService_UpdateUserInfoProfile(t *testing.T) {
 
 func TestUserInfoService_UpdateUserInfoProfile_DefaultAvatar(t *testing.T) {
 	fq := &fakeUserInfoQuerier{
-		users: map[int64]model.UserInfo{
+		users: map[int64]orm.UserInfo{
 			1: {ID: 1, Email: "test@example.com", Nickname: "Old Nickname", Status: 1},
 		},
 	}
@@ -252,7 +251,7 @@ func TestUserInfoService_UpdateUserInfoProfile_DefaultAvatar(t *testing.T) {
 
 func TestUserInfoService_GetUserInfoByNickname(t *testing.T) {
 	fq := &fakeUserInfoQuerier{
-		usersByNickname: map[string]model.UserInfo{
+		usersByNickname: map[string]orm.UserInfo{
 			"Alice": {ID: 1, Email: "alice@example.com", Nickname: "Alice", Status: 1},
 		},
 	}
@@ -265,7 +264,7 @@ func TestUserInfoService_GetUserInfoByNickname(t *testing.T) {
 
 func TestUserInfoService_GetUserInfoByNickname_NotFound(t *testing.T) {
 	fq := &fakeUserInfoQuerier{
-		usersByNickname: map[string]model.UserInfo{},
+		usersByNickname: map[string]orm.UserInfo{},
 	}
 	svc := NewUserInfoService(fq)
 
@@ -276,7 +275,7 @@ func TestUserInfoService_GetUserInfoByNickname_NotFound(t *testing.T) {
 
 func TestUserInfoService_UpdateUserInfoProfile_NotFound(t *testing.T) {
 	fq := &fakeUserInfoQuerier{
-		users: map[int64]model.UserInfo{},
+		users: map[int64]orm.UserInfo{},
 	}
 	svc := NewUserInfoService(fq)
 
@@ -287,7 +286,7 @@ func TestUserInfoService_UpdateUserInfoProfile_NotFound(t *testing.T) {
 
 func TestUserInfoService_UpdateUserInfoStatus(t *testing.T) {
 	fq := &fakeUserInfoQuerier{
-		users: map[int64]model.UserInfo{
+		users: map[int64]orm.UserInfo{
 			1: {ID: 1, Email: "test@example.com", Nickname: "Test User", Status: 1},
 		},
 	}
@@ -300,7 +299,7 @@ func TestUserInfoService_UpdateUserInfoStatus(t *testing.T) {
 
 func TestUserInfoService_UpdateUserInfoStatus_NotFound(t *testing.T) {
 	fq := &fakeUserInfoQuerier{
-		users: map[int64]model.UserInfo{},
+		users: map[int64]orm.UserInfo{},
 	}
 	svc := NewUserInfoService(fq)
 
@@ -311,7 +310,7 @@ func TestUserInfoService_UpdateUserInfoStatus_NotFound(t *testing.T) {
 
 func TestUserInfoService_SearchUserInfoByNickname(t *testing.T) {
 	fq := &fakeUserInfoQuerier{
-		searchResults: []model.UserInfo{
+		searchResults: []orm.UserInfo{
 			{ID: 1, Nickname: "Alice", Status: 1},
 			{ID: 2, Nickname: "Bob", Status: 1},
 		},

@@ -5,35 +5,29 @@ import (
 	"context"
 	"time"
 
-	"github.com/hellopoisonx/aim/app/logic/rpc/model"
+	"github.com/hellopoisonx/aim/app/logic/rpc/model/dao"
 	"github.com/hellopoisonx/aim/app/shared/outbox"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
-// outboxStoreAdapter adapts sqlc-generated Queries to outbox.Store.
+// outboxStoreAdapter adapts the GORM DAO to outbox.Store.
 type outboxStoreAdapter struct {
-	queries model.Querier
+	store *dao.Store
 }
 
-// NewOutboxStore creates an outbox.Store backed by sqlc queries.
-func NewOutboxStore(queries model.Querier) outbox.Store {
-	if queries == nil {
+// NewOutboxStore creates an outbox.Store backed by the logic DAO.
+func NewOutboxStore(store *dao.Store) outbox.Store {
+	if store == nil {
 		return nil
 	}
-	return &outboxStoreAdapter{queries: queries}
+	return &outboxStoreAdapter{store: store}
 }
 
 func (a *outboxStoreAdapter) Insert(ctx context.Context, topic, key string, payload []byte) (int64, error) {
-	return a.queries.InsertOutboxRecord(ctx, model.InsertOutboxRecordParams{
-		Topic:   topic,
-		Key:     key,
-		Payload: payload,
-	})
+	return a.store.InsertOutboxRecord(ctx, topic, key, payload)
 }
 
 func (a *outboxStoreAdapter) FetchPending(ctx context.Context, batchSize int) ([]outbox.Record, error) {
-	limit := int32(batchSize) //nolint:gosec // batchSize is config-controlled, max ~1000
-	rows, err := a.queries.FetchPendingOutboxRecords(ctx, limit)
+	rows, err := a.store.FetchPendingOutboxRecords(ctx, batchSize)
 	if err != nil {
 		return nil, err
 	}
@@ -44,16 +38,16 @@ func (a *outboxStoreAdapter) FetchPending(ctx context.Context, batchSize int) ([
 			Topic:     r.Topic,
 			Key:       r.Key,
 			Payload:   r.Payload,
-			CreatedAt: r.CreatedAt.Time,
+			CreatedAt: r.CreatedAt,
 		}
 	}
 	return records, nil
 }
 
 func (a *outboxStoreAdapter) MarkProcessed(ctx context.Context, ids []int64) (int64, error) {
-	return a.queries.MarkOutboxRecordsProcessed(ctx, ids)
+	return a.store.MarkOutboxRecordsProcessed(ctx, ids)
 }
 
 func (a *outboxStoreAdapter) DeleteBefore(ctx context.Context, before time.Time) (int64, error) {
-	return a.queries.DeleteOutboxRecordsBefore(ctx, pgtype.Timestamptz{Time: before, Valid: true})
+	return a.store.DeleteOutboxRecordsBefore(ctx, before)
 }

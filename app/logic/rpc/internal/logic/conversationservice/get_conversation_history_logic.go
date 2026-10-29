@@ -79,7 +79,7 @@ func (l *GetConversationHistoryLogic) GetConversationHistory(in *pb.GetConversat
 			MessageType:    msg.MessageType,
 			Content:        messageContentFromJSONB(msg.Content),
 			ClientMsgId:    clientMsgID,
-			CreatedAt:      service.UnixFromPGTimestamptz(msg.CreatedAt),
+			CreatedAt:      msg.CreatedAt.UnixMilli(),
 			Mentions:       service.ParseMentionsJSON(msg.Mentions),
 			IsSystem:       msg.SenderID == 0 && msg.MessageType == service.MessageTypeSystem,
 		})
@@ -91,7 +91,7 @@ func (l *GetConversationHistoryLogic) GetConversationHistory(in *pb.GetConversat
 
 	if hasMore && len(messages) > 0 {
 		lastMsg := messages[len(messages)-1]
-		nextCursorCreatedAt = service.UnixFromPGTimestamptz(lastMsg.CreatedAt)
+		nextCursorCreatedAt = lastMsg.CreatedAt.UnixMilli()
 		nextCursorID = lastMsg.ID
 	}
 
