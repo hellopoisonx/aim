@@ -24,7 +24,6 @@ import (
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/userservice"
 	"github.com/hellopoisonx/aim/app/shared/quota"
 
-
 	"github.com/hellopoisonx/aim/app/shared/tracing"
 
 	"github.com/redis/go-redis/v9"
@@ -186,13 +185,13 @@ type ServiceContext struct {
 	RateLimitQuota          *quota.QuotaStore
 	BotRateLimitQuota       *quota.QuotaStore
 
-	RedisClient            *redis.Client
+	RedisClient *redis.Client
 
-	PresencePub            PresencePublisher
-	TypingPub              TypingPublisher
-	ReadReceiptPub         ReadReceiptPublisher
-	WsManager              *ws.Manager
-	reaperCancel           context.CancelFunc // cancels the presence reaper goroutine
+	PresencePub    PresencePublisher
+	TypingPub      TypingPublisher
+	ReadReceiptPub ReadReceiptPublisher
+	WsManager      *ws.Manager
+	reaperCancel   context.CancelFunc // cancels the presence reaper goroutine
 }
 
 func NewServiceContext(c config.Config) *ServiceContext {
@@ -212,26 +211,19 @@ func NewServiceContext(c config.Config) *ServiceContext {
 
 	logx.Must(err)
 
-
-
 	// Core RPC client setup
 
 	coreClient, err := zrpc.NewClient(c.CoreRpc)
 
 	logx.Must(err)
 
-
-
 	logicClient, err := zrpc.NewClient(c.LogicRpc)
 
 	logx.Must(err)
 
-
-
 	attachmentClient, err := zrpc.NewClient(c.AttachmentRpc)
 
 	logx.Must(err)
-
 
 	// Create Redis client for presence heartbeat state management.
 	redisClient := redis.NewClient(&redis.Options{
@@ -290,12 +282,11 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		RateLimitQuota:          rateLimitQuota,
 		BotRateLimitQuota:       botRateLimitQuota,
 
-
-		RedisClient:            redisClient,
-		PresencePub:            newPresencePub(c, redisClient),
-		TypingPub:              newTypingPub(c, redisClient),
-		ReadReceiptPub:         newReadReceiptPub(c, redisClient),
-		WsManager:              wsManager,
+		RedisClient:    redisClient,
+		PresencePub:    newPresencePub(c, redisClient),
+		TypingPub:      newTypingPub(c, redisClient),
+		ReadReceiptPub: newReadReceiptPub(c, redisClient),
+		WsManager:      wsManager,
 	}
 }
 

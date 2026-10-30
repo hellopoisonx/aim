@@ -2,11 +2,11 @@ package bot
 
 import (
 	"context"
-	"slices"
 	"strconv"
 	"strings"
 
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/botctx"
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/membership"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
 	gatewayws "github.com/hellopoisonx/aim/app/gateway/api/internal/ws"
@@ -45,19 +45,13 @@ func ensureBotConversationMember(
 	identity botctx.BotIdentity,
 	conversationID int64,
 ) error {
-	membersResp, err := client.GetConversationMembers(ctx, &conversationservice.GetConversationMembersReq{
-		ConversationId: conversationID,
-	})
-	if err != nil {
-		return errorx.SanitizeGRPCErrorNoLog(err)
-	}
-
-	if !slices.Contains(membersResp.GetMemberIds(), identity.BotUserID) {
-		return errorx.NewCodeError(errorx.CodeForbidden, "bot is not a member of this conversation")
-	}
-
-	return nil
+	return membership.RequireMember(ctx, noLogLogger{}, client, conversationID, identity.BotUserID, membership.ActorBot)
 }
+
+// noLogLogger satisfies errorx.ErrorLogger for call paths that own logging.
+type noLogLogger struct{}
+
+func (noLogLogger) Errorf(string, ...any) {}
 
 func convertBotReadState(st *pb.ReadStateItem) types.BotReadStateItem {
 	return types.BotReadStateItem{

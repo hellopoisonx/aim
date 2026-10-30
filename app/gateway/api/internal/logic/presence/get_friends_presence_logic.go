@@ -6,11 +6,12 @@ package presence
 import (
 	"context"
 	"fmt"
+
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/authctx"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
-	"github.com/hellopoisonx/aim/app/gateway/api/internal/ws"
 	friendshippb "github.com/hellopoisonx/aim/app/logic/rpc/client/friendshipservice"
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/userservice"
 
@@ -34,7 +35,7 @@ func NewGetFriendsPresenceLogic(ctx context.Context, svcCtx *svc.ServiceContext)
 
 func (l *GetFriendsPresenceLogic) GetFriendsPresence() (resp *types.GetFriendsPresenceResponse, err error) {
 	// Extract current user ID from the auth context.
-	identity, ok := ws.IdentityFromContext(l.ctx)
+	identity, ok := authctx.IdentityFromContext(l.ctx)
 	if !ok || identity.UserID == 0 {
 		return nil, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
 	}

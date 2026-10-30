@@ -3,9 +3,10 @@ package conversations
 import (
 	"context"
 
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/authctx"
+
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
-	"github.com/hellopoisonx/aim/app/gateway/api/internal/ws"
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/conversationservice"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 
@@ -27,7 +28,7 @@ func NewRemoveGroupMemberLogic(ctx context.Context, svcCtx *svc.ServiceContext) 
 }
 
 func (l *RemoveGroupMemberLogic) RemoveGroupMember(req *types.RemoveGroupMemberRequest) (err error) {
-	identity, ok := ws.IdentityFromContext(l.ctx)
+	identity, ok := authctx.IdentityFromContext(l.ctx)
 	if !ok {
 		return errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
 	}

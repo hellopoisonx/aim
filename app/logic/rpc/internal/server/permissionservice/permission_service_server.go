@@ -7,7 +7,7 @@ package server
 import (
 	"context"
 
-	"github.com/hellopoisonx/aim/app/logic/rpc/internal/logic/permissionservice"
+	permissionservicelogic "github.com/hellopoisonx/aim/app/logic/rpc/internal/logic/permissionservice"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
 )

@@ -8,20 +8,16 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/authctx"
+
 	"github.com/coder/websocket"
 	"github.com/redis/go-redis/v9"
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
-// Identity represents a connected client's identity.
-type Identity struct {
-	UserID   int64
-	DeviceID string
-}
-
 // Connection represents a single WebSocket connection with its context.
 type Connection struct {
-	Identity Identity
+	Identity authctx.Identity
 	Cancel   context.CancelFunc
 	Conn     *websocket.Conn
 
@@ -50,7 +46,7 @@ type PresenceResult struct {
 // Manager tracks all active WebSocket connections by user_id and device_id.
 type Manager struct {
 	mu               sync.RWMutex
-	connections      map[Identity]*Connection
+	connections      map[authctx.Identity]*Connection
 	redisClient      *redis.Client
 	nodeID           string
 	presenceTTL      time.Duration
@@ -58,7 +54,7 @@ type Manager struct {
 	reconnectGrace   time.Duration // grace period after token-expired close for reconnection
 
 	pendingMu      sync.Mutex
-	pendingOffline map[Identity]time.Time // identity → deadline for grace
+	pendingOffline map[authctx.Identity]time.Time // identity → deadline for grace
 
 	replay *ReplayStore // pending/replay 队列，服务侧面向心跳重放用
 }
@@ -67,8 +63,8 @@ type Manager struct {
 // Use NewManagerWithPresence for production setups.
 func NewManager() *Manager {
 	m := &Manager{
-		connections:    make(map[Identity]*Connection),
-		pendingOffline: make(map[Identity]time.Time),
+		connections:    make(map[authctx.Identity]*Connection),
+		pendingOffline: make(map[authctx.Identity]time.Time),
 	}
 	m.replay = mustNewReplayStore()
 	return m
@@ -77,13 +73,13 @@ func NewManager() *Manager {
 // NewManagerWithPresence creates a manager that synchronises Redis presence sets.
 func NewManagerWithPresence(redisClient *redis.Client, nodeID string, ttlSeconds int) *Manager {
 	m := &Manager{
-		connections:      make(map[Identity]*Connection),
+		connections:      make(map[authctx.Identity]*Connection),
 		redisClient:      redisClient,
 		nodeID:           nodeID,
 		presenceTTL:      time.Duration(ttlSeconds) * time.Second,
 		heartbeatTimeout: 60 * time.Second, // default: 60s heartbeat timeout
 		reconnectGrace:   30 * time.Second, // default: 30s token-refresh grace
-		pendingOffline:   make(map[Identity]time.Time),
+		pendingOffline:   make(map[authctx.Identity]time.Time),
 	}
 	m.replay = mustNewReplayStore()
 	return m
@@ -128,7 +124,7 @@ func userPresenceKey(userID int64) string {
 // Register adds a new connection for the given identity.
 // When Redis is configured it maintains aim:user_gateway and aim:presence Sets.
 // If the same user/device had a pending offline from token expiration, it is cancelled.
-func (m *Manager) Register(ctx context.Context, identity Identity, conn *websocket.Conn, cancel context.CancelFunc) (*PresenceResult, error) {
+func (m *Manager) Register(ctx context.Context, identity authctx.Identity, conn *websocket.Conn, cancel context.CancelFunc) (*PresenceResult, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -153,7 +149,7 @@ func (m *Manager) Register(ctx context.Context, identity Identity, conn *websock
 
 // cancelPendingOfflineLocked removes a pending offline entry and returns true if one existed.
 // Must be called with pendingMu held (or from Register which holds mu).
-func (m *Manager) cancelPendingOfflineLocked(identity Identity) bool {
+func (m *Manager) cancelPendingOfflineLocked(identity authctx.Identity) bool {
 	m.pendingMu.Lock()
 	defer m.pendingMu.Unlock()
 
@@ -165,7 +161,7 @@ func (m *Manager) cancelPendingOfflineLocked(identity Identity) bool {
 }
 
 // CancelPendingOffline removes a pending offline entry (public variant for reaper/external use).
-func (m *Manager) CancelPendingOffline(identity Identity) bool {
+func (m *Manager) CancelPendingOffline(identity authctx.Identity) bool {
 	m.pendingMu.Lock()
 	defer m.pendingMu.Unlock()
 
@@ -212,7 +208,7 @@ func (m *Manager) updatePresenceOnRegister(ctx context.Context, userID int64, de
 
 // MarkTokenExpired sets the token-expired flag on a connection before it is closed.
 // This causes Unregister to register a reconnect grace instead of publishing offline.
-func (m *Manager) MarkTokenExpired(identity Identity) {
+func (m *Manager) MarkTokenExpired(identity authctx.Identity) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -227,7 +223,7 @@ func (m *Manager) MarkTokenExpired(identity Identity) {
 // client has acknowledged. The seq counter is monotonic so older acks are
 // dropped silently. Returns false when the identity has no active connection.
 // 同时从 pending/replay 队列中清除 seq <= ackSeq 的帧，释放内存。
-func (m *Manager) RecordClientAck(identity Identity, ackSeq int64) bool {
+func (m *Manager) RecordClientAck(identity authctx.Identity, ackSeq int64) bool {
 	m.mu.Lock()
 	conn, exists := m.connections[identity]
 	if !exists {
@@ -247,7 +243,7 @@ func (m *Manager) RecordClientAck(identity Identity, ackSeq int64) bool {
 }
 
 // RecordHeartbeat updates the LastSeen time for a connection and renews presence TTL.
-func (m *Manager) RecordHeartbeat(ctx context.Context, identity Identity) {
+func (m *Manager) RecordHeartbeat(ctx context.Context, identity authctx.Identity) {
 	m.mu.RLock()
 	conn, exists := m.connections[identity]
 	m.mu.RUnlock()
@@ -265,7 +261,7 @@ func (m *Manager) RecordHeartbeat(ctx context.Context, identity Identity) {
 // If the connection was closed due to token expiry, a reconnect grace is registered
 // and no offline event is published. The offline will be published only if the
 // grace expires without reconnection.
-func (m *Manager) Unregister(ctx context.Context, identity Identity) (*PresenceResult, error) {
+func (m *Manager) Unregister(ctx context.Context, identity authctx.Identity) (*PresenceResult, error) {
 	m.mu.Lock()
 
 	conn, exists := m.connections[identity]
@@ -303,7 +299,7 @@ func (m *Manager) Unregister(ctx context.Context, identity Identity) (*PresenceR
 }
 
 // registerGraceDeadline stores a grace deadline for the given identity.
-func (m *Manager) registerGraceDeadline(identity Identity) {
+func (m *Manager) registerGraceDeadline(identity authctx.Identity) {
 	m.pendingMu.Lock()
 	defer m.pendingMu.Unlock()
 
@@ -378,7 +374,7 @@ func (m *Manager) RenewPresenceTTL(ctx context.Context, userID int64) {
 }
 
 // Get returns a connection by identity.
-func (m *Manager) Get(identity Identity) (*Connection, error) {
+func (m *Manager) Get(identity authctx.Identity) (*Connection, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -456,11 +452,11 @@ func (m *Manager) All() []*Connection {
 }
 
 // ListIdentities returns all identities currently connected.
-func (m *Manager) ListIdentities() []Identity {
+func (m *Manager) ListIdentities() []authctx.Identity {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	identities := make([]Identity, 0, len(m.connections))
+	identities := make([]authctx.Identity, 0, len(m.connections))
 	for identity := range m.connections {
 		identities = append(identities, identity)
 	}
@@ -470,7 +466,7 @@ func (m *Manager) ListIdentities() []Identity {
 
 // ScanStaleConnections returns identities whose LastSeen is older than the given threshold.
 // Returns nil if heartbeatTimeout is not configured.
-func (m *Manager) ScanStaleConnections(now int64) []Identity {
+func (m *Manager) ScanStaleConnections(now int64) []authctx.Identity {
 	if m.heartbeatTimeout <= 0 {
 		return nil
 	}
@@ -480,7 +476,7 @@ func (m *Manager) ScanStaleConnections(now int64) []Identity {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	var stale []Identity
+	var stale []authctx.Identity
 	for identity, conn := range m.connections {
 		if conn.LastSeen < threshold {
 			stale = append(stale, identity)
@@ -491,11 +487,11 @@ func (m *Manager) ScanStaleConnections(now int64) []Identity {
 
 // ScanExpiredGraces returns identities whose reconnect grace has expired.
 // Each entry is paired with whether the identity has any remaining active connections.
-func (m *Manager) ScanExpiredGraces(now time.Time) []Identity {
+func (m *Manager) ScanExpiredGraces(now time.Time) []authctx.Identity {
 	m.pendingMu.Lock()
 	defer m.pendingMu.Unlock()
 
-	var expired []Identity
+	var expired []authctx.Identity
 	for identity, deadline := range m.pendingOffline {
 		if now.After(deadline) {
 			expired = append(expired, identity)
@@ -505,14 +501,14 @@ func (m *Manager) ScanExpiredGraces(now time.Time) []Identity {
 }
 
 // RemoveExpiredGrace removes a grace entry after it has been processed (offline published).
-func (m *Manager) RemoveExpiredGrace(identity Identity) {
+func (m *Manager) RemoveExpiredGrace(identity authctx.Identity) {
 	m.pendingMu.Lock()
 	defer m.pendingMu.Unlock()
 	delete(m.pendingOffline, identity)
 }
 
 // HasPendingGrace returns whether an identity has an active reconnect grace.
-func (m *Manager) HasPendingGrace(identity Identity) bool {
+func (m *Manager) HasPendingGrace(identity authctx.Identity) bool {
 	m.pendingMu.Lock()
 	defer m.pendingMu.Unlock()
 	_, exists := m.pendingOffline[identity]
@@ -521,7 +517,7 @@ func (m *Manager) HasPendingGrace(identity Identity) bool {
 
 // ForceOfflineForExpiredGrace publishes an offline event for a user/device whose grace expired.
 // It removes the device from the presence set and checks if user went offline.
-func (m *Manager) ForceOfflineForExpiredGrace(ctx context.Context, identity Identity) (*PresenceResult, error) {
+func (m *Manager) ForceOfflineForExpiredGrace(ctx context.Context, identity authctx.Identity) (*PresenceResult, error) {
 	if m.redisClient == nil {
 		return &PresenceResult{}, nil
 	}

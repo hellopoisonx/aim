@@ -2,6 +2,7 @@ package bot
 
 import (
 	"context"
+
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"

@@ -4,6 +4,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/authctx"
+
 	wspb "github.com/hellopoisonx/aim/shared/proto/ws/pb"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -28,7 +30,7 @@ func TestReplayStoreAppendAndPendingAfter(t *testing.T) {
 	t.Parallel()
 
 	store := newTestReplayStore(t, 16, time.Minute)
-	identity := Identity{UserID: 1, DeviceID: "dev-1"}
+	identity := authctx.Identity{UserID: 1, DeviceID: "dev-1"}
 
 	for _, seq := range []int64{1, 2, 3} {
 		store.Append(identity, buildPushMessageFrame(seq))
@@ -47,7 +49,7 @@ func TestReplayStoreAckTrimsConfirmedFrames(t *testing.T) {
 	t.Parallel()
 
 	store := newTestReplayStore(t, 16, time.Minute)
-	identity := Identity{UserID: 2, DeviceID: "dev-2"}
+	identity := authctx.Identity{UserID: 2, DeviceID: "dev-2"}
 
 	for _, seq := range []int64{10, 11, 12, 13} {
 		store.Append(identity, buildPushMessageFrame(seq))
@@ -64,7 +66,7 @@ func TestReplayStoreRejectsNonReplayableFrames(t *testing.T) {
 	t.Parallel()
 
 	store := newTestReplayStore(t, 16, time.Minute)
-	identity := Identity{UserID: 3, DeviceID: "dev-3"}
+	identity := authctx.Identity{UserID: 3, DeviceID: "dev-3"}
 
 	store.Append(identity, &wspb.WsFrame{
 		Type: wspb.FrameType_FRAME_TYPE_PUSH_TYPING,
@@ -94,7 +96,7 @@ func TestReplayStoreRejectsUnassignedSeq(t *testing.T) {
 	t.Parallel()
 
 	store := newTestReplayStore(t, 16, time.Minute)
-	identity := Identity{UserID: 4, DeviceID: "dev-4"}
+	identity := authctx.Identity{UserID: 4, DeviceID: "dev-4"}
 
 	store.Append(identity, buildPushMessageFrame(0))
 	assert.Equal(t, 0, store.Len(identity))
@@ -104,7 +106,7 @@ func TestReplayStoreCapacityTrim(t *testing.T) {
 	t.Parallel()
 
 	store := newTestReplayStore(t, 3, time.Minute)
-	identity := Identity{UserID: 5, DeviceID: "dev-5"}
+	identity := authctx.Identity{UserID: 5, DeviceID: "dev-5"}
 
 	for seq := int64(1); seq <= 5; seq++ {
 		store.Append(identity, buildPushMessageFrame(seq))
@@ -120,7 +122,7 @@ func TestReplayStoreTTLExpiration(t *testing.T) {
 	t.Parallel()
 
 	store := newTestReplayStore(t, 16, 20*time.Millisecond)
-	identity := Identity{UserID: 6, DeviceID: "dev-6"}
+	identity := authctx.Identity{UserID: 6, DeviceID: "dev-6"}
 
 	store.Append(identity, buildPushMessageFrame(1))
 	time.Sleep(40 * time.Millisecond)
@@ -135,7 +137,7 @@ func TestReplayStoreDelete(t *testing.T) {
 	t.Parallel()
 
 	store := newTestReplayStore(t, 16, time.Minute)
-	identity := Identity{UserID: 7, DeviceID: "dev-7"}
+	identity := authctx.Identity{UserID: 7, DeviceID: "dev-7"}
 
 	store.Append(identity, buildPushMessageFrame(1))
 	store.Delete(identity)
@@ -147,7 +149,7 @@ func TestReplayStoreClonesOnAppendAndRead(t *testing.T) {
 	t.Parallel()
 
 	store := newTestReplayStore(t, 16, time.Minute)
-	identity := Identity{UserID: 8, DeviceID: "dev-8"}
+	identity := authctx.Identity{UserID: 8, DeviceID: "dev-8"}
 
 	frame := buildPushMessageFrame(1)
 	frame.Payload = []byte("original")

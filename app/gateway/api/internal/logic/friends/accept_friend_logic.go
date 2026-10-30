@@ -6,6 +6,8 @@ package friends
 import (
 	"context"
 
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/authctx"
+
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/ws"
@@ -31,7 +33,7 @@ func NewAcceptFriendLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Acce
 }
 
 func (l *AcceptFriendLogic) AcceptFriend(req *types.AcceptFriendRequest) (resp *types.AcceptFriendResponse, err error) {
-	identity, ok := ws.IdentityFromContext(l.ctx)
+	identity, ok := authctx.IdentityFromContext(l.ctx)
 	if !ok {
 		return nil, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
 	}

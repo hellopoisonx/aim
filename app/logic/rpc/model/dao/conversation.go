@@ -4,6 +4,8 @@ import (
 	"context"
 	"time"
 
+	sharedconversation "github.com/hellopoisonx/aim/app/shared/conversation"
+
 	"github.com/hellopoisonx/aim/app/logic/rpc/model/orm"
 )
 
@@ -100,7 +102,7 @@ func (s *Store) AddConversationMembers(ctx context.Context, conversationID, user
 	member := orm.ConversationMember{
 		ConversationID: conversationID,
 		UserID:         userID,
-		Role:           "member",
+		Role:           sharedconversation.RoleMember,
 	}
 	result := s.db.WithContext(ctx).Create(&member)
 	if result.Error != nil {

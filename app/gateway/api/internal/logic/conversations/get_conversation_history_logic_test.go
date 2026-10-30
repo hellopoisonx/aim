@@ -5,9 +5,10 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/authctx"
+
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
-	"github.com/hellopoisonx/aim/app/gateway/api/internal/ws"
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/conversationservice"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
@@ -352,11 +353,29 @@ func TestGetConversationHistory(t *testing.T) {
 			},
 			wantErr: nil,
 		},
+		{
+			name: "non-member is forbidden",
+			req: &types.GetConversationHistoryRequest{
+				Id:    123,
+				Limit: 20,
+			},
+			mockSetup: func(ms *mockGetHistoryConversationService) {
+				ms.GetConversationMembersFunc = func(context.Context, *conversationservice.GetConversationMembersReq) (*conversationservice.GetConversationMembersResp, error) {
+					return &conversationservice.GetConversationMembersResp{MemberIds: []int64{7, 8}}, nil
+				}
+			},
+			wantErr: &errorx.CodeError{Code: errorx.CodeForbidden, Message: "user is not a member of this conversation"},
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockClient := &mockGetHistoryConversationService{}
+			mockClient := &mockGetHistoryConversationService{
+				// Caller 42 is a member unless the case overrides the lookup.
+				GetConversationMembersFunc: func(context.Context, *conversationservice.GetConversationMembersReq) (*conversationservice.GetConversationMembersResp, error) {
+					return &conversationservice.GetConversationMembersResp{MemberIds: []int64{42, 7}}, nil
+				},
+			}
 			tt.mockSetup(mockClient)
 
 			svcCtx := &svc.ServiceContext{
@@ -368,7 +387,7 @@ func TestGetConversationHistory(t *testing.T) {
 			if tt.wantErr != nil && tt.wantErr.Code == errorx.CodeAuth {
 				ctx = context.Background() // No identity for unauthorized test
 			} else {
-				ctx = ws.WithIdentity(context.Background(), ws.Identity{UserID: 42, DeviceID: "test-device"})
+				ctx = authctx.WithIdentity(context.Background(), authctx.Identity{UserID: 42, DeviceID: "test-device"})
 			}
 			logic := NewGetConversationHistoryLogic(ctx, svcCtx)
 

@@ -10,7 +10,7 @@ import (
 
 // BotIdentity is a snapshot of the authenticated bot resolved from
 // `Authorization: Bot <token>`. It is the Bot OpenAPI counterpart to
-// `ws.Identity` for human users.
+// `authctx.Identity` for human users.
 type BotIdentity struct {
 	BotUserID  int64
 	TokenID    int64

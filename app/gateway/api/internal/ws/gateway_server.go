@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/authctx"
+
 	"github.com/coder/websocket"
 	pb "github.com/hellopoisonx/aim/shared/proto/gateway/pb"
 	wspb "github.com/hellopoisonx/aim/shared/proto/ws/pb"
@@ -42,7 +44,7 @@ func (r writeRequest) complete(err error) {
 	}
 }
 
-func newConnection(identity Identity, conn *websocket.Conn, cancel context.CancelFunc, lastSeen int64) *Connection {
+func newConnection(identity authctx.Identity, conn *websocket.Conn, cancel context.CancelFunc, lastSeen int64) *Connection {
 	connection := &Connection{
 		Identity: identity,
 		Cancel:   cancel,

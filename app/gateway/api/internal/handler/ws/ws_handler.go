@@ -10,6 +10,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/authctx"
+
 	"github.com/coder/websocket"
 	corepb "github.com/hellopoisonx/aim/app/core/rpc/pb"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/httperr"
@@ -81,13 +83,13 @@ func (h *WsHandler) ServeWS(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 
 	// 4. Register connection
-	identity := ws.Identity{
+	identity := authctx.Identity{
 		UserID:   claims.UserID,
 		DeviceID: claims.DeviceID,
 	}
 
 	// Inject identity into context for downstream handlers
-	ctx = ws.WithIdentity(ctx, identity)
+	ctx = authctx.WithIdentity(ctx, identity)
 
 	presResult, err := h.manager.Register(ctx, identity, conn, cancel)
 	if err != nil {
@@ -218,7 +220,7 @@ func (h *WsHandler) handleClientAck(ctx context.Context, frame *pb.WsFrame) erro
 		return errors.New("invalid client ack payload")
 	}
 
-	identity, ok := ws.IdentityFromContext(ctx)
+	identity, ok := authctx.IdentityFromContext(ctx)
 	if !ok {
 		// Without an identity we cannot attribute the ack; ignore silently because
 		// auth middleware should have rejected the connection earlier.
@@ -255,7 +257,7 @@ func (h *WsHandler) handleTyping(ctx context.Context, _ *websocket.Conn, frame *
 		return errors.New("invalid typing payload")
 	}
 
-	identity, ok := ws.IdentityFromContext(ctx)
+	identity, ok := authctx.IdentityFromContext(ctx)
 	if !ok {
 		return errors.New("no identity in context")
 	}
@@ -302,7 +304,7 @@ func (h *WsHandler) handleReadReceipt(ctx context.Context, conn *websocket.Conn,
 		return errors.New("invalid read receipt payload")
 	}
 
-	identity, ok := ws.IdentityFromContext(ctx)
+	identity, ok := authctx.IdentityFromContext(ctx)
 	if !ok {
 		codeErr := errorx.NewCodeError(errorx.CodeAuth, "no identity in context")
 		span.RecordError(codeErr)
@@ -440,7 +442,7 @@ func (h *WsHandler) handleHeartbeat(ctx context.Context, conn *websocket.Conn, f
 	ctx, span := tracer.Start(ctx, "ws.handle_heartbeat")
 	defer span.End()
 
-	identity, hasIdentity := ws.IdentityFromContext(ctx)
+	identity, hasIdentity := authctx.IdentityFromContext(ctx)
 	if hasIdentity {
 		span.SetAttributes(
 			attribute.Int64("ws.user_id", identity.UserID),
@@ -489,7 +491,7 @@ func (h *WsHandler) handleHeartbeat(ctx context.Context, conn *websocket.Conn, f
 
 // replayPendingForHeartbeat 由心跳触发，补发 pending 队列中 seq > lastSeq 的
 // 可重放帧。使用 WriteEncodedFrameNoReplay 避免重复入队。
-func (h *WsHandler) replayPendingForHeartbeat(ctx context.Context, identity ws.Identity, lastSeq int64) {
+func (h *WsHandler) replayPendingForHeartbeat(ctx context.Context, identity authctx.Identity, lastSeq int64) {
 	store := h.manager.ReplayStore()
 	if store == nil {
 		return
@@ -534,7 +536,7 @@ func (h *WsHandler) handleSendMessage(ctx context.Context, conn *websocket.Conn,
 	}
 
 	// Extract identity from context
-	identity, ok := ws.IdentityFromContext(ctx)
+	identity, ok := authctx.IdentityFromContext(ctx)
 	if !ok {
 		codeErr := errorx.NewCodeError(errorx.CodeAuth, "no identity in context")
 		span.RecordError(codeErr)
@@ -714,7 +716,7 @@ func (h *WsHandler) writeFrame(ctx context.Context, conn *websocket.Conn, frame 
 	)
 	defer span.End()
 
-	if identity, ok := ws.IdentityFromContext(ctx); ok {
+	if identity, ok := authctx.IdentityFromContext(ctx); ok {
 		entry, err := h.manager.Get(identity)
 		if err == nil && entry.Conn == conn {
 			if err := entry.WriteEncodedFrame(ctx, frame); err != nil {
@@ -756,7 +758,7 @@ func (h *WsHandler) nextSeq() int64 {
 }
 
 // sendTokenExpired builds and sends a TOKEN_EXPIRED frame, then closes the connection.
-func (h *WsHandler) sendTokenExpired(ctx context.Context, conn *websocket.Conn, identity ws.Identity, expiredAt int64) {
+func (h *WsHandler) sendTokenExpired(ctx context.Context, conn *websocket.Conn, identity authctx.Identity, expiredAt int64) {
 	// Mark the connection as token-expired so Unregister registers a reconnect grace
 	// instead of immediately publishing offline.
 	h.manager.MarkTokenExpired(identity)

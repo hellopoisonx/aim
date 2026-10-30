@@ -4,6 +4,7 @@ import (
 	"context"
 
 	attachmentpb "github.com/hellopoisonx/aim/app/attachment/rpc/pb"
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/membership"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
@@ -32,6 +33,23 @@ func (l *DownloadAttachmentLogic) DownloadAttachment(req *types.DownloadAttachme
 	}
 	if l.svcCtx.AttachmentClient == nil {
 		return nil, errorx.NewCodeError(errorx.CodeInternal, "attachment service unavailable")
+	}
+
+	// Attachments belong to a conversation; non-members must not download them.
+	fileInfo, err := l.svcCtx.AttachmentClient.GetFile(l.ctx, &attachmentpb.GetFileReq{
+		UserId: userID,
+		FileId: req.Id,
+	})
+	if err != nil {
+		return nil, errorx.SanitizeGRPCError(l, "get attachment", err)
+	}
+
+	if l.svcCtx.LogicConversationClient == nil {
+		return nil, errorx.NewCodeError(errorx.CodeInternal, "internal error")
+	}
+
+	if err := membership.RequireMember(l.ctx, l, l.svcCtx.LogicConversationClient, fileInfo.GetConversationId(), userID, membership.ActorUser); err != nil {
+		return nil, err
 	}
 
 	rpcResp, err := l.svcCtx.AttachmentClient.AuthorizeDownload(l.ctx, &attachmentpb.AuthorizeDownloadReq{

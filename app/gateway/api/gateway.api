@@ -372,7 +372,14 @@ service gateway-api {
 
 	@handler Refresh
 	post /refresh (RefreshRequest) returns (RefreshResponse)
+}
 
+@server (
+	middleware: Auth,UserRateLimit
+	prefix:     /api/auth
+	group:      auth
+)
+service gateway-api {
 	@handler Logout
 	post /logout returns (LogoutResponse)
 }

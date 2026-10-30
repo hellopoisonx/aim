@@ -29,15 +29,17 @@ const (
 	CodeNotAdmin             = 40312
 )
 
+// Conversation vocabulary (types, member roles) lives in app/shared/conversation
+// so the DAO and the service agree on one set of literals.
 const (
-	ConversationTypeDirect = "direct"
-	ConversationTypeGroup  = "group"
+	ConversationTypeDirect = sharedconversation.TypeDirect
+	ConversationTypeGroup  = sharedconversation.TypeGroup
 
-	RoleMember = "member"
-	RoleAdmin  = "admin"
-	RoleOwner  = "owner"
+	RoleMember = sharedconversation.RoleMember
+	RoleAdmin  = sharedconversation.RoleAdmin
+	RoleOwner  = sharedconversation.RoleOwner
 
-	MessageTypeSystem = "system"
+	MessageTypeSystem = sharedconversation.MessageTypeSystem
 )
 
 // Domain errors carry their biz code directly so every RPC handler can return

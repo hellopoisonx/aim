@@ -5,14 +5,15 @@ import (
 	"encoding/json"
 	"strings"
 
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/authctx"
+
 	attachmentpb "github.com/hellopoisonx/aim/app/attachment/rpc/pb"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
-	"github.com/hellopoisonx/aim/app/gateway/api/internal/ws"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 )
 
 func currentUserID(ctx context.Context) (int64, error) {
-	identity, ok := ws.IdentityFromContext(ctx)
+	identity, ok := authctx.IdentityFromContext(ctx)
 	if !ok || identity.UserID <= 0 {
 		return 0, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
 	}

@@ -10,6 +10,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/authctx"
+
 	"github.com/alicebob/miniredis/v2"
 	"github.com/coder/websocket"
 	jwtlib "github.com/golang-jwt/jwt/v4"
@@ -206,7 +208,7 @@ func TestServeWSHeartbeatReplaysPendingFrames(t *testing.T) {
 	pushFrame := readWSFrame(t, conn)
 	require.Equal(t, pb.FrameType_FRAME_TYPE_PUSH_MESSAGE, pushFrame.GetType())
 	require.Equal(t, int64(1), pushFrame.GetSeq())
-	require.Equal(t, 1, manager.ReplayStore().Len(wsmanager.Identity{UserID: userID, DeviceID: deviceID}))
+	require.Equal(t, 1, manager.ReplayStore().Len(authctx.Identity{UserID: userID, DeviceID: deviceID}))
 
 	// 客户端心跳上报 last_seq=0，表示尚未确认任何服务端 seq；服务端应先 ACK 心跳，再重放 seq=1 的 pending 帧。
 	heartbeatPayload, err := wsmanager.EncodePayload(&pb.HeartbeatPayload{LastSeq: 0})
@@ -230,7 +232,7 @@ func TestServeWSHeartbeatReplaysPendingFrames(t *testing.T) {
 	require.Equal(t, pushFrame.GetPayload(), replayedFrame.GetPayload())
 
 	// 重放路径不应把 replayedFrame 再次入队。
-	require.Equal(t, 1, manager.ReplayStore().Len(wsmanager.Identity{UserID: userID, DeviceID: deviceID}))
+	require.Equal(t, 1, manager.ReplayStore().Len(authctx.Identity{UserID: userID, DeviceID: deviceID}))
 }
 
 func TestServeWSHeartbeatLastSeqTrimsPendingFrames(t *testing.T) {
@@ -280,7 +282,7 @@ func TestServeWSHeartbeatLastSeqTrimsPendingFrames(t *testing.T) {
 	ackFrame := readWSFrame(t, conn)
 	require.Equal(t, pb.FrameType_FRAME_TYPE_SERVER_ACK, ackFrame.GetType())
 
-	identity := wsmanager.Identity{UserID: userID, DeviceID: deviceID}
+	identity := authctx.Identity{UserID: userID, DeviceID: deviceID}
 	require.Eventually(t, func() bool {
 		entry, getErr := manager.Get(identity)
 		return getErr == nil && entry.LastAckedSeq == pushFrame.GetSeq() && manager.ReplayStore().Len(identity) == 0
@@ -1496,7 +1498,7 @@ func TestTokenExpiryCleansUpOnDisconnect(t *testing.T) {
 
 	// Wait for server to process close and execute defer block.
 	require.Eventually(t, func() bool {
-		_, err = manager.Get(wsmanager.Identity{UserID: userID, DeviceID: deviceID})
+		_, err = manager.Get(authctx.Identity{UserID: userID, DeviceID: deviceID})
 		return err != nil
 	}, 5*time.Second, 10*time.Millisecond, "connection should be gone after disconnect")
 	require.Error(t, err) // connection should not exist

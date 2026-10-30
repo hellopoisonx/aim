@@ -3,14 +3,15 @@ package middleware
 import (
 	"net/http"
 
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/authctx"
+
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/httperr"
-	"github.com/hellopoisonx/aim/app/gateway/api/internal/ws"
 	wsauth "github.com/hellopoisonx/aim/app/gateway/api/internal/ws/auth"
 )
 
 // AuthMiddleware validates JWT tokens on protected REST endpoints.
-// On success, it injects ws.Identity into the request context so downstream
-// logic can extract UserID and DeviceID via ws.IdentityFromContext.
+// On success, it injects authctx.Identity into the request context so downstream
+// logic can extract UserID and DeviceID via authctx.IdentityFromContext.
 type AuthMiddleware struct {
 	secretKey string
 }
@@ -36,12 +37,12 @@ func (m *AuthMiddleware) Handle(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
-		identity := ws.Identity{
+		identity := authctx.Identity{
 			UserID:   claims.UserID,
 			DeviceID: claims.DeviceID,
 		}
 
-		ctx := ws.WithIdentity(r.Context(), identity)
+		ctx := authctx.WithIdentity(r.Context(), identity)
 		next(w, r.WithContext(ctx))
 	}
 }

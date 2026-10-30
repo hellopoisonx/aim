@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/authctx"
+
 	"github.com/coder/websocket"
 	pb "github.com/hellopoisonx/aim/shared/proto/gateway/pb"
 	wspb "github.com/hellopoisonx/aim/shared/proto/ws/pb"
@@ -75,7 +77,7 @@ func setupGatewayTest(t *testing.T) *gatewayTestEnv {
 type wsTestServer struct {
 	manager  *Manager
 	server   *httptest.Server
-	identity Identity
+	identity authctx.Identity
 	conn     *websocket.Conn
 	mu       sync.Mutex
 	// done channel signals the handler to clean up
@@ -88,7 +90,7 @@ func newWSTestServer(t *testing.T, manager *Manager, userID int64, deviceID stri
 
 	wsServer := &wsTestServer{
 		manager:  manager,
-		identity: Identity{UserID: userID, DeviceID: deviceID},
+		identity: authctx.Identity{UserID: userID, DeviceID: deviceID},
 		done:     make(chan struct{}),
 	}
 
@@ -300,7 +302,7 @@ func TestConnectionWriteQueueAssignsSeqForConcurrentWrites(t *testing.T) {
 	env := setupGatewayTest(t)
 	t.Cleanup(env.cleanup)
 
-	identity := Identity{UserID: 22346, DeviceID: "queue-device"}
+	identity := authctx.Identity{UserID: 22346, DeviceID: "queue-device"}
 	wsServer := newWSTestServer(t, env.manager, identity.UserID, identity.DeviceID)
 	t.Cleanup(wsServer.close)
 
@@ -378,7 +380,7 @@ func TestConnectionWriteFrameAfterUnregisterReturnsError(t *testing.T) {
 	env := setupGatewayTest(t)
 	t.Cleanup(env.cleanup)
 
-	identity := Identity{UserID: 22347, DeviceID: "closed-writer-device"}
+	identity := authctx.Identity{UserID: 22347, DeviceID: "closed-writer-device"}
 	wsServer := newWSTestServer(t, env.manager, identity.UserID, identity.DeviceID)
 	t.Cleanup(wsServer.close)
 

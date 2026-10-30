@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/authctx"
+
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/ws"
 	wspb "github.com/hellopoisonx/aim/shared/proto/ws/pb"
 	"github.com/stretchr/testify/assert"
@@ -33,7 +35,7 @@ func TestManagerRegister(t *testing.T) {
 	_, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	identity := ws.Identity{UserID: 1, DeviceID: "device-1"}
+	identity := authctx.Identity{UserID: 1, DeviceID: "device-1"}
 
 	_, err := mgr.Register(context.Background(), identity, nil, cancel)
 	require.NoError(t, err)
@@ -49,7 +51,7 @@ func TestManagerRegisterDuplicate(t *testing.T) {
 	_, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	identity := ws.Identity{UserID: 1, DeviceID: "device-1"}
+	identity := authctx.Identity{UserID: 1, DeviceID: "device-1"}
 
 	_, err := mgr.Register(context.Background(), identity, nil, cancel)
 	require.NoError(t, err)
@@ -67,7 +69,7 @@ func TestManagerUnregister(t *testing.T) {
 	_, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	identity := ws.Identity{UserID: 1, DeviceID: "device-1"}
+	identity := authctx.Identity{UserID: 1, DeviceID: "device-1"}
 
 	_, err := mgr.Register(context.Background(), identity, nil, cancel)
 	require.NoError(t, err)
@@ -82,7 +84,7 @@ func TestManagerUnregisterNotFound(t *testing.T) {
 
 	mgr := ws.NewManager()
 
-	identity := ws.Identity{UserID: 999, DeviceID: "nonexistent"}
+	identity := authctx.Identity{UserID: 999, DeviceID: "nonexistent"}
 
 	_, err := mgr.Unregister(context.Background(), identity)
 	assert.Error(t, err)
@@ -96,7 +98,7 @@ func TestManagerGet(t *testing.T) {
 	_, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	identity := ws.Identity{UserID: 1, DeviceID: "device-1"}
+	identity := authctx.Identity{UserID: 1, DeviceID: "device-1"}
 
 	_, err := mgr.Register(context.Background(), identity, nil, cancel)
 	require.NoError(t, err)
@@ -112,7 +114,7 @@ func TestManagerGetNotFound(t *testing.T) {
 
 	mgr := ws.NewManager()
 
-	identity := ws.Identity{UserID: 999, DeviceID: "nonexistent"}
+	identity := authctx.Identity{UserID: 999, DeviceID: "nonexistent"}
 
 	_, err := mgr.Get(identity)
 	assert.Error(t, err)
@@ -126,14 +128,14 @@ func TestManagerCountByUser(t *testing.T) {
 	_, cancel2 := context.WithCancel(context.Background())
 
 	// User 1 with two devices
-	_, err := mgr.Register(context.Background(), ws.Identity{UserID: 1, DeviceID: "device-1"}, nil, cancel1)
+	_, err := mgr.Register(context.Background(), authctx.Identity{UserID: 1, DeviceID: "device-1"}, nil, cancel1)
 	require.NoError(t, err)
-	_, err = mgr.Register(context.Background(), ws.Identity{UserID: 1, DeviceID: "device-2"}, nil, cancel2)
+	_, err = mgr.Register(context.Background(), authctx.Identity{UserID: 1, DeviceID: "device-2"}, nil, cancel2)
 	require.NoError(t, err)
 
 	// User 2 with one device
 	_, cancel3 := context.WithCancel(context.Background())
-	_, err = mgr.Register(context.Background(), ws.Identity{UserID: 2, DeviceID: "device-1"}, nil, cancel3)
+	_, err = mgr.Register(context.Background(), authctx.Identity{UserID: 2, DeviceID: "device-1"}, nil, cancel3)
 	require.NoError(t, err)
 
 	assert.Equal(t, 2, mgr.CountByUser(1))
@@ -148,9 +150,9 @@ func TestManagerListIdentities(t *testing.T) {
 	_, cancel1 := context.WithCancel(context.Background())
 	_, cancel2 := context.WithCancel(context.Background())
 
-	_, err := mgr.Register(context.Background(), ws.Identity{UserID: 1, DeviceID: "device-1"}, nil, cancel1)
+	_, err := mgr.Register(context.Background(), authctx.Identity{UserID: 1, DeviceID: "device-1"}, nil, cancel1)
 	require.NoError(t, err)
-	_, err = mgr.Register(context.Background(), ws.Identity{UserID: 2, DeviceID: "device-1"}, nil, cancel2)
+	_, err = mgr.Register(context.Background(), authctx.Identity{UserID: 2, DeviceID: "device-1"}, nil, cancel2)
 	require.NoError(t, err)
 
 	identities := mgr.ListIdentities()
@@ -171,7 +173,7 @@ func TestManagerConcurrent(t *testing.T) {
 			defer wg.Done()
 
 			_, cancel := context.WithCancel(context.Background())
-			identity := ws.Identity{UserID: userID, DeviceID: "device-1"}
+			identity := authctx.Identity{UserID: userID, DeviceID: "device-1"}
 			_, _ = mgr.Register(context.Background(), identity, nil, cancel)
 		}(i)
 	}
@@ -194,7 +196,7 @@ func TestManagerConcurrentSameUser(t *testing.T) {
 			defer wg.Done()
 
 			_, cancel := context.WithCancel(context.Background())
-			identity := ws.Identity{UserID: 1, DeviceID: deviceID}
+			identity := authctx.Identity{UserID: 1, DeviceID: deviceID}
 			_, _ = mgr.Register(context.Background(), identity, nil, cancel)
 		}("device-" + string(rune('a'+i-1)))
 	}
@@ -210,9 +212,9 @@ func TestManagerCloseAll(t *testing.T) {
 	_, cancel1 := context.WithCancel(context.Background())
 	_, cancel2 := context.WithCancel(context.Background())
 
-	_, err := mgr.Register(context.Background(), ws.Identity{UserID: 1, DeviceID: "device-1"}, nil, cancel1)
+	_, err := mgr.Register(context.Background(), authctx.Identity{UserID: 1, DeviceID: "device-1"}, nil, cancel1)
 	require.NoError(t, err)
-	_, err = mgr.Register(context.Background(), ws.Identity{UserID: 2, DeviceID: "device-1"}, nil, cancel2)
+	_, err = mgr.Register(context.Background(), authctx.Identity{UserID: 2, DeviceID: "device-1"}, nil, cancel2)
 	require.NoError(t, err)
 
 	mgr.CloseAll()
@@ -227,7 +229,7 @@ func TestMarkTokenExpiredCreatesGrace(t *testing.T) {
 	mgr := ws.NewManagerWithPresence(nil, "node-1", 60)
 	mgr.SetReconnectGrace(30 * time.Second)
 
-	identity := ws.Identity{UserID: 1, DeviceID: "device-1"}
+	identity := authctx.Identity{UserID: 1, DeviceID: "device-1"}
 	_, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -253,7 +255,7 @@ func TestCancelPendingOfflineOnReregister(t *testing.T) {
 	mgr := ws.NewManagerWithPresence(nil, "node-1", 60)
 	mgr.SetReconnectGrace(30 * time.Second)
 
-	identity := ws.Identity{UserID: 1, DeviceID: "device-1"}
+	identity := authctx.Identity{UserID: 1, DeviceID: "device-1"}
 	_, cancel1 := context.WithCancel(context.Background())
 	defer cancel1()
 
@@ -281,7 +283,7 @@ func TestNormalUnregisterStillPublishesOffline(t *testing.T) {
 	mgr := ws.NewManagerWithPresence(nil, "node-1", 60)
 	mgr.SetReconnectGrace(30 * time.Second)
 
-	identity := ws.Identity{UserID: 1, DeviceID: "device-1"}
+	identity := authctx.Identity{UserID: 1, DeviceID: "device-1"}
 	_, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -306,7 +308,7 @@ func TestScanStaleConnections(t *testing.T) {
 	mgr := ws.NewManagerWithPresence(nil, "node-1", 60)
 	mgr.SetHeartbeatTimeout(10 * time.Second)
 
-	identity := ws.Identity{UserID: 1, DeviceID: "device-1"}
+	identity := authctx.Identity{UserID: 1, DeviceID: "device-1"}
 	_, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -330,7 +332,7 @@ func TestRecordHeartbeatPreventsStale(t *testing.T) {
 	mgr := ws.NewManagerWithPresence(nil, "node-1", 60)
 	mgr.SetHeartbeatTimeout(10 * time.Second)
 
-	identity := ws.Identity{UserID: 1, DeviceID: "device-1"}
+	identity := authctx.Identity{UserID: 1, DeviceID: "device-1"}
 	_, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -356,7 +358,7 @@ func TestScanStaleConnectionsNoTimeout(t *testing.T) {
 	mgr := ws.NewManager()
 	mgr.SetHeartbeatTimeout(0)
 
-	identity := ws.Identity{UserID: 1, DeviceID: "device-1"}
+	identity := authctx.Identity{UserID: 1, DeviceID: "device-1"}
 	_, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -375,7 +377,7 @@ func TestScanExpiredGraces(t *testing.T) {
 	mgr := ws.NewManagerWithPresence(nil, "node-1", 60)
 	mgr.SetReconnectGrace(100 * time.Millisecond)
 
-	identity := ws.Identity{UserID: 1, DeviceID: "device-1"}
+	identity := authctx.Identity{UserID: 1, DeviceID: "device-1"}
 	_, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -407,7 +409,7 @@ func TestForceOfflineForExpiredGrace(t *testing.T) {
 	mgr := ws.NewManagerWithPresence(nil, "node-1", 60)
 	mgr.SetReconnectGrace(30 * time.Second)
 
-	identity := ws.Identity{UserID: 1, DeviceID: "device-1"}
+	identity := authctx.Identity{UserID: 1, DeviceID: "device-1"}
 
 	// With nil redis, ForceOffline returns empty result
 	result, err := mgr.ForceOfflineForExpiredGrace(context.Background(), identity)
@@ -424,8 +426,8 @@ func TestMultiDeviceOnlineOffline(t *testing.T) {
 	mgr := ws.NewManagerWithPresence(nil, "node-1", 60)
 	mgr.SetReconnectGrace(30 * time.Second)
 
-	identity1 := ws.Identity{UserID: 1, DeviceID: "device-1"}
-	identity2 := ws.Identity{UserID: 1, DeviceID: "device-2"}
+	identity1 := authctx.Identity{UserID: 1, DeviceID: "device-1"}
+	identity2 := authctx.Identity{UserID: 1, DeviceID: "device-2"}
 	_, cancel1 := context.WithCancel(context.Background())
 	_, cancel2 := context.WithCancel(context.Background())
 
@@ -456,8 +458,8 @@ func TestMultiDeviceTokenExpiredDoesNotOffline(t *testing.T) {
 	mgr := ws.NewManagerWithPresence(nil, "node-1", 60)
 	mgr.SetReconnectGrace(30 * time.Second)
 
-	identity1 := ws.Identity{UserID: 1, DeviceID: "device-1"}
-	identity2 := ws.Identity{UserID: 1, DeviceID: "device-2"}
+	identity1 := authctx.Identity{UserID: 1, DeviceID: "device-1"}
+	identity2 := authctx.Identity{UserID: 1, DeviceID: "device-2"}
 	_, cancel1 := context.WithCancel(context.Background())
 	_, cancel2 := context.WithCancel(context.Background())
 
@@ -479,7 +481,7 @@ func TestManagerRecordClientAckTrimsReplayStore(t *testing.T) {
 	t.Parallel()
 
 	mgr := ws.NewManager()
-	identity := ws.Identity{UserID: 9901, DeviceID: "ack-device"}
+	identity := authctx.Identity{UserID: 9901, DeviceID: "ack-device"}
 	_, cancel := context.WithCancel(context.Background())
 
 	_, err := mgr.Register(context.Background(), identity, nil, cancel)
@@ -512,7 +514,7 @@ func TestManagerUnregisterDeletesReplayStore(t *testing.T) {
 	t.Parallel()
 
 	mgr := ws.NewManager()
-	identity := ws.Identity{UserID: 9902, DeviceID: "delete-device"}
+	identity := authctx.Identity{UserID: 9902, DeviceID: "delete-device"}
 	_, cancel := context.WithCancel(context.Background())
 
 	_, err := mgr.Register(context.Background(), identity, nil, cancel)
