@@ -8,11 +8,11 @@ import (
 // Key prefixes. Every builder below composes "<prefix>:<id>".
 const (
 	prefixConversation = "conv"
-	prefixUser        = "user"
-	prefixFriendship  = "friend"
-	prefixBot         = "bot"
-	prefixPresence    = "presence"
-	prefixWsReplay    = "ws"
+	prefixUser         = "user"
+	prefixFriendship   = "friend"
+	prefixBot          = "bot"
+	prefixPresence     = "presence"
+	prefixWsReplay     = "ws"
 )
 
 const (
