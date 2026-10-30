@@ -37,10 +37,6 @@ func (l *RejectFriendLogic) RejectFriend(req *types.RejectFriendRequest) (resp *
 		return nil, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
 	}
 
-	if l.svcCtx.LogicFriendshipClient == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "internal error")
-	}
-
 	rpcResp, err := l.svcCtx.LogicFriendshipClient.RejectFriend(l.ctx, &friendshipservice.RejectFriendReq{
 		UserId:   identity.UserID,
 		FriendId: req.Id,

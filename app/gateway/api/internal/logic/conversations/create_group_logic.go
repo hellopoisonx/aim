@@ -46,10 +46,6 @@ func (l *CreateGroupLogic) CreateGroup(req *types.CreateGroupRequest) (resp *typ
 		return nil, errorx.NewCodeError(errorx.CodeBadInput, "name is required")
 	}
 
-	if l.svcCtx.LogicConversationClient == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "internal error")
-	}
-
 	rpcResp, err := l.svcCtx.LogicConversationClient.CreateConversation(l.ctx, &conversationservice.CreateConversationReq{
 		ConversationType: "group",
 		CreatorId:        identity.UserID,

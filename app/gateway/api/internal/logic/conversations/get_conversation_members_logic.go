@@ -34,10 +34,6 @@ func (l *GetConversationMembersLogic) GetConversationMembers(req *types.GetConve
 		return nil, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
 	}
 
-	if l.svcCtx.LogicConversationClient == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "internal error")
-	}
-
 	// The member list is conversation-scoped data: only members may read it.
 	if err := membership.RequireMember(l.ctx, l, l.svcCtx.LogicConversationClient, req.Id, identity.UserID, membership.ActorUser); err != nil {
 		return nil, err

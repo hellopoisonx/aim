@@ -28,9 +28,6 @@ func (l *RevokeUserBotTokenLogic) RevokeUserBotToken(req *types.RevokeUserBotTok
 	if !ok {
 		return nil, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
 	}
-	if l.svcCtx.LogicBotClient == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "bot service not configured")
-	}
 	rpcResp, err := l.svcCtx.LogicBotClient.RevokeUserBotToken(l.ctx, &botservice.RevokeUserBotTokenReq{
 		OwnerUserId: identity.UserID, BotUserId: req.Id, TokenId: req.TokenId,
 	})

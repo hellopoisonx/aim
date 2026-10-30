@@ -45,10 +45,6 @@ func (l *AddFriendLogic) AddFriend(req *types.AddFriendRequest) (resp *types.Add
 		return nil, errorx.NewCodeError(errorx.CodeBadInput, "id is required")
 	}
 
-	if l.svcCtx.LogicFriendshipClient == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "internal error")
-	}
-
 	rpcResp, err := l.svcCtx.LogicFriendshipClient.AddFriend(l.ctx, &friendshipservice.AddFriendReq{
 		UserId:   identity.UserID,
 		FriendId: req.Id,

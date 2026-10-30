@@ -43,10 +43,7 @@ func (l *BotMarkReadLogic) BotMarkRead(req *types.BotMarkReadRequest) (*types.Bo
 		return nil, err
 	}
 
-	client, err := requireLogicConversationClient(l.svcCtx)
-	if err != nil {
-		return nil, err
-	}
+	client := logicConversationClient(l.svcCtx)
 
 	rpcResp, err := client.UpdateReadReceipt(l.ctx, &conversationservice.UpdateReadReceiptReq{
 		ConversationId:    conversationID,

@@ -38,10 +38,6 @@ func (l *ListFriendsLogic) ListFriends() (resp *types.ListFriendsResponse, err e
 		return nil, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
 	}
 
-	if l.svcCtx.LogicFriendshipClient == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "internal error")
-	}
-
 	rpcResp, err := l.svcCtx.LogicFriendshipClient.ListFriends(l.ctx, &friendshipservice.ListFriendsReq{UserId: identity.UserID})
 	if err != nil {
 		return nil, errorx.SanitizeGRPCError(l, "list friends", err)
@@ -79,7 +75,7 @@ const peerEnrichWorkers = 8
 // loop makes the endpoint latency grow linearly with the friend count.
 // Failures are ignored — the fields stay empty and the client falls back.
 func enrichPeerInfos(ctx context.Context, svcCtx *svc.ServiceContext, viewerID int64, items []types.FriendshipItem) {
-	if svcCtx == nil || svcCtx.LogicUserClient == nil || len(items) == 0 {
+	if svcCtx == nil || len(items) == 0 {
 		return
 	}
 
@@ -142,7 +138,7 @@ type peerProfile struct {
 // fetchPeerProfile resolves one peer's display fields; ok is false when the
 // lookup fails or the user client is not configured.
 func fetchPeerProfile(ctx context.Context, svcCtx *svc.ServiceContext, peerID int64) (peerProfile, bool) {
-	if svcCtx == nil || svcCtx.LogicUserClient == nil || peerID <= 0 {
+	if svcCtx == nil || peerID <= 0 {
 		return peerProfile{}, false
 	}
 

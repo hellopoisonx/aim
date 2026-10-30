@@ -34,20 +34,12 @@ func (l *CreateUserBotLogic) CreateUserBot(req *types.CreateUserBotRequest) (res
 		return nil, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
 	}
 
-	if l.svcCtx.AuthClient == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "auth service not configured")
-	}
-
 	credentialResp, err := l.svcCtx.AuthClient.CreateBotCredential(l.ctx, &authservice.CreateBotCredentialReq{
 		Email:    req.Email,
 		Nickname: req.Nickname,
 	})
 	if err != nil {
 		return nil, errorx.SanitizeGRPCError(l, "create bot credential", err)
-	}
-
-	if l.svcCtx.LogicBotClient == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "bot service not configured")
 	}
 
 	botResp, err := l.svcCtx.LogicBotClient.CreateUserBot(l.ctx, &botservice.CreateUserBotReq{

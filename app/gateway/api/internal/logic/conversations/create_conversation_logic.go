@@ -63,10 +63,6 @@ func (l *CreateConversationLogic) CreateConversation(req *types.CreateConversati
 		}
 	}
 
-	if l.svcCtx.LogicConversationClient == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "internal error")
-	}
-
 	rpcResp, err := l.svcCtx.LogicConversationClient.CreateConversation(l.ctx, &conversationservice.CreateConversationReq{
 		ConversationType: req.ConversationType,
 		CreatorId:        identity.UserID,

@@ -65,14 +65,6 @@ func TestCreateUserBotRequiresIdentity(t *testing.T) {
 	require.Equal(t, errorx.CodeAuth, codeErr.Code)
 }
 
-func TestCreateUserBotRequiresClients(t *testing.T) {
-	ctx := authctx.WithIdentity(context.Background(), authctx.Identity{UserID: 1})
-	_, err := NewCreateUserBotLogic(ctx, &svc.ServiceContext{}).CreateUserBot(&types.CreateUserBotRequest{})
-	var codeErr *errorx.CodeError
-	require.ErrorAs(t, err, &codeErr)
-	require.Equal(t, errorx.CodeInternal, codeErr.Code)
-}
-
 func TestCreateUserBotForwardsCredentialAndOwner(t *testing.T) {
 	authClient := &fakeAuthClient{resp: &authpb.CreateBotCredentialResp{UserId: 900, Email: "bot@example.com"}}
 	botClient := &fakeBotClient{resp: &logicpb.CreateUserBotResp{Bot: &logicpb.UserBotInfo{

@@ -28,9 +28,6 @@ func (l *ListUserBotsLogic) ListUserBots() (resp *types.ListUserBotsResponse, er
 	if !ok {
 		return nil, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
 	}
-	if l.svcCtx.LogicBotClient == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "bot service not configured")
-	}
 	rpcResp, err := l.svcCtx.LogicBotClient.ListUserBots(l.ctx, &botservice.ListUserBotsReq{OwnerUserId: identity.UserID})
 	if err != nil {
 		return nil, errorx.SanitizeGRPCError(l, "list user bots", err)

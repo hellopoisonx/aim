@@ -28,9 +28,6 @@ func (l *CreateUserBotTokenLogic) CreateUserBotToken(req *types.CreateUserBotTok
 	if !ok {
 		return nil, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
 	}
-	if l.svcCtx.LogicBotClient == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "bot service not configured")
-	}
 	rpcResp, err := l.svcCtx.LogicBotClient.CreateUserBotToken(l.ctx, &botservice.CreateUserBotTokenReq{
 		OwnerUserId: identity.UserID, BotUserId: req.Id, Name: req.Name, ExpiresAt: req.ExpiresAt, Actions: req.Actions,
 	})

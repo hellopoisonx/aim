@@ -32,9 +32,6 @@ func (l *ListFriendTagsLogic) ListFriendTags() (resp *types.ListFriendTagsRespon
 	if !ok {
 		return nil, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
 	}
-	if l.svcCtx.LogicFriendshipClient == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "internal error")
-	}
 
 	rpcResp, err := l.svcCtx.LogicFriendshipClient.ListFriendTags(l.ctx, &friendshipservice.ListFriendTagsReq{
 		UserId: identity.UserID,

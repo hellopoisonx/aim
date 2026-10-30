@@ -38,10 +38,7 @@ func (l *BotListReadStatesLogic) BotListReadStates(req *types.BotListReadStatesR
 		return nil, err
 	}
 
-	client, err := requireLogicConversationClient(l.svcCtx)
-	if err != nil {
-		return nil, err
-	}
+	client := logicConversationClient(l.svcCtx)
 
 	if err := ensureBotConversationMember(l.ctx, client, identity, conversationID); err != nil {
 		return nil, err

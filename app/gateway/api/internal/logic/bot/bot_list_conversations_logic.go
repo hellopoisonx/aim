@@ -32,10 +32,6 @@ func (l *BotListConversationsLogic) BotListConversations() (*types.BotListConver
 		return nil, err
 	}
 
-	if l.svcCtx.LogicBotClient == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "internal error")
-	}
-
 	rpcResp, err := l.svcCtx.LogicBotClient.ListBotConversations(l.ctx, &botservice.ListBotConversationsReq{
 		BotUserId: identity.BotUserID,
 	})

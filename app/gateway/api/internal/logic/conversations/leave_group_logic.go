@@ -33,10 +33,6 @@ func (l *LeaveGroupLogic) LeaveGroup(req *types.LeaveGroupRequest) (err error) {
 		return errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
 	}
 
-	if l.svcCtx.LogicConversationClient == nil {
-		return errorx.NewCodeError(errorx.CodeInternal, "internal error")
-	}
-
 	_, err = l.svcCtx.LogicConversationClient.LeaveGroup(l.ctx, &conversationservice.LeaveGroupReq{
 		ConversationId: req.Id,
 		UserId:         identity.UserID,

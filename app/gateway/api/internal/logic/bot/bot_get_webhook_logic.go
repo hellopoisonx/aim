@@ -32,10 +32,6 @@ func (l *BotGetWebhookLogic) BotGetWebhook() (*types.BotGetWebhookResponse, erro
 		return nil, err
 	}
 
-	if l.svcCtx.LogicBotClient == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "internal error")
-	}
-
 	rpcResp, err := l.svcCtx.LogicBotClient.GetBotWebhook(l.ctx, &botservice.GetBotWebhookReq{
 		BotUserId: identity.BotUserID,
 	})

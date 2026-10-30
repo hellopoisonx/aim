@@ -33,10 +33,6 @@ func (l *BotSetWebhookLogic) BotSetWebhook(req *types.BotSetWebhookRequest) (*ty
 		return nil, err
 	}
 
-	if l.svcCtx.LogicBotClient == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "internal error")
-	}
-
 	if req.Url == "" {
 		return nil, errorx.NewCodeError(errorx.CodeBotWebhookInvalid, "url is required")
 	}

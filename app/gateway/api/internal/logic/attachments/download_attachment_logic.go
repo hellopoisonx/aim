@@ -31,9 +31,6 @@ func (l *DownloadAttachmentLogic) DownloadAttachment(req *types.DownloadAttachme
 	if err != nil {
 		return nil, err
 	}
-	if l.svcCtx.AttachmentClient == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "attachment service unavailable")
-	}
 
 	// Attachments belong to a conversation; non-members must not download them.
 	fileInfo, err := l.svcCtx.AttachmentClient.GetFile(l.ctx, &attachmentpb.GetFileReq{
@@ -42,10 +39,6 @@ func (l *DownloadAttachmentLogic) DownloadAttachment(req *types.DownloadAttachme
 	})
 	if err != nil {
 		return nil, errorx.SanitizeGRPCError(l, "get attachment", err)
-	}
-
-	if l.svcCtx.LogicConversationClient == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "internal error")
 	}
 
 	if err := membership.RequireMember(l.ctx, l, l.svcCtx.LogicConversationClient, fileInfo.GetConversationId(), userID, membership.ActorUser); err != nil {

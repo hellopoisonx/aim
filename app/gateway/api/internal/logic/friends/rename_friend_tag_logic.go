@@ -32,9 +32,6 @@ func (l *RenameFriendTagLogic) RenameFriendTag(req *types.RenameFriendTagRequest
 	if !ok {
 		return nil, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
 	}
-	if l.svcCtx.LogicFriendshipClient == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "internal error")
-	}
 
 	rpcResp, err := l.svcCtx.LogicFriendshipClient.RenameFriendTag(l.ctx, &friendshipservice.RenameFriendTagReq{
 		UserId: identity.UserID,

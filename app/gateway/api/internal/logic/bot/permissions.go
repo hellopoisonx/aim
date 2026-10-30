@@ -24,10 +24,6 @@ func requireBotAction(ctx context.Context, action string) (botctx.BotIdentity, e
 }
 
 func requireWebhookEventActions(ctx context.Context, svcCtx *svc.ServiceContext, identity botctx.BotIdentity, events []string) error {
-	if svcCtx.LogicBotClient == nil {
-		return errorx.NewCodeError(errorx.CodeInternal, "internal error")
-	}
-
 	resp, err := svcCtx.LogicBotClient.ResolveBotWebhookEventActions(ctx, &botservice.ResolveBotWebhookEventActionsReq{Events: events})
 	if err != nil {
 		var ce *errorx.CodeError

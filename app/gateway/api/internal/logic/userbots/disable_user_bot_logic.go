@@ -28,9 +28,6 @@ func (l *DisableUserBotLogic) DisableUserBot(req *types.DisableUserBotRequest) (
 	if !ok {
 		return nil, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
 	}
-	if l.svcCtx.LogicBotClient == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "bot service not configured")
-	}
 	rpcResp, err := l.svcCtx.LogicBotClient.SetUserBotStatus(l.ctx, &botservice.SetUserBotStatusReq{
 		OwnerUserId: identity.UserID, BotUserId: req.Id, Enabled: false,
 	})

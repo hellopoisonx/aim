@@ -32,9 +32,6 @@ func (l *RemoveFriendTagLogic) RemoveFriendTag(req *types.RemoveFriendTagRequest
 	if !ok {
 		return nil, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
 	}
-	if l.svcCtx.LogicFriendshipClient == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "internal error")
-	}
 
 	rpcResp, err := l.svcCtx.LogicFriendshipClient.RemoveFriendTag(l.ctx, &friendshipservice.RemoveFriendTagReq{
 		UserId:   identity.UserID,

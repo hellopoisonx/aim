@@ -33,10 +33,6 @@ func (l *RemoveGroupMemberLogic) RemoveGroupMember(req *types.RemoveGroupMemberR
 		return errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
 	}
 
-	if l.svcCtx.LogicConversationClient == nil {
-		return errorx.NewCodeError(errorx.CodeInternal, "internal error")
-	}
-
 	_, err = l.svcCtx.LogicConversationClient.RemoveGroupMembers(l.ctx, &conversationservice.RemoveGroupMembersReq{
 		ConversationId: req.Id,
 		OperatorId:     identity.UserID,

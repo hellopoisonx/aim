@@ -53,9 +53,6 @@ func (l *CreateFriendTagLogic) CreateFriendTag(req *types.CreateFriendTagRequest
 	if !ok {
 		return nil, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
 	}
-	if l.svcCtx.LogicFriendshipClient == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "internal error")
-	}
 
 	rpcResp, err := l.svcCtx.LogicFriendshipClient.CreateFriendTag(l.ctx, &friendshipservice.CreateFriendTagReq{
 		UserId: identity.UserID,

@@ -38,10 +38,6 @@ func (l *GetConversationHistoryLogic) GetConversationHistory(req *types.GetConve
 		return nil, errorx.NewCodeError(errorx.CodeBadInput, "id is required and must be positive")
 	}
 
-	if l.svcCtx.LogicConversationClient == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "internal error")
-	}
-
 	// History is conversation-scoped data: only members may read it.
 	if err := membership.RequireMember(l.ctx, l, l.svcCtx.LogicConversationClient, req.Id, identity.UserID, membership.ActorUser); err != nil {
 		return nil, err

@@ -27,9 +27,6 @@ func (l *ListBotActionsLogic) ListBotActions() (resp *types.ListBotActionsRespon
 	if _, ok := authctx.IdentityFromContext(l.ctx); !ok {
 		return nil, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
 	}
-	if l.svcCtx.LogicBotClient == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "bot service not configured")
-	}
 	rpcResp, err := l.svcCtx.LogicBotClient.ListBotActions(l.ctx, &botservice.ListBotActionsReq{})
 	if err != nil {
 		return nil, errorx.SanitizeGRPCError(l, "list bot actions", err)

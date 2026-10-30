@@ -33,10 +33,6 @@ func (l *ListConversationsLogic) ListConversations() (resp *types.ListConversati
 		return nil, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
 	}
 
-	if l.svcCtx.LogicConversationClient == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "internal error")
-	}
-
 	rpcResp, err := l.svcCtx.LogicConversationClient.GetUserConversations(l.ctx, &conversationservice.GetUserConversationsReq{
 		UserId: identity.UserID,
 	})

@@ -31,11 +31,10 @@ func parseOptionalID(raw string, field string) (int64, error) {
 	return id, nil
 }
 
-func requireLogicConversationClient(svcCtx *svc.ServiceContext) (conversationservice.ConversationService, error) {
-	if svcCtx == nil || svcCtx.LogicConversationClient == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "internal error")
-	}
-	return svcCtx.LogicConversationClient, nil
+// logicConversationClient returns the client injected at startup; the gateway
+// fails fast when it cannot be built, so no nil guard is needed here.
+func logicConversationClient(svcCtx *svc.ServiceContext) conversationservice.ConversationService {
+	return svcCtx.LogicConversationClient
 }
 
 func ensureBotConversationMember(
@@ -96,7 +95,7 @@ func fanOutBotReadReceiptLocal(
 	conversationID int64,
 	readState *pb.ReadStateItem,
 ) {
-	if svcCtx == nil || svcCtx.LogicConversationClient == nil || svcCtx.WsManager == nil || readState == nil {
+	if svcCtx == nil || svcCtx.WsManager == nil || readState == nil {
 		return
 	}
 

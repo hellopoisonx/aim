@@ -28,9 +28,6 @@ func (l *RotateUserBotTokenLogic) RotateUserBotToken(req *types.RotateUserBotTok
 	if !ok {
 		return nil, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
 	}
-	if l.svcCtx.LogicBotClient == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "bot service not configured")
-	}
 	rpcResp, err := l.svcCtx.LogicBotClient.RotateUserBotToken(l.ctx, &botservice.RotateUserBotTokenReq{
 		OwnerUserId: identity.UserID, BotUserId: req.Id, TokenId: req.TokenId,
 	})

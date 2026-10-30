@@ -35,9 +35,6 @@ func (l *GrantGroupAdminLogic) GrantGroupAdmin(req *types.GrantGroupAdminRequest
 	if !ok {
 		return errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
 	}
-	if l.svcCtx.LogicConversationClient == nil {
-		return errorx.NewCodeError(errorx.CodeInternal, "internal error")
-	}
 	_, err := l.svcCtx.LogicConversationClient.GrantGroupAdmin(l.ctx, &conversationservice.GrantGroupAdminReq{
 		ConversationId: req.Id,
 		OperatorId:     identity.UserID,

@@ -28,9 +28,6 @@ func (l *GetUserBotLogic) GetUserBot(req *types.GetUserBotRequest) (resp *types.
 	if !ok {
 		return nil, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
 	}
-	if l.svcCtx.LogicBotClient == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "bot service not configured")
-	}
 	rpcResp, err := l.svcCtx.LogicBotClient.GetUserBot(l.ctx, &botservice.GetUserBotReq{
 		OwnerUserId: identity.UserID, BotUserId: req.Id,
 	})

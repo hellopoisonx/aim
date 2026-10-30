@@ -28,9 +28,6 @@ func (l *CreateUserBotDirectConversationLogic) CreateUserBotDirectConversation(r
 	if !ok {
 		return nil, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
 	}
-	if l.svcCtx.LogicBotClient == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "bot service not configured")
-	}
 	rpcResp, err := l.svcCtx.LogicBotClient.CreateUserBotDirectConversation(l.ctx, &botservice.CreateUserBotDirectConversationReq{
 		OwnerUserId: identity.UserID, BotUserId: req.Id,
 	})

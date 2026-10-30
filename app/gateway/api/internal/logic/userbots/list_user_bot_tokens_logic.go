@@ -28,9 +28,6 @@ func (l *ListUserBotTokensLogic) ListUserBotTokens(req *types.ListUserBotTokensR
 	if !ok {
 		return nil, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
 	}
-	if l.svcCtx.LogicBotClient == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "bot service not configured")
-	}
 	rpcResp, err := l.svcCtx.LogicBotClient.ListUserBotTokens(l.ctx, &botservice.ListUserBotTokensReq{
 		OwnerUserId: identity.UserID, BotUserId: req.Id,
 	})

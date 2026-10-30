@@ -28,9 +28,6 @@ func (l *UpdateUserBotTokenLogic) UpdateUserBotToken(req *types.UpdateUserBotTok
 	if !ok {
 		return nil, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
 	}
-	if l.svcCtx.LogicBotClient == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "bot service not configured")
-	}
 	rpcResp, err := l.svcCtx.LogicBotClient.UpdateUserBotToken(l.ctx, &botservice.UpdateUserBotTokenReq{
 		OwnerUserId: identity.UserID, BotUserId: req.Id, TokenId: req.TokenId,
 		Name: req.Name, ExpiresAt: req.ExpiresAt, Actions: req.Actions,

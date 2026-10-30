@@ -28,9 +28,6 @@ func (l *AddUserBotToConversationLogic) AddUserBotToConversation(req *types.AddU
 	if !ok {
 		return nil, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
 	}
-	if l.svcCtx.LogicBotClient == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "bot service not configured")
-	}
 	rpcResp, err := l.svcCtx.LogicBotClient.AddUserBotToConversation(l.ctx, &botservice.AddUserBotToConversationReq{
 		OwnerUserId: identity.UserID, BotUserId: req.Id,
 		ConversationId: req.ConversationId, OperatorId: identity.UserID, OperatorName: "",

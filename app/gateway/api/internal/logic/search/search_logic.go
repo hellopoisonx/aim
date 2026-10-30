@@ -34,9 +34,6 @@ func (l *SearchLogic) Search(req *types.SearchRequest) (resp *types.SearchRespon
 	if !ok {
 		return nil, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
 	}
-	if l.svcCtx.LogicSearchClient == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "internal error")
-	}
 
 	var scopes []string
 	if req.Scope != "" {

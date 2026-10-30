@@ -28,9 +28,6 @@ func (l *DeleteUserBotLogic) DeleteUserBot(req *types.DeleteUserBotRequest) (res
 	if !ok {
 		return nil, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
 	}
-	if l.svcCtx.LogicBotClient == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "bot service not configured")
-	}
 	rpcResp, err := l.svcCtx.LogicBotClient.DeleteUserBot(l.ctx, &botservice.DeleteUserBotReq{
 		OwnerUserId: identity.UserID, BotUserId: req.Id,
 	})

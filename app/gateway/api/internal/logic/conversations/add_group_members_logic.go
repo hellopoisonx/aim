@@ -33,10 +33,6 @@ func (l *AddGroupMembersLogic) AddGroupMembers(req *types.AddGroupMembersRequest
 		return nil, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
 	}
 
-	if l.svcCtx.LogicConversationClient == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "internal error")
-	}
-
 	rpcResp, err := l.svcCtx.LogicConversationClient.AddGroupMembers(l.ctx, &conversationservice.AddGroupMembersReq{
 		ConversationId: req.Id,
 		OperatorId:     identity.UserID,

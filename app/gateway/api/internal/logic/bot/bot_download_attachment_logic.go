@@ -42,10 +42,6 @@ func (l *BotDownloadAttachmentLogic) BotDownloadAttachment(req *types.BotDownloa
 		return nil, errorx.NewCodeError(errorx.CodeBadInput, "id is required")
 	}
 
-	if l.svcCtx.AttachmentClient == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "internal error")
-	}
-
 	// 1. Get file metadata to learn the conversation_id.
 	fileInfo, err := l.svcCtx.AttachmentClient.GetFile(l.ctx, &attachmentpb.GetFileReq{
 		UserId: identity.BotUserID,
@@ -65,9 +61,6 @@ func (l *BotDownloadAttachmentLogic) BotDownloadAttachment(req *types.BotDownloa
 	}
 
 	// 2. Verify the bot is a member of the conversation that owns the attachment.
-	if l.svcCtx.LogicConversationClient == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "internal error")
-	}
 
 	membersResp, err := l.svcCtx.LogicConversationClient.GetConversationMembers(l.ctx,
 		&conversationservice.GetConversationMembersReq{

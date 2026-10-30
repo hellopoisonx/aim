@@ -36,10 +36,6 @@ func (l *ListFriendApplicationsLogic) ListFriendApplications() (*types.ListFrien
 		return nil, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
 	}
 
-	if l.svcCtx.LogicFriendshipClient == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "internal error")
-	}
-
 	rpcResp, err := l.svcCtx.LogicFriendshipClient.ListFriendApplications(l.ctx, &friendshipservice.ListFriendApplicationsReq{UserId: identity.UserID})
 	if err != nil {
 		return nil, errorx.SanitizeGRPCError(l, "list friend applications", err)

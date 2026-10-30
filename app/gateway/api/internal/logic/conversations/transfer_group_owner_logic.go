@@ -35,9 +35,6 @@ func (l *TransferGroupOwnerLogic) TransferGroupOwner(req *types.TransferGroupOwn
 	if !ok {
 		return nil, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
 	}
-	if l.svcCtx.LogicConversationClient == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "internal error")
-	}
 	rpcResp, err := l.svcCtx.LogicConversationClient.TransferGroupOwner(l.ctx, &conversationservice.TransferGroupOwnerReq{
 		ConversationId: req.Id,
 		OperatorId:     identity.UserID,

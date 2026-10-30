@@ -35,9 +35,6 @@ func (l *RevokeGroupAdminLogic) RevokeGroupAdmin(req *types.RevokeGroupAdminRequ
 	if !ok {
 		return errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
 	}
-	if l.svcCtx.LogicConversationClient == nil {
-		return errorx.NewCodeError(errorx.CodeInternal, "internal error")
-	}
 	_, err := l.svcCtx.LogicConversationClient.RevokeGroupAdmin(l.ctx, &conversationservice.RevokeGroupAdminReq{
 		ConversationId: req.Id,
 		OperatorId:     identity.UserID,
