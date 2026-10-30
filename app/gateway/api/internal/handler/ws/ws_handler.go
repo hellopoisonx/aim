@@ -100,14 +100,29 @@ func (h *WsHandler) ServeWS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Publish presence event if user just came online.
+	// 5. Ensure unregister on disconnect (armed before any early return below)
+	defer func() {
+		unregResult, err := h.manager.Unregister(ctx, identity)
+		if err != nil {
+			logx.WithContext(ctx).Errorf("ws unregister failed: %v", err)
+		}
+
+		// Publish presence event if user just went offline.
+		if unregResult != nil && unregResult.Switched && h.srv.PresencePub != nil {
+			if err := h.srv.PresencePub.PublishPresence(ctx, identity.UserID, unregResult.Status); err != nil {
+				logx.WithContext(ctx).Errorf("failed to publish presence event on unregister: %v", err)
+			}
+		}
+	}()
+
+	// 6. Publish presence event if user just came online.
 	if presResult != nil && presResult.Switched && h.srv.PresencePub != nil {
 		if err := h.srv.PresencePub.PublishPresence(ctx, identity.UserID, presResult.Status); err != nil {
 			logx.WithContext(ctx).Errorf("failed to publish presence event on register: %v", err)
 		}
 	}
 
-	// 5. Schedule token expiry timer
+	// 7. Schedule token expiry timer
 	tokenExpiresAt := claims.ExpiresAt.Time
 	if tokenExpiresAt.After(time.Now()) {
 		duration := time.Until(tokenExpiresAt)
@@ -125,22 +140,7 @@ func (h *WsHandler) ServeWS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 6. Ensure unregister on disconnect
-	defer func() {
-		unregResult, err := h.manager.Unregister(ctx, identity)
-		if err != nil {
-			logx.WithContext(ctx).Errorf("ws unregister failed: %v", err)
-		}
-
-		// Publish presence event if user just went offline.
-		if unregResult != nil && unregResult.Switched && h.srv.PresencePub != nil {
-			if err := h.srv.PresencePub.PublishPresence(ctx, identity.UserID, unregResult.Status); err != nil {
-				logx.WithContext(ctx).Errorf("failed to publish presence event on unregister: %v", err)
-			}
-		}
-	}()
-
-	// 7. Read loop with config limits
+	// 8. Read loop with config limits
 	for {
 		_, data, err := conn.Read(ctx)
 		if err != nil {

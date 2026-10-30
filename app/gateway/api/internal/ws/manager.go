@@ -139,7 +139,7 @@ func (m *Manager) Register(ctx context.Context, identity authctx.Identity, conn 
 	connEntry.startWriter(ctx)
 
 	// Cancel any pending offline for this identity (token-refresh grace).
-	cancelled := m.cancelPendingOfflineLocked(identity)
+	cancelled := m.CancelPendingOffline(identity)
 
 	logx.WithContext(ctx).Infof("ws connection registered: user_id=%d device_id=%s total=%d cancelled_pending_offline=%v",
 		identity.UserID, identity.DeviceID, len(m.connections), cancelled)
@@ -147,20 +147,8 @@ func (m *Manager) Register(ctx context.Context, identity authctx.Identity, conn 
 	return m.updatePresenceOnRegister(ctx, identity.UserID, identity.DeviceID), nil
 }
 
-// cancelPendingOfflineLocked removes a pending offline entry and returns true if one existed.
-// Must be called with pendingMu held (or from Register which holds mu).
-func (m *Manager) cancelPendingOfflineLocked(identity authctx.Identity) bool {
-	m.pendingMu.Lock()
-	defer m.pendingMu.Unlock()
-
-	if _, exists := m.pendingOffline[identity]; exists {
-		delete(m.pendingOffline, identity)
-		return true
-	}
-	return false
-}
-
-// CancelPendingOffline removes a pending offline entry (public variant for reaper/external use).
+// CancelPendingOffline removes a pending offline grace entry and reports whether
+// one existed. Register calls it when a client reconnects during the grace window.
 func (m *Manager) CancelPendingOffline(identity authctx.Identity) bool {
 	m.pendingMu.Lock()
 	defer m.pendingMu.Unlock()
@@ -268,6 +256,12 @@ func (m *Manager) Unregister(ctx context.Context, identity authctx.Identity) (*P
 	if !exists {
 		m.mu.Unlock()
 		return nil, fmt.Errorf("connection not found for user_id=%d device_id=%s", identity.UserID, identity.DeviceID)
+	}
+
+	// The expiry timer belongs to the live connection; leaving it armed would
+	// fire sendTokenExpired against a closed socket or a recycled identity.
+	if conn.ExpiryTimer != nil {
+		conn.ExpiryTimer.Stop()
 	}
 
 	tokenExpired := conn.TokenExpired
@@ -545,15 +539,13 @@ func (m *Manager) ForceOfflineForExpiredGrace(ctx context.Context, identity auth
 	}
 
 	if _, err := pipe.Exec(ctx); err != nil {
-		logx.WithContext(ctx).Errorf("force offline Redis pipeline failed for user %d: %v", identity.UserID, err)
-		return &PresenceResult{}, nil
+		return &PresenceResult{}, fmt.Errorf("force offline pipeline for user %d: %w", identity.UserID, err)
 	}
 
 	// Check if all devices are gone → offline.
 	remaining, err := m.redisClient.SCard(ctx, presKey).Result()
 	if err != nil {
-		logx.WithContext(ctx).Errorf("force offline SCARD failed for user %d: %v", identity.UserID, err)
-		return &PresenceResult{}, nil
+		return &PresenceResult{}, fmt.Errorf("force offline SCARD for user %d: %w", identity.UserID, err)
 	}
 
 	if remaining == 0 {

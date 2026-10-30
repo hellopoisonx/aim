@@ -135,3 +135,40 @@ func signedRequest(t *testing.T, secret string, body []byte) *http.Request {
 	req.Header.Set("X-AIM-Signature", signaturePrefixSHA256+signWithSecretHash(HashWebhookSecret(secret), body))
 	return req
 }
+
+// Events already acknowledged with 202 must be delivered even when shutdown
+// arrives while they are still queued.
+func TestAsyncProcessorDrainsQueueOnShutdown(t *testing.T) {
+	secret := testPlainSecret
+	release := make(chan struct{})
+	var handled atomic.Int32
+	var gate atomic.Bool
+
+	processor, err := NewAsyncProcessor(secret, MessageHandlerFunc(func(context.Context, WebhookEvent) error {
+		// Hold the first event so the rest are still queued when shutdown starts.
+		if gate.CompareAndSwap(false, true) {
+			<-release
+		}
+		handled.Add(1)
+		return nil
+	}),
+		WithProcessorWorkers(1),
+		WithProcessorBackoff(func(int) time.Duration { return time.Millisecond }),
+	)
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	processor.Start(ctx)
+
+	const total = 5
+	for i := range total {
+		rr := httptest.NewRecorder()
+		processor.ServeHTTP(rr, signedRequest(t, secret, webhookBody(t, "drain-"+string(rune('a'+i)))))
+		require.Equal(t, http.StatusAccepted, rr.Code)
+	}
+
+	close(release)
+	require.NoError(t, processor.Shutdown(context.Background()))
+	require.Equal(t, int32(total), handled.Load(), "queued events must be delivered after shutdown")
+}

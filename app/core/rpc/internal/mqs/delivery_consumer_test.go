@@ -232,8 +232,9 @@ func TestDeliveryConsumer_Consume_InvalidJSON(t *testing.T) {
 	svcCtx := newTestServiceContext(t, fakeGw)
 	consumer := NewDeliveryConsumer(context.Background(), svcCtx)
 
+	// Undecodable payloads are dropped so the partition keeps moving.
 	err := consumer.Consume(context.Background(), "200", "invalid json{")
-	require.Error(t, err)
+	require.NoError(t, err)
 	require.Empty(t, fakeGw.pushes)
 }
 

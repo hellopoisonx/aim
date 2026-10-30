@@ -252,9 +252,9 @@ func TestArchiveConsumer_Consume_InvalidJSON(t *testing.T) {
 	store := &fakeArchiveStore{}
 	consumer := newTestArchiveConsumer(store)
 
+	// Undecodable payloads are dropped so the partition keeps moving.
 	err := consumer.Consume(context.Background(), "200", "invalid json{")
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "invalid character")
+	require.NoError(t, err)
 }
 
 // TestArchiveConsumer_TransferEventFields verifies the transferEvent struct

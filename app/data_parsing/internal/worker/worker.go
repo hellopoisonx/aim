@@ -66,7 +66,11 @@ func (w *Worker) Close() {
 func (w *Worker) Consume(ctx context.Context, key string, value string) (err error) {
 	var event events.AttachmentUploadedEvent
 	if err := json.Unmarshal([]byte(value), &event); err != nil {
-		return err
+		// Undecodable payloads cannot be repaired by redelivery.
+		logx.WithContext(ctx).Errorf(
+			"dropping undecodable attachment uploaded event key=%s: %v payload=%q", key, err, value,
+		)
+		return nil
 	}
 	ctx = tracing.ExtractTraceContext(ctx, event.TraceContextFields)
 	ctx, span := tracing.StartKafkaConsumerSpan(
@@ -157,7 +161,10 @@ func (w *Worker) fail(ctx context.Context, event events.AttachmentUploadedEvent,
 		}
 	}
 	_ = w.publish(ctx, events.AttachmentParsedEvent{TraceContextFields: tracing.InjectTraceContext(ctx), FileID: event.FileID, Kind: event.Kind, ParseStatus: attachment.ParseStatusFailed, Error: cause.Error(), ParsedAt: time.Now().UnixMilli()})
-	return cause
+	// The failure is already recorded on the attachment and announced downstream;
+	// returning nil lets Kafka commit the offset instead of replaying the same
+	// unparsable object forever.
+	return nil
 }
 
 func (w *Worker) publish(ctx context.Context, event events.AttachmentParsedEvent) error {
