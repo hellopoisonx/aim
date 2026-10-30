@@ -85,6 +85,16 @@ AttachmentParsedConsumerConf:
   Offset: first
   Consumers: 1
   Processors: 1
+# 好友申请消费者：把好友关系变更推送到目标用户连接的所有 Gateway 节点。
+FriendApplicationConsumerConf:
+  Name: core-friend-application-consumer
+  Brokers:
+    - kafka:9092
+  Group: aim-core-friend-application
+  Topic: aim.friend_application.events
+  Offset: first
+  Consumers: 1
+  Processors: 4
 GatewayRpc:
   ServiceName: gateway.rpc
   Target: aim-gateway:9091

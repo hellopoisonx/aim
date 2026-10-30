@@ -85,6 +85,29 @@ func (r *GatewayRouter) PushReadReceipt(ctx context.Context, req *gwpb.PushReadR
 	return client.PushReadReceipt(ctx, req)
 }
 
+// PushFriendApplication delivers through the default gateway client.
+//
+// The consumer fans out per node by calling this on each node's client.
+func (r *GatewayRouter) PushFriendApplication(ctx context.Context, req *gwpb.PushFriendApplicationReq) (*gwpb.PushFriendApplicationResp, error) {
+	client := r.clientFor("")
+	if client == nil {
+		return nil, fmt.Errorf("no gateway client available")
+	}
+
+	return client.PushFriendApplication(ctx, req)
+}
+
+// PushFriendApplicationToNode delivers a friend application through the client
+// registered for nodeID.
+func (r *GatewayRouter) PushFriendApplicationToNode(ctx context.Context, nodeID string, req *gwpb.PushFriendApplicationReq) (*gwpb.PushFriendApplicationResp, error) {
+	client := r.clientFor(nodeID)
+	if client == nil {
+		return nil, fmt.Errorf("no gateway client available for node %s", nodeID)
+	}
+
+	return client.PushFriendApplication(ctx, req)
+}
+
 // PushNotification routes a system notification to the default gateway client.
 // For broadcast scenarios callers should fan out per-node themselves.
 func (r *GatewayRouter) PushNotification(ctx context.Context, req *gwpb.PushNotificationReq) (*gwpb.PushNotificationResp, error) {

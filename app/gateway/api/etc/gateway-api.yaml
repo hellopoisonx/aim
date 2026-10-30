@@ -48,6 +48,7 @@ Kafka:
   PresenceTopic: aim.presence.events
   TypingTopic: aim.typing.events
   ReadReceiptTopic: aim.read_receipt.events
+  FriendApplicationTopic: aim.friend_application.events
 AttachmentRpc:
   Etcd:
     Hosts:

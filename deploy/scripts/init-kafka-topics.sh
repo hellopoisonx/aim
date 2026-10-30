@@ -14,6 +14,7 @@ aim.typing.events
 aim.read_receipt.events
 aim.attachment.uploaded
 aim.attachment.parsed
+aim.friend_application.events
 "
 
 for topic in $TOPICS; do

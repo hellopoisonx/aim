@@ -13,7 +13,7 @@ import (
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/friendshipservice"
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/userservice"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
-	gwpb "github.com/hellopoisonx/aim/shared/proto/gateway/pb"
+	"github.com/hellopoisonx/aim/app/shared/events"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -83,11 +83,12 @@ func (l *AddFriendLogic) AddFriend(req *types.AddFriendRequest) (resp *types.Add
 		}
 	}
 
-	if gateway := l.svcCtx.Gateway(); gateway != nil && item.Status == friendshipStatusPending {
-		_, _ = gateway.PushFriendApplication(l.ctx, &gwpb.PushFriendApplicationReq{
-			TargetUserId: item.FriendId,
-			UserId:       item.UserId,
-			FriendId:     item.FriendId,
+	if item.Status == friendshipStatusPending {
+		// Notify the recipient on every gateway node holding their connections.
+		l.svcCtx.FriendAppPub.PublishFriendApplication(l.ctx, events.FriendApplicationEvent{
+			TargetUserID: item.FriendId,
+			UserID:       item.UserId,
+			FriendID:     item.FriendId,
 			Status:       item.Status,
 			CreatedAt:    item.CreatedAt,
 			UpdatedAt:    item.UpdatedAt,

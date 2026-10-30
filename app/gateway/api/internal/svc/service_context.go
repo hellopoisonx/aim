@@ -11,6 +11,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/hellopoisonx/aim/app/shared/events"
+
 	sharedkafka "github.com/hellopoisonx/aim/app/shared/kafka"
 
 	attachmentpb "github.com/hellopoisonx/aim/app/attachment/rpc/pb"
@@ -50,8 +52,19 @@ type ReadReceiptPublisher interface {
 	PublishReadReceipt(ctx context.Context, fromUserID, conversationID, lastReadMessageID, updatedAt int64) error
 }
 
+// FriendApplicationPublisher publishes friendship changes so core can push them
+// to the target user on whichever gateway node holds their connections.
+type FriendApplicationPublisher interface {
+	PublishFriendApplication(ctx context.Context, event events.FriendApplicationEvent) error
+}
+
 // noopPublisher is a no-op implementation for when no real publisher is configured.
 type noopPublisher struct{}
+
+func (noopPublisher) PublishFriendApplication(_ context.Context, event events.FriendApplicationEvent) error {
+	logx.WithContext(context.Background()).Debugf("friend application publish (noop): target=%d status=%s", event.TargetUserID, event.Status)
+	return nil
+}
 
 func (noopPublisher) PublishPresence(ctx context.Context, userID int64, status string) error {
 	logx.WithContext(ctx).Debugf("presence publish (noop): user=%d status=%s", userID, status)
@@ -110,6 +123,26 @@ func (p *kafkaPresencePublisher) PublishPresence(ctx context.Context, userID int
 	// Use user_id as Kafka key to preserve order for same user.
 	key := strconv.FormatInt(userID, 10)
 	return p.pusher.PushWithKey(ctx, key, string(data))
+}
+
+// kafkaFriendApplicationPublisher implements FriendApplicationPublisher via Kafka.
+type kafkaFriendApplicationPublisher struct {
+	pusher *kq.Pusher
+}
+
+func (p *kafkaFriendApplicationPublisher) PublishFriendApplication(ctx context.Context, event events.FriendApplicationEvent) error {
+	event.TraceContextFields = tracing.InjectTraceContext(ctx)
+	if event.UpdatedAt == 0 {
+		event.UpdatedAt = time.Now().UnixMilli()
+	}
+
+	data, err := json.Marshal(event)
+	if err != nil {
+		return err
+	}
+
+	// Key by target user so a user's application updates stay ordered.
+	return p.pusher.PushWithKey(ctx, strconv.FormatInt(event.TargetUserID, 10), string(data))
 }
 
 // kafkaTypingPublisher implements TypingPublisher via Kafka.
@@ -188,6 +221,7 @@ type ServiceContext struct {
 
 	RedisClient *redis.Client
 
+	FriendAppPub   FriendApplicationPublisher
 	PresencePub    PresencePublisher
 	TypingPub      TypingPublisher
 	ReadReceiptPub ReadReceiptPublisher
@@ -303,6 +337,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		BotRateLimitQuota:       botRateLimitQuota,
 
 		RedisClient:    redisClient,
+		FriendAppPub:   newFriendApplicationPub(c),
 		PresencePub:    newPresencePub(c, redisClient),
 		TypingPub:      newTypingPub(c, redisClient),
 		ReadReceiptPub: newReadReceiptPub(c, redisClient),
@@ -332,6 +367,19 @@ func newPresencePub(c config.Config, redisClient *redis.Client) PresencePublishe
 			nodeID: c.GatewayNodeID,
 		}
 	}
+	return &noopPublisher{}
+}
+
+// newFriendApplicationPub creates a FriendApplicationPublisher (Kafka when
+// brokers and topic are configured, otherwise noop).
+func newFriendApplicationPub(c config.Config) FriendApplicationPublisher {
+	if len(c.Kafka.Brokers) > 0 && c.Kafka.FriendApplicationTopic != "" {
+		logx.WithContext(context.Background()).Infof("friend application publisher: Kafka topic=%s", c.Kafka.FriendApplicationTopic)
+		return &kafkaFriendApplicationPublisher{
+			pusher: sharedkafka.NewPusher(c.Kafka.Brokers, c.Kafka.FriendApplicationTopic),
+		}
+	}
+
 	return &noopPublisher{}
 }
 

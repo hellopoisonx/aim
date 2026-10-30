@@ -12,7 +12,7 @@ import (
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/friendshipservice"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
-	gwpb "github.com/hellopoisonx/aim/shared/proto/gateway/pb"
+	"github.com/hellopoisonx/aim/app/shared/events"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -54,17 +54,15 @@ func (l *AcceptFriendLogic) AcceptFriend(req *types.AcceptFriendRequest) (resp *
 		return nil, errorx.NewCodeError(errorx.CodeInternal, "internal error")
 	}
 
-	// Push notification to the requester via WebSocket.
-	if gateway := l.svcCtx.Gateway(); gateway != nil {
-		_, _ = gateway.PushFriendApplication(l.ctx, &gwpb.PushFriendApplicationReq{
-			TargetUserId: req.Id,
-			UserId:       identity.UserID,
-			FriendId:     req.Id,
-			Status:       friendship.GetStatus(),
-			CreatedAt:    friendship.GetCreatedAt(),
-			UpdatedAt:    friendship.GetUpdatedAt(),
-		})
-	}
+	// Notify the requester on every gateway node holding their connections.
+	l.svcCtx.FriendAppPub.PublishFriendApplication(l.ctx, events.FriendApplicationEvent{
+		TargetUserID: req.Id,
+		UserID:       identity.UserID,
+		FriendID:     req.Id,
+		Status:       friendship.GetStatus(),
+		CreatedAt:    friendship.GetCreatedAt(),
+		UpdatedAt:    friendship.GetUpdatedAt(),
+	})
 
 	item := types.FriendshipItem{
 		UserId:    friendship.GetUserId(),

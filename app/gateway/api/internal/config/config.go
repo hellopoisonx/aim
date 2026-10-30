@@ -46,6 +46,9 @@ type Config struct {
 		TypingTopic string `json:",default=aim.typing.events"` //nolint:staticcheck // go-zero conf uses json tag options for defaults.
 		// ReadReceiptTopic is the Kafka topic for read receipt events.
 		ReadReceiptTopic string `json:",default=aim.read_receipt.events"` //nolint:staticcheck // go-zero conf uses json tag options for defaults.
+		// FriendApplicationTopic is the Kafka topic core consumes to fan friend
+		// application pushes out to every gateway node.
+		FriendApplicationTopic string `json:",default=aim.friend_application.events"` //nolint:staticcheck // go-zero conf uses json tag options for defaults.
 	}
 	AttachmentRpc zrpc.RpcClientConf
 	// GatewayNodeID identifies this gateway instance for the directory service.

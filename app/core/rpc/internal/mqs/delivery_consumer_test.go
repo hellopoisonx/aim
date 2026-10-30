@@ -74,6 +74,10 @@ func (f *fakeGatewayClient) PushNotification(ctx context.Context, req *gwpb.Push
 	return &gwpb.PushNotificationResp{Success: true}, nil
 }
 
+func (f *fakeGatewayClient) PushFriendApplication(_ context.Context, _ *gwpb.PushFriendApplicationReq) (*gwpb.PushFriendApplicationResp, error) {
+	return &gwpb.PushFriendApplicationResp{Success: true}, nil
+}
+
 func newFakeGatewayClient() *fakeGatewayClient {
 	return &fakeGatewayClient{pushResp: &gwpb.PushMessageResp{Success: true}}
 }
