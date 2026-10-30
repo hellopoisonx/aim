@@ -199,17 +199,17 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				},
 				{
 					Method:  http.MethodDelete,
-					Path:    "/:id/members/:uid",
+					Path:    "/:id/members/:user_id",
 					Handler: conversations.RemoveGroupMemberHandler(serverCtx),
 				},
 				{
 					Method:  http.MethodPost,
-					Path:    "/:id/members/:uid/admin",
+					Path:    "/:id/members/:user_id/admin",
 					Handler: conversations.GrantGroupAdminHandler(serverCtx),
 				},
 				{
 					Method:  http.MethodDelete,
-					Path:    "/:id/members/:uid/admin",
+					Path:    "/:id/members/:user_id/admin",
 					Handler: conversations.RevokeGroupAdminHandler(serverCtx),
 				},
 				{

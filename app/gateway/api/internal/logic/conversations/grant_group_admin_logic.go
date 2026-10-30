@@ -41,7 +41,7 @@ func (l *GrantGroupAdminLogic) GrantGroupAdmin(req *types.GrantGroupAdminRequest
 	_, err := l.svcCtx.LogicConversationClient.GrantGroupAdmin(l.ctx, &conversationservice.GrantGroupAdminReq{
 		ConversationId: req.Id,
 		OperatorId:     identity.UserID,
-		TargetUserId:   req.Uid,
+		TargetUserId:   req.UserId,
 	})
 	if err != nil {
 		return errorx.SanitizeGRPCError(l, "grant group admin", err)

@@ -41,7 +41,7 @@ func (l *RevokeGroupAdminLogic) RevokeGroupAdmin(req *types.RevokeGroupAdminRequ
 	_, err := l.svcCtx.LogicConversationClient.RevokeGroupAdmin(l.ctx, &conversationservice.RevokeGroupAdminReq{
 		ConversationId: req.Id,
 		OperatorId:     identity.UserID,
-		TargetUserId:   req.Uid,
+		TargetUserId:   req.UserId,
 	})
 	if err != nil {
 		return errorx.SanitizeGRPCError(l, "revoke group admin", err)

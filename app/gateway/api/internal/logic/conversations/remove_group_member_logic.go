@@ -41,7 +41,7 @@ func (l *RemoveGroupMemberLogic) RemoveGroupMember(req *types.RemoveGroupMemberR
 		ConversationId: req.Id,
 		OperatorId:     identity.UserID,
 		OperatorName:   "",
-		MemberIds:      []int64{req.Uid},
+		MemberIds:      []int64{req.UserId},
 	})
 	if err != nil {
 		return errorx.SanitizeGRPCError(l, "remove group member", err)
