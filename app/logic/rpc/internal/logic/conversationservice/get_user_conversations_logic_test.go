@@ -7,6 +7,7 @@ import (
 	sharedconversation "github.com/hellopoisonx/aim/app/shared/conversation"
 
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/service"
+	"github.com/hellopoisonx/aim/app/logic/rpc/internal/servicefakes"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/logic/rpc/model/orm"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
@@ -15,19 +16,19 @@ import (
 )
 
 func TestGetUserConversationsLogic(t *testing.T) {
-	store := newFakeStore()
+	store := servicefakes.NewConversationStore()
 	convID1 := generateTestConversationID()
-	store.conversations[convID1] = newConv(convID1, "direct")
-	store.members[convID1] = newMember(convID1, 1)
+	store.Conversations[convID1] = newConv(convID1, "direct")
+	store.Members[convID1] = newMember(convID1, 1)
 
 	convID2 := generateTestConversationID()
-	store.conversations[convID2] = newConv(convID2, "group")
-	store.members[convID2] = newMember(convID2, 1, 3)
+	store.Conversations[convID2] = newConv(convID2, "group")
+	store.Members[convID2] = newMember(convID2, 1, 3)
 
 	// convID3: user 2 only (not user 1)
 	convID3 := generateTestConversationID()
-	store.conversations[convID3] = newConv(convID3, "direct")
-	store.members[convID3] = newMember(convID3, 2, 4)
+	store.Conversations[convID3] = newConv(convID3, "direct")
+	store.Members[convID3] = newMember(convID3, 2, 4)
 
 	convSvc := service.NewConversationService(store, testSnowflake, nil, nil)
 	svcCtx := &svc.ServiceContext{
