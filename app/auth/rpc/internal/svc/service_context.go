@@ -53,7 +53,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 
 	// Initialize outbox Poller if Kafka pusher is configured
 	if c.IsKqPusherConfigured() {
-		outboxStore := NewOutboxStore(store)
+		outboxStore := outbox.NewGORMStore(store.DB())
 		publisher := newKafkaPublisher(c.KqPusherConf.Brokers, c.KqPusherConf.Topic)
 		svcCtx.OutboxPoller = outbox.NewPoller(outboxStore, publisher, outbox.Config{})
 	}

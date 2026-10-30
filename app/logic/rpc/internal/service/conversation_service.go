@@ -14,7 +14,6 @@ import (
 	sharedcache "github.com/hellopoisonx/aim/app/shared/cache"
 	sharedconversation "github.com/hellopoisonx/aim/app/shared/conversation"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
-	"github.com/hellopoisonx/aim/app/shared/outbox"
 	"github.com/hellopoisonx/aim/app/shared/tools"
 	"github.com/hellopoisonx/aim/app/shared/tracing"
 
@@ -157,7 +156,7 @@ func WithConversationCaches(convCache *sharedcache.TypedCache[orm.Conversation],
 }
 
 // WithOutbox configures the outbox topic and a wake function for the Poller.
-func WithOutbox(topic string, store outbox.Store, wakeFn func()) ConversationServiceOption {
+func WithOutbox(topic string, wakeFn func()) ConversationServiceOption {
 	return func(s *ConversationService) {
 		s.outboxTopic = topic
 		s.outboxWakeFn = wakeFn

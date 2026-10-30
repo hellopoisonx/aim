@@ -100,6 +100,18 @@ type Poller struct {
 	wake    chan struct{} // buffered (1); signaled by Wake()
 	running sync.Mutex    // guards Start/Stop serialization
 	wg      sync.WaitGroup
+
+	started bool // true while poll/cleanup loops are running
+
+	backoffMu sync.Mutex
+	backoff   map[int64]retryState // per-record retry state, keyed by record ID
+}
+
+// retryState tracks failures of a single outbox record so one unpublishable
+// record cannot starve the rest of the queue.
+type retryState struct {
+	attempts    int
+	nextAttempt time.Time
 }
 
 // NewPoller creates a Poller. If store or publish is nil the Poller is a no-op.
@@ -110,12 +122,14 @@ func NewPoller(store Store, publish PublisherFunc, cfg Config) *Poller {
 		cfg:     cfg.WithDefaults(),
 		done:    make(chan struct{}),
 		wake:    make(chan struct{}, 1),
+		backoff: make(map[int64]retryState),
 	}
 }
 
 // Start begins the background poll and cleanup loops. ctx controls the
-// lifetime of per-iteration Store/Publisher calls. Safe to call once;
-// subsequent calls are no-ops.
+// lifetime of per-iteration Store/Publisher calls. Safe to call multiple
+// times: while the loops are running, further calls are no-ops. Start after
+// Stop starts the loops again.
 func (p *Poller) Start(ctx context.Context) {
 	if p.store == nil || p.publish == nil {
 		return
@@ -123,12 +137,17 @@ func (p *Poller) Start(ctx context.Context) {
 	p.running.Lock()
 	defer p.running.Unlock()
 
+	if p.started {
+		return
+	}
+
 	// Restore done channel if Stop was called (allows Start→Stop→Start).
 	select {
 	case <-p.done:
 		p.done = make(chan struct{})
 	default:
 	}
+	p.started = true
 
 	p.wg.Go(func() {
 		p.pollLoop(ctx)
@@ -148,10 +167,8 @@ func (p *Poller) Stop() {
 		return
 	}
 	p.running.Lock()
-	select {
-	case <-p.done:
-		// already closed
-	default:
+	if p.started {
+		p.started = false
 		close(p.done)
 	}
 	p.running.Unlock()
@@ -199,21 +216,24 @@ func (p *Poller) pollOnce(ctx context.Context) {
 
 	var delivered []int64
 	for _, r := range records {
-		if err := p.publish(ctx, r.Topic, r.Key, r.Payload); err != nil {
-			logx.WithContext(ctx).Errorf(
-				"outbox publish failed id=%d topic=%s key=%s: %v",
-				r.ID, r.Topic, r.Key, err,
-			)
-			// Stop delivering this batch so undelivered records are retried
-			// on the next poll cycle.
-			break
+		if !p.dueNow(r.ID) {
+			// This record failed recently; leave it pending so the rest of the
+			// batch is not blocked behind it.
+			continue
 		}
+
+		if err := p.publish(ctx, r.Topic, r.Key, r.Payload); err != nil {
+			p.recordFailure(ctx, r, err)
+			continue
+		}
+
 		delivered = append(delivered, r.ID)
 	}
 
 	if len(delivered) == 0 {
 		return
 	}
+	p.forgetBackoff(delivered)
 
 	n, err := p.store.MarkProcessed(ctx, delivered)
 	if err != nil {
@@ -226,6 +246,41 @@ func (p *Poller) pollOnce(ctx context.Context) {
 		logx.WithContext(ctx).Infof(
 			"outbox marked %d/%d records as processed", n, len(delivered),
 		)
+	}
+}
+
+// dueNow reports whether record id is allowed to be attempted at this moment.
+func (p *Poller) dueNow(id int64) bool {
+	p.backoffMu.Lock()
+	defer p.backoffMu.Unlock()
+	state, ok := p.backoff[id]
+	return !ok || !time.Now().Before(state.nextAttempt)
+}
+
+// recordFailure schedules the next attempt of a failed record with exponential
+// backoff. The record stays pending in the outbox table, so no event is lost;
+// only its next attempt is delayed.
+func (p *Poller) recordFailure(ctx context.Context, r Record, cause error) {
+	p.backoffMu.Lock()
+	state := p.backoff[r.ID]
+	state.attempts++
+	delay := p.cfg.retryDelay(state.attempts)
+	state.nextAttempt = time.Now().Add(delay)
+	p.backoff[r.ID] = state
+	p.backoffMu.Unlock()
+
+	logx.WithContext(ctx).Errorf(
+		"outbox publish failed id=%d topic=%s key=%s attempt=%d retry_in=%s: %v",
+		r.ID, r.Topic, r.Key, state.attempts, delay, cause,
+	)
+}
+
+// forgetBackoff drops retry state for records that were delivered.
+func (p *Poller) forgetBackoff(ids []int64) {
+	p.backoffMu.Lock()
+	defer p.backoffMu.Unlock()
+	for _, id := range ids {
+		delete(p.backoff, id)
 	}
 }
 

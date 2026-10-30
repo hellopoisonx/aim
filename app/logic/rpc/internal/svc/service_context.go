@@ -97,12 +97,11 @@ func NewServiceContext(c config.Config) *ServiceContext {
 
 			hasProducer := len(c.ConversationEventProducerConf.Brokers) > 0 && c.ConversationEventProducerConf.Topic != ""
 			if hasProducer {
-				outboxStore := NewOutboxStore(store)
+				outboxStore := outbox.NewGORMStore(store.DB())
 				publisher := newConversationEventPublisher(c.ConversationEventProducerConf.Brokers, c.ConversationEventProducerConf.Topic)
 				svcCtx.OutboxPoller = outbox.NewPoller(outboxStore, publisher, outbox.Config{})
 				convOpts = append(convOpts, service.WithOutbox(
 					c.ConversationEventProducerConf.Topic,
-					outboxStore,
 					func() { svcCtx.OutboxPoller.Wake() },
 				))
 				logx.WithContext(context.Background()).Infof("conversation event outbox initialized: topic=%s", c.ConversationEventProducerConf.Topic)

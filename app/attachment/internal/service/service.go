@@ -19,6 +19,7 @@ import (
 	"github.com/hellopoisonx/aim/app/shared/events"
 	"github.com/hellopoisonx/aim/app/shared/gormdb"
 	"github.com/hellopoisonx/aim/app/shared/outbox"
+	"github.com/hellopoisonx/aim/app/shared/s3signer"
 	"github.com/hellopoisonx/aim/app/shared/tracing"
 	"github.com/segmentio/kafka-go"
 	"github.com/zeromicro/go-queue/kq"
@@ -33,7 +34,7 @@ var ErrNotFound = errors.New("attachment not found")
 type Service struct {
 	cfg          config.Config
 	store        *dao.Store
-	signer       S3Signer
+	signer       s3signer.S3Signer
 	outboxPoller *outbox.Poller
 }
 
@@ -101,7 +102,7 @@ func New(ctx context.Context, cfg config.Config) (*Service, error) {
 	svc := &Service{
 		cfg:   cfg,
 		store: store,
-		signer: S3Signer{
+		signer: s3signer.S3Signer{
 			Endpoint:       cfg.Seaweed.Endpoint,
 			PublicEndpoint: cfg.Seaweed.PublicEndpoint,
 			Region:         cfg.Seaweed.Region,
@@ -113,7 +114,7 @@ func New(ctx context.Context, cfg config.Config) (*Service, error) {
 
 	// Initialize outbox Poller if Kafka is configured
 	if store != nil && len(cfg.Kafka.Brokers) > 0 && cfg.Kafka.Topic != "" {
-		outboxStore := newDAOOutboxStore(store)
+		outboxStore := outbox.NewGORMStore(store.DB())
 		publisher := newOutboxPublisher(cfg.Kafka.Brokers, cfg.Kafka.Topic)
 		svc.outboxPoller = outbox.NewPoller(outboxStore, publisher, outbox.Config{})
 	}
