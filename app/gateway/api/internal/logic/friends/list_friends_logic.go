@@ -5,6 +5,7 @@ package friends
 
 import (
 	"context"
+	"sync"
 
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/authctx"
 
@@ -60,30 +61,97 @@ func (l *ListFriendsLogic) ListFriends() (resp *types.ListFriendsResponse, err e
 			tags = append(tags, friendTagToType(t))
 		}
 		item.Tags = tags
-		// Enrich peer name snapshot.
-		peerID := item.FriendId
-		if peerID <= 0 {
-			peerID = item.UserId
-		}
-		enrichPeerInfo(l.ctx, l.svcCtx, peerID, &item)
 		friends = append(friends, item)
 	}
+
+	enrichPeerInfos(l.ctx, l.svcCtx, friends)
 
 	return &types.ListFriendsResponse{Friends: friends}, nil
 }
 
-// enrichPeerInfo fills display_name, email, avatar on a FriendshipItem by
-// looking up the peer user via the logic user service. Failures are silently
-// ignored — the fields remain empty and the client can fall back.
-func enrichPeerInfo(ctx context.Context, svcCtx *svc.ServiceContext, peerID int64, item *types.FriendshipItem) {
-	if svcCtx.LogicUserClient == nil || peerID <= 0 {
+// peerEnrichWorkers bounds the concurrent GetUserInfo calls issued while
+// resolving friend profiles.
+const peerEnrichWorkers = 8
+
+// enrichPeerInfos fills display_name, email and avatar for each peer.
+//
+// Lookups run concurrently because the user service has no batch RPC: a serial
+// loop makes the endpoint latency grow linearly with the friend count.
+// Failures are ignored — the fields stay empty and the client falls back.
+func enrichPeerInfos(ctx context.Context, svcCtx *svc.ServiceContext, items []types.FriendshipItem) {
+	if svcCtx == nil || svcCtx.LogicUserClient == nil || len(items) == 0 {
 		return
 	}
+
+	sem := make(chan struct{}, peerEnrichWorkers)
+	var wg sync.WaitGroup
+
+	for i := range items {
+		peerID := items[i].FriendId
+		if peerID <= 0 {
+			peerID = items[i].UserId
+		}
+		if peerID <= 0 {
+			continue
+		}
+
+		wg.Add(1)
+		sem <- struct{}{}
+
+		go func(idx int, id int64) {
+			defer wg.Done()
+			defer func() { <-sem }()
+
+			profile, ok := fetchPeerProfile(ctx, svcCtx, id)
+			if !ok {
+				return
+			}
+			items[idx].Name = profile.name
+			items[idx].Email = profile.email
+			items[idx].Avatar = profile.avatar
+		}(i, peerID)
+	}
+
+	wg.Wait()
+}
+
+// enrichPeerInfo fills display_name, email and avatar for a single friendship
+// item. Lookup failures leave the fields empty.
+func enrichPeerInfo(ctx context.Context, svcCtx *svc.ServiceContext, peerID int64, item *types.FriendshipItem) {
+	if item == nil {
+		return
+	}
+
+	profile, ok := fetchPeerProfile(ctx, svcCtx, peerID)
+	if !ok {
+		return
+	}
+	item.Name = profile.name
+	item.Email = profile.email
+	item.Avatar = profile.avatar
+}
+
+type peerProfile struct {
+	name   string
+	email  string
+	avatar string
+}
+
+// fetchPeerProfile resolves one peer's display fields; ok is false when the
+// lookup fails or the user client is not configured.
+func fetchPeerProfile(ctx context.Context, svcCtx *svc.ServiceContext, peerID int64) (peerProfile, bool) {
+	if svcCtx == nil || svcCtx.LogicUserClient == nil || peerID <= 0 {
+		return peerProfile{}, false
+	}
+
 	u, err := svcCtx.LogicUserClient.GetUserInfo(ctx, &userservice.GetUserInfoReq{Id: peerID})
 	if err != nil {
-		return
+		return peerProfile{}, false
 	}
-	item.Name = u.GetUser().GetNickname()
-	item.Email = u.GetUser().GetEmail()
-	item.Avatar = u.GetUser().GetAvatar()
+
+	return peerProfile{
+		name:   u.GetUser().GetNickname(),
+		email:  u.GetUser().GetEmail(),
+		avatar: u.GetUser().GetAvatar(),
+	}, true
 }

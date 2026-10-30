@@ -610,15 +610,13 @@ func (h *WsHandler) writeErrorAck(ctx context.Context, conn *websocket.Conn, ack
 		return errorx.NewCodeError(errorx.CodeInternal, "ack code overflows int32")
 	}
 
-	ackFrame, err := ws.NewServerAckExtended(
-		ackSeq,
-		clientMsgID,
-		0,
-		status,
-		int32(code),
-		msg,
-		0,
-	)
+	ackFrame, err := ws.NewServerAckFrame(ws.ServerAck{
+		AckSeq:      ackSeq,
+		ClientMsgID: clientMsgID,
+		Status:      status,
+		Code:        int32(code),
+		Msg:         msg,
+	})
 	if err != nil {
 		return err
 	}
@@ -645,15 +643,13 @@ func int32Code(code int) int32 {
 func mapTransferToAck(ackSeq int64, clientMsgID string, seq int64, resp *corepb.TransferResp, err error) *pb.WsFrame {
 	if err == nil {
 		// Success
-		ackFrame, _ := ws.NewServerAckExtended(
-			ackSeq,
-			clientMsgID,
-			seq,
-			pb.AckStatus_ACK_STATUS_ACCEPTED,
-			0,
-			"",
-			resp.GetMessageId(),
-		)
+		ackFrame, _ := ws.NewServerAckFrame(ws.ServerAck{
+			AckSeq:      ackSeq,
+			ClientMsgID: clientMsgID,
+			Seq:         seq,
+			Status:      pb.AckStatus_ACK_STATUS_ACCEPTED,
+			MessageID:   resp.GetMessageId(),
+		})
 
 		return ackFrame
 	}
@@ -662,30 +658,28 @@ func mapTransferToAck(ackSeq int64, clientMsgID string, seq int64, resp *corepb.
 	codeErr := errorx.FromGRPCError(err)
 	if codeErr == nil {
 		// Non-gRPC error, treat as retryable
-		ackFrame, _ := ws.NewServerAckExtended(
-			ackSeq,
-			clientMsgID,
-			seq,
-			pb.AckStatus_ACK_STATUS_RETRYABLE,
-			int32Code(errorx.CodeInternal),
-			"internal error",
-			0,
-		)
+		ackFrame, _ := ws.NewServerAckFrame(ws.ServerAck{
+			AckSeq:      ackSeq,
+			ClientMsgID: clientMsgID,
+			Seq:         seq,
+			Status:      pb.AckStatus_ACK_STATUS_RETRYABLE,
+			Code:        int32Code(errorx.CodeInternal),
+			Msg:         "internal error",
+		})
 
 		return ackFrame
 	}
 
 	status := ackStatusForCode(codeErr.Code)
 
-	ackFrame, _ := ws.NewServerAckExtended(
-		ackSeq,
-		clientMsgID,
-		seq,
-		status,
-		int32Code(codeErr.Code),
-		codeErr.Message,
-		0,
-	)
+	ackFrame, _ := ws.NewServerAckFrame(ws.ServerAck{
+		AckSeq:      ackSeq,
+		ClientMsgID: clientMsgID,
+		Seq:         seq,
+		Status:      status,
+		Code:        int32Code(codeErr.Code),
+		Msg:         codeErr.Message,
+	})
 
 	return ackFrame
 }

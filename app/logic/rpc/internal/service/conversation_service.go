@@ -246,7 +246,7 @@ func (s *ConversationService) buildSystemMessage(event string, operatorID int64,
 	return data
 }
 
-func (s ConversationService) memberRole(ctx context.Context, conversationID, userID int64) (sharedconversation.Role, error) {
+func (s *ConversationService) memberRole(ctx context.Context, conversationID, userID int64) (sharedconversation.Role, error) {
 	if conversationID <= 0 {
 		return "", errorx.NewCodeError(errorx.CodeBadInput, "conversation_id is required and must be positive")
 	}
@@ -268,7 +268,7 @@ func (s ConversationService) memberRole(ctx context.Context, conversationID, use
 	return "", ErrNotMember
 }
 
-func (s ConversationService) isOwner(ctx context.Context, conversationID, userID int64) (bool, error) {
+func (s *ConversationService) isOwner(ctx context.Context, conversationID, userID int64) (bool, error) {
 	role, err := s.memberRole(ctx, conversationID, userID)
 	if err != nil {
 		return false, err
@@ -276,7 +276,7 @@ func (s ConversationService) isOwner(ctx context.Context, conversationID, userID
 	return role == RoleOwner, nil
 }
 
-func (s ConversationService) isAdminOrOwner(ctx context.Context, conversationID, userID int64) (bool, error) {
+func (s *ConversationService) isAdminOrOwner(ctx context.Context, conversationID, userID int64) (bool, error) {
 	role, err := s.memberRole(ctx, conversationID, userID)
 	if err != nil {
 		return false, err
@@ -284,7 +284,7 @@ func (s ConversationService) isAdminOrOwner(ctx context.Context, conversationID,
 	return role == RoleOwner || role == RoleAdmin, nil
 }
 
-func (s ConversationService) CreateConversation(ctx context.Context, conversationType sharedconversation.Type, creatorID int64, memberIDs []int64, name string, avatar string) (orm.Conversation, error) {
+func (s *ConversationService) CreateConversation(ctx context.Context, conversationType sharedconversation.Type, creatorID int64, memberIDs []int64, name string, avatar string) (orm.Conversation, error) {
 	if creatorID <= 0 {
 		return orm.Conversation{}, errorx.NewCodeError(errorx.CodeBadInput, "creator_id is required and must be positive")
 	}
@@ -379,7 +379,7 @@ func (s ConversationService) CreateConversation(ctx context.Context, conversatio
 	return conv, nil
 }
 
-func (s ConversationService) GetConversationByID(ctx context.Context, id int64) (orm.Conversation, error) {
+func (s *ConversationService) GetConversationByID(ctx context.Context, id int64) (orm.Conversation, error) {
 	row, err := s.getConversationRow(ctx, id)
 	if err != nil {
 		if errors.Is(err, dao.ErrNotFound) {
@@ -388,18 +388,10 @@ func (s ConversationService) GetConversationByID(ctx context.Context, id int64) 
 		return orm.Conversation{}, err
 	}
 
-	return orm.Conversation{
-		ID:               row.ID,
-		ConversationType: row.ConversationType,
-		IsActive:         row.IsActive,
-		Name:             row.Name,
-		Avatar:           row.Avatar,
-		CreatorID:        row.CreatorID,
-		CreatedAt:        row.CreatedAt,
-	}, nil
+	return row, nil
 }
 
-func (s ConversationService) GetConversationHistory(ctx context.Context, conversationID int64, cursorCreatedAt int64, cursorID int64, limit int32) ([]orm.Message, error) {
+func (s *ConversationService) GetConversationHistory(ctx context.Context, conversationID int64, cursorCreatedAt int64, cursorID int64, limit int32) ([]orm.Message, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 50
 	}
@@ -424,7 +416,7 @@ func (s ConversationService) GetConversationHistory(ctx context.Context, convers
 	return messages, nil
 }
 
-func (s ConversationService) GetConversationHistoryInitial(ctx context.Context, conversationID int64, limit int32) ([]orm.Message, error) {
+func (s *ConversationService) GetConversationHistoryInitial(ctx context.Context, conversationID int64, limit int32) ([]orm.Message, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 50
 	}
@@ -445,7 +437,7 @@ func (s ConversationService) GetConversationHistoryInitial(ctx context.Context, 
 	return messages, nil
 }
 
-func (s ConversationService) GetConversationMembers(ctx context.Context, conversationID int64) ([]orm.ConversationMember, error) {
+func (s *ConversationService) GetConversationMembers(ctx context.Context, conversationID int64) ([]orm.ConversationMember, error) {
 	_, err := s.getConversationRow(ctx, conversationID)
 	if err != nil {
 		if errors.Is(err, dao.ErrNotFound) {
@@ -462,7 +454,7 @@ func (s ConversationService) GetConversationMembers(ctx context.Context, convers
 	return rows, nil
 }
 
-func (s ConversationService) IsMember(ctx context.Context, conversationID int64, userID int64) (bool, error) {
+func (s *ConversationService) IsMember(ctx context.Context, conversationID int64, userID int64) (bool, error) {
 	members, err := s.GetConversationMembers(ctx, conversationID)
 	if err != nil {
 		return false, err
@@ -477,7 +469,7 @@ func (s ConversationService) IsMember(ctx context.Context, conversationID int64,
 	return false, nil
 }
 
-func (s ConversationService) GetUserConversations(ctx context.Context, userID int64) ([]orm.Conversation, error) {
+func (s *ConversationService) GetUserConversations(ctx context.Context, userID int64) ([]orm.Conversation, error) {
 	rows, err := s.store.GetConversationsByUserID(ctx, userID)
 	if err != nil {
 		return nil, err
@@ -490,7 +482,7 @@ func (s ConversationService) GetUserConversations(ctx context.Context, userID in
 	return rows, nil
 }
 
-func (s ConversationService) AddGroupMembers(ctx context.Context, conversationID, operatorID int64, operatorName string, newMemberIDs []int64) (orm.Conversation, error) {
+func (s *ConversationService) AddGroupMembers(ctx context.Context, conversationID, operatorID int64, operatorName string, newMemberIDs []int64) (orm.Conversation, error) {
 	conv, err := s.GetConversationByID(ctx, conversationID)
 	if err != nil {
 		return orm.Conversation{}, err
@@ -567,7 +559,7 @@ func (s ConversationService) AddGroupMembers(ctx context.Context, conversationID
 				ConversationID: conversationID,
 				SenderID:       0,
 				MessageType:    MessageTypeSystem,
-				Content:        string(s.buildSystemMessage("member_joined", operatorID, operatorName, newMemberIDs)),
+				Content:        string(content),
 				TargetUserIDs:  targetUserIDs,
 				Timestamp:      time.Now().UnixMilli(),
 			})
@@ -587,7 +579,7 @@ func (s ConversationService) AddGroupMembers(ctx context.Context, conversationID
 	return conv, nil
 }
 
-func (s ConversationService) RemoveGroupMembers(ctx context.Context, conversationID, operatorID int64, operatorName string, removeMemberIDs []int64) error {
+func (s *ConversationService) RemoveGroupMembers(ctx context.Context, conversationID, operatorID int64, operatorName string, removeMemberIDs []int64) error {
 	conv, err := s.GetConversationByID(ctx, conversationID)
 	if err != nil {
 		return err
@@ -661,7 +653,7 @@ func (s ConversationService) RemoveGroupMembers(ctx context.Context, conversatio
 				ConversationID: conversationID,
 				SenderID:       0,
 				MessageType:    MessageTypeSystem,
-				Content:        string(s.buildSystemMessage("member_removed", operatorID, operatorName, removeMemberIDs)),
+				Content:        string(content),
 				TargetUserIDs:  targetUserIDs,
 				Timestamp:      time.Now().UnixMilli(),
 			})
@@ -680,7 +672,7 @@ func (s ConversationService) RemoveGroupMembers(ctx context.Context, conversatio
 	return nil
 }
 
-func (s ConversationService) LeaveGroup(ctx context.Context, conversationID, userID int64, userName string) error {
+func (s *ConversationService) LeaveGroup(ctx context.Context, conversationID, userID int64, userName string) error {
 	conv, err := s.GetConversationByID(ctx, conversationID)
 	if err != nil {
 		return err
@@ -735,7 +727,7 @@ func (s ConversationService) LeaveGroup(ctx context.Context, conversationID, use
 				ConversationID: conversationID,
 				SenderID:       0,
 				MessageType:    MessageTypeSystem,
-				Content:        string(s.buildSystemMessage("member_left", userID, userName, []int64{userID})),
+				Content:        string(content),
 				TargetUserIDs:  targetUserIDs,
 				Timestamp:      time.Now().UnixMilli(),
 			})
@@ -754,7 +746,7 @@ func (s ConversationService) LeaveGroup(ctx context.Context, conversationID, use
 	return nil
 }
 
-func (s ConversationService) DismissGroup(ctx context.Context, conversationID, operatorID int64) error {
+func (s *ConversationService) DismissGroup(ctx context.Context, conversationID, operatorID int64) error {
 	conv, err := s.GetConversationByID(ctx, conversationID)
 	if err != nil {
 		return err
@@ -808,7 +800,7 @@ func (s ConversationService) DismissGroup(ctx context.Context, conversationID, o
 				ConversationID: conversationID,
 				SenderID:       0,
 				MessageType:    MessageTypeSystem,
-				Content:        string(s.buildSystemMessage("group_dismissed", operatorID, "", nil)),
+				Content:        string(content),
 				TargetUserIDs:  targetUserIDs,
 				Timestamp:      time.Now().UnixMilli(),
 			})
@@ -827,7 +819,7 @@ func (s ConversationService) DismissGroup(ctx context.Context, conversationID, o
 	return nil
 }
 
-func (s ConversationService) UpdateGroupInfo(ctx context.Context, conversationID, operatorID int64, operatorName string, name, avatar *string) (orm.Conversation, error) {
+func (s *ConversationService) UpdateGroupInfo(ctx context.Context, conversationID, operatorID int64, operatorName string, name, avatar *string) (orm.Conversation, error) {
 	conv, err := s.GetConversationByID(ctx, conversationID)
 	if err != nil {
 		return orm.Conversation{}, err
@@ -909,7 +901,7 @@ func (s ConversationService) UpdateGroupInfo(ctx context.Context, conversationID
 				ConversationID: conversationID,
 				SenderID:       0,
 				MessageType:    MessageTypeSystem,
-				Content:        string(s.buildSystemMessage(eventType, operatorID, operatorName, nil)),
+				Content:        string(content),
 				TargetUserIDs:  targetUserIDs,
 				Timestamp:      time.Now().UnixMilli(),
 			})
@@ -929,7 +921,7 @@ func (s ConversationService) UpdateGroupInfo(ctx context.Context, conversationID
 	return conv, nil
 }
 
-func (s ConversationService) GrantGroupAdmin(ctx context.Context, conversationID, operatorID, targetUserID int64) error {
+func (s *ConversationService) GrantGroupAdmin(ctx context.Context, conversationID, operatorID, targetUserID int64) error {
 	conv, err := s.GetConversationByID(ctx, conversationID)
 	if err != nil {
 		return err
@@ -971,7 +963,7 @@ func (s ConversationService) GrantGroupAdmin(ctx context.Context, conversationID
 	return nil
 }
 
-func (s ConversationService) RevokeGroupAdmin(ctx context.Context, conversationID, operatorID, targetUserID int64) error {
+func (s *ConversationService) RevokeGroupAdmin(ctx context.Context, conversationID, operatorID, targetUserID int64) error {
 	conv, err := s.GetConversationByID(ctx, conversationID)
 	if err != nil {
 		return err
@@ -1013,7 +1005,7 @@ func (s ConversationService) RevokeGroupAdmin(ctx context.Context, conversationI
 	return nil
 }
 
-func (s ConversationService) TransferGroupOwner(ctx context.Context, conversationID, operatorID, targetUserID int64) (orm.Conversation, error) {
+func (s *ConversationService) TransferGroupOwner(ctx context.Context, conversationID, operatorID, targetUserID int64) (orm.Conversation, error) {
 	conv, err := s.GetConversationByID(ctx, conversationID)
 	if err != nil {
 		return orm.Conversation{}, err
@@ -1077,7 +1069,7 @@ func (s ConversationService) TransferGroupOwner(ctx context.Context, conversatio
 	return s.GetConversationByID(ctx, conversationID)
 }
 
-func (s ConversationService) GetConversationMembersDetail(ctx context.Context, conversationID int64) ([]MemberDetail, error) {
+func (s *ConversationService) GetConversationMembersDetail(ctx context.Context, conversationID int64) ([]MemberDetail, error) {
 	_, err := s.GetConversationByID(ctx, conversationID)
 	if err != nil {
 		return nil, err
@@ -1103,7 +1095,7 @@ func (s ConversationService) GetConversationMembersDetail(ctx context.Context, c
 	return details, nil
 }
 
-func (s ConversationService) UpdateReadReceipt(ctx context.Context, conversationID, userID, lastReadMessageID int64) (ReadState, error) {
+func (s *ConversationService) UpdateReadReceipt(ctx context.Context, conversationID, userID, lastReadMessageID int64) (ReadState, error) {
 	if conversationID <= 0 {
 		return ReadState{}, errorx.NewCodeError(errorx.CodeBadInput, "conversation_id is required and must be positive")
 	}
@@ -1139,7 +1131,7 @@ func (s ConversationService) UpdateReadReceipt(ctx context.Context, conversation
 	}, nil
 }
 
-func (s ConversationService) ListConversationReadStates(ctx context.Context, conversationID int64) ([]ReadState, error) {
+func (s *ConversationService) ListConversationReadStates(ctx context.Context, conversationID int64) ([]ReadState, error) {
 	if conversationID <= 0 {
 		return nil, errorx.NewCodeError(errorx.CodeBadInput, "conversation_id is required and must be positive")
 	}
