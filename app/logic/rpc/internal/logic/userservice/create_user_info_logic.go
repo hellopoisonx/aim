@@ -3,7 +3,6 @@ package userservicelogic
 import (
 	"context"
 
-	"github.com/hellopoisonx/aim/app/logic/rpc/internal/service"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/logic/rpc/model/orm"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
@@ -47,7 +46,7 @@ func (l *CreateUserInfoLogic) CreateUserInfo(in *pb.CreateUserInfoReq) (*pb.Crea
 
 	info, err := userSvc.CreateUserInfo(l.ctx, in.GetId(), in.GetEmail(), in.GetNickname(), in.GetAvatar())
 	if err != nil {
-		return nil, service.ToGRPCError(err)
+		return nil, errorx.ToGRPCError(err)
 	}
 
 	return &pb.CreateUserInfoResp{

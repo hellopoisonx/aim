@@ -32,18 +32,11 @@ func (l *BotGetWebhookLogic) BotGetWebhook() (*types.BotGetWebhookResponse, erro
 		return nil, err
 	}
 
-	if l.svcCtx.LogicBotClient == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "internal error")
-	}
-
 	rpcResp, err := l.svcCtx.LogicBotClient.GetBotWebhook(l.ctx, &botservice.GetBotWebhookReq{
 		BotUserId: identity.BotUserID,
 	})
 	if err != nil {
-		if ce := errorx.FromGRPCError(err); ce != nil {
-			return nil, ce
-		}
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "internal error")
+		return nil, errorx.SanitizeGRPCError(l, "bot get webhook", err)
 	}
 
 	cfg := rpcResp.GetWebhook()

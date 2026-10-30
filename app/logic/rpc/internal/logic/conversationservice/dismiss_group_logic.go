@@ -3,7 +3,6 @@ package conversationservicelogic
 import (
 	"context"
 
-	"github.com/hellopoisonx/aim/app/logic/rpc/internal/service"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
@@ -40,7 +39,7 @@ func (l *DismissGroupLogic) DismissGroup(in *pb.DismissGroupReq) (*pb.DismissGro
 
 	err := convSvc.DismissGroup(l.ctx, in.GetConversationId(), in.GetOperatorId())
 	if err != nil {
-		return nil, service.ConversationToGRPCError(err)
+		return nil, errorx.ToGRPCError(err)
 	}
 
 	return &pb.DismissGroupResp{}, nil

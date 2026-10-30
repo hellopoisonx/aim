@@ -3,6 +3,8 @@ package bot
 import (
 	"context"
 
+	"github.com/hellopoisonx/aim/app/shared/errorx"
+
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/conversationservice"
@@ -41,10 +43,7 @@ func (l *BotMarkReadLogic) BotMarkRead(req *types.BotMarkReadRequest) (*types.Bo
 		return nil, err
 	}
 
-	client, err := requireLogicConversationClient(l.svcCtx)
-	if err != nil {
-		return nil, err
-	}
+	client := logicConversationClient(l.svcCtx)
 
 	rpcResp, err := client.UpdateReadReceipt(l.ctx, &conversationservice.UpdateReadReceiptReq{
 		ConversationId:    conversationID,
@@ -52,7 +51,7 @@ func (l *BotMarkReadLogic) BotMarkRead(req *types.BotMarkReadRequest) (*types.Bo
 		LastReadMessageId: lastReadMessageID,
 	})
 	if err != nil {
-		return nil, sanitizeBotLogicRPCError(err)
+		return nil, errorx.SanitizeGRPCErrorNoLog(err)
 	}
 
 	readState := rpcResp.GetReadState()

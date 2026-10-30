@@ -468,7 +468,7 @@ def test_opcodes_unthrottled(quota_window: int, no_reset: bool) -> bool:
 
     # READ_RECEIPT
     for i in range(OPCODE_REQUESTS):
-        ws.send_read_receipt(conv_id, last_msg_id=i + 1)
+        ws.send_read_receipt(conv_id, last_read_message_id=i + 1)
     deadline = time.time() + 5
     while len(captured) < OPCODE_REQUESTS and time.time() < deadline:
         time.sleep(0.2)

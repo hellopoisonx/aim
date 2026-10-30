@@ -7,9 +7,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"os"
 	"strconv"
+	"sync"
 	"time"
+
+	"github.com/hellopoisonx/aim/app/shared/events"
+
+	sharedkafka "github.com/hellopoisonx/aim/app/shared/kafka"
 
 	attachmentpb "github.com/hellopoisonx/aim/app/attachment/rpc/pb"
 	"github.com/hellopoisonx/aim/app/auth/rpc/authservice"
@@ -24,11 +28,9 @@ import (
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/userservice"
 	"github.com/hellopoisonx/aim/app/shared/quota"
 
-
 	"github.com/hellopoisonx/aim/app/shared/tracing"
 
 	"github.com/redis/go-redis/v9"
-	"github.com/segmentio/kafka-go"
 	"github.com/zeromicro/go-queue/kq"
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/rest"
@@ -50,8 +52,19 @@ type ReadReceiptPublisher interface {
 	PublishReadReceipt(ctx context.Context, fromUserID, conversationID, lastReadMessageID, updatedAt int64) error
 }
 
+// FriendApplicationPublisher publishes friendship changes so core can push them
+// to the target user on whichever gateway node holds their connections.
+type FriendApplicationPublisher interface {
+	PublishFriendApplication(ctx context.Context, event events.FriendApplicationEvent) error
+}
+
 // noopPublisher is a no-op implementation for when no real publisher is configured.
 type noopPublisher struct{}
+
+func (noopPublisher) PublishFriendApplication(_ context.Context, event events.FriendApplicationEvent) error {
+	logx.WithContext(context.Background()).Debugf("friend application publish (noop): target=%d status=%s", event.TargetUserID, event.Status)
+	return nil
+}
 
 func (noopPublisher) PublishPresence(ctx context.Context, userID int64, status string) error {
 	logx.WithContext(ctx).Debugf("presence publish (noop): user=%d status=%s", userID, status)
@@ -110,6 +123,26 @@ func (p *kafkaPresencePublisher) PublishPresence(ctx context.Context, userID int
 	// Use user_id as Kafka key to preserve order for same user.
 	key := strconv.FormatInt(userID, 10)
 	return p.pusher.PushWithKey(ctx, key, string(data))
+}
+
+// kafkaFriendApplicationPublisher implements FriendApplicationPublisher via Kafka.
+type kafkaFriendApplicationPublisher struct {
+	pusher *kq.Pusher
+}
+
+func (p *kafkaFriendApplicationPublisher) PublishFriendApplication(ctx context.Context, event events.FriendApplicationEvent) error {
+	event.TraceContextFields = tracing.InjectTraceContext(ctx)
+	if event.UpdatedAt == 0 {
+		event.UpdatedAt = time.Now().UnixMilli()
+	}
+
+	data, err := json.Marshal(event)
+	if err != nil {
+		return err
+	}
+
+	// Key by target user so a user's application updates stay ordered.
+	return p.pusher.PushWithKey(ctx, strconv.FormatInt(event.TargetUserID, 10), string(data))
 }
 
 // kafkaTypingPublisher implements TypingPublisher via Kafka.
@@ -186,22 +219,42 @@ type ServiceContext struct {
 	RateLimitQuota          *quota.QuotaStore
 	BotRateLimitQuota       *quota.QuotaStore
 
-	RedisClient            *redis.Client
+	RedisClient *redis.Client
 
-	PresencePub            PresencePublisher
-	TypingPub              TypingPublisher
-	ReadReceiptPub         ReadReceiptPublisher
-	WsManager              *ws.Manager
-	reaperCancel           context.CancelFunc // cancels the presence reaper goroutine
+	FriendAppPub   FriendApplicationPublisher
+	PresencePub    PresencePublisher
+	TypingPub      TypingPublisher
+	ReadReceiptPub ReadReceiptPublisher
+	WsManager      *ws.Manager
+	reaperCancel   context.CancelFunc // cancels the presence reaper goroutine
+
+	gatewayOnce sync.Once
+	gateway     *ws.GatewayServer
+}
+
+// Gateway returns the in-process pusher for connections held by this node.
+//
+// Handlers must not construct ws.GatewayServer themselves: the adapter is a
+// process-wide view of the connection manager, and only this accessor owns it.
+func (s *ServiceContext) Gateway() *ws.GatewayServer {
+	if s == nil {
+		return nil
+	}
+
+	s.gatewayOnce.Do(func() {
+		if s.WsManager != nil {
+			s.gateway = ws.NewGatewayServer(s.WsManager)
+		}
+	})
+
+	return s.gateway
 }
 
 func NewServiceContext(c config.Config) *ServiceContext {
-	// Read GatewayNodeID from environment variable (required).
+	// GatewayNodeID is resolved by config.ApplyEnv during startup; a constructor
+	// without it is a programming error.
 	if c.GatewayNodeID == "" {
-		c.GatewayNodeID = os.Getenv("AIM_GATEWAY_NODE_ID")
-	}
-	if c.GatewayNodeID == "" {
-		logx.Must(errors.New("AIM_GATEWAY_NODE_ID environment variable is required but not set"))
+		logx.Must(errors.New("gateway node id is required: set AIM_GATEWAY_NODE_ID or Config.GatewayNodeID"))
 	}
 
 	if c.Auth.AccessSecret == "" {
@@ -212,26 +265,19 @@ func NewServiceContext(c config.Config) *ServiceContext {
 
 	logx.Must(err)
 
-
-
 	// Core RPC client setup
 
 	coreClient, err := zrpc.NewClient(c.CoreRpc)
 
 	logx.Must(err)
 
-
-
 	logicClient, err := zrpc.NewClient(c.LogicRpc)
 
 	logx.Must(err)
 
-
-
 	attachmentClient, err := zrpc.NewClient(c.AttachmentRpc)
 
 	logx.Must(err)
-
 
 	// Create Redis client for presence heartbeat state management.
 	redisClient := redis.NewClient(&redis.Options{
@@ -290,12 +336,12 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		RateLimitQuota:          rateLimitQuota,
 		BotRateLimitQuota:       botRateLimitQuota,
 
-
-		RedisClient:            redisClient,
-		PresencePub:            newPresencePub(c, redisClient),
-		TypingPub:              newTypingPub(c, redisClient),
-		ReadReceiptPub:         newReadReceiptPub(c, redisClient),
-		WsManager:              wsManager,
+		RedisClient:    redisClient,
+		FriendAppPub:   newFriendApplicationPub(c),
+		PresencePub:    newPresencePub(c, redisClient),
+		TypingPub:      newTypingPub(c, redisClient),
+		ReadReceiptPub: newReadReceiptPub(c, redisClient),
+		WsManager:      wsManager,
 	}
 }
 
@@ -317,10 +363,23 @@ func newPresencePub(c config.Config, redisClient *redis.Client) PresencePublishe
 	if len(c.Kafka.Brokers) > 0 && c.Kafka.PresenceTopic != "" && redisClient != nil {
 		logx.WithContext(context.Background()).Infof("presence publisher: Kafka topic=%s (balancer: murmur2)", c.Kafka.PresenceTopic)
 		return &kafkaPresencePublisher{
-			pusher: kq.NewPusher(c.Kafka.Brokers, c.Kafka.PresenceTopic, kq.WithBalancer(&kafka.Murmur2Balancer{})),
+			pusher: sharedkafka.NewPusher(c.Kafka.Brokers, c.Kafka.PresenceTopic),
 			nodeID: c.GatewayNodeID,
 		}
 	}
+	return &noopPublisher{}
+}
+
+// newFriendApplicationPub creates a FriendApplicationPublisher (Kafka when
+// brokers and topic are configured, otherwise noop).
+func newFriendApplicationPub(c config.Config) FriendApplicationPublisher {
+	if len(c.Kafka.Brokers) > 0 && c.Kafka.FriendApplicationTopic != "" {
+		logx.WithContext(context.Background()).Infof("friend application publisher: Kafka topic=%s", c.Kafka.FriendApplicationTopic)
+		return &kafkaFriendApplicationPublisher{
+			pusher: sharedkafka.NewPusher(c.Kafka.Brokers, c.Kafka.FriendApplicationTopic),
+		}
+	}
+
 	return &noopPublisher{}
 }
 
@@ -328,7 +387,7 @@ func newPresencePub(c config.Config, redisClient *redis.Client) PresencePublishe
 func newTypingPub(c config.Config, redisClient *redis.Client) TypingPublisher {
 	if len(c.Kafka.Brokers) > 0 && c.Kafka.TypingTopic != "" && redisClient != nil {
 		logx.WithContext(context.Background()).Infof("typing publisher: Kafka topic=%s (balancer: murmur2)", c.Kafka.TypingTopic)
-		return &kafkaTypingPublisher{pusher: kq.NewPusher(c.Kafka.Brokers, c.Kafka.TypingTopic, kq.WithBalancer(&kafka.Murmur2Balancer{})), nodeID: c.GatewayNodeID}
+		return &kafkaTypingPublisher{pusher: sharedkafka.NewPusher(c.Kafka.Brokers, c.Kafka.TypingTopic), nodeID: c.GatewayNodeID}
 	}
 	return &noopPublisher{}
 }
@@ -337,7 +396,7 @@ func newTypingPub(c config.Config, redisClient *redis.Client) TypingPublisher {
 func newReadReceiptPub(c config.Config, redisClient *redis.Client) ReadReceiptPublisher {
 	if len(c.Kafka.Brokers) > 0 && c.Kafka.ReadReceiptTopic != "" && redisClient != nil {
 		logx.WithContext(context.Background()).Infof("read receipt publisher: Kafka topic=%s (balancer: murmur2)", c.Kafka.ReadReceiptTopic)
-		return &kafkaReadReceiptPublisher{pusher: kq.NewPusher(c.Kafka.Brokers, c.Kafka.ReadReceiptTopic, kq.WithBalancer(&kafka.Murmur2Balancer{})), nodeID: c.GatewayNodeID}
+		return &kafkaReadReceiptPublisher{pusher: sharedkafka.NewPusher(c.Kafka.Brokers, c.Kafka.ReadReceiptTopic), nodeID: c.GatewayNodeID}
 	}
 	return &noopPublisher{}
 }

@@ -38,7 +38,7 @@ func (l *RejectFriendLogic) RejectFriend(in *pb.RejectFriendReq) (*pb.RejectFrie
 	}
 
 	if userID == friendID {
-		return nil, FriendshipToGRPCError(service.ErrSelfAdd)
+		return nil, errorx.ToGRPCError(service.ErrSelfAdd)
 	}
 
 	store := l.svcCtx.FriendshipDAO
@@ -51,19 +51,19 @@ func (l *RejectFriendLogic) RejectFriend(in *pb.RejectFriendReq) (*pb.RejectFrie
 	pendingRecord, err := store.GetFriendshipByPair(l.ctx, friendID, userID)
 	if err != nil {
 		if errors.Is(err, dao.ErrNotFound) {
-			return nil, FriendshipToGRPCError(service.ErrFriendNotFound)
+			return nil, errorx.ToGRPCError(service.ErrFriendNotFound)
 		}
-		return nil, FriendshipToGRPCError(err)
+		return nil, errorx.ToGRPCError(err)
 	}
 
 	if pendingRecord.Status != service.FriendshipStatusPending {
-		return nil, FriendshipToGRPCError(service.ErrNotPending)
+		return nil, errorx.ToGRPCError(service.ErrNotPending)
 	}
 
 	// Update the pending record to "blocked".
 	blockedRecord, err := store.UpsertFriendship(l.ctx, friendID, userID, "blocked")
 	if err != nil {
-		return nil, FriendshipToGRPCError(err)
+		return nil, errorx.ToGRPCError(err)
 	}
 	l.svcCtx.InvalidateFriendship(l.ctx, userID, friendID)
 

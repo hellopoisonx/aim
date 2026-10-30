@@ -3,12 +3,7 @@ package userbots
 import (
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
-	"github.com/hellopoisonx/aim/app/shared/errorx"
 )
-
-func sanitizeError(logger errorx.ErrorLogger, operation string, err error) error {
-	return errorx.SanitizeGRPCError(logger, operation, err)
-}
 
 func userBotToType(b *pb.UserBotInfo) types.UserBotInfo {
 	if b == nil {

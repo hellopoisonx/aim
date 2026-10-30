@@ -17,6 +17,7 @@ type Config struct {
 	ReadReceiptConsumerConf       kq.KqConf          `json:",optional"`
 	ConversationEventConsumerConf kq.KqConf          `json:",optional"`
 	AttachmentParsedConsumerConf  kq.KqConf          `json:",optional"`
+	FriendApplicationConsumerConf kq.KqConf          `json:",optional"`
 	LogicRpc                      zrpc.RpcClientConf `json:",optional"`
 	GatewayRpc                    GatewayRpcConf     `json:",optional"`
 	AttachmentRpc                 zrpc.RpcClientConf `json:",optional"`

@@ -4,10 +4,12 @@ import (
 	"context"
 	"strings"
 
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/authctx"
+
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
-	"github.com/hellopoisonx/aim/app/gateway/api/internal/ws"
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/searchservice"
+	logicpb "github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 
 	"github.com/zeromicro/go-zero/core/logx"
@@ -28,12 +30,9 @@ func NewSearchLogic(ctx context.Context, svcCtx *svc.ServiceContext) *SearchLogi
 }
 
 func (l *SearchLogic) Search(req *types.SearchRequest) (resp *types.SearchResponse, err error) {
-	identity, ok := ws.IdentityFromContext(l.ctx)
+	identity, ok := authctx.IdentityFromContext(l.ctx)
 	if !ok {
 		return nil, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
-	}
-	if l.svcCtx.LogicSearchClient == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "internal error")
 	}
 
 	var scopes []string
@@ -57,66 +56,63 @@ func (l *SearchLogic) Search(req *types.SearchRequest) (resp *types.SearchRespon
 		return nil, errorx.SanitizeGRPCError(l, "unified search", err)
 	}
 
-	// Map users
-	users := make([]types.SearchUserResultItem, 0, len(rpcResp.GetUsers()))
-	for _, u := range rpcResp.GetUsers() {
-		userInfo := u.GetUser()
+	return &types.SearchResponse{
+		Users:               mapSearchUsers(rpcResp.GetUsers()),
+		Friends:             mapSearchFriends(rpcResp.GetFriends()),
+		Conversations:       mapSearchConversations(rpcResp.GetConversations()),
+		Messages:            mapSearchMessages(rpcResp.GetMessages()),
+		NextCursorCreatedAt: rpcResp.GetNextCursorCreatedAt(),
+		NextCursorId:        rpcResp.GetNextCursorId(),
+		HasMore:             rpcResp.GetHasMore(),
+	}, nil
+}
+
+// mapSearchUsers converts the RPC user hits into their REST shape.
+func mapSearchUsers(items []*logicpb.SearchUserResult) []types.SearchUserResultItem {
+	users := make([]types.SearchUserResultItem, 0, len(items))
+	for _, u := range items {
 		users = append(users, types.SearchUserResultItem{
-			User: types.UserInfo{
-				Id:        userInfo.GetId(),
-				Email:     userInfo.GetEmail(),
-				Status:    userInfo.GetStatus(),
-				Nickname:  userInfo.GetNickname(),
-				Avatar:    userInfo.GetAvatar(),
-				CreatedAt: userInfo.GetCreatedAt(),
-				UpdatedAt: userInfo.GetUpdatedAt(),
-			},
+			User:    mapSearchUserInfo(u.GetUser()),
 			Snippet: u.GetSnippet(),
 		})
 	}
 
-	// Map friends
-	friends := make([]types.SearchFriendResultItem, 0, len(rpcResp.GetFriends()))
-	for _, f := range rpcResp.GetFriends() {
-		friendShip := f.GetFriendship()
-		friendUser := f.GetUser()
-		tags := make([]types.FriendTagItem, 0, len(friendShip.GetTags()))
-		for _, t := range friendShip.GetTags() {
-			tags = append(tags, types.FriendTagItem{
-				Id:        t.GetId(),
-				UserId:    t.GetUserId(),
-				Name:      t.GetName(),
-				CreatedAt: t.GetCreatedAt(),
-				UpdatedAt: t.GetUpdatedAt(),
-			})
+	return users
+}
+
+// mapSearchFriends converts the RPC friend hits, including their tags.
+func mapSearchFriends(items []*logicpb.SearchFriendResult) []types.SearchFriendResultItem {
+	friends := make([]types.SearchFriendResultItem, 0, len(items))
+	for _, f := range items {
+		friendship := f.GetFriendship()
+		tags := make([]types.FriendTagItem, 0, len(friendship.GetTags()))
+		for _, t := range friendship.GetTags() {
+			tags = append(tags, mapSearchFriendTag(t))
 		}
+
 		friends = append(friends, types.SearchFriendResultItem{
 			Friendship: types.FriendshipItem{
-				UserId:    friendShip.GetUserId(),
-				FriendId:  friendShip.GetFriendId(),
-				Status:    friendShip.GetStatus(),
-				CreatedAt: friendShip.GetCreatedAt(),
-				UpdatedAt: friendShip.GetUpdatedAt(),
+				UserId:    friendship.GetUserId(),
+				FriendId:  friendship.GetFriendId(),
+				Status:    friendship.GetStatus(),
+				CreatedAt: friendship.GetCreatedAt(),
+				UpdatedAt: friendship.GetUpdatedAt(),
 				Tags:      tags,
 			},
-			User: types.UserInfo{
-				Id:        friendUser.GetId(),
-				Email:     friendUser.GetEmail(),
-				Status:    friendUser.GetStatus(),
-				Nickname:  friendUser.GetNickname(),
-				Avatar:    friendUser.GetAvatar(),
-				CreatedAt: friendUser.GetCreatedAt(),
-				UpdatedAt: friendUser.GetUpdatedAt(),
-			},
+			User:    mapSearchUserInfo(f.GetUser()),
 			Snippet: f.GetSnippet(),
 		})
 	}
 
-	// Map conversations
-	convs := make([]types.SearchConversationResultItem, 0, len(rpcResp.GetConversations()))
-	for _, c := range rpcResp.GetConversations() {
+	return friends
+}
+
+// mapSearchConversations converts the RPC conversation hits.
+func mapSearchConversations(items []*logicpb.SearchConversationResult) []types.SearchConversationResultItem {
+	conversations := make([]types.SearchConversationResultItem, 0, len(items))
+	for _, c := range items {
 		conv := c.GetConversation()
-		convs = append(convs, types.SearchConversationResultItem{
+		conversations = append(conversations, types.SearchConversationResultItem{
 			Conversation: types.ConversationItem{
 				ConversationId:   conv.GetId(),
 				ConversationType: conv.GetConversationType(),
@@ -131,11 +127,15 @@ func (l *SearchLogic) Search(req *types.SearchRequest) (resp *types.SearchRespon
 		})
 	}
 
-	// Map messages
-	msgs := make([]types.SearchMessageResultItem, 0, len(rpcResp.GetMessages()))
-	for _, m := range rpcResp.GetMessages() {
+	return conversations
+}
+
+// mapSearchMessages converts the RPC message hits.
+func mapSearchMessages(items []*logicpb.SearchMessageResult) []types.SearchMessageResultItem {
+	messages := make([]types.SearchMessageResultItem, 0, len(items))
+	for _, m := range items {
 		msg := m.GetMessage()
-		msgs = append(msgs, types.SearchMessageResultItem{
+		messages = append(messages, types.SearchMessageResultItem{
 			Message: types.MessageItem{
 				Id:             msg.GetId(),
 				ConversationId: msg.GetConversationId(),
@@ -150,13 +150,31 @@ func (l *SearchLogic) Search(req *types.SearchRequest) (resp *types.SearchRespon
 		})
 	}
 
-	return &types.SearchResponse{
-		Users:               users,
-		Friends:             friends,
-		Conversations:       convs,
-		Messages:            msgs,
-		NextCursorCreatedAt: rpcResp.GetNextCursorCreatedAt(),
-		NextCursorId:        rpcResp.GetNextCursorId(),
-		HasMore:             rpcResp.GetHasMore(),
-	}, nil
+	return messages
 }
+
+// mapSearchUserInfo converts an RPC user profile into the REST shape.
+func mapSearchUserInfo(userInfo *logicpb.UserInfoResponse) types.UserInfo {
+	return types.UserInfo{
+		Id:        userInfo.GetId(),
+		Email:     userInfo.GetEmail(),
+		Status:    userInfo.GetStatus(),
+		Nickname:  userInfo.GetNickname(),
+		Avatar:    userInfo.GetAvatar(),
+		CreatedAt: userInfo.GetCreatedAt(),
+		UpdatedAt: userInfo.GetUpdatedAt(),
+	}
+}
+
+// mapSearchFriendTag converts an RPC friend tag into the REST shape.
+func mapSearchFriendTag(tag *logicpb.FriendTagResponse) types.FriendTagItem {
+	return types.FriendTagItem{
+		Id:        tag.GetId(),
+		UserId:    tag.GetUserId(),
+		Name:      tag.GetName(),
+		CreatedAt: tag.GetCreatedAt(),
+		UpdatedAt: tag.GetUpdatedAt(),
+	}
+}
+
+var _ = logicpb.UnifiedSearchResp{}

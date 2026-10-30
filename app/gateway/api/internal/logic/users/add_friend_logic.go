@@ -6,16 +6,20 @@ package users
 import (
 	"context"
 
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/authctx"
+
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
-	"github.com/hellopoisonx/aim/app/gateway/api/internal/ws"
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/friendshipservice"
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/userservice"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
-	gwpb "github.com/hellopoisonx/aim/shared/proto/gateway/pb"
+	"github.com/hellopoisonx/aim/app/shared/events"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
+
+// friendshipStatusPending is the status of a friend request awaiting acceptance.
+const friendshipStatusPending = "pending"
 
 type AddFriendLogic struct {
 	logx.Logger
@@ -32,17 +36,13 @@ func NewAddFriendLogic(ctx context.Context, svcCtx *svc.ServiceContext) *AddFrie
 }
 
 func (l *AddFriendLogic) AddFriend(req *types.AddFriendRequest) (resp *types.AddFriendResponse, err error) {
-	identity, ok := ws.IdentityFromContext(l.ctx)
+	identity, ok := authctx.IdentityFromContext(l.ctx)
 	if !ok {
 		return nil, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
 	}
 
 	if req.Id <= 0 {
 		return nil, errorx.NewCodeError(errorx.CodeBadInput, "id is required")
-	}
-
-	if l.svcCtx.LogicFriendshipClient == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "internal error")
 	}
 
 	rpcResp, err := l.svcCtx.LogicFriendshipClient.AddFriend(l.ctx, &friendshipservice.AddFriendReq{
@@ -79,11 +79,12 @@ func (l *AddFriendLogic) AddFriend(req *types.AddFriendRequest) (resp *types.Add
 		}
 	}
 
-	if l.svcCtx.WsManager != nil && item.Status == "pending" {
-		_, _ = ws.NewGatewayServer(l.svcCtx.WsManager).PushFriendApplication(l.ctx, &gwpb.PushFriendApplicationReq{
-			TargetUserId: item.FriendId,
-			UserId:       item.UserId,
-			FriendId:     item.FriendId,
+	if item.Status == friendshipStatusPending {
+		// Notify the recipient on every gateway node holding their connections.
+		l.svcCtx.FriendAppPub.PublishFriendApplication(l.ctx, events.FriendApplicationEvent{
+			TargetUserID: item.FriendId,
+			UserID:       item.UserId,
+			FriendID:     item.FriendId,
 			Status:       item.Status,
 			CreatedAt:    item.CreatedAt,
 			UpdatedAt:    item.UpdatedAt,

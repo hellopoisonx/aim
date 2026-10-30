@@ -4,18 +4,12 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"os"
-	"path/filepath"
-	"strings"
 
-	"database/sql"
 	"github.com/hellopoisonx/aim/app/attachment/internal/config"
 	"github.com/hellopoisonx/aim/app/attachment/internal/server"
 	attachmentservice "github.com/hellopoisonx/aim/app/attachment/internal/service"
 	"github.com/hellopoisonx/aim/app/attachment/rpc/pb"
 	rpcutil "github.com/hellopoisonx/aim/app/shared/rpc"
-
-	_ "github.com/lib/pq"
 	"github.com/zeromicro/go-zero/core/conf"
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/core/proc"
@@ -34,9 +28,6 @@ func main() {
 	applyDefaults(&c)
 
 	ctx := context.Background()
-	if err := runMigrations(ctx, c.Postgres.DataSource, "app/attachment/model/migrations"); err != nil {
-		logx.WithContext(ctx).Errorf("attachment migration failed: %v", err)
-	}
 
 	svc, err := attachmentservice.New(ctx, c)
 	logx.Must(err)
@@ -95,39 +86,4 @@ func applyDefaults(c *config.Config) {
 	if c.Kafka.Topic == "" {
 		c.Kafka.Topic = "aim.attachment.uploaded"
 	}
-}
-
-func runMigrations(ctx context.Context, dsn, dir string) error {
-	if dsn == "" {
-		return nil
-	}
-	db, err := sql.Open("postgres", dsn)
-	if err != nil {
-		return err
-	}
-	defer db.Close()
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		// Container working directory is /app, where migrations are copied under /app/model/migrations.
-		alt := filepath.Join("model", "migrations")
-		entries, err = os.ReadDir(alt)
-		if err != nil {
-			return nil
-		}
-		dir = alt
-	}
-	for _, e := range entries {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), ".sql") {
-			continue
-		}
-		// #nosec G304 -- migration file names come from os.ReadDir on a trusted migrations directory.
-		b, err := os.ReadFile(filepath.Join(dir, e.Name()))
-		if err != nil {
-			return err
-		}
-		if _, err := db.ExecContext(ctx, string(b)); err != nil {
-			return err
-		}
-	}
-	return nil
 }

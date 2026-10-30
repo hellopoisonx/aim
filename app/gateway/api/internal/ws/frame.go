@@ -48,106 +48,83 @@ func EncodePayload(msg proto.Message) ([]byte, error) {
 func DecodePayload(frame *pb.WsFrame) (proto.Message, error) {
 	switch frame.GetType() {
 	case pb.FrameType_FRAME_TYPE_SEND_MESSAGE:
-		var payload pb.SendMessagePayload
-		if err := proto.Unmarshal(frame.GetPayload(), &payload); err != nil {
-			return nil, fmt.Errorf("decode sendmessage: %w", err)
-		}
-
-		return &payload, nil
+		return decodeInto(frame, &pb.SendMessagePayload{})
 	case pb.FrameType_FRAME_TYPE_HEARTBEAT:
-		var payload pb.HeartbeatPayload
-		if err := proto.Unmarshal(frame.GetPayload(), &payload); err != nil {
-			return nil, fmt.Errorf("decode heartbeat: %w", err)
-		}
-
-		return &payload, nil
+		return decodeInto(frame, &pb.HeartbeatPayload{})
 	case pb.FrameType_FRAME_TYPE_TYPING:
-		var payload pb.TypingPayload
-		if err := proto.Unmarshal(frame.GetPayload(), &payload); err != nil {
-			return nil, fmt.Errorf("decode typing: %w", err)
-		}
-
-		return &payload, nil
+		return decodeInto(frame, &pb.TypingPayload{})
 	case pb.FrameType_FRAME_TYPE_READ_RECEIPT:
-		var payload pb.ReadReceiptPayload
-		if err := proto.Unmarshal(frame.GetPayload(), &payload); err != nil {
-			return nil, fmt.Errorf("decode readreceipt: %w", err)
-		}
-
-		return &payload, nil
+		return decodeInto(frame, &pb.ReadReceiptPayload{})
 	case pb.FrameType_FRAME_TYPE_ACK:
-		var payload pb.ClientAckPayload
-		if err := proto.Unmarshal(frame.GetPayload(), &payload); err != nil {
-			return nil, fmt.Errorf("decode clientack: %w", err)
-		}
-
-		return &payload, nil
+		return decodeInto(frame, &pb.ClientAckPayload{})
 	case pb.FrameType_FRAME_TYPE_PUSH_MESSAGE:
-		var payload pb.PushMessagePayload
-		if err := proto.Unmarshal(frame.GetPayload(), &payload); err != nil {
-			return nil, fmt.Errorf("decode pushmessage: %w", err)
-		}
-
-		return &payload, nil
+		return decodeInto(frame, &pb.PushMessagePayload{})
 	case pb.FrameType_FRAME_TYPE_PUSH_PRESENCE:
-		var payload pb.PushPresencePayload
-		if err := proto.Unmarshal(frame.GetPayload(), &payload); err != nil {
-			return nil, fmt.Errorf("decode pushpresence: %w", err)
-		}
-
-		return &payload, nil
+		return decodeInto(frame, &pb.PushPresencePayload{})
 	case pb.FrameType_FRAME_TYPE_PUSH_NOTIFICATION:
-		var payload pb.PushNotificationPayload
-		if err := proto.Unmarshal(frame.GetPayload(), &payload); err != nil {
-			return nil, fmt.Errorf("decode pushnotification: %w", err)
-		}
-
-		return &payload, nil
+		return decodeInto(frame, &pb.PushNotificationPayload{})
 	case pb.FrameType_FRAME_TYPE_PUSH_FRIEND_APPLICATION:
-		var payload pb.PushFriendApplicationPayload
-		if err := proto.Unmarshal(frame.GetPayload(), &payload); err != nil {
-			return nil, fmt.Errorf("decode pushfriendapplication: %w", err)
-		}
-
-		return &payload, nil
+		return decodeInto(frame, &pb.PushFriendApplicationPayload{})
 	case pb.FrameType_FRAME_TYPE_PUSH_TYPING:
-		var payload pb.PushTypingPayload
-		if err := proto.Unmarshal(frame.GetPayload(), &payload); err != nil {
-			return nil, fmt.Errorf("decode pushtyping: %w", err)
-		}
-
-		return &payload, nil
+		return decodeInto(frame, &pb.PushTypingPayload{})
 	case pb.FrameType_FRAME_TYPE_PUSH_READ_RECEIPT:
-		var payload pb.PushReadReceiptPayload
-		if err := proto.Unmarshal(frame.GetPayload(), &payload); err != nil {
-			return nil, fmt.Errorf("decode pushreadreceipt: %w", err)
-		}
-
-		return &payload, nil
+		return decodeInto(frame, &pb.PushReadReceiptPayload{})
 	case pb.FrameType_FRAME_TYPE_RECONNECT:
-		var payload pb.ReconnectPayload
-		if err := proto.Unmarshal(frame.GetPayload(), &payload); err != nil {
-			return nil, fmt.Errorf("decode reconnect: %w", err)
-		}
-
-		return &payload, nil
+		return decodeInto(frame, &pb.ReconnectPayload{})
 	case pb.FrameType_FRAME_TYPE_TOKEN_EXPIRED:
-		var payload pb.TokenExpiredPayload
-		if err := proto.Unmarshal(frame.GetPayload(), &payload); err != nil {
-			return nil, fmt.Errorf("decode tokenexpired: %w", err)
-		}
-
-		return &payload, nil
+		return decodeInto(frame, &pb.TokenExpiredPayload{})
 	case pb.FrameType_FRAME_TYPE_SERVER_ACK:
-		var payload pb.ServerAckPayload
-		if err := proto.Unmarshal(frame.GetPayload(), &payload); err != nil {
-			return nil, fmt.Errorf("decode serverack: %w", err)
-		}
-
-		return &payload, nil
+		return decodeInto(frame, &pb.ServerAckPayload{})
 	default:
 		return nil, fmt.Errorf("unknown frame type: %v", frame.GetType())
 	}
+}
+
+// decodeInto unmarshals the frame payload into target.
+func decodeInto[T proto.Message](frame *pb.WsFrame, target T) (proto.Message, error) {
+	if err := proto.Unmarshal(frame.GetPayload(), target); err != nil {
+		return nil, fmt.Errorf("decode %s: %w", frame.GetType(), err)
+	}
+
+	return target, nil
+}
+
+// ServerAck describes the fields of a SERVER_ACK frame.
+type ServerAck struct {
+	// AckSeq is the seq of the client frame being acknowledged.
+	AckSeq int64
+	// ClientMsgID echoes the client's message id (may be empty).
+	ClientMsgID string
+	// Seq is the server sequence number for this frame (0 lets the writer
+	// assign one).
+	Seq int64
+	// Status classifies the acknowledgement.
+	Status pb.AckStatus
+	// Code is the biz code for rejected/retryable acks.
+	Code int32
+	// Msg is the human-readable reason.
+	Msg string
+	// MessageID is the stored message id for accepted sends.
+	MessageID int64
+}
+
+// NewServerAckFrame builds a SERVER_ACK frame from a ServerAck value.
+func NewServerAckFrame(ack ServerAck) (*pb.WsFrame, error) {
+	payload := &pb.ServerAckPayload{
+		AckSeq:      ack.AckSeq,
+		ClientMsgId: ack.ClientMsgID,
+		Status:      ack.Status,
+		Code:        ack.Code,
+		Msg:         ack.Msg,
+		MessageId:   ack.MessageID,
+	}
+
+	data, err := EncodePayload(payload)
+	if err != nil {
+		return nil, err
+	}
+
+	return BuildFrame(pb.FrameType_FRAME_TYPE_SERVER_ACK, ack.Seq, data), nil
 }
 
 // BuildFrame creates a WsFrame with the given type, sequence number, payload, and current timestamp.
@@ -166,33 +143,6 @@ func NewServerAck(ackSeq int64, clientMsgID string, seq int64) (*pb.WsFrame, err
 	payload := &pb.ServerAckPayload{
 		AckSeq:      ackSeq,
 		ClientMsgId: clientMsgID,
-	}
-
-	data, err := EncodePayload(payload)
-	if err != nil {
-		return nil, err
-	}
-
-	return BuildFrame(pb.FrameType_FRAME_TYPE_SERVER_ACK, seq, data), nil
-}
-
-// NewServerAckExtended builds a SERVER_ACK frame with extended fields for message send results.
-func NewServerAckExtended(
-	ackSeq int64,
-	clientMsgID string,
-	seq int64,
-	status pb.AckStatus,
-	code int32,
-	msg string,
-	messageID int64,
-) (*pb.WsFrame, error) {
-	payload := &pb.ServerAckPayload{
-		AckSeq:      ackSeq,
-		ClientMsgId: clientMsgID,
-		Status:      status,
-		Code:        code,
-		Msg:         msg,
-		MessageId:   messageID,
 	}
 
 	data, err := EncodePayload(payload)

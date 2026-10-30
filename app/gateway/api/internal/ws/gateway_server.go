@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/authctx"
+
 	"github.com/coder/websocket"
 	pb "github.com/hellopoisonx/aim/shared/proto/gateway/pb"
 	wspb "github.com/hellopoisonx/aim/shared/proto/ws/pb"
@@ -42,7 +44,7 @@ func (r writeRequest) complete(err error) {
 	}
 }
 
-func newConnection(identity Identity, conn *websocket.Conn, cancel context.CancelFunc, lastSeen int64) *Connection {
+func newConnection(identity authctx.Identity, conn *websocket.Conn, cancel context.CancelFunc, lastSeen int64) *Connection {
 	connection := &Connection{
 		Identity: identity,
 		Cancel:   cancel,
@@ -468,12 +470,12 @@ func (s *GatewayServer) DrainNotify(ctx context.Context, req *pb.DrainNotifyReq)
 	var affected int32
 
 	for _, conn := range connections {
-		// Send RECONNECT frame first.
+		// Send RECONNECT frame first. A connection that cannot be written is
+		// already broken, but it still has to be closed: schedule the shutdown
+		// either way so the drain does not leave half-dead sockets behind.
 		if err := conn.WriteFrame(ctx, wspb.FrameType_FRAME_TYPE_RECONNECT, payload); err != nil {
 			logx.WithContext(ctx).Errorf("DrainNotify: failed to send reconnect to user_id=%d device_id=%s: %v",
 				conn.Identity.UserID, conn.Identity.DeviceID, err)
-
-			continue
 		}
 
 		// Schedule close after drain timeout.

@@ -3,9 +3,10 @@ package userbots
 import (
 	"context"
 
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/authctx"
+
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
-	"github.com/hellopoisonx/aim/app/gateway/api/internal/ws"
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/botservice"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 
@@ -23,18 +24,15 @@ func NewGetUserBotLogic(ctx context.Context, svcCtx *svc.ServiceContext) *GetUse
 }
 
 func (l *GetUserBotLogic) GetUserBot(req *types.GetUserBotRequest) (resp *types.GetUserBotResponse, err error) {
-	identity, ok := ws.IdentityFromContext(l.ctx)
+	identity, ok := authctx.IdentityFromContext(l.ctx)
 	if !ok {
 		return nil, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
-	}
-	if l.svcCtx.LogicBotClient == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "bot service not configured")
 	}
 	rpcResp, err := l.svcCtx.LogicBotClient.GetUserBot(l.ctx, &botservice.GetUserBotReq{
 		OwnerUserId: identity.UserID, BotUserId: req.Id,
 	})
 	if err != nil {
-		return nil, sanitizeError(l, "get user bot", err)
+		return nil, errorx.SanitizeGRPCError(l, "get user bot", err)
 	}
 	return &types.GetUserBotResponse{Bot: userBotToType(rpcResp.GetBot())}, nil
 }

@@ -52,8 +52,7 @@ func TestIntegrationBotSDKClientAgainstInMemoryGateway(t *testing.T) {
 	require.NotEmpty(t, sent.MessageID)
 	require.Equal(t, "client-msg-it-1", sent.ClientMsgID)
 
-	history, err := client.GetConversationHistory(context.Background(), GetConversationHistoryRequest{
-		ConversationID:  integrationConversation,
+	history, err := client.GetConversationHistory(context.Background(), integrationConversation, GetConversationHistoryRequest{
 		CursorCreatedAt: 1700000000000,
 		CursorID:        "msg-0",
 		Limit:           10,
@@ -70,8 +69,7 @@ func TestIntegrationBotSDKClientAgainstInMemoryGateway(t *testing.T) {
 		members.Members[1].UserID,
 	})
 
-	markRead, err := client.MarkRead(context.Background(), MarkReadRequest{
-		ConversationID:    integrationConversation,
+	markRead, err := client.MarkRead(context.Background(), integrationConversation, MarkReadRequest{
 		LastReadMessageID: sent.MessageID,
 	})
 	require.NoError(t, err)

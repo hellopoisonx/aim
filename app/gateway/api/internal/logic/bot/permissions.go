@@ -24,10 +24,6 @@ func requireBotAction(ctx context.Context, action string) (botctx.BotIdentity, e
 }
 
 func requireWebhookEventActions(ctx context.Context, svcCtx *svc.ServiceContext, identity botctx.BotIdentity, events []string) error {
-	if svcCtx.LogicBotClient == nil {
-		return errorx.NewCodeError(errorx.CodeInternal, "internal error")
-	}
-
 	resp, err := svcCtx.LogicBotClient.ResolveBotWebhookEventActions(ctx, &botservice.ResolveBotWebhookEventActionsReq{Events: events})
 	if err != nil {
 		var ce *errorx.CodeError
@@ -35,11 +31,7 @@ func requireWebhookEventActions(ctx context.Context, svcCtx *svc.ServiceContext,
 			return ce
 		}
 
-		if ce := errorx.FromGRPCError(err); ce != nil {
-			return ce
-		}
-
-		return errorx.NewCodeError(errorx.CodeInternal, "internal error")
+		return errorx.SanitizeGRPCErrorNoLog(err)
 	}
 
 	for _, ea := range resp.GetEventActions() {

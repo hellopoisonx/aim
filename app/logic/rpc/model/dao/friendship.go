@@ -25,7 +25,7 @@ func (s *Store) GetFriendshipBidirectional(ctx context.Context, userID, friendID
 	if err := s.db.WithContext(ctx).
 		Where("(user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)", userID, friendID, friendID, userID).
 		Find(&rows).Error; err != nil {
-		return nil, translate(err)
+		return nil, err
 	}
 
 	return rows, nil
@@ -37,7 +37,7 @@ func (s *Store) GetFriendshipByPair(ctx context.Context, userID, friendID int64)
 	if err := s.db.WithContext(ctx).
 		Where("user_id = ? AND friend_id = ?", userID, friendID).
 		First(&row).Error; err != nil {
-		return orm.Friendship{}, translate(err)
+		return orm.Friendship{}, err
 	}
 
 	return row, nil
@@ -51,7 +51,7 @@ func (s *Store) UpsertFriendship(ctx context.Context, userID, friendID int64, st
 		DoUpdates: clause.Assignments(map[string]any{"status": status, "updated_at": time.Now()}),
 	}).Create(&row).Error
 	if err != nil {
-		return orm.Friendship{}, translate(err)
+		return orm.Friendship{}, err
 	}
 
 	return s.GetFriendshipByPair(ctx, userID, friendID)
@@ -64,7 +64,7 @@ func (s *Store) ListPendingFriendApplications(ctx context.Context, friendID int6
 		Where("friend_id = ? AND status = 'pending'", friendID).
 		Order("created_at DESC").
 		Find(&rows).Error; err != nil {
-		return nil, translate(err)
+		return nil, err
 	}
 
 	return rows, nil
@@ -97,7 +97,7 @@ ORDER BY updated_at DESC`
 
 	var rows []orm.Friendship
 	if err := s.db.WithContext(ctx).Raw(query, userID, userID, userID, userID).Scan(&rows).Error; err != nil {
-		return nil, translate(err)
+		return nil, err
 	}
 
 	return rows, nil
@@ -131,7 +131,7 @@ ORDER BY deduped.updated_at DESC`
 
 	var rows []orm.Friendship
 	if err := s.db.WithContext(ctx).Raw(query, userID, userID, userID, userID, userID, tagID).Scan(&rows).Error; err != nil {
-		return nil, translate(err)
+		return nil, err
 	}
 
 	return rows, nil
@@ -167,7 +167,7 @@ ORDER BY deduped.updated_at DESC`
 
 	var rows []orm.Friendship
 	if err := s.db.WithContext(ctx).Raw(query, userID, userID, userID, userID, userID, name).Scan(&rows).Error; err != nil {
-		return nil, translate(err)
+		return nil, err
 	}
 
 	return rows, nil
@@ -216,7 +216,7 @@ LIMIT ?`
 		userID, search,
 		limit,
 	).Scan(&rows).Error; err != nil {
-		return nil, translate(err)
+		return nil, err
 	}
 
 	return rows, nil
@@ -226,7 +226,7 @@ LIMIT ?`
 func (s *Store) CreateFriendTag(ctx context.Context, id, userID int64, name string) (orm.FriendTag, error) {
 	tag := orm.FriendTag{ID: id, UserID: userID, Name: name}
 	if err := s.db.WithContext(ctx).Create(&tag).Error; err != nil {
-		return orm.FriendTag{}, translate(err)
+		return orm.FriendTag{}, err
 	}
 
 	return tag, nil
@@ -238,7 +238,7 @@ func (s *Store) GetFriendTagByID(ctx context.Context, userID, tagID int64) (orm.
 	if err := s.db.WithContext(ctx).
 		Where("user_id = ? AND id = ?", userID, tagID).
 		First(&tag).Error; err != nil {
-		return orm.FriendTag{}, translate(err)
+		return orm.FriendTag{}, err
 	}
 
 	return tag, nil
@@ -255,7 +255,7 @@ func (s *Store) GetFriendTagsByIDs(ctx context.Context, userID int64, ids []int6
 		Where("user_id = ? AND id IN ?", userID, ids).
 		Order("name ASC, id ASC").
 		Find(&tags).Error; err != nil {
-		return nil, translate(err)
+		return nil, err
 	}
 
 	return tags, nil
@@ -268,7 +268,7 @@ func (s *Store) ListFriendTags(ctx context.Context, userID int64) ([]orm.FriendT
 		Where("user_id = ?", userID).
 		Order("updated_at DESC, name ASC, id ASC").
 		Find(&tags).Error; err != nil {
-		return nil, translate(err)
+		return nil, err
 	}
 
 	return tags, nil
@@ -281,7 +281,7 @@ func (s *Store) RenameFriendTag(ctx context.Context, userID, tagID int64, name s
 		Where("user_id = ? AND id = ?", userID, tagID).
 		Updates(map[string]any{"name": name, "updated_at": time.Now()})
 	if result.Error != nil {
-		return orm.FriendTag{}, translate(result.Error)
+		return orm.FriendTag{}, result.Error
 	}
 	if result.RowsAffected == 0 {
 		return orm.FriendTag{}, ErrNotFound
@@ -296,7 +296,7 @@ func (s *Store) DeleteFriendTag(ctx context.Context, userID, tagID int64) (int64
 		Where("user_id = ? AND id = ?", userID, tagID).
 		Delete(&orm.FriendTag{})
 	if result.Error != nil {
-		return 0, translate(result.Error)
+		return 0, result.Error
 	}
 
 	return result.RowsAffected, nil
@@ -308,7 +308,7 @@ func (s *Store) ReplaceFriendTags(ctx context.Context, userID, friendID int64, t
 		if err := tx.db.WithContext(ctx).
 			Where("user_id = ? AND friend_id = ?", userID, friendID).
 			Delete(&orm.FriendTagAssignment{}).Error; err != nil {
-			return translate(err)
+			return err
 		}
 
 		if len(tagIDs) == 0 {
@@ -326,7 +326,7 @@ func (s *Store) ReplaceFriendTags(ctx context.Context, userID, friendID int64, t
 		if err := tx.db.WithContext(ctx).
 			Clauses(clause.OnConflict{DoNothing: true}).
 			Create(&assignments).Error; err != nil {
-			return translate(err)
+			return err
 		}
 
 		return nil
@@ -339,7 +339,7 @@ func (s *Store) RemoveFriendTagAssignment(ctx context.Context, userID, friendID,
 		Where("user_id = ? AND friend_id = ? AND tag_id = ?", userID, friendID, tagID).
 		Delete(&orm.FriendTagAssignment{})
 	if result.Error != nil {
-		return 0, translate(result.Error)
+		return 0, result.Error
 	}
 
 	return result.RowsAffected, nil
@@ -356,7 +356,7 @@ ORDER BY ft.name ASC, ft.id ASC`
 
 	var tags []orm.FriendTag
 	if err := s.db.WithContext(ctx).Raw(query, userID, friendID).Scan(&tags).Error; err != nil {
-		return nil, translate(err)
+		return nil, err
 	}
 
 	return tags, nil

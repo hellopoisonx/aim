@@ -33,7 +33,7 @@ NEED_ROOT_CMDS=(init up down restart backup rollback config)
 # 部署必须存在的服务配置。
 REQUIRED_CONFIG_FILES=(auth.yaml logic.yaml core.yaml gateway-api.yaml attachment.yaml data_parsing.yaml seaweed-s3.json)
 # 一键迁移服务（按顺序跑，依赖图来自 deploy/compose/base.yaml）。
-INIT_SERVICES=(auth-migrate logic-migrate kafka-init seaweed-bucket-init)
+INIT_SERVICES=(auth-migrate logic-migrate attachment-migrate kafka-init seaweed-bucket-init)
 
 # === 输出样式 ================================================================
 

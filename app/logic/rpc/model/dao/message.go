@@ -17,7 +17,7 @@ type MessageSearchRow struct {
 // the caller leaves it zero.
 func (s *Store) InsertMessage(ctx context.Context, message orm.Message) error {
 	if err := s.db.WithContext(ctx).Create(&message).Error; err != nil {
-		return translate(err)
+		return err
 	}
 
 	return nil
@@ -32,7 +32,7 @@ func (s *Store) ListMessagesByConversation(ctx context.Context, conversationID i
 		Order("created_at DESC, id DESC").
 		Limit(int(limit)).
 		Find(&messages).Error; err != nil {
-		return nil, translate(err)
+		return nil, err
 	}
 
 	return messages, nil
@@ -46,7 +46,7 @@ func (s *Store) ListMessagesByConversationInitial(ctx context.Context, conversat
 		Order("created_at DESC, id DESC").
 		Limit(int(limit)).
 		Find(&messages).Error; err != nil {
-		return nil, translate(err)
+		return nil, err
 	}
 
 	return messages, nil
@@ -59,7 +59,7 @@ func (s *Store) CountMessagesByConversation(ctx context.Context, conversationID 
 		Model(&orm.Message{}).
 		Where("conversation_id = ?", conversationID).
 		Count(&count).Error; err != nil {
-		return 0, translate(err)
+		return 0, err
 	}
 
 	return count, nil
@@ -86,18 +86,13 @@ WHERE (
 ORDER BY m.created_at DESC, m.id DESC
 LIMIT ?`
 
-	var cursor any
-	if cursorCreatedAt != nil {
-		cursor = *cursorCreatedAt
-	}
-
 	var rows []MessageSearchRow
 	if err := s.db.WithContext(ctx).Raw(query,
 		search, userID, search, search,
-		cursor, cursor, cursor, cursorID,
+		cursorCreatedAt, cursorCreatedAt, cursorCreatedAt, cursorID,
 		limit,
 	).Scan(&rows).Error; err != nil {
-		return nil, translate(err)
+		return nil, err
 	}
 
 	return rows, nil
@@ -124,18 +119,13 @@ WHERE m.conversation_id = ?
 ORDER BY m.created_at DESC, m.id DESC
 LIMIT ?`
 
-	var cursor any
-	if cursorCreatedAt != nil {
-		cursor = *cursorCreatedAt
-	}
-
 	var rows []MessageSearchRow
 	if err := s.db.WithContext(ctx).Raw(query,
 		search, userID, conversationID, search, search,
-		cursor, cursor, cursor, cursorID,
+		cursorCreatedAt, cursorCreatedAt, cursorCreatedAt, cursorID,
 		limit,
 	).Scan(&rows).Error; err != nil {
-		return nil, translate(err)
+		return nil, err
 	}
 
 	return rows, nil

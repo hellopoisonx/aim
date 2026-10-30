@@ -6,19 +6,22 @@ package orm
 import (
 	"time"
 
+	sharedconversation "github.com/hellopoisonx/aim/app/shared/conversation"
+
+	"github.com/hellopoisonx/aim/app/shared/pgtypes"
+
 	"github.com/lib/pq"
-	"gorm.io/datatypes"
 )
 
 // Conversation maps table conversations (001, 004).
 type Conversation struct {
-	ID               int64     `gorm:"column:id;primaryKey" json:"id"`
-	ConversationType string    `gorm:"column:conversation_type;size:16;not null;default:direct" json:"conversation_type"`
-	IsActive         bool      `gorm:"column:is_active;not null;default:true" json:"is_active"`
-	Name             string    `gorm:"column:name;size:128;not null;default:''" json:"name"`
-	Avatar           string    `gorm:"column:avatar;size:512;not null;default:''" json:"avatar"`
-	CreatorID        int64     `gorm:"column:creator_id;not null;default:0" json:"creator_id"`
-	CreatedAt        time.Time `gorm:"column:created_at;not null" json:"created_at"`
+	ID               int64                   `gorm:"column:id;primaryKey" json:"id"`
+	ConversationType sharedconversation.Type `gorm:"column:conversation_type;size:16;not null;default:direct" json:"conversation_type"`
+	IsActive         bool                    `gorm:"column:is_active;not null;default:true" json:"is_active"`
+	Name             string                  `gorm:"column:name;size:128;not null;default:''" json:"name"`
+	Avatar           string                  `gorm:"column:avatar;size:512;not null;default:''" json:"avatar"`
+	CreatorID        int64                   `gorm:"column:creator_id;not null;default:0" json:"creator_id"`
+	CreatedAt        time.Time               `gorm:"column:created_at;not null" json:"created_at"`
 }
 
 // TableName pins the physical table name (GORM default would be "conversations", keep explicit).
@@ -26,12 +29,12 @@ func (Conversation) TableName() string { return "conversations" }
 
 // ConversationMember maps table conversation_members (001, 004).
 type ConversationMember struct {
-	ConversationID int64      `gorm:"column:conversation_id;primaryKey" json:"conversation_id"`
-	UserID         int64      `gorm:"column:user_id;primaryKey" json:"user_id"`
-	IsMuted        bool       `gorm:"column:is_muted;not null;default:false" json:"is_muted"`
-	MutedUntil     *time.Time `gorm:"column:muted_until" json:"muted_until"`
-	JoinedAt       time.Time  `gorm:"column:joined_at;not null;default:now()" json:"joined_at"`
-	Role           string     `gorm:"column:role;size:16;not null;default:member" json:"role"`
+	ConversationID int64                   `gorm:"column:conversation_id;primaryKey" json:"conversation_id"`
+	UserID         int64                   `gorm:"column:user_id;primaryKey" json:"user_id"`
+	IsMuted        bool                    `gorm:"column:is_muted;not null;default:false" json:"is_muted"`
+	MutedUntil     *time.Time              `gorm:"column:muted_until" json:"muted_until"`
+	JoinedAt       time.Time               `gorm:"column:joined_at;not null;default:now()" json:"joined_at"`
+	Role           sharedconversation.Role `gorm:"column:role;size:16;not null;default:member" json:"role"`
 }
 
 // TableName pins the physical table name.
@@ -51,14 +54,14 @@ func (Friendship) TableName() string { return "friendships" }
 
 // Message maps table messages (002). Content/Mentions are JSONB columns.
 type Message struct {
-	ID             int64          `gorm:"column:id;primaryKey" json:"id"`
-	ConversationID int64          `gorm:"column:conversation_id;not null" json:"conversation_id"`
-	SenderID       int64          `gorm:"column:sender_id;not null" json:"sender_id"`
-	MessageType    string         `gorm:"column:message_type;size:32;not null" json:"message_type"`
-	Content        datatypes.JSON `gorm:"column:content;type:jsonb;not null;default:'{}'" json:"content"`
-	ClientMsgID    *string        `gorm:"column:client_msg_id;size:256" json:"client_msg_id"`
-	Mentions       datatypes.JSON `gorm:"column:mentions;type:jsonb;default:'[]'" json:"mentions"`
-	CreatedAt      time.Time      `gorm:"column:created_at;not null" json:"created_at"`
+	ID             int64        `gorm:"column:id;primaryKey" json:"id"`
+	ConversationID int64        `gorm:"column:conversation_id;not null" json:"conversation_id"`
+	SenderID       int64        `gorm:"column:sender_id;not null" json:"sender_id"`
+	MessageType    string       `gorm:"column:message_type;size:32;not null" json:"message_type"`
+	Content        pgtypes.JSON `gorm:"column:content;type:jsonb;not null;default:'{}'" json:"content"`
+	ClientMsgID    *string      `gorm:"column:client_msg_id;size:256" json:"client_msg_id"`
+	Mentions       pgtypes.JSON `gorm:"column:mentions;type:jsonb;default:'[]'" json:"mentions"`
+	CreatedAt      time.Time    `gorm:"column:created_at;not null" json:"created_at"`
 }
 
 // TableName pins the physical table name.

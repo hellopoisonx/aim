@@ -36,8 +36,12 @@ func NewConversationEventConsumer(ctx context.Context, svcCtx *svc.ServiceContex
 func (c *ConversationEventConsumer) Consume(ctx context.Context, key string, value string) error {
 	var event conversationEvent
 	if err := json.Unmarshal([]byte(value), &event); err != nil {
-		logx.WithContext(ctx).Errorf("failed to unmarshal conversation event: %v", err)
-		return err
+		// A malformed payload never decodes on redelivery: dropping it keeps the
+		// partition moving instead of replaying the same poison message forever.
+		logx.WithContext(ctx).Errorf(
+			"dropping undecodable conversation event key=%s: %v payload=%q", key, err, value,
+		)
+		return nil
 	}
 
 	ctx = tracing.ExtractTraceContext(ctx, event.TraceContextFields)

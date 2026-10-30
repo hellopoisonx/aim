@@ -39,7 +39,7 @@ func (l *AcceptFriendLogic) AcceptFriend(in *pb.AcceptFriendReq) (*pb.AcceptFrie
 	}
 
 	if userID == friendID {
-		return nil, FriendshipToGRPCError(service.ErrSelfAdd)
+		return nil, errorx.ToGRPCError(service.ErrSelfAdd)
 	}
 
 	store := l.svcCtx.FriendshipDAO
@@ -52,25 +52,25 @@ func (l *AcceptFriendLogic) AcceptFriend(in *pb.AcceptFriendReq) (*pb.AcceptFrie
 	pendingRecord, err := store.GetFriendshipByPair(l.ctx, friendID, userID)
 	if err != nil {
 		if errors.Is(err, dao.ErrNotFound) {
-			return nil, FriendshipToGRPCError(service.ErrFriendNotFound)
+			return nil, errorx.ToGRPCError(service.ErrFriendNotFound)
 		}
-		return nil, FriendshipToGRPCError(err)
+		return nil, errorx.ToGRPCError(err)
 	}
 
 	if pendingRecord.Status != service.FriendshipStatusPending {
-		return nil, FriendshipToGRPCError(service.ErrNotPending)
+		return nil, errorx.ToGRPCError(service.ErrNotPending)
 	}
 
 	// Update the existing pending record to "accepted".
 	acceptedRecord, err := store.UpsertFriendship(l.ctx, friendID, userID, service.FriendshipStatusAccepted)
 	if err != nil {
-		return nil, FriendshipToGRPCError(err)
+		return nil, errorx.ToGRPCError(err)
 	}
 
 	// Create the reverse record (user_id→friend_id, "accepted").
 	_, err = store.UpsertFriendship(l.ctx, userID, friendID, service.FriendshipStatusAccepted)
 	if err != nil {
-		return nil, FriendshipToGRPCError(err)
+		return nil, errorx.ToGRPCError(err)
 	}
 	l.svcCtx.InvalidateFriendship(l.ctx, userID, friendID)
 

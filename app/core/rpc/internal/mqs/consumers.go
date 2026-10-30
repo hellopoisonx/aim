@@ -44,5 +44,12 @@ func Consumers(ctx context.Context, svcCtx *svc.ServiceContext) []service.Servic
 		logx.WithContext(ctx).Infof("attachment parsed consumer registered: topic=%s", svcCtx.Config.AttachmentParsedConsumerConf.Topic)
 	}
 
+	// Friend application consumer (optional): fans friendship changes out to
+	// every gateway node holding the target user's connections.
+	if len(svcCtx.Config.FriendApplicationConsumerConf.Brokers) > 0 && svcCtx.Config.FriendApplicationConsumerConf.Topic != "" {
+		svcs = append(svcs, kq.MustNewQueue(svcCtx.Config.FriendApplicationConsumerConf, NewFriendApplicationConsumer(ctx, svcCtx)))
+		logx.WithContext(ctx).Infof("friend application consumer registered: topic=%s", svcCtx.Config.FriendApplicationConsumerConf.Topic)
+	}
+
 	return svcs
 }

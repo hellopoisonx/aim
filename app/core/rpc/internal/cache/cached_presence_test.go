@@ -5,8 +5,8 @@ import (
 	"testing"
 
 	"github.com/alicebob/miniredis/v2"
+	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/require"
-	gzredis "github.com/zeromicro/go-zero/core/stores/redis"
 )
 
 func TestCachedPresenceStoreCachesGatewayNodes(t *testing.T) {
@@ -14,8 +14,7 @@ func TestCachedPresenceStoreCachesGatewayNodes(t *testing.T) {
 	require.NoError(t, err)
 	defer mr.Close()
 
-	rds, err := gzredis.NewRedis(gzredis.RedisConf{Host: mr.Addr(), Type: gzredis.NodeType})
-	require.NoError(t, err)
+	rds := redis.NewClient(&redis.Options{Addr: mr.Addr()})
 	store, err := NewCachedPresenceStore(rds, 30)
 	require.NoError(t, err)
 
@@ -26,7 +25,7 @@ func TestCachedPresenceStoreCachesGatewayNodes(t *testing.T) {
 	require.NoError(t, err)
 	require.ElementsMatch(t, []string{"gw-a"}, nodes)
 
-	_, err = rds.SaddCtx(ctx, "aim:user_gateway:42", "gw-b")
+	err = rds.SAdd(ctx, "aim:user_gateway:42", "gw-b").Err()
 	require.NoError(t, err)
 
 	nodes, err = store.GetUserGatewayNodes(ctx, 42)
@@ -44,8 +43,7 @@ func TestCachedPresenceStoreIsUserOnline(t *testing.T) {
 	require.NoError(t, err)
 	defer mr.Close()
 
-	rds, err := gzredis.NewRedis(gzredis.RedisConf{Host: mr.Addr(), Type: gzredis.NodeType})
-	require.NoError(t, err)
+	rds := redis.NewClient(&redis.Options{Addr: mr.Addr()})
 	store, err := NewCachedPresenceStore(rds, 30)
 	require.NoError(t, err)
 

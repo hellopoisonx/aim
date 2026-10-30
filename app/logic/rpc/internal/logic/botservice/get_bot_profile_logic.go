@@ -3,7 +3,6 @@ package botservicelogic
 import (
 	"context"
 
-	"github.com/hellopoisonx/aim/app/logic/rpc/internal/service"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
@@ -37,7 +36,7 @@ func (l *GetBotProfileLogic) GetBotProfile(in *pb.GetBotProfileReq) (*pb.GetBotP
 
 	info, err := l.svcCtx.BotService.GetBotProfile(l.ctx, in.GetBotUserId())
 	if err != nil {
-		return nil, service.ToGRPCError(err)
+		return nil, errorx.ToGRPCError(err)
 	}
 
 	return &pb.GetBotProfileResp{

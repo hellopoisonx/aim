@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"errors"
 	"strings"
 	"time"
 
@@ -19,7 +18,7 @@ const (
 	maxSearchLimit     = 100
 )
 
-var ErrSearchQueryEmpty = errors.New("search query must not be empty")
+var ErrSearchQueryEmpty = errorx.NewCodeError(CodeSearchQueryEmpty, "search query must not be empty")
 
 // SearchStore defines the DAO queries needed by the search service.
 type SearchStore interface {
@@ -112,18 +111,37 @@ type SearchResults struct {
 // UnifiedSearchFn defines the function type for search methods.
 type UnifiedSearchFn func(ctx context.Context, query string, limit int32) (*SearchResults, error)
 
+// SearchParams carries one search request.
+//
+// The fields mirror the RPC request so callers read like the API they serve;
+// nothing is positional, and optional scoping is explicit.
+type SearchParams struct {
+	// UserID is the caller whose visibility scopes the results.
+	UserID int64
+	// Query is the raw search text; surrounding space is ignored.
+	Query string
+	// Scopes restricts the categories searched (users, friends, conversations,
+	// messages). Empty means all.
+	Scopes []string
+	// ConversationID restricts message hits to one conversation. Zero searches
+	// every conversation the caller belongs to.
+	ConversationID int64
+	// CursorCreatedAt and CursorID page message results; zero means the first page.
+	CursorCreatedAt int64
+	CursorID        int64
+	// Limit is the per-category page size (defaults to 20, capped at 100).
+	Limit int32
+}
+
 // Search searches across the given scopes.
-func (s *SearchService) Search(
-	ctx context.Context,
-	userID int64,
-	query string,
-	scopes []string,
-	conversationID int64,
-	cursorCreatedAt int64,
-	cursorID int64,
-	limit int32,
-) (*SearchResults, error) {
-	query = strings.TrimSpace(query)
+func (s *SearchService) Search(ctx context.Context, params SearchParams) (*SearchResults, error) {
+	userID := params.UserID
+	query := strings.TrimSpace(params.Query)
+	scopes := params.Scopes
+	conversationID := params.ConversationID
+	cursorCreatedAt := params.CursorCreatedAt
+	cursorID := params.CursorID
+	limit := params.Limit
 	if query == "" {
 		return nil, ErrSearchQueryEmpty
 	}
@@ -236,7 +254,7 @@ func (s *SearchService) searchConversations(ctx context.Context, userID int64, q
 	for _, row := range rows {
 		results = append(results, SearchConversationResult{
 			ConversationID:   row.ID,
-			ConversationType: row.ConversationType,
+			ConversationType: string(row.ConversationType),
 			IsActive:         row.IsActive,
 			Name:             row.Name,
 			Avatar:           row.Avatar,
@@ -331,15 +349,4 @@ func buildMessageResults(rows []dao.MessageSearchRow, maxRows int32) ([]SearchMe
 	}
 
 	return results, nextCreatedAt, nextID, hasMore, nil
-}
-
-// SearchErrToGRPCError converts search errors to gRPC errors.
-func SearchErrToGRPCError(err error) error {
-	switch {
-	case errors.Is(err, ErrSearchQueryEmpty):
-		return errorx.NewCodeError(CodeSearchQueryEmpty, "search query must not be empty")
-	case err != nil:
-		return errorx.NewCodeError(errorx.CodeInternal, "internal error")
-	}
-	return nil
 }

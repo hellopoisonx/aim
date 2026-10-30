@@ -1,17 +1,17 @@
 package middleware
 
 import (
-	"encoding/json"
 	"net/http"
 
-	"github.com/hellopoisonx/aim/app/gateway/api/internal/ws"
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/authctx"
+
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/httperr"
 	wsauth "github.com/hellopoisonx/aim/app/gateway/api/internal/ws/auth"
-	"github.com/hellopoisonx/aim/app/shared/errorx"
 )
 
 // AuthMiddleware validates JWT tokens on protected REST endpoints.
-// On success, it injects ws.Identity into the request context so downstream
-// logic can extract UserID and DeviceID via ws.IdentityFromContext.
+// On success, it injects authctx.Identity into the request context so downstream
+// logic can extract UserID and DeviceID via authctx.IdentityFromContext.
 type AuthMiddleware struct {
 	secretKey string
 }
@@ -31,32 +31,18 @@ func (m *AuthMiddleware) Handle(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		authHeader := r.Header.Get("Authorization")
 
-		claims, codeErr := wsauth.ExtractAndValidate(authHeader, m.secretKey)
-		if codeErr != nil {
-			writeAuthError(w, codeErr)
+		claims, err := wsauth.ExtractAndValidate(authHeader, m.secretKey)
+		if err != nil {
+			httperr.Write(w, err)
 			return
 		}
 
-		identity := ws.Identity{
+		identity := authctx.Identity{
 			UserID:   claims.UserID,
 			DeviceID: claims.DeviceID,
 		}
 
-		ctx := ws.WithIdentity(r.Context(), identity)
+		ctx := authctx.WithIdentity(r.Context(), identity)
 		next(w, r.WithContext(ctx))
 	}
-}
-
-// writeAuthError writes a JSON error response matching the project envelope.
-func writeAuthError(w http.ResponseWriter, codeErr *errorx.CodeError) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusUnauthorized)
-
-	_ = json.NewEncoder(w).Encode(struct {
-		Code int    `json:"code"`
-		Msg  string `json:"msg"`
-	}{
-		Code: codeErr.Code,
-		Msg:  codeErr.Message,
-	})
 }

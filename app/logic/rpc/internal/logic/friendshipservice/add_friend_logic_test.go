@@ -2,7 +2,6 @@ package friendshipservicelogic
 
 import (
 	"context"
-	"errors"
 	"testing"
 	"time"
 
@@ -125,7 +124,7 @@ func TestAddFriend_SelfAdd(t *testing.T) {
 
 	var codeErr *errorx.CodeError
 	require.ErrorAs(t, err, &codeErr)
-	assert.Equal(t, errorx.CodeBadInput, codeErr.Code)
+	assert.Equal(t, service.CodeSelfAdd, codeErr.Code)
 }
 
 func TestAddFriend_InvalidIDs(t *testing.T) {
@@ -212,7 +211,8 @@ func TestAddFriend_TargetUserNotFound(t *testing.T) {
 
 	var codeErr *errorx.CodeError
 	require.ErrorAs(t, err, &codeErr)
-	assert.Equal(t, errorx.CodeNotFound, codeErr.Code)
+	// The shared auth sentinel for "user not found" keeps its own code.
+	assert.Equal(t, errorx.CodeUserNotFound, codeErr.Code)
 }
 
 func TestAddFriend_DatabaseNotConfigured(t *testing.T) {
@@ -293,44 +293,6 @@ func TestAddFriend_BlockedRelationship(t *testing.T) {
 
 	var codeErr *errorx.CodeError
 	require.ErrorAs(t, err, &codeErr)
-	assert.Equal(t, errorx.CodeForbidden, codeErr.Code)
-}
-
-func TestFriendshipToGRPCError(t *testing.T) {
-	tests := []struct {
-		name     string
-		inputErr error
-		expected int
-	}{
-		{
-			name:     "user not found",
-			inputErr: service.ErrUserNotFound,
-			expected: errorx.CodeNotFound,
-		},
-		{
-			name:     "self add",
-			inputErr: service.ErrSelfAdd,
-			expected: errorx.CodeBadInput,
-		},
-		{
-			name:     "blocked",
-			inputErr: service.ErrBlocked,
-			expected: errorx.CodeForbidden,
-		},
-		{
-			name:     "unknown error",
-			inputErr: errors.New("some unknown error"),
-			expected: errorx.CodeInternal,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := FriendshipToGRPCError(tt.inputErr)
-
-			var codeErr *errorx.CodeError
-			require.ErrorAs(t, err, &codeErr)
-			assert.Equal(t, tt.expected, codeErr.Code)
-		})
-	}
+	// The blocked relationship keeps its precise domain code.
+	assert.Equal(t, service.CodeBlocked, codeErr.Code)
 }

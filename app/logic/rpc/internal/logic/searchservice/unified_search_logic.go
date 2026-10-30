@@ -35,18 +35,17 @@ func (l *UnifiedSearchLogic) UnifiedSearch(in *pb.UnifiedSearchReq) (*pb.Unified
 		return nil, errorx.NewCodeError(errorx.CodeInternal, "search service not configured")
 	}
 
-	results, err := l.svcCtx.SearchService.Search(
-		l.ctx,
-		in.GetUserId(),
-		in.GetQuery(),
-		in.GetScopes(),
-		in.GetConversationId(),
-		in.GetCursorCreatedAt(),
-		in.GetCursorId(),
-		in.GetLimit(),
-	)
+	results, err := l.svcCtx.SearchService.Search(l.ctx, service.SearchParams{
+		UserID:          in.GetUserId(),
+		Query:           in.GetQuery(),
+		Scopes:          in.GetScopes(),
+		ConversationID:  in.GetConversationId(),
+		CursorCreatedAt: in.GetCursorCreatedAt(),
+		CursorID:        in.GetCursorId(),
+		Limit:           in.GetLimit(),
+	})
 	if err != nil {
-		return nil, service.SearchErrToGRPCError(err)
+		return nil, errorx.ToGRPCError(err)
 	}
 
 	pbUsers := make([]*pb.SearchUserResult, 0, len(results.Users))

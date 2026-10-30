@@ -239,3 +239,93 @@ func TestConfigCleanupDisabled(t *testing.T) {
 		t.Errorf("negative CleanupInterval should become 0 (disabled), got %v", c.CleanupInterval)
 	}
 }
+
+func TestPollerPoisonRecordDoesNotBlockLaterRecords(t *testing.T) {
+	store := &memoryStore{}
+
+	pub := func(_ context.Context, _ string, key string, _ []byte) error {
+		if key == "poison" {
+			return errors.New("permanently unpublishable")
+		}
+		return nil
+	}
+
+	poller := NewPoller(store, pub, Config{
+		BatchSize:    10,
+		PollInterval: 20 * time.Millisecond,
+	})
+	ctx := t.Context()
+	poller.Start(ctx)
+	defer poller.Stop()
+
+	if _, err := store.Insert(ctx, "test.topic", "poison", []byte("bad")); err != nil {
+		t.Fatal(err)
+	}
+	for range 3 {
+		if _, err := store.Insert(ctx, "test.topic", "good", []byte("ok")); err != nil {
+			t.Fatal(err)
+		}
+	}
+	poller.Wake()
+
+	deadline := time.After(2 * time.Second)
+	for store.pendingCount() > 1 {
+		select {
+		case <-deadline:
+			t.Fatalf("healthy records were not delivered past the poison record, pending=%d", store.pendingCount())
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
+}
+
+func TestPollerStartIsIdempotent(t *testing.T) {
+	store := &countingStore{}
+	poller := NewPoller(store, func(context.Context, string, string, []byte) error { return nil }, Config{
+		BatchSize:       10,
+		PollInterval:    10 * time.Millisecond,
+		CleanupInterval: -1,
+	})
+	ctx := t.Context()
+	poller.Start(ctx)
+	poller.Start(ctx)
+	poller.Start(ctx)
+
+	time.Sleep(120 * time.Millisecond)
+	poller.Stop()
+
+	// A single loop polls roughly every 10ms: expect ~12 fetches, not 3x that.
+	if got := store.fetchCount(); got > 25 {
+		t.Fatalf("Start spawned duplicate poll loops: %d fetches in 120ms", got)
+	}
+}
+
+type countingStore struct {
+	mu       sync.Mutex
+	fetches  int
+	backoff  bool
+	inserted bool
+}
+
+func (s *countingStore) Insert(context.Context, string, string, []byte) (int64, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.inserted = true
+	return 1, nil
+}
+
+func (s *countingStore) FetchPending(context.Context, int) ([]Record, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.fetches++
+	return nil, nil
+}
+
+func (s *countingStore) MarkProcessed(context.Context, []int64) (int64, error) { return 0, nil }
+
+func (s *countingStore) DeleteBefore(context.Context, time.Time) (int64, error) { return 0, nil }
+
+func (s *countingStore) fetchCount() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.fetches
+}

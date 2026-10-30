@@ -4,9 +4,10 @@ import (
 	"context"
 	"strings"
 
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/authctx"
+
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
-	"github.com/hellopoisonx/aim/app/gateway/api/internal/ws"
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/conversationservice"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 
@@ -28,13 +29,9 @@ func NewUpdateGroupInfoLogic(ctx context.Context, svcCtx *svc.ServiceContext) *U
 }
 
 func (l *UpdateGroupInfoLogic) UpdateGroupInfo(req *types.UpdateGroupInfoRequest) (resp *types.UpdateGroupInfoResponse, err error) {
-	identity, ok := ws.IdentityFromContext(l.ctx)
+	identity, ok := authctx.IdentityFromContext(l.ctx)
 	if !ok {
 		return nil, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
-	}
-
-	if l.svcCtx.LogicConversationClient == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "internal error")
 	}
 
 	var name, avatar *string

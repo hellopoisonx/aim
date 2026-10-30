@@ -3,7 +3,6 @@ package conversationservicelogic
 import (
 	"context"
 
-	"github.com/hellopoisonx/aim/app/logic/rpc/internal/service"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
@@ -34,7 +33,7 @@ func (l *ListConversationReadStatesLogic) ListConversationReadStates(in *pb.List
 
 	states, err := convSvc.ListConversationReadStates(l.ctx, in.GetConversationId())
 	if err != nil {
-		return nil, service.ConversationToGRPCError(err)
+		return nil, errorx.ToGRPCError(err)
 	}
 
 	items := make([]*pb.ReadStateItem, len(states))

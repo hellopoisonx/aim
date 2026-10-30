@@ -5,7 +5,8 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/hellopoisonx/aim/app/gateway/api/internal/ws"
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/authctx"
+
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 	"github.com/hellopoisonx/aim/app/shared/quota"
 	"github.com/zeromicro/go-zero/core/logx"
@@ -13,7 +14,7 @@ import (
 
 // UserRateLimitMiddleware enforces a per-(device_id, user_id) sliding-window
 // rate limit on REST endpoints that already passed AuthMiddleware. It reads
-// ws.Identity from the request context and delegates to a quota.QuotaStore.
+// authctx.Identity from the request context and delegates to a quota.QuotaStore.
 //
 // A nil store is treated as "rate limiting disabled" so callers can register
 // the middleware unconditionally and switch it on via configuration.
@@ -37,7 +38,7 @@ func (m *UserRateLimitMiddleware) Handle(next http.HandlerFunc) http.HandlerFunc
 			next(w, r)
 			return
 		}
-		identity, ok := ws.IdentityFromContext(r.Context())
+		identity, ok := authctx.IdentityFromContext(r.Context())
 		if !ok {
 			// Auth middleware was not run before us — let the downstream
 			// handler surface the missing identity error. Failing open here

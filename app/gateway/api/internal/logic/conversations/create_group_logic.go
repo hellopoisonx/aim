@@ -7,9 +7,10 @@ import (
 	"context"
 	"strings"
 
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/authctx"
+
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
-	"github.com/hellopoisonx/aim/app/gateway/api/internal/ws"
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/conversationservice"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 
@@ -31,7 +32,7 @@ func NewCreateGroupLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Creat
 }
 
 func (l *CreateGroupLogic) CreateGroup(req *types.CreateGroupRequest) (resp *types.CreateConversationResponse, err error) {
-	identity, ok := ws.IdentityFromContext(l.ctx)
+	identity, ok := authctx.IdentityFromContext(l.ctx)
 	if !ok {
 		return nil, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
 	}
@@ -43,10 +44,6 @@ func (l *CreateGroupLogic) CreateGroup(req *types.CreateGroupRequest) (resp *typ
 	name := strings.TrimSpace(req.Name)
 	if name == "" {
 		return nil, errorx.NewCodeError(errorx.CodeBadInput, "name is required")
-	}
-
-	if l.svcCtx.LogicConversationClient == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "internal error")
 	}
 
 	rpcResp, err := l.svcCtx.LogicConversationClient.CreateConversation(l.ctx, &conversationservice.CreateConversationReq{

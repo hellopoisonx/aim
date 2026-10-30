@@ -6,9 +6,10 @@ package conversations
 import (
 	"context"
 
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/authctx"
+
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
-	"github.com/hellopoisonx/aim/app/gateway/api/internal/ws"
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/conversationservice"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 
@@ -30,12 +31,9 @@ func NewTransferGroupOwnerLogic(ctx context.Context, svcCtx *svc.ServiceContext)
 }
 
 func (l *TransferGroupOwnerLogic) TransferGroupOwner(req *types.TransferGroupOwnerRequest) (resp *types.TransferGroupOwnerResponse, err error) {
-	identity, ok := ws.IdentityFromContext(l.ctx)
+	identity, ok := authctx.IdentityFromContext(l.ctx)
 	if !ok {
 		return nil, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
-	}
-	if l.svcCtx.LogicConversationClient == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "internal error")
 	}
 	rpcResp, err := l.svcCtx.LogicConversationClient.TransferGroupOwner(l.ctx, &conversationservice.TransferGroupOwnerReq{
 		ConversationId: req.Id,

@@ -453,8 +453,8 @@ type GetUserByNameResponse struct {
 }
 
 type GrantGroupAdminRequest struct {
-	Id  int64 `path:"id" validate:"required"`
-	Uid int64 `path:"uid" validate:"required"`
+	Id     int64 `path:"id" validate:"required"`
+	UserId int64 `path:"user_id" validate:"required"`
 }
 
 type InitAttachmentUploadRequest struct {
@@ -621,8 +621,8 @@ type RemoveFriendTagResponse struct {
 }
 
 type RemoveGroupMemberRequest struct {
-	Id  int64 `path:"id" validate:"required"`
-	Uid int64 `path:"uid" validate:"required"`
+	Id     int64 `path:"id" validate:"required"`
+	UserId int64 `path:"user_id" validate:"required"`
 }
 
 type RenameFriendTagRequest struct {
@@ -635,8 +635,8 @@ type RenameFriendTagResponse struct {
 }
 
 type RevokeGroupAdminRequest struct {
-	Id  int64 `path:"id" validate:"required"`
-	Uid int64 `path:"uid" validate:"required"`
+	Id     int64 `path:"id" validate:"required"`
+	UserId int64 `path:"user_id" validate:"required"`
 }
 
 type RevokeUserBotTokenRequest struct {

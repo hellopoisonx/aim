@@ -3,6 +3,8 @@ package svc
 import (
 	"context"
 
+	sharedkafka "github.com/hellopoisonx/aim/app/shared/kafka"
+
 	attachmentpb "github.com/hellopoisonx/aim/app/attachment/rpc/pb"
 	"github.com/hellopoisonx/aim/app/core/rpc/internal/cache"
 	"github.com/hellopoisonx/aim/app/core/rpc/internal/config"
@@ -11,10 +13,8 @@ import (
 	"github.com/hellopoisonx/aim/app/shared/tools"
 
 	"github.com/redis/go-redis/v9"
-	"github.com/segmentio/kafka-go"
 	"github.com/zeromicro/go-queue/kq"
 	"github.com/zeromicro/go-zero/core/logx"
-	gzredis "github.com/zeromicro/go-zero/core/stores/redis"
 	"github.com/zeromicro/go-zero/zrpc"
 )
 
@@ -68,7 +68,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 
 	if len(c.KqPusherConf.Brokers) > 0 && c.KqPusherConf.Topic != "" {
 		logx.WithContext(context.Background()).Infof("initializing Kafka pusher with brokers: %v, topic: %s (balancer: murmur2)", c.KqPusherConf.Brokers, c.KqPusherConf.Topic)
-		kqPusher = kq.NewPusher(c.KqPusherConf.Brokers, c.KqPusherConf.Topic, kq.WithBalancer(&kafka.Murmur2Balancer{}))
+		kqPusher = sharedkafka.NewPusher(c.KqPusherConf.Brokers, c.KqPusherConf.Topic)
 	}
 
 	// Logic RPC client (if configured)
@@ -103,10 +103,8 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	// Presence store (nil if not configured)
 	var presenceStore cache.PresenceDirectory
 	if c.Presence.TTLSeconds > 0 {
-		rds, err := gzredis.NewRedis(gzredis.RedisConf{Host: c.CacheRedis.Addr, Type: gzredis.NodeType, Pass: c.CacheRedis.Password})
-		if err != nil {
-			logx.WithContext(context.Background()).Errorf("failed to create go-zero Redis presence client: %v", err)
-		} else if store, err := cache.NewCachedPresenceStore(rds, c.Presence.TTLSeconds); err != nil {
+		rds := redis.NewClient(&redis.Options{Addr: c.CacheRedis.Addr, Password: c.CacheRedis.Password})
+		if store, err := cache.NewCachedPresenceStore(rds, c.Presence.TTLSeconds); err != nil {
 			logx.WithContext(context.Background()).Errorf("failed to create cached presence store: %v", err)
 		} else {
 			presenceStore = store

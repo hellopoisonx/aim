@@ -3,6 +3,8 @@ package bot
 import (
 	"context"
 
+	"github.com/hellopoisonx/aim/app/shared/errorx"
+
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/conversationservice"
@@ -41,10 +43,7 @@ func (l *BotGetConversationHistoryLogic) BotGetConversationHistory(req *types.Bo
 		return nil, err
 	}
 
-	client, err := requireLogicConversationClient(l.svcCtx)
-	if err != nil {
-		return nil, err
-	}
+	client := logicConversationClient(l.svcCtx)
 
 	if err := ensureBotConversationMember(l.ctx, client, identity, conversationID); err != nil {
 		return nil, err
@@ -65,7 +64,7 @@ func (l *BotGetConversationHistoryLogic) BotGetConversationHistory(req *types.Bo
 		Limit:           limit,
 	})
 	if err != nil {
-		return nil, sanitizeBotLogicRPCError(err)
+		return nil, errorx.SanitizeGRPCErrorNoLog(err)
 	}
 
 	messages := make([]types.BotMessageItem, 0, len(rpcResp.GetMessages()))
@@ -88,8 +87,8 @@ func (l *BotGetConversationHistoryLogic) BotGetConversationHistory(req *types.Bo
 			ConversationId: formatID(msg.GetConversationId()),
 			SenderId:       formatID(msg.GetSenderId()),
 			SenderInfo: types.BotSenderInfo{
-				Name:        senderInfo.GetName(),
-				Email:       senderInfo.GetEmail(),
+				Name:  senderInfo.GetName(),
+				Email: senderInfo.GetEmail(),
 			},
 			MessageType: msg.GetMessageType(),
 			Content:     msg.GetContent(),

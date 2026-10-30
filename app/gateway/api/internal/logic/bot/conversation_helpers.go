@@ -2,14 +2,13 @@ package bot
 
 import (
 	"context"
-	"slices"
 	"strconv"
 	"strings"
 
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/botctx"
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/membership"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
-	gatewayws "github.com/hellopoisonx/aim/app/gateway/api/internal/ws"
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/conversationservice"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
@@ -32,15 +31,10 @@ func parseOptionalID(raw string, field string) (int64, error) {
 	return id, nil
 }
 
-func sanitizeBotLogicRPCError(err error) error {
-	return errorx.SanitizeGRPCErrorNoLog(err)
-}
-
-func requireLogicConversationClient(svcCtx *svc.ServiceContext) (conversationservice.ConversationService, error) {
-	if svcCtx == nil || svcCtx.LogicConversationClient == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "internal error")
-	}
-	return svcCtx.LogicConversationClient, nil
+// logicConversationClient returns the client injected at startup; the gateway
+// fails fast when it cannot be built, so no nil guard is needed here.
+func logicConversationClient(svcCtx *svc.ServiceContext) conversationservice.ConversationService {
+	return svcCtx.LogicConversationClient
 }
 
 func ensureBotConversationMember(
@@ -49,19 +43,13 @@ func ensureBotConversationMember(
 	identity botctx.BotIdentity,
 	conversationID int64,
 ) error {
-	membersResp, err := client.GetConversationMembers(ctx, &conversationservice.GetConversationMembersReq{
-		ConversationId: conversationID,
-	})
-	if err != nil {
-		return sanitizeBotLogicRPCError(err)
-	}
-
-	if !slices.Contains(membersResp.GetMemberIds(), identity.BotUserID) {
-		return errorx.NewCodeError(errorx.CodeForbidden, "bot is not a member of this conversation")
-	}
-
-	return nil
+	return membership.RequireMember(ctx, noLogLogger{}, client, conversationID, identity.BotUserID, membership.ActorBot)
 }
+
+// noLogLogger satisfies errorx.ErrorLogger for call paths that own logging.
+type noLogLogger struct{}
+
+func (noLogLogger) Errorf(string, ...any) {}
 
 func convertBotReadState(st *pb.ReadStateItem) types.BotReadStateItem {
 	return types.BotReadStateItem{
@@ -107,7 +95,7 @@ func fanOutBotReadReceiptLocal(
 	conversationID int64,
 	readState *pb.ReadStateItem,
 ) {
-	if svcCtx == nil || svcCtx.LogicConversationClient == nil || svcCtx.WsManager == nil || readState == nil {
+	if svcCtx == nil || svcCtx.WsManager == nil || readState == nil {
 		return
 	}
 
@@ -119,7 +107,7 @@ func fanOutBotReadReceiptLocal(
 		return
 	}
 
-	gateway := gatewayws.NewGatewayServer(svcCtx.WsManager)
+	gateway := svcCtx.Gateway()
 	for _, memberID := range membersResp.GetMemberIds() {
 		if memberID <= 0 || memberID == fromUserID || len(svcCtx.WsManager.GetByUserID(memberID)) == 0 {
 			continue

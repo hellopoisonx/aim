@@ -2,7 +2,11 @@ package svc
 
 import (
 	"context"
+	"fmt"
 	"time"
+
+	sharedkafka "github.com/hellopoisonx/aim/app/shared/kafka"
+	"github.com/redis/go-redis/v9"
 
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/config"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/service"
@@ -13,10 +17,7 @@ import (
 	"github.com/hellopoisonx/aim/app/shared/outbox"
 	"github.com/hellopoisonx/aim/app/shared/tools"
 
-	"github.com/segmentio/kafka-go"
-	"github.com/zeromicro/go-queue/kq"
 	"github.com/zeromicro/go-zero/core/logx"
-	gzredis "github.com/zeromicro/go-zero/core/stores/redis"
 )
 
 type FriendshipDAO interface {
@@ -68,7 +69,10 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	if c.Postgres.DataSource != "" {
 		db, err := gormdb.Open(c.Postgres.DataSource)
 		if err != nil {
-			logx.WithContext(context.Background()).Errorf("failed to create Postgres connection: %v, falling back to DenyAll", err)
+			// Fail fast: a half-booted logic service answers every permission
+			// check with DenyAll and cannot serve conversations, so the
+			// container should restart until Postgres is reachable.
+			logx.Must(fmt.Errorf("logic service requires Postgres: %w", err))
 		} else {
 			store := dao.New(db)
 			svcCtx.DAO = store
@@ -84,7 +88,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 				UserType:     svcCtx.UserTypeCache,
 			})
 			svcCtx.UserInfoService = service.NewUserInfoService(store, service.WithUserInfoCache(svcCtx.UserCache), service.WithUserTypeCache(svcCtx.UserTypeCache))
-			svcCtx.BotService = service.NewBotService(store,
+			svcCtx.BotService = service.NewBotService(store, store,
 				service.WithBotTokenCache(svcCtx.BotTokenCache),
 				service.WithBotTxRunner(botTxRunner{store: store}),
 				service.WithBotIDGenerator(snowflake),
@@ -97,12 +101,11 @@ func NewServiceContext(c config.Config) *ServiceContext {
 
 			hasProducer := len(c.ConversationEventProducerConf.Brokers) > 0 && c.ConversationEventProducerConf.Topic != ""
 			if hasProducer {
-				outboxStore := NewOutboxStore(store)
+				outboxStore := outbox.NewGORMStore(store.DB())
 				publisher := newConversationEventPublisher(c.ConversationEventProducerConf.Brokers, c.ConversationEventProducerConf.Topic)
 				svcCtx.OutboxPoller = outbox.NewPoller(outboxStore, publisher, outbox.Config{})
 				convOpts = append(convOpts, service.WithOutbox(
 					c.ConversationEventProducerConf.Topic,
-					outboxStore,
 					func() { svcCtx.OutboxPoller.Wake() },
 				))
 				logx.WithContext(context.Background()).Infof("conversation event outbox initialized: topic=%s", c.ConversationEventProducerConf.Topic)
@@ -147,7 +150,7 @@ func (r botTxRunner) WithTx(ctx context.Context, fn func(tx service.BotManagemen
 
 // newConversationEventPublisher creates an outbox.PublisherFunc using kq.Pusher.
 func newConversationEventPublisher(brokers []string, topic string) outbox.PublisherFunc {
-	pusher := kq.NewPusher(brokers, topic, kq.WithBalancer(&kafka.Murmur2Balancer{}))
+	pusher := sharedkafka.NewPusher(brokers, topic)
 	return func(ctx context.Context, _, key string, payload []byte) error {
 		return pusher.PushWithKey(ctx, key, string(payload))
 	}
@@ -175,15 +178,7 @@ func initSharedCaches(svcCtx *ServiceContext, c config.Config) {
 	}
 
 	conf := c.Cache.WithDefaults()
-	rds, err := gzredis.NewRedis(gzredis.RedisConf{
-		Host: c.CacheRedis.Addr,
-		Type: gzredis.NodeType,
-		Pass: c.CacheRedis.Password,
-	})
-	if err != nil {
-		logx.WithContext(context.Background()).Errorf("failed to create go-zero Redis cache client: %v", err)
-		return
-	}
+	rds := redis.NewClient(&redis.Options{Addr: c.CacheRedis.Addr, Password: c.CacheRedis.Password})
 
 	manager := sharedcache.NewCacheManager(rds, conf.InvalidateStream)
 	svcCtx.CacheManager = manager

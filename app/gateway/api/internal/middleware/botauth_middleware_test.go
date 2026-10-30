@@ -161,7 +161,7 @@ func TestBotAuthMiddleware_Success(t *testing.T) {
 		assert.True(t, ok)
 		assert.Equal(t, int64(1001), identity.BotUserID)
 		assert.True(t, identity.HasAction("bot.message.send"))
-		assert.False(t, identity.HasScope("admin"))
+		assert.False(t, identity.HasAction("bot.admin.all"))
 	})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/bot/v1/me", nil)

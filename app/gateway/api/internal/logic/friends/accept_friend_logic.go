@@ -6,12 +6,13 @@ package friends
 import (
 	"context"
 
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/authctx"
+
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
-	"github.com/hellopoisonx/aim/app/gateway/api/internal/ws"
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/friendshipservice"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
-	gwpb "github.com/hellopoisonx/aim/shared/proto/gateway/pb"
+	"github.com/hellopoisonx/aim/app/shared/events"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -31,13 +32,9 @@ func NewAcceptFriendLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Acce
 }
 
 func (l *AcceptFriendLogic) AcceptFriend(req *types.AcceptFriendRequest) (resp *types.AcceptFriendResponse, err error) {
-	identity, ok := ws.IdentityFromContext(l.ctx)
+	identity, ok := authctx.IdentityFromContext(l.ctx)
 	if !ok {
 		return nil, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
-	}
-
-	if l.svcCtx.LogicFriendshipClient == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "internal error")
 	}
 
 	rpcResp, err := l.svcCtx.LogicFriendshipClient.AcceptFriend(l.ctx, &friendshipservice.AcceptFriendReq{
@@ -53,18 +50,15 @@ func (l *AcceptFriendLogic) AcceptFriend(req *types.AcceptFriendRequest) (resp *
 		return nil, errorx.NewCodeError(errorx.CodeInternal, "internal error")
 	}
 
-	// Push notification to the requester via WebSocket.
-	if l.svcCtx.WsManager != nil {
-		gs := ws.NewGatewayServer(l.svcCtx.WsManager)
-		_, _ = gs.PushFriendApplication(l.ctx, &gwpb.PushFriendApplicationReq{
-			TargetUserId: req.Id,
-			UserId:       identity.UserID,
-			FriendId:     req.Id,
-			Status:       friendship.GetStatus(),
-			CreatedAt:    friendship.GetCreatedAt(),
-			UpdatedAt:    friendship.GetUpdatedAt(),
-		})
-	}
+	// Notify the requester on every gateway node holding their connections.
+	l.svcCtx.FriendAppPub.PublishFriendApplication(l.ctx, events.FriendApplicationEvent{
+		TargetUserID: req.Id,
+		UserID:       identity.UserID,
+		FriendID:     req.Id,
+		Status:       friendship.GetStatus(),
+		CreatedAt:    friendship.GetCreatedAt(),
+		UpdatedAt:    friendship.GetUpdatedAt(),
+	})
 
 	item := types.FriendshipItem{
 		UserId:    friendship.GetUserId(),

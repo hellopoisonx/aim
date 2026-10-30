@@ -6,6 +6,8 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/hellopoisonx/aim/app/shared/events"
+
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/config"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/logic/rpc/model/orm"
@@ -53,7 +55,7 @@ func TestArchiveConsumer_Consume_DBNil_Skips(t *testing.T) {
 	svcCtx := newTestServiceContextWithDBNil()
 	consumer := NewArchiveConsumer(context.Background(), svcCtx)
 
-	event := transferEvent{
+	event := events.TransferEvent{
 		MessageID:      12345,
 		SenderID:       100,
 		ConversationID: 200,
@@ -86,7 +88,7 @@ func TestArchiveConsumer_Consume_ValidEvent(t *testing.T) {
 	store := &fakeArchiveStore{}
 	consumer := newTestArchiveConsumer(store)
 
-	event := transferEvent{
+	event := events.TransferEvent{
 		MessageID:      12345,
 		SenderID:       100,
 		ConversationID: 200,
@@ -110,7 +112,7 @@ func TestArchiveConsumer_Consume_PropagatesTraceContext(t *testing.T) {
 	traceID, err := trace.TraceIDFromHex("4bf92f3577b34da6a3ce929d0e0e4736")
 	require.NoError(t, err)
 
-	event := transferEvent{
+	event := events.TransferEvent{
 		TraceContextFields: tracing.TraceContextFields{TraceParent: "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"},
 		MessageID:          12345,
 		SenderID:           100,
@@ -133,7 +135,7 @@ func TestArchiveConsumer_Consume_EmptyClientMsgID(t *testing.T) {
 	store := &fakeArchiveStore{}
 	consumer := newTestArchiveConsumer(store)
 
-	event := transferEvent{
+	event := events.TransferEvent{
 		MessageID:      12345,
 		SenderID:       100,
 		ConversationID: 200,
@@ -154,7 +156,7 @@ func TestArchiveConsumer_Consume_NoMentions(t *testing.T) {
 	store := &fakeArchiveStore{}
 	consumer := newTestArchiveConsumer(store)
 
-	event := transferEvent{
+	event := events.TransferEvent{
 		MessageID:      12345,
 		SenderID:       100,
 		ConversationID: 200,
@@ -176,7 +178,7 @@ func TestArchiveConsumer_Consume_MultipleMessages(t *testing.T) {
 	store := &fakeArchiveStore{}
 	consumer := newTestArchiveConsumer(store)
 
-	event1 := transferEvent{
+	event1 := events.TransferEvent{
 		MessageID:      1,
 		SenderID:       10,
 		ConversationID: 100,
@@ -189,7 +191,7 @@ func TestArchiveConsumer_Consume_MultipleMessages(t *testing.T) {
 	err := consumer.Consume(context.Background(), "100", string(value1))
 	require.NoError(t, err)
 
-	event2 := transferEvent{
+	event2 := events.TransferEvent{
 		MessageID:      2,
 		SenderID:       20,
 		ConversationID: 200,
@@ -209,7 +211,7 @@ func TestArchiveConsumer_Consume_DBInsertError(t *testing.T) {
 	store := &fakeArchiveStore{err: errors.New("database error")}
 	consumer := newTestArchiveConsumer(store)
 
-	event := transferEvent{
+	event := events.TransferEvent{
 		MessageID:      12345,
 		SenderID:       100,
 		ConversationID: 200,
@@ -236,7 +238,7 @@ func TestArchiveConsumer_Consume_RecordsSpanError(t *testing.T) {
 	store := &fakeArchiveStore{err: errors.New("database error")}
 	consumer := newTestArchiveConsumer(store)
 
-	event := transferEvent{MessageID: 12345, SenderID: 100, ConversationID: 200, MessageType: "text", Content: "hello", ClientMsgID: "client-1", Timestamp: 1700000000000}
+	event := events.TransferEvent{MessageID: 12345, SenderID: 100, ConversationID: 200, MessageType: "text", Content: "hello", ClientMsgID: "client-1", Timestamp: 1700000000000}
 	value, err := json.Marshal(event)
 	require.NoError(t, err)
 
@@ -252,15 +254,15 @@ func TestArchiveConsumer_Consume_InvalidJSON(t *testing.T) {
 	store := &fakeArchiveStore{}
 	consumer := newTestArchiveConsumer(store)
 
+	// Undecodable payloads are dropped so the partition keeps moving.
 	err := consumer.Consume(context.Background(), "200", "invalid json{")
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "invalid character")
+	require.NoError(t, err)
 }
 
-// TestArchiveConsumer_TransferEventFields verifies the transferEvent struct
+// TestArchiveConsumer_TransferEventFields verifies the events.TransferEvent struct
 // has all the fields needed by the consumer.
 func TestArchiveConsumer_TransferEventFields(t *testing.T) {
-	event := transferEvent{
+	event := events.TransferEvent{
 		MessageID:      12345,
 		SenderID:       100,
 		DeviceID:       "device-abc",

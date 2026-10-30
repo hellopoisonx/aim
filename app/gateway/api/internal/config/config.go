@@ -46,6 +46,9 @@ type Config struct {
 		TypingTopic string `json:",default=aim.typing.events"` //nolint:staticcheck // go-zero conf uses json tag options for defaults.
 		// ReadReceiptTopic is the Kafka topic for read receipt events.
 		ReadReceiptTopic string `json:",default=aim.read_receipt.events"` //nolint:staticcheck // go-zero conf uses json tag options for defaults.
+		// FriendApplicationTopic is the Kafka topic core consumes to fan friend
+		// application pushes out to every gateway node.
+		FriendApplicationTopic string `json:",default=aim.friend_application.events"` //nolint:staticcheck // go-zero conf uses json tag options for defaults.
 	}
 	AttachmentRpc zrpc.RpcClientConf
 	// GatewayNodeID identifies this gateway instance for the directory service.
@@ -81,4 +84,18 @@ type CorsConf struct {
 	Enabled bool `json:",default=false"` //nolint:staticcheck // go-zero conf uses json tag options for defaults.
 	// Origins is the list of allowed origins. Defaults to ["*"] when empty.
 	Origins []string `json:",optional"`
+}
+
+// nodeIDEnvVar is where the deployment injects this gateway's node identity.
+const nodeIDEnvVar = "AIM_GATEWAY_NODE_ID"
+
+// ApplyEnv derives configuration from the process environment.
+//
+// It is the single place where the gateway reads deployment identity from the
+// environment, so NewServiceContext stays a pure constructor that tests can
+// call with an explicit config.
+func (c *Config) ApplyEnv(getenv func(string) string) {
+	if c.GatewayNodeID == "" && getenv != nil {
+		c.GatewayNodeID = getenv(nodeIDEnvVar)
+	}
 }

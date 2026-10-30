@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/hellopoisonx/aim/app/shared/events"
+
 	"github.com/hellopoisonx/aim/app/core/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/core/rpc/pb"
 	logicpb "github.com/hellopoisonx/aim/app/logic/rpc/pb"
@@ -232,19 +234,17 @@ func parseMentionIDs(raw []string) ([]int64, error) {
 
 // buildTransferEvent serializes the transfer event as JSON for Kafka.
 func (l *TransferLogic) buildTransferEvent(in *pb.TransferReq, msgID int64) ([]byte, error) {
-	traceFields := tracing.InjectTraceContext(l.ctx)
-	event := map[string]any{
-		"traceparent":     traceFields.TraceParent,
-		"tracestate":      traceFields.TraceState,
-		"message_id":      msgID,
-		"sender_id":       in.SenderId,
-		"device_id":       in.DeviceId,
-		"conversation_id": in.ConversationId,
-		"message_type":    in.MessageType,
-		"content":         in.Content,
-		"client_msg_id":   in.ClientMsgId,
-		"mentions":        in.Mentions,
-		"timestamp":       time.Now().UnixMilli(),
+	event := events.TransferEvent{
+		TraceContextFields: tracing.InjectTraceContext(l.ctx),
+		MessageID:          msgID,
+		SenderID:           in.SenderId,
+		DeviceID:           in.DeviceId,
+		ConversationID:     in.ConversationId,
+		MessageType:        in.MessageType,
+		Content:            in.Content,
+		ClientMsgID:        in.ClientMsgId,
+		Mentions:           in.Mentions,
+		Timestamp:          time.Now().UnixMilli(),
 	}
 
 	return json.Marshal(event)
