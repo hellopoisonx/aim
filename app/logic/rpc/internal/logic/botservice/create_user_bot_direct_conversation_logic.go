@@ -3,6 +3,8 @@ package botservicelogic
 import (
 	"context"
 
+	sharedconversation "github.com/hellopoisonx/aim/app/shared/conversation"
+
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
@@ -39,7 +41,7 @@ func (l *CreateUserBotDirectConversationLogic) CreateUserBotDirectConversation(i
 	}
 
 	conv, err := l.svcCtx.ConversationService.CreateConversation(l.ctx,
-		"direct", in.GetOwnerUserId(),
+		sharedconversation.TypeDirect, in.GetOwnerUserId(),
 		[]int64{in.GetBotUserId()}, botInfo.Nickname, "")
 	if err != nil {
 		return nil, err
@@ -48,7 +50,7 @@ func (l *CreateUserBotDirectConversationLogic) CreateUserBotDirectConversation(i
 	return &pb.CreateUserBotDirectConversationResp{
 		Conversation: &pb.ConversationResponse{
 			Id:               conv.ID,
-			ConversationType: conv.ConversationType,
+			ConversationType: string(conv.ConversationType),
 			IsActive:         conv.IsActive,
 			CreatedAt:        conv.CreatedAt.UnixMilli(),
 			Name:             conv.Name,

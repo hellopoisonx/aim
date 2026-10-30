@@ -77,7 +77,7 @@ func (l *GetUserConversationsLogic) GetUserConversations(in *pb.GetUserConversat
 
 		pbConversations = append(pbConversations, &pb.ConversationResponse{
 			Id:               conv.ID,
-			ConversationType: conv.ConversationType,
+			ConversationType: string(conv.ConversationType),
 			IsActive:         conv.IsActive,
 			CreatedAt:        conv.CreatedAt.UnixMilli(),
 			MemberIds:        memberIDs,

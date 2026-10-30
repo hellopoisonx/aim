@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	sharedconversation "github.com/hellopoisonx/aim/app/shared/conversation"
+
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/service"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/logic/rpc/model/dao"
@@ -37,7 +39,7 @@ func newFakeStore() *fakeConversationStore {
 	}
 }
 
-func (f *fakeConversationStore) CreateConversation(_ context.Context, id int64, conversationType, name, avatar string, creatorID int64) (orm.Conversation, error) {
+func (f *fakeConversationStore) CreateConversation(_ context.Context, id int64, conversationType sharedconversation.Type, name, avatar string, creatorID int64) (orm.Conversation, error) {
 	conv := orm.Conversation{
 		ID:               id,
 		ConversationType: conversationType,
@@ -113,7 +115,7 @@ func (f *fakeConversationStore) GetDirectConversationByMembers(_ context.Context
 	return orm.Conversation{}, dao.ErrNotFound
 }
 
-func (f *fakeConversationStore) AddConversationMemberWithRole(_ context.Context, conversationID, userID int64, role string) (int64, error) {
+func (f *fakeConversationStore) AddConversationMemberWithRole(_ context.Context, conversationID, userID int64, role sharedconversation.Role) (int64, error) {
 	f.members[conversationID] = append(f.members[conversationID], orm.ConversationMember{
 		ConversationID: conversationID,
 		UserID:         userID,
@@ -166,7 +168,7 @@ func (f *fakeConversationStore) UpdateConversationCreator(_ context.Context, con
 	return nil
 }
 
-func (f *fakeConversationStore) UpdateConversationMemberRole(_ context.Context, conversationID, userID int64, role string) (int64, error) {
+func (f *fakeConversationStore) UpdateConversationMemberRole(_ context.Context, conversationID, userID int64, role sharedconversation.Role) (int64, error) {
 	members := f.members[conversationID]
 	for i, m := range members {
 		if m.UserID == userID {
@@ -212,7 +214,7 @@ func (f *fakeConversationStore) GetConversationMembersDetail(_ context.Context, 
 			UserID:   m.UserID,
 			Email:    userEmail(m.UserID),
 			Avatar:   "avatar-" + userEmail(m.UserID),
-			Role:     m.Role,
+			Role:     string(m.Role),
 			JoinedAt: m.JoinedAt,
 		})
 	}

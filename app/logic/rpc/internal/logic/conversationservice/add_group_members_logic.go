@@ -58,7 +58,7 @@ func (l *AddGroupMembersLogic) AddGroupMembers(in *pb.AddGroupMembersReq) (*pb.A
 	return &pb.AddGroupMembersResp{
 		Conversation: &pb.ConversationResponse{
 			Id:               conv.ID,
-			ConversationType: conv.ConversationType,
+			ConversationType: string(conv.ConversationType),
 			IsActive:         conv.IsActive,
 			CreatedAt:        conv.CreatedAt.UnixMilli(),
 			MemberIds:        memberIDs,

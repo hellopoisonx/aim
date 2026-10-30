@@ -54,7 +54,7 @@ var (
 )
 
 type ConversationQuerier interface {
-	CreateConversation(ctx context.Context, conversationType string, creatorID int64, memberIDs []int64, name string, avatar string) (orm.Conversation, error)
+	CreateConversation(ctx context.Context, conversationType sharedconversation.Type, creatorID int64, memberIDs []int64, name string, avatar string) (orm.Conversation, error)
 	GetConversationByID(ctx context.Context, id int64) (orm.Conversation, error)
 	GetConversationHistory(ctx context.Context, conversationID int64, cursorCreatedAt int64, cursorID int64, limit int32) ([]orm.Message, error)
 	GetConversationHistoryInitial(ctx context.Context, conversationID int64, limit int32) ([]orm.Message, error)
@@ -91,10 +91,10 @@ type MemberDetail struct {
 }
 
 type ConversationStore interface {
-	CreateConversation(ctx context.Context, id int64, conversationType, name, avatar string, creatorID int64) (orm.Conversation, error)
+	CreateConversation(ctx context.Context, id int64, conversationType sharedconversation.Type, name, avatar string, creatorID int64) (orm.Conversation, error)
 	GetConversation(ctx context.Context, id int64) (orm.Conversation, error)
 	AddConversationMembers(ctx context.Context, conversationID, userID int64) (int64, error)
-	AddConversationMemberWithRole(ctx context.Context, conversationID, userID int64, role string) (int64, error)
+	AddConversationMemberWithRole(ctx context.Context, conversationID, userID int64, role sharedconversation.Role) (int64, error)
 	GetConversationMembers(ctx context.Context, conversationID int64) ([]orm.ConversationMember, error)
 	GetConversationsByUserID(ctx context.Context, userID int64) ([]orm.Conversation, error)
 	ListMessagesByConversation(ctx context.Context, conversationID int64, cursorCreatedAt time.Time, cursorID int64, limit int32) ([]orm.Message, error)
@@ -104,7 +104,7 @@ type ConversationStore interface {
 	RemoveConversationMembers(ctx context.Context, conversationID int64, userIDs []int64) (int64, error)
 	UpdateConversation(ctx context.Context, id int64, name, avatar *string) error
 	UpdateConversationCreator(ctx context.Context, conversationID, creatorID int64) error
-	UpdateConversationMemberRole(ctx context.Context, conversationID, userID int64, role string) (int64, error)
+	UpdateConversationMemberRole(ctx context.Context, conversationID, userID int64, role sharedconversation.Role) (int64, error)
 	DeactivateConversation(ctx context.Context, id int64) error
 	GetConversationCreator(ctx context.Context, id int64) (int64, error)
 	IsConversationMember(ctx context.Context, conversationID, userID int64) (bool, error)
@@ -246,7 +246,7 @@ func (s *ConversationService) buildSystemMessage(event string, operatorID int64,
 	return data
 }
 
-func (s ConversationService) memberRole(ctx context.Context, conversationID, userID int64) (string, error) {
+func (s ConversationService) memberRole(ctx context.Context, conversationID, userID int64) (sharedconversation.Role, error) {
 	if conversationID <= 0 {
 		return "", errorx.NewCodeError(errorx.CodeBadInput, "conversation_id is required and must be positive")
 	}
@@ -284,7 +284,7 @@ func (s ConversationService) isAdminOrOwner(ctx context.Context, conversationID,
 	return role == RoleOwner || role == RoleAdmin, nil
 }
 
-func (s ConversationService) CreateConversation(ctx context.Context, conversationType string, creatorID int64, memberIDs []int64, name string, avatar string) (orm.Conversation, error) {
+func (s ConversationService) CreateConversation(ctx context.Context, conversationType sharedconversation.Type, creatorID int64, memberIDs []int64, name string, avatar string) (orm.Conversation, error) {
 	if creatorID <= 0 {
 		return orm.Conversation{}, errorx.NewCodeError(errorx.CodeBadInput, "creator_id is required and must be positive")
 	}

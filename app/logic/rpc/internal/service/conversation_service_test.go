@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	sharedconversation "github.com/hellopoisonx/aim/app/shared/conversation"
+
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 
 	"github.com/hellopoisonx/aim/app/logic/rpc/model/dao"
@@ -32,7 +34,7 @@ type fakeConversationStore struct {
 	listReadStatesErr   error
 }
 
-func (f *fakeConversationStore) CreateConversation(ctx context.Context, id int64, conversationType, name, avatar string, creatorID int64) (orm.Conversation, error) {
+func (f *fakeConversationStore) CreateConversation(ctx context.Context, id int64, conversationType sharedconversation.Type, name, avatar string, creatorID int64) (orm.Conversation, error) {
 	if f.createErr != nil {
 		return orm.Conversation{}, f.createErr
 	}
@@ -77,7 +79,7 @@ func (f *fakeConversationStore) AddConversationMembers(ctx context.Context, conv
 	return 1, nil
 }
 
-func (f *fakeConversationStore) AddConversationMemberWithRole(ctx context.Context, conversationID, userID int64, role string) (int64, error) {
+func (f *fakeConversationStore) AddConversationMemberWithRole(ctx context.Context, conversationID, userID int64, role sharedconversation.Role) (int64, error) {
 	if f.addMemberErr != nil {
 		return 0, f.addMemberErr
 	}
@@ -135,7 +137,7 @@ func (f *fakeConversationStore) UpdateConversationCreator(ctx context.Context, c
 	return nil
 }
 
-func (f *fakeConversationStore) UpdateConversationMemberRole(ctx context.Context, conversationID, userID int64, role string) (int64, error) {
+func (f *fakeConversationStore) UpdateConversationMemberRole(ctx context.Context, conversationID, userID int64, role sharedconversation.Role) (int64, error) {
 	members := f.members[conversationID]
 	for i, m := range members {
 		if m.UserID == userID {
@@ -180,7 +182,7 @@ func (f *fakeConversationStore) GetConversationMembersDetail(ctx context.Context
 		result = append(result, dao.ConversationMemberDetail{
 			UserID:   m.UserID,
 			Email:    "",
-			Role:     m.Role,
+			Role:     string(m.Role),
 			JoinedAt: m.JoinedAt,
 		})
 	}
@@ -360,9 +362,9 @@ func TestConversationService_CreateConversation_ValidDirect(t *testing.T) {
 	svc := NewConversationService(store, testSnowflake, nil, nil)
 
 	// direct conversations: member_ids must contain exactly the peer (creator is auto-added).
-	conv, err := svc.CreateConversation(context.Background(), "direct", 1, []int64{2}, "direct-1-2", "")
+	conv, err := svc.CreateConversation(context.Background(), sharedconversation.TypeDirect, 1, []int64{2}, "direct-1-2", "")
 	require.NoError(t, err)
-	assert.Equal(t, "direct", conv.ConversationType)
+	assert.Equal(t, sharedconversation.TypeDirect, conv.ConversationType)
 	assert.True(t, conv.IsActive)
 
 	// Verify members were added (creator auto-added on top of peer)
@@ -375,9 +377,9 @@ func TestConversationService_CreateConversation_ValidGroup(t *testing.T) {
 	store := newFakeConversationStore()
 	svc := NewConversationService(store, testSnowflake, nil, nil)
 
-	conv, err := svc.CreateConversation(context.Background(), "group", 1, []int64{1, 2, 3, 4}, "Group Chat", "")
+	conv, err := svc.CreateConversation(context.Background(), sharedconversation.TypeGroup, 1, []int64{1, 2, 3, 4}, "Group Chat", "")
 	require.NoError(t, err)
-	assert.Equal(t, "group", conv.ConversationType)
+	assert.Equal(t, sharedconversation.TypeGroup, conv.ConversationType)
 	assert.True(t, conv.IsActive)
 
 	// Verify all members were added
@@ -387,7 +389,7 @@ func TestConversationService_CreateConversation_ValidGroup(t *testing.T) {
 	var foundOwner bool
 	for _, m := range members {
 		if m.UserID == 1 {
-			assert.Equal(t, "owner", m.Role)
+			assert.Equal(t, sharedconversation.RoleOwner, m.Role)
 			foundOwner = true
 		}
 	}
@@ -409,7 +411,7 @@ func TestConversationService_CreateConversation_InvalidType(t *testing.T) {
 			store := newFakeConversationStore()
 			svc := NewConversationService(store, testSnowflake, nil, nil)
 
-			_, err := svc.CreateConversation(context.Background(), tt.conversationType, 1, []int64{1, 2}, "conv", "")
+			_, err := svc.CreateConversation(context.Background(), sharedconversation.Type(tt.conversationType), 1, []int64{1, 2}, "conv", "")
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), "conversation_type must be 'direct' or 'group'")
 		})
@@ -498,7 +500,7 @@ func TestConversationService_CreateConversation_DirectWithCreatorNotInMembers(t 
 	svc := NewConversationService(store, testSnowflake, nil, nil)
 
 	// Creator (1) is not in the member list; the service should auto-add it.
-	conv, err := svc.CreateConversation(context.Background(), "direct", 1, []int64{2}, "direct-1-2", "")
+	conv, err := svc.CreateConversation(context.Background(), sharedconversation.TypeDirect, 1, []int64{2}, "direct-1-2", "")
 	require.NoError(t, err)
 
 	// Creator should be automatically added
@@ -518,7 +520,7 @@ func TestConversationService_CreateConversation_DirectWithCreatorNotInMembers(t 
 	var foundOwner bool
 	for _, m := range members {
 		if m.UserID == 1 {
-			assert.Equal(t, "owner", m.Role)
+			assert.Equal(t, sharedconversation.RoleOwner, m.Role)
 			foundOwner = true
 		}
 	}
@@ -552,7 +554,7 @@ func testMemberRole(t *testing.T, store *fakeConversationStore, conversationID, 
 	t.Helper()
 	for _, m := range store.members[conversationID] {
 		if m.UserID == userID {
-			return m.Role
+			return string(m.Role)
 		}
 	}
 	t.Fatalf("member %d not found in conversation %d", userID, conversationID)
@@ -670,16 +672,16 @@ func TestConversationService_CreateConversation_DirectDedup_Existing(t *testing.
 	svc := NewConversationService(store, testSnowflake, nil, nil)
 
 	// First call: create a direct conversation between users 1 and 2
-	conv1, err := svc.CreateConversation(context.Background(), "direct", 1, []int64{2}, "direct-1-2", "")
+	conv1, err := svc.CreateConversation(context.Background(), sharedconversation.TypeDirect, 1, []int64{2}, "direct-1-2", "")
 	require.NoError(t, err)
 
 	// Second call: same two users should return the existing conversation
-	conv2, err := svc.CreateConversation(context.Background(), "direct", 1, []int64{2}, "direct-1-2", "")
+	conv2, err := svc.CreateConversation(context.Background(), sharedconversation.TypeDirect, 1, []int64{2}, "direct-1-2", "")
 	require.NoError(t, err)
 
 	// Should return the SAME conversation ID
 	assert.Equal(t, conv1.ID, conv2.ID)
-	assert.Equal(t, "direct", conv2.ConversationType)
+	assert.Equal(t, sharedconversation.TypeDirect, conv2.ConversationType)
 	assert.True(t, conv2.IsActive)
 }
 
@@ -688,7 +690,7 @@ func TestConversationService_CreateConversation_DirectDedup_NewMembers(t *testin
 	svc := NewConversationService(store, testSnowflake, nil, nil)
 
 	// Create conversation between users 1 and 2
-	conv1, err := svc.CreateConversation(context.Background(), "direct", 1, []int64{2}, "direct-1-2", "")
+	conv1, err := svc.CreateConversation(context.Background(), sharedconversation.TypeDirect, 1, []int64{2}, "direct-1-2", "")
 	require.NoError(t, err)
 
 	// Create conversation between users 3 and 4 (different pair)
@@ -704,7 +706,7 @@ func TestConversationService_CreateConversation_DirectDedup_StoreError(t *testin
 	store.getErr = errors.New("database connection error")
 	svc := NewConversationService(store, testSnowflake, nil, nil)
 
-	_, err := svc.CreateConversation(context.Background(), "direct", 1, []int64{2}, "direct-1-2", "")
+	_, err := svc.CreateConversation(context.Background(), sharedconversation.TypeDirect, 1, []int64{2}, "direct-1-2", "")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "database connection error")
 }
@@ -726,7 +728,7 @@ func TestConversationService_GetConversationByID_Found(t *testing.T) {
 	conv, err := svc.GetConversationByID(context.Background(), 100)
 	require.NoError(t, err)
 	assert.Equal(t, int64(100), conv.ID)
-	assert.Equal(t, "direct", conv.ConversationType)
+	assert.Equal(t, sharedconversation.TypeDirect, conv.ConversationType)
 }
 
 func TestConversationService_GetConversationByID_NotFound(t *testing.T) {
@@ -1215,14 +1217,14 @@ func TestConversationService_CreateConversation_TableDriven(t *testing.T) {
 			store := newFakeConversationStore()
 			svc := NewConversationService(store, testSnowflake, nil, nil)
 
-			conv, err := svc.CreateConversation(context.Background(), tt.convType, tt.creatorID, tt.memberIDs, tt.convName, "")
+			conv, err := svc.CreateConversation(context.Background(), sharedconversation.Type(tt.convType), tt.creatorID, tt.memberIDs, tt.convName, "")
 
 			if tt.wantErr {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), tt.errContains)
 			} else {
 				require.NoError(t, err)
-				assert.Equal(t, tt.convType, conv.ConversationType)
+				assert.Equal(t, sharedconversation.Type(tt.convType), conv.ConversationType)
 
 				members, err := store.GetConversationMembers(context.Background(), conv.ID)
 				require.NoError(t, err)

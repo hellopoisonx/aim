@@ -53,6 +53,6 @@ func (l *GetConversationMembersLogic) GetConversationMembers(in *pb.GetConversat
 	return &pb.GetConversationMembersResp{
 		ConversationId:   in.GetConversationId(),
 		MemberIds:        memberIDs,
-		ConversationType: conv.ConversationType,
+		ConversationType: string(conv.ConversationType),
 	}, nil
 }

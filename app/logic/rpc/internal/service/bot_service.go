@@ -278,7 +278,7 @@ func (s *BotService) ListBotConversations(ctx context.Context, botUserID int64) 
 	for _, r := range rows {
 		out = append(out, BotConversationItem{
 			ConversationID:   r.ID,
-			ConversationType: r.ConversationType,
+			ConversationType: string(r.ConversationType),
 			Name:             r.Name,
 			Avatar:           r.Avatar,
 			CreatedAt:        r.CreatedAt,

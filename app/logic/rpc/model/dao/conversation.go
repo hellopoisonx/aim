@@ -27,7 +27,7 @@ type ConversationSearchRow struct {
 }
 
 // CreateConversation inserts an active conversation.
-func (s *Store) CreateConversation(ctx context.Context, id int64, conversationType, name, avatar string, creatorID int64) (orm.Conversation, error) {
+func (s *Store) CreateConversation(ctx context.Context, id int64, conversationType sharedconversation.Type, name, avatar string, creatorID int64) (orm.Conversation, error) {
 	conv := orm.Conversation{
 		ID:               id,
 		ConversationType: conversationType,
@@ -113,7 +113,7 @@ func (s *Store) AddConversationMembers(ctx context.Context, conversationID, user
 }
 
 // AddConversationMemberWithRole inserts a member with an explicit role.
-func (s *Store) AddConversationMemberWithRole(ctx context.Context, conversationID, userID int64, role string) (int64, error) {
+func (s *Store) AddConversationMemberWithRole(ctx context.Context, conversationID, userID int64, role sharedconversation.Role) (int64, error) {
 	member := orm.ConversationMember{
 		ConversationID: conversationID,
 		UserID:         userID,
@@ -156,7 +156,7 @@ func (s *Store) RemoveConversationMembers(ctx context.Context, conversationID in
 }
 
 // UpdateConversationMemberRole changes a member's role.
-func (s *Store) UpdateConversationMemberRole(ctx context.Context, conversationID, userID int64, role string) (int64, error) {
+func (s *Store) UpdateConversationMemberRole(ctx context.Context, conversationID, userID int64, role sharedconversation.Role) (int64, error) {
 	result := s.db.WithContext(ctx).
 		Model(&orm.ConversationMember{}).
 		Where("conversation_id = ? AND user_id = ?", conversationID, userID).

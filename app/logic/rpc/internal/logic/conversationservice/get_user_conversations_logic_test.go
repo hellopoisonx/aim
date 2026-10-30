@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 
+	sharedconversation "github.com/hellopoisonx/aim/app/shared/conversation"
+
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/service"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/logic/rpc/model/orm"
@@ -109,7 +111,7 @@ func TestGetUserConversationsLogic_NilService(t *testing.T) {
 func newConv(id int64, convType string) orm.Conversation {
 	return orm.Conversation{
 		ID:               id,
-		ConversationType: convType,
+		ConversationType: sharedconversation.Type(convType),
 		IsActive:         true,
 		CreatedAt:        newTS(),
 	}

@@ -4,7 +4,8 @@ import (
 	"context"
 	"strings"
 
-	"github.com/hellopoisonx/aim/app/logic/rpc/internal/service"
+	sharedconversation "github.com/hellopoisonx/aim/app/shared/conversation"
+
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
@@ -31,14 +32,14 @@ func (l *CreateConversationLogic) CreateConversation(in *pb.CreateConversationRe
 		return nil, errorx.NewCodeError(errorx.CodeBadInput, "creator_id is required and must be positive")
 	}
 
-	if in.GetConversationType() != service.ConversationTypeDirect && in.GetConversationType() != service.ConversationTypeGroup {
+	if sharedconversation.Type(in.GetConversationType()) != sharedconversation.TypeDirect && sharedconversation.Type(in.GetConversationType()) != sharedconversation.TypeGroup {
 		return nil, errorx.NewCodeError(errorx.CodeBadInput, "conversation_type must be 'direct' or 'group'")
 	}
 
 	memberIDs := in.GetMemberIds()
 	var name string
 	var displayName string // the name to return to the caller
-	if in.GetConversationType() == service.ConversationTypeDirect {
+	if sharedconversation.Type(in.GetConversationType()) == sharedconversation.TypeDirect {
 		if len(memberIDs) != 1 {
 			return nil, errorx.NewCodeError(errorx.CodeBadInput, "direct conversation member_ids must contain exactly one peer user id")
 		}
@@ -83,7 +84,7 @@ func (l *CreateConversationLogic) CreateConversation(in *pb.CreateConversationRe
 		return nil, errorx.NewCodeError(errorx.CodeInternal, "conversation service is not configured")
 	}
 
-	conv, err := convSvc.CreateConversation(l.ctx, in.GetConversationType(), in.GetCreatorId(), memberIDs, name, in.GetAvatar())
+	conv, err := convSvc.CreateConversation(l.ctx, sharedconversation.Type(in.GetConversationType()), in.GetCreatorId(), memberIDs, name, in.GetAvatar())
 	if err != nil {
 		return nil, errorx.ToGRPCError(err)
 	}
@@ -99,13 +100,13 @@ func (l *CreateConversationLogic) CreateConversation(in *pb.CreateConversationRe
 	}
 
 	respName := conv.Name
-	if in.GetConversationType() == service.ConversationTypeDirect && displayName != "" {
+	if sharedconversation.Type(in.GetConversationType()) == sharedconversation.TypeDirect && displayName != "" {
 		respName = displayName
 	}
 	return &pb.CreateConversationResp{
 		Conversation: &pb.ConversationResponse{
 			Id:               conv.ID,
-			ConversationType: conv.ConversationType,
+			ConversationType: string(conv.ConversationType),
 			IsActive:         conv.IsActive,
 			CreatedAt:        conv.CreatedAt.UnixMilli(),
 			MemberIds:        respMemberIDs,

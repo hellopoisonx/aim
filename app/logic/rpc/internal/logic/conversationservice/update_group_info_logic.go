@@ -70,7 +70,7 @@ func (l *UpdateGroupInfoLogic) UpdateGroupInfo(in *pb.UpdateGroupInfoReq) (*pb.U
 	return &pb.UpdateGroupInfoResp{
 		Conversation: &pb.ConversationResponse{
 			Id:               conv.ID,
-			ConversationType: conv.ConversationType,
+			ConversationType: string(conv.ConversationType),
 			IsActive:         conv.IsActive,
 			CreatedAt:        conv.CreatedAt.UnixMilli(),
 			MemberIds:        memberIDs,

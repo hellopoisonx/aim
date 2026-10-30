@@ -55,7 +55,7 @@ func (l *TransferGroupOwnerLogic) TransferGroupOwner(in *pb.TransferGroupOwnerRe
 
 	return &pb.TransferGroupOwnerResp{Conversation: &pb.ConversationResponse{
 		Id:               conv.ID,
-		ConversationType: conv.ConversationType,
+		ConversationType: string(conv.ConversationType),
 		IsActive:         conv.IsActive,
 		CreatedAt:        conv.CreatedAt.UnixMilli(),
 		MemberIds:        memberIDs,

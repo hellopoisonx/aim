@@ -235,7 +235,7 @@ func (s *SearchService) searchConversations(ctx context.Context, userID int64, q
 	for _, row := range rows {
 		results = append(results, SearchConversationResult{
 			ConversationID:   row.ID,
-			ConversationType: row.ConversationType,
+			ConversationType: string(row.ConversationType),
 			IsActive:         row.IsActive,
 			Name:             row.Name,
 			Avatar:           row.Avatar,
