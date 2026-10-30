@@ -41,7 +41,7 @@ func (l *RemoveFriendTagLogic) RemoveFriendTag(in *pb.RemoveFriendTagReq) (*pb.R
 
 	_, err := l.svcCtx.FriendTagService.RemoveTag(l.ctx, in.GetUserId(), in.GetFriendId(), in.GetTagId())
 	if err != nil {
-		return nil, service.TagErrToGRPCError(err)
+		return nil, errorx.ToGRPCError(err)
 	}
 
 	friendship := &pb.FriendshipResponse{

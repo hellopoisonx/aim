@@ -35,11 +35,7 @@ func requireWebhookEventActions(ctx context.Context, svcCtx *svc.ServiceContext,
 			return ce
 		}
 
-		if ce := errorx.FromGRPCError(err); ce != nil {
-			return ce
-		}
-
-		return errorx.NewCodeError(errorx.CodeInternal, "internal error")
+		return errorx.SanitizeGRPCErrorNoLog(err)
 	}
 
 	for _, ea := range resp.GetEventActions() {

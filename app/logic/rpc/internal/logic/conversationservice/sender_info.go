@@ -3,7 +3,6 @@ package conversationservicelogic
 import (
 	"context"
 
-	"github.com/hellopoisonx/aim/app/logic/rpc/internal/service"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	sharedconversation "github.com/hellopoisonx/aim/app/shared/conversation"
@@ -32,7 +31,7 @@ func senderInfoForUser(ctx context.Context, svcCtx *svc.ServiceContext, userID i
 
 	info, err := userSvc.GetUserInfo(ctx, userID)
 	if err != nil {
-		return nil, service.ToGRPCError(err)
+		return nil, errorx.ToGRPCError(err)
 	}
 
 	return &pb.SenderInfo{

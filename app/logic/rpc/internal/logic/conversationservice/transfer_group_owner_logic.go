@@ -3,7 +3,6 @@ package conversationservicelogic
 import (
 	"context"
 
-	"github.com/hellopoisonx/aim/app/logic/rpc/internal/service"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
@@ -42,12 +41,12 @@ func (l *TransferGroupOwnerLogic) TransferGroupOwner(in *pb.TransferGroupOwnerRe
 	}
 	conv, err := convSvc.TransferGroupOwner(l.ctx, in.GetConversationId(), in.GetOperatorId(), in.GetTargetUserId())
 	if err != nil {
-		return nil, service.ConversationToGRPCError(err)
+		return nil, errorx.ToGRPCError(err)
 	}
 
 	members, err := convSvc.GetConversationMembers(l.ctx, conv.ID)
 	if err != nil {
-		return nil, service.ConversationToGRPCError(err)
+		return nil, errorx.ToGRPCError(err)
 	}
 	memberIDs := make([]int64, len(members))
 	for i, m := range members {

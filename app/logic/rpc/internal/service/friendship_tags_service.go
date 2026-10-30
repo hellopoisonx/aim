@@ -22,12 +22,12 @@ const (
 const friendTagNameMaxLen = 64
 
 var (
-	ErrTagNotFound    = errors.New("tag not found")
-	ErrTagNameEmpty   = errors.New("tag name must not be empty after trimming")
-	ErrTagNameTooLong = errors.New("tag name exceeds maximum length")
-	ErrTagNameExists  = errors.New("tag name already exists")
-	ErrTagNotOwned    = errors.New("tag does not belong to the user")
-	ErrNotFriend      = errors.New("not an accepted friend")
+	ErrTagNotFound    = errorx.NewCodeError(CodeTagNotFound, "tag not found")
+	ErrTagNameEmpty   = errorx.NewCodeError(CodeTagNameEmpty, "tag name must not be empty after trimming")
+	ErrTagNameTooLong = errorx.NewCodeError(CodeTagNameTooLong, "tag name exceeds maximum length")
+	ErrTagNameExists  = errorx.NewCodeError(CodeTagNameExists, "tag name already exists")
+	ErrTagNotOwned    = errorx.NewCodeError(CodeTagNotOwned, "tag does not belong to the user")
+	ErrNotFriend      = errorx.NewCodeError(CodeNotFriend, "not an accepted friend")
 )
 
 // FriendTagStore defines the DAO methods required by the friend tag service.
@@ -158,27 +158,4 @@ func (s *FriendshipTagService) RemoveTag(ctx context.Context, userID, friendID, 
 // GetFriendTags returns the tags assigned to a specific friend.
 func (s *FriendshipTagService) GetFriendTags(ctx context.Context, userID, friendID int64) ([]orm.FriendTag, error) {
 	return s.store.ListFriendTagsForFriend(ctx, userID, friendID)
-}
-
-// TagErrToGRPCError converts tag domain errors to gRPC errors.
-func TagErrToGRPCError(err error) error {
-	switch {
-	case errors.Is(err, ErrTagNotFound):
-		return errorx.NewCodeError(CodeTagNotFound, "tag not found")
-	case errors.Is(err, ErrTagNameEmpty):
-		return errorx.NewCodeError(CodeTagNameEmpty, "tag name must not be empty")
-	case errors.Is(err, ErrTagNameTooLong):
-		return errorx.NewCodeError(CodeTagNameTooLong, "tag name too long")
-	case errors.Is(err, ErrTagNameExists):
-		return errorx.NewCodeError(CodeTagNameExists, "tag name already exists")
-	case errors.Is(err, ErrTagNotOwned):
-		return errorx.NewCodeError(CodeTagNotOwned, "tag does not belong to the user")
-	case errors.Is(err, ErrNotFriend):
-		return errorx.NewCodeError(CodeNotFriend, "not an accepted friend")
-	case errors.Is(err, dao.ErrDuplicateKey):
-		return errorx.NewCodeError(CodeTagNameExists, "tag name already exists")
-	case err != nil:
-		return errorx.NewCodeError(errorx.CodeInternal, "internal error")
-	}
-	return nil
 }

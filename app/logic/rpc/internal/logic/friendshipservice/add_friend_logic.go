@@ -56,7 +56,7 @@ func (l *AddFriendLogic) AddFriend(in *pb.AddFriendReq) (*pb.AddFriendResp, erro
 	}
 
 	if userID == friendID {
-		return nil, FriendshipToGRPCError(service.ErrSelfAdd)
+		return nil, errorx.ToGRPCError(service.ErrSelfAdd)
 	}
 
 	userSvc := l.svcCtx.UserInfoService
@@ -71,7 +71,7 @@ func (l *AddFriendLogic) AddFriend(in *pb.AddFriendReq) (*pb.AddFriendResp, erro
 			return nil, FriendshipToGRPCError(service.ErrUserNotFound)
 		}
 
-		return nil, FriendshipToGRPCError(err)
+		return nil, errorx.ToGRPCError(err)
 	}
 
 	store := l.svcCtx.FriendshipDAO
@@ -82,7 +82,7 @@ func (l *AddFriendLogic) AddFriend(in *pb.AddFriendReq) (*pb.AddFriendResp, erro
 	// Check if either direction has a blocked relationship.
 	existing, err := store.GetFriendshipBidirectional(l.ctx, userID, friendID)
 	if err != nil {
-		return nil, FriendshipToGRPCError(err)
+		return nil, errorx.ToGRPCError(err)
 	}
 
 	for _, f := range existing {
@@ -95,7 +95,7 @@ func (l *AddFriendLogic) AddFriend(in *pb.AddFriendReq) (*pb.AddFriendResp, erro
 	// If it exists with accepted or pending status, return it unchanged (idempotent).
 	directRecord, err := store.GetFriendshipByPair(l.ctx, userID, friendID)
 	if err != nil && !errors.Is(err, dao.ErrNotFound) {
-		return nil, FriendshipToGRPCError(err)
+		return nil, errorx.ToGRPCError(err)
 	}
 
 	if !errors.Is(err, dao.ErrNotFound) && (directRecord.Status == service.FriendshipStatusAccepted || directRecord.Status == service.FriendshipStatusPending) {
@@ -113,7 +113,7 @@ func (l *AddFriendLogic) AddFriend(in *pb.AddFriendReq) (*pb.AddFriendResp, erro
 	// No direct record exists; insert a new pending friendship.
 	record, err := store.UpsertFriendship(l.ctx, userID, friendID, service.FriendshipStatusPending)
 	if err != nil {
-		return nil, FriendshipToGRPCError(err)
+		return nil, errorx.ToGRPCError(err)
 	}
 	l.svcCtx.InvalidateFriendship(l.ctx, userID, friendID)
 

@@ -25,7 +25,7 @@ func (s *Store) CreateUserInfo(ctx context.Context, id int64, email, nickname, a
 		UserType: "human",
 	}
 	if err := s.db.WithContext(ctx).Create(&info).Error; err != nil {
-		return orm.UserInfo{}, translate(err)
+		return orm.UserInfo{}, err
 	}
 
 	return info, nil
@@ -35,7 +35,7 @@ func (s *Store) CreateUserInfo(ctx context.Context, id int64, email, nickname, a
 func (s *Store) GetUserInfoByID(ctx context.Context, id int64) (orm.UserInfo, error) {
 	var info orm.UserInfo
 	if err := s.db.WithContext(ctx).Where("id = ?", id).First(&info).Error; err != nil {
-		return orm.UserInfo{}, translate(err)
+		return orm.UserInfo{}, err
 	}
 
 	return info, nil
@@ -45,7 +45,7 @@ func (s *Store) GetUserInfoByID(ctx context.Context, id int64) (orm.UserInfo, er
 func (s *Store) GetUserInfoByEmail(ctx context.Context, email string) (orm.UserInfo, error) {
 	var info orm.UserInfo
 	if err := s.db.WithContext(ctx).Where("email = ?", email).First(&info).Error; err != nil {
-		return orm.UserInfo{}, translate(err)
+		return orm.UserInfo{}, err
 	}
 
 	return info, nil
@@ -55,7 +55,7 @@ func (s *Store) GetUserInfoByEmail(ctx context.Context, email string) (orm.UserI
 func (s *Store) GetUserInfoByNickname(ctx context.Context, nickname string) (orm.UserInfo, error) {
 	var info orm.UserInfo
 	if err := s.db.WithContext(ctx).Where("nickname = ?", nickname).First(&info).Error; err != nil {
-		return orm.UserInfo{}, translate(err)
+		return orm.UserInfo{}, err
 	}
 
 	return info, nil
@@ -68,7 +68,7 @@ func (s *Store) UpdateUserInfoProfile(ctx context.Context, id int64, nickname, a
 		Where("id = ?", id).
 		Updates(map[string]any{"nickname": nickname, "avatar": avatar, "updated_at": time.Now()})
 	if result.Error != nil {
-		return orm.UserInfo{}, translate(result.Error)
+		return orm.UserInfo{}, result.Error
 	}
 	if result.RowsAffected == 0 {
 		return orm.UserInfo{}, ErrNotFound
@@ -84,7 +84,7 @@ func (s *Store) UpdateUserInfoStatus(ctx context.Context, id int64, status int16
 		Where("id = ?", id).
 		Updates(map[string]any{"status": status, "updated_at": time.Now()})
 	if result.Error != nil {
-		return orm.UserInfo{}, translate(result.Error)
+		return orm.UserInfo{}, result.Error
 	}
 	if result.RowsAffected == 0 {
 		return orm.UserInfo{}, ErrNotFound
@@ -104,7 +104,7 @@ LIMIT ?`
 
 	var rows []orm.UserInfo
 	if err := s.db.WithContext(ctx).Raw(query, search, search, limit).Scan(&rows).Error; err != nil {
-		return nil, translate(err)
+		return nil, err
 	}
 
 	return rows, nil
@@ -126,7 +126,7 @@ LIMIT ?`
 
 	var rows []UserSearchRow
 	if err := s.db.WithContext(ctx).Raw(query, search, search, search, search, limit).Scan(&rows).Error; err != nil {
-		return nil, translate(err)
+		return nil, err
 	}
 
 	return rows, nil
@@ -136,7 +136,7 @@ LIMIT ?`
 func (s *Store) GetUserType(ctx context.Context, id int64) (string, error) {
 	var info orm.UserInfo
 	if err := s.db.WithContext(ctx).Select("user_type").Where("id = ?", id).First(&info).Error; err != nil {
-		return "", translate(err)
+		return "", err
 	}
 
 	return info.UserType, nil

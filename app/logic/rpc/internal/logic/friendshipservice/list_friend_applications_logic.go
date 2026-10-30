@@ -37,7 +37,7 @@ func (l *ListFriendApplicationsLogic) ListFriendApplications(in *pb.ListFriendAp
 
 	records, err := l.svcCtx.FriendshipDAO.ListPendingFriendApplications(l.ctx, userID)
 	if err != nil {
-		return nil, FriendshipToGRPCError(err)
+		return nil, errorx.ToGRPCError(err)
 	}
 
 	applications := make([]*pb.FriendshipResponse, 0, len(records))

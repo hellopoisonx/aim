@@ -40,10 +40,7 @@ func (l *BotListConversationsLogic) BotListConversations() (*types.BotListConver
 		BotUserId: identity.BotUserID,
 	})
 	if err != nil {
-		if ce := errorx.FromGRPCError(err); ce != nil {
-			return nil, ce
-		}
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "internal error")
+		return nil, errorx.SanitizeGRPCError(l, "bot list conversations", err)
 	}
 
 	convs := rpcResp.GetConversations()

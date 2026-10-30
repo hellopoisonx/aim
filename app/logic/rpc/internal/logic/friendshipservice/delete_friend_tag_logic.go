@@ -3,7 +3,6 @@ package friendshipservicelogic
 import (
 	"context"
 
-	"github.com/hellopoisonx/aim/app/logic/rpc/internal/service"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
@@ -38,7 +37,7 @@ func (l *DeleteFriendTagLogic) DeleteFriendTag(in *pb.DeleteFriendTagReq) (*pb.D
 
 	deleted, err := l.svcCtx.FriendTagService.DeleteTag(l.ctx, in.GetUserId(), in.GetTagId())
 	if err != nil {
-		return nil, service.TagErrToGRPCError(err)
+		return nil, errorx.ToGRPCError(err)
 	}
 
 	return &pb.DeleteFriendTagResp{Deleted: deleted}, nil

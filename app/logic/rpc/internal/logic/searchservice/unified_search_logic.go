@@ -46,7 +46,7 @@ func (l *UnifiedSearchLogic) UnifiedSearch(in *pb.UnifiedSearchReq) (*pb.Unified
 		in.GetLimit(),
 	)
 	if err != nil {
-		return nil, service.SearchErrToGRPCError(err)
+		return nil, errorx.ToGRPCError(err)
 	}
 
 	pbUsers := make([]*pb.SearchUserResult, 0, len(results.Users))

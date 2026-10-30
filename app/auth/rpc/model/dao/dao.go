@@ -68,7 +68,7 @@ func (s *Store) createCredential(ctx context.Context, id int64, email, passwordH
 		Status:       status,
 	}
 	if err := s.db.WithContext(ctx).Create(&user).Error; err != nil {
-		return orm.UserCredential{}, translate(err)
+		return orm.UserCredential{}, err
 	}
 
 	return user, nil
@@ -78,7 +78,7 @@ func (s *Store) createCredential(ctx context.Context, id int64, email, passwordH
 func (s *Store) GetUserByEmail(ctx context.Context, email string) (orm.UserCredential, error) {
 	var user orm.UserCredential
 	if err := s.db.WithContext(ctx).Where("email = ?", email).First(&user).Error; err != nil {
-		return orm.UserCredential{}, translate(err)
+		return orm.UserCredential{}, err
 	}
 
 	return user, nil
@@ -88,19 +88,8 @@ func (s *Store) GetUserByEmail(ctx context.Context, email string) (orm.UserCrede
 func (s *Store) InsertOutboxRecord(ctx context.Context, topic, key string, payload []byte) (int64, error) {
 	record := orm.OutboxRecord{Topic: topic, Key: key, Payload: payload}
 	if err := s.db.WithContext(ctx).Create(&record).Error; err != nil {
-		return 0, translate(err)
+		return 0, err
 	}
 
 	return record.ID, nil
-}
-
-func translate(err error) error {
-	switch {
-	case errors.Is(err, gorm.ErrRecordNotFound):
-		return ErrNotFound
-	case errors.Is(err, gorm.ErrDuplicatedKey):
-		return ErrDuplicateKey
-	default:
-		return err
-	}
 }

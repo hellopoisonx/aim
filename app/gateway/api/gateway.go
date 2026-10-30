@@ -13,6 +13,7 @@ import (
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/config"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/handler"
 	handlersws "github.com/hellopoisonx/aim/app/gateway/api/internal/handler/ws"
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/httperr"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/ws"
 	gwpb "github.com/hellopoisonx/aim/shared/proto/gateway/pb"
@@ -43,6 +44,9 @@ func main() {
 
 	// Start presence reaper for stale connection and token-refresh grace detection.
 	ctx.StartPresenceReaper()
+
+	// Install the shared JSON envelope before any route is served.
+	httperr.Register()
 
 	restServer := rest.MustNewServer(c.RestConf, corsOptions(c.Cors)...)
 	defer restServer.Stop()

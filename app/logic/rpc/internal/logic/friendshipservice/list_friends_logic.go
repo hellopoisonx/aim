@@ -42,17 +42,17 @@ func (l *ListFriendsLogic) ListFriends(in *pb.ListFriendsReq) (*pb.ListFriendsRe
 	case in.GetTagId() > 0:
 		records, err = l.svcCtx.FriendshipDAO.ListFriendsByTagID(l.ctx, userID, in.GetTagId())
 		if err != nil {
-			return nil, FriendshipToGRPCError(err)
+			return nil, errorx.ToGRPCError(err)
 		}
 	case in.GetTagName() != "":
 		records, err = l.svcCtx.FriendshipDAO.ListFriendsByTagName(l.ctx, userID, in.GetTagName())
 		if err != nil {
-			return nil, FriendshipToGRPCError(err)
+			return nil, errorx.ToGRPCError(err)
 		}
 	default:
 		records, err = l.svcCtx.FriendshipDAO.ListFriends(l.ctx, userID)
 		if err != nil {
-			return nil, FriendshipToGRPCError(err)
+			return nil, errorx.ToGRPCError(err)
 		}
 	}
 

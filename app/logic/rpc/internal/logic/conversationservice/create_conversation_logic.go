@@ -58,11 +58,11 @@ func (l *CreateConversationLogic) CreateConversation(in *pb.CreateConversationRe
 		if l.svcCtx.UserInfoService != nil {
 			creatorInfo, err := l.svcCtx.UserInfoService.GetUserInfo(l.ctx, in.GetCreatorId())
 			if err != nil {
-				return nil, service.ToGRPCError(err)
+				return nil, errorx.ToGRPCError(err)
 			}
 			peerInfo, err := l.svcCtx.UserInfoService.GetUserInfo(l.ctx, peerID)
 			if err != nil {
-				return nil, service.ToGRPCError(err)
+				return nil, errorx.ToGRPCError(err)
 			}
 			name = creatorInfo.Nickname + " | " + peerInfo.Nickname
 			displayName = peerInfo.Nickname
@@ -85,12 +85,12 @@ func (l *CreateConversationLogic) CreateConversation(in *pb.CreateConversationRe
 
 	conv, err := convSvc.CreateConversation(l.ctx, in.GetConversationType(), in.GetCreatorId(), memberIDs, name, in.GetAvatar())
 	if err != nil {
-		return nil, service.ConversationToGRPCError(err)
+		return nil, errorx.ToGRPCError(err)
 	}
 
 	members, err := convSvc.GetConversationMembers(l.ctx, conv.ID)
 	if err != nil {
-		return nil, service.ConversationToGRPCError(err)
+		return nil, errorx.ToGRPCError(err)
 	}
 
 	respMemberIDs := make([]int64, len(members))

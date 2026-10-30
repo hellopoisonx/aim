@@ -46,7 +46,7 @@ func TestServeWSRejectsMissingToken(t *testing.T) {
 	handler.ServeWS(rec, req)
 
 	require.Equal(t, http.StatusUnauthorized, rec.Code)
-	require.JSONEq(t, `{"code":1004,"msg":"missing token"}`, rec.Body.String())
+	require.JSONEq(t, `{"code":1004,"msg":"missing token","body":null}`, rec.Body.String())
 }
 
 func TestServeWSRejectsInvalidAuthorizationHeader(t *testing.T) {
@@ -63,7 +63,7 @@ func TestServeWSRejectsInvalidAuthorizationHeader(t *testing.T) {
 	handler.ServeWS(rec, req)
 
 	require.Equal(t, http.StatusUnauthorized, rec.Code)
-	require.JSONEq(t, `{"code":1004,"msg":"invalid authorization"}`, rec.Body.String())
+	require.JSONEq(t, `{"code":1004,"msg":"invalid authorization","body":null}`, rec.Body.String())
 }
 
 func TestServeWSValidTokenWithoutUpgradeHeaders(t *testing.T) {
@@ -98,7 +98,7 @@ func TestServeWSRejectsQueryToken(t *testing.T) {
 	handler.ServeWS(rec, req)
 
 	require.Equal(t, http.StatusUnauthorized, rec.Code)
-	require.JSONEq(t, `{"code":1004,"msg":"missing token"}`, rec.Body.String())
+	require.JSONEq(t, `{"code":1004,"msg":"missing token","body":null}`, rec.Body.String())
 }
 
 func TestServeWSHeartbeatAck(t *testing.T) {

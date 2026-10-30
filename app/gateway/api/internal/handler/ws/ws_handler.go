@@ -3,7 +3,6 @@ package handler
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"math"
 	"net/http"
@@ -13,6 +12,7 @@ import (
 
 	"github.com/coder/websocket"
 	corepb "github.com/hellopoisonx/aim/app/core/rpc/pb"
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/httperr"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/ws"
 	wsauth "github.com/hellopoisonx/aim/app/gateway/api/internal/ws/auth"
@@ -47,10 +47,10 @@ func (h *WsHandler) ServeWS(w http.ResponseWriter, r *http.Request) {
 	// 1. Extract and validate JWT
 	authHeader := r.Header.Get("Authorization")
 
-	claims, codeErr := wsauth.ExtractAndValidate(authHeader, h.srv.Config.Auth.AccessSecret)
-	if codeErr != nil {
-		// Write JSON error response before upgrade
-		writeAuthError(w, codeErr)
+	claims, err := wsauth.ExtractAndValidate(authHeader, h.srv.Config.Auth.AccessSecret)
+	if err != nil {
+		// Write JSON error response before upgrade.
+		httperr.Write(w, err)
 		return
 	}
 
@@ -634,15 +634,12 @@ func int32Code(code int) int32 {
 
 // mapTransferToAck maps the Transfer response/error to a SERVER_ACK frame.
 //
-// ACK mapping:
+// ACK mapping is decided by biz-code category (code/100), so sub-codes such as
+// 40010 or 40110 are classified exactly like their parent category:
 //   - nil error (success): ACK_STATUS_ACCEPTED, code=0, message_id from resp
-//   - gRPC error with CodeBadInput (40000): ACK_STATUS_REJECTED
-//   - gRPC error with CodeAuth (40100): ACK_STATUS_REJECTED
-//   - gRPC error with CodeForbidden (40300): ACK_STATUS_REJECTED
-//   - gRPC error with CodeNotFound (40400): ACK_STATUS_REJECTED
-//   - gRPC error with CodeRateLimit (42900): ACK_STATUS_REJECTED
-//   - gRPC error with CodeInternal (50000) / infrastructure errors: ACK_STATUS_RETRYABLE
-//   - unknown codes: ACK_STATUS_RETRYABLE (safe default)
+//   - 400xx/401xx/403xx/404xx/409xx/429xx: ACK_STATUS_REJECTED (client fault,
+//     retrying the same frame cannot succeed)
+//   - 5xxxx and infrastructure/unknown codes: ACK_STATUS_RETRYABLE
 func mapTransferToAck(ackSeq int64, clientMsgID string, seq int64, resp *corepb.TransferResp, err error) *pb.WsFrame {
 	if err == nil {
 		// Success
@@ -676,16 +673,7 @@ func mapTransferToAck(ackSeq int64, clientMsgID string, seq int64, resp *corepb.
 		return ackFrame
 	}
 
-	// Map biz code to ACK status
-	var status pb.AckStatus
-
-	switch codeErr.Code {
-	case errorx.CodeBadInput, errorx.CodeAuth, errorx.CodeForbidden, errorx.CodeNotFound, errorx.CodeConflict, errorx.CodeRateLimit:
-		status = pb.AckStatus_ACK_STATUS_REJECTED
-	default:
-		// CodeInternal (50000) and unknown codes → RETRYABLE
-		status = pb.AckStatus_ACK_STATUS_RETRYABLE
-	}
+	status := ackStatusForCode(codeErr.Code)
 
 	ackFrame, _ := ws.NewServerAckExtended(
 		ackSeq,
@@ -698,6 +686,22 @@ func mapTransferToAck(ackSeq int64, clientMsgID string, seq int64, resp *corepb.
 	)
 
 	return ackFrame
+}
+
+// ackStatusForCode classifies a biz code as a permanent client fault (REJECTED)
+// or a transient failure worth retrying (RETRYABLE).
+func ackStatusForCode(code int) pb.AckStatus {
+	switch category := code / 100; {
+	case category == 400 || category == 401 || category == 403 ||
+		category == 404 || category == 409 || category == 429:
+		return pb.AckStatus_ACK_STATUS_REJECTED
+	case code == errorx.CodeInvalidCredentials, code == errorx.CodeTokenInvalid,
+		code == errorx.CodeTokenExpired, code == errorx.CodeUserBanned,
+		code == errorx.CodeUserNotFound, code == errorx.CodeUserExists:
+		return pb.AckStatus_ACK_STATUS_REJECTED
+	default:
+		return pb.AckStatus_ACK_STATUS_RETRYABLE
+	}
 }
 
 // writeFrame writes a WsFrame to the WebSocket connection with a 5s timeout.
@@ -774,17 +778,4 @@ func (h *WsHandler) sendTokenExpired(ctx context.Context, conn *websocket.Conn, 
 	}
 
 	_ = conn.Close(websocket.StatusPolicyViolation, "token expired")
-}
-
-// writeAuthError writes a JSON error response without upgrading.
-func writeAuthError(w http.ResponseWriter, codeErr *errorx.CodeError) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusUnauthorized)
-	_ = json.NewEncoder(w).Encode(struct {
-		Code int    `json:"code"`
-		Msg  string `json:"msg"`
-	}{
-		Code: codeErr.Code,
-		Msg:  codeErr.Message,
-	})
 }

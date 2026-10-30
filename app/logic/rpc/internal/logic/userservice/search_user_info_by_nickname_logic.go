@@ -3,7 +3,6 @@ package userservicelogic
 import (
 	"context"
 
-	"github.com/hellopoisonx/aim/app/logic/rpc/internal/service"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
@@ -47,7 +46,7 @@ func (l *SearchUserInfoByNicknameLogic) SearchUserInfoByNickname(in *pb.SearchUs
 
 	infos, err := userSvc.SearchUserInfoByNickname(l.ctx, in.GetNickname(), limit)
 	if err != nil {
-		return nil, service.ToGRPCError(err)
+		return nil, errorx.ToGRPCError(err)
 	}
 
 	users := make([]*pb.UserInfoResponse, 0, len(infos))

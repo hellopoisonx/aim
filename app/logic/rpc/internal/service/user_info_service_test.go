@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"github.com/hellopoisonx/aim/app/shared/errorx"
 	"testing"
 
 	"github.com/hellopoisonx/aim/app/logic/rpc/model/dao"
@@ -333,17 +334,22 @@ func TestUserInfoService_SearchUserInfoByNickname_DBError(t *testing.T) {
 	assert.Contains(t, err.Error(), "database error")
 }
 
-func TestToGRPCError_UserNotFound(t *testing.T) {
-	err := ToGRPCError(ErrUserNotFound)
-	assert.Contains(t, err.Error(), "user not found")
-}
-
-func TestToGRPCError_UserExists(t *testing.T) {
-	err := ToGRPCError(ErrUserExists)
-	assert.Contains(t, err.Error(), "user already exists")
-}
-
-func TestToGRPCError_Unknown(t *testing.T) {
-	err := ToGRPCError(errors.New("some error"))
-	assert.Contains(t, err.Error(), "internal error")
+// User errors reuse the shared auth sentinels, so one concept keeps one biz
+// code across every service.
+func TestUserErrorsReuseSharedBizCodes(t *testing.T) {
+	tests := []struct {
+		name     string
+		err      error
+		wantCode int
+	}{
+		{"not found", ErrUserNotFound, errorx.CodeUserNotFound},
+		{"exists", ErrUserExists, errorx.CodeUserExists},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var codeErr *errorx.CodeError
+			require.ErrorAs(t, tt.err, &codeErr)
+			assert.Equal(t, tt.wantCode, codeErr.Code)
+		})
+	}
 }

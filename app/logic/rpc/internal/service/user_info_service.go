@@ -10,15 +10,13 @@ import (
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 )
 
-const (
-	CodeUserNotFound  int32  = 40410
-	CodeUserExists    int32  = 40910
-	DefaultUserAvatar string = "https://implement.me"
-)
+const DefaultUserAvatar string = "https://implement.me"
 
+// User errors reuse the shared auth sentinels so one concept keeps one code
+// across every service.
 var (
-	ErrUserNotFound = errors.New("user not found")
-	ErrUserExists   = errors.New("user already exists")
+	ErrUserNotFound = errorx.ErrUserNotFound
+	ErrUserExists   = errorx.ErrUserExists
 )
 
 // UserInfoQuerier defines the interface for user profile operations.
@@ -210,16 +208,4 @@ func (s UserInfoService) delUserInfoCache(ctx context.Context, info orm.UserInfo
 	}
 
 	return nil
-}
-
-// ToGRPCError converts domain errors to gRPC status errors.
-func ToGRPCError(err error) error {
-	switch {
-	case errors.Is(err, ErrUserNotFound):
-		return errorx.NewCodeError(errorx.CodeNotFound, "user not found")
-	case errors.Is(err, ErrUserExists):
-		return errorx.NewCodeError(errorx.CodeConflict, "user already exists")
-	default:
-		return errorx.NewCodeError(errorx.CodeInternal, "internal error")
-	}
 }

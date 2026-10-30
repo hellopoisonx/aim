@@ -24,14 +24,14 @@ func (s *Store) UpsertConversationReadState(ctx context.Context, conversationID,
 		}),
 	}).Create(&state).Error
 	if err != nil {
-		return orm.ConversationReadState{}, translate(err)
+		return orm.ConversationReadState{}, err
 	}
 
 	var stored orm.ConversationReadState
 	if err := s.db.WithContext(ctx).
 		Where("conversation_id = ? AND user_id = ?", conversationID, userID).
 		First(&stored).Error; err != nil {
-		return orm.ConversationReadState{}, translate(err)
+		return orm.ConversationReadState{}, err
 	}
 
 	return stored, nil
@@ -44,7 +44,7 @@ func (s *Store) ListConversationReadStates(ctx context.Context, conversationID i
 		Where("conversation_id = ?", conversationID).
 		Order("user_id ASC").
 		Find(&states).Error; err != nil {
-		return nil, translate(err)
+		return nil, err
 	}
 
 	return states, nil

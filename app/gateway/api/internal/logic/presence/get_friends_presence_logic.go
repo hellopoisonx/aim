@@ -6,6 +6,7 @@ package presence
 import (
 	"context"
 	"fmt"
+	"github.com/hellopoisonx/aim/app/shared/errorx"
 
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
@@ -35,7 +36,7 @@ func (l *GetFriendsPresenceLogic) GetFriendsPresence() (resp *types.GetFriendsPr
 	// Extract current user ID from the auth context.
 	identity, ok := ws.IdentityFromContext(l.ctx)
 	if !ok || identity.UserID == 0 {
-		return nil, fmt.Errorf("unauthorized")
+		return nil, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
 	}
 
 	// Get friend list from logic service.
@@ -43,8 +44,7 @@ func (l *GetFriendsPresenceLogic) GetFriendsPresence() (resp *types.GetFriendsPr
 		UserId: identity.UserID,
 	})
 	if err != nil {
-		logx.WithContext(l.ctx).Errorf("ListFriends failed: %v", err)
-		return nil, err
+		return nil, errorx.SanitizeGRPCError(l, "list friends", err)
 	}
 
 	friendIDs := make([]int64, 0, len(friendsResp.Friends))

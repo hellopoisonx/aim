@@ -87,7 +87,7 @@ type FileRow struct {
 // CreateAttachmentFile inserts the attachment_files row.
 func (s *Store) CreateAttachmentFile(ctx context.Context, file orm.AttachmentFile) error {
 	if err := s.db.WithContext(ctx).Create(&file).Error; err != nil {
-		return translate(err)
+		return err
 	}
 
 	return nil
@@ -96,7 +96,7 @@ func (s *Store) CreateAttachmentFile(ctx context.Context, file orm.AttachmentFil
 // CreateAttachmentObject inserts an attachment_objects row.
 func (s *Store) CreateAttachmentObject(ctx context.Context, object orm.AttachmentObject) error {
 	if err := s.db.WithContext(ctx).Create(&object).Error; err != nil {
-		return translate(err)
+		return err
 	}
 
 	return nil
@@ -113,7 +113,7 @@ WHERE f.file_id = ? AND f.owner_id = ? AND f.status = 'pending'`
 
 	var row PendingFile
 	if err := s.db.WithContext(ctx).Raw(query, fileID, ownerID).Scan(&row).Error; err != nil {
-		return PendingFile{}, translate(err)
+		return PendingFile{}, err
 	}
 	if row.FileID == uuid.Nil {
 		return PendingFile{}, ErrNotFound
@@ -133,7 +133,7 @@ WHERE file_id = ? AND owner_id = ? AND status = 'pending'`
 
 	result := s.db.WithContext(ctx).Exec(query, sha256, kindFile, fileID, ownerID)
 	if result.Error != nil {
-		return 0, translate(result.Error)
+		return 0, result.Error
 	}
 
 	return result.RowsAffected, nil
@@ -157,7 +157,7 @@ WHERE f.file_id = ? AND (f.owner_id = ? OR f.status = 'uploaded')`
 
 	var row FileRow
 	if err := s.db.WithContext(ctx).Raw(query, fileID, userID).Scan(&row).Error; err != nil {
-		return FileRow{}, translate(err)
+		return FileRow{}, err
 	}
 	if row.FileID == uuid.Nil {
 		return FileRow{}, ErrNotFound
@@ -180,7 +180,7 @@ func (s *Store) UpsertAttachmentObject(ctx context.Context, object orm.Attachmen
 		}),
 	}).Create(&object).Error
 	if err != nil {
-		return translate(err)
+		return err
 	}
 
 	return nil
@@ -200,7 +200,7 @@ func (s *Store) UpsertAttachmentParseResult(ctx context.Context, result orm.Atta
 		}),
 	}).Create(&result).Error
 	if err != nil {
-		return translate(err)
+		return err
 	}
 
 	return nil
@@ -213,7 +213,7 @@ func (s *Store) SetParseStatus(ctx context.Context, fileID uuid.UUID, status str
 		Where("file_id = ?", fileID).
 		Updates(map[string]any{"parse_status": status, "updated_at": gorm.Expr("NOW()")})
 	if result.Error != nil {
-		return 0, translate(result.Error)
+		return 0, result.Error
 	}
 
 	return result.RowsAffected, nil
@@ -227,7 +227,7 @@ VALUES (?, ?, '{}')
 ON CONFLICT (file_id) DO UPDATE SET error = EXCLUDED.error, updated_at = NOW()`
 
 	if err := s.db.WithContext(ctx).Exec(query, fileID, message).Error; err != nil {
-		return translate(err)
+		return err
 	}
 
 	return nil
@@ -237,19 +237,8 @@ ON CONFLICT (file_id) DO UPDATE SET error = EXCLUDED.error, updated_at = NOW()`
 func (s *Store) InsertOutboxRecord(ctx context.Context, topic, key string, payload []byte) (int64, error) {
 	record := orm.OutboxRecord{Topic: topic, Key: key, Payload: payload}
 	if err := s.db.WithContext(ctx).Create(&record).Error; err != nil {
-		return 0, translate(err)
+		return 0, err
 	}
 
 	return record.ID, nil
-}
-
-func translate(err error) error {
-	switch {
-	case errors.Is(err, gorm.ErrRecordNotFound):
-		return ErrNotFound
-	case errors.Is(err, gorm.ErrDuplicatedKey):
-		return ErrDuplicateKey
-	default:
-		return err
-	}
 }

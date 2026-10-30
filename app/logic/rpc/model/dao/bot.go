@@ -56,7 +56,7 @@ WHERE bt.token_hash = ?`
 
 	var row BotTokenWithUser
 	if err := s.db.WithContext(ctx).Raw(query, tokenHash).Scan(&row).Error; err != nil {
-		return BotTokenWithUser{}, translate(err)
+		return BotTokenWithUser{}, err
 	}
 	if row.ID == 0 {
 		return BotTokenWithUser{}, ErrNotFound
@@ -75,7 +75,7 @@ func (s *Store) ListEnabledActionsByToken(ctx context.Context, tokenID int64) ([
 		Where("btp.token_id = ? AND ba.enabled = TRUE", tokenID).
 		Order("ba.action").
 		Pluck("ba.action", &actions).Error; err != nil {
-		return nil, translate(err)
+		return nil, err
 	}
 
 	return actions, nil
@@ -91,7 +91,7 @@ func (s *Store) GetEnabledActionByWebhookEvent(ctx context.Context, event string
 		Where("bea.event = ? AND bea.enabled = TRUE AND ba.enabled = TRUE", event).
 		Limit(1).
 		Pluck("ba.action", &actions).Error; err != nil {
-		return "", translate(err)
+		return "", err
 	}
 	if len(actions) == 0 {
 		return "", ErrNotFound
@@ -104,7 +104,7 @@ func (s *Store) GetEnabledActionByWebhookEvent(ctx context.Context, event string
 func (s *Store) GetBotWebhook(ctx context.Context, botUserID int64) (orm.BotWebhook, error) {
 	var hook orm.BotWebhook
 	if err := s.db.WithContext(ctx).Where("bot_user_id = ?", botUserID).First(&hook).Error; err != nil {
-		return orm.BotWebhook{}, translate(err)
+		return orm.BotWebhook{}, err
 	}
 
 	return hook, nil
@@ -130,7 +130,7 @@ func (s *Store) UpsertBotWebhook(ctx context.Context, botUserID int64, url, secr
 		}),
 	}).Create(&hook).Error
 	if err != nil {
-		return orm.BotWebhook{}, translate(err)
+		return orm.BotWebhook{}, err
 	}
 
 	return s.GetBotWebhook(ctx, botUserID)
@@ -140,7 +140,7 @@ func (s *Store) UpsertBotWebhook(ctx context.Context, botUserID int64, url, secr
 func (s *Store) DeleteBotWebhook(ctx context.Context, botUserID int64) (int64, error) {
 	result := s.db.WithContext(ctx).Where("bot_user_id = ?", botUserID).Delete(&orm.BotWebhook{})
 	if result.Error != nil {
-		return 0, translate(result.Error)
+		return 0, result.Error
 	}
 
 	return result.RowsAffected, nil
@@ -161,7 +161,7 @@ WHERE cm.conversation_id = ?
 
 	var hooks []orm.BotWebhook
 	if err := s.db.WithContext(ctx).Raw(query, conversationID).Scan(&hooks).Error; err != nil {
-		return nil, translate(err)
+		return nil, err
 	}
 
 	return hooks, nil
@@ -178,7 +178,7 @@ func (s *Store) CreateUserBotProfile(ctx context.Context, id int64, email, nickn
 		UserType: "bot",
 	}
 	if err := s.db.WithContext(ctx).Create(&info).Error; err != nil {
-		return orm.UserInfo{}, translate(err)
+		return orm.UserInfo{}, err
 	}
 
 	return info, nil
@@ -188,7 +188,7 @@ func (s *Store) CreateUserBotProfile(ctx context.Context, id int64, email, nickn
 func (s *Store) CreateUserBotOwnership(ctx context.Context, botUserID, ownerUserID int64) (orm.UserBot, error) {
 	row := orm.UserBot{BotUserID: botUserID, OwnerUserID: ownerUserID}
 	if err := s.db.WithContext(ctx).Create(&row).Error; err != nil {
-		return orm.UserBot{}, translate(err)
+		return orm.UserBot{}, err
 	}
 
 	return row, nil
@@ -210,7 +210,7 @@ WHERE ub.owner_user_id = ?
 
 	var row ManagedUserBot
 	if err := s.db.WithContext(ctx).Raw(query, ownerUserID, botUserID).Scan(&row).Error; err != nil {
-		return ManagedUserBot{}, translate(err)
+		return ManagedUserBot{}, err
 	}
 	if row.ID == 0 {
 		return ManagedUserBot{}, ErrNotFound
@@ -235,7 +235,7 @@ ORDER BY ub.created_at DESC, ui.id DESC`
 
 	var rows []ManagedUserBot
 	if err := s.db.WithContext(ctx).Raw(query, ownerUserID).Scan(&rows).Error; err != nil {
-		return nil, translate(err)
+		return nil, err
 	}
 
 	return rows, nil
@@ -256,7 +256,7 @@ RETURNING ui.id, ui.email, ui.status, ui.nickname, ui.avatar, ui.created_at, ui.
 
 	var info orm.UserInfo
 	if err := s.db.WithContext(ctx).Raw(query, nickname, avatar, ownerUserID, botUserID).Scan(&info).Error; err != nil {
-		return orm.UserInfo{}, translate(err)
+		return orm.UserInfo{}, err
 	}
 	if info.ID == 0 {
 		return orm.UserInfo{}, ErrNotFound
@@ -280,7 +280,7 @@ RETURNING ui.id, ui.email, ui.status, ui.nickname, ui.avatar, ui.created_at, ui.
 
 	var info orm.UserInfo
 	if err := s.db.WithContext(ctx).Raw(query, status, ownerUserID, botUserID).Scan(&info).Error; err != nil {
-		return orm.UserInfo{}, translate(err)
+		return orm.UserInfo{}, err
 	}
 	if info.ID == 0 {
 		return orm.UserInfo{}, ErrNotFound
@@ -299,7 +299,7 @@ func (s *Store) SoftDeleteManagedUserBot(ctx context.Context, ownerUserID, botUs
 			"updated_at": gorm.Expr("NOW()"),
 		})
 	if result.Error != nil {
-		return 0, translate(result.Error)
+		return 0, result.Error
 	}
 
 	return result.RowsAffected, nil
@@ -312,7 +312,7 @@ func (s *Store) RevokeAllBotTokensByBot(ctx context.Context, botUserID int64) (i
 		Where("bot_user_id = ? AND revoked_at IS NULL", botUserID).
 		Update("revoked_at", gorm.Expr("COALESCE(revoked_at, NOW())"))
 	if result.Error != nil {
-		return 0, translate(result.Error)
+		return 0, result.Error
 	}
 
 	return result.RowsAffected, nil
@@ -329,7 +329,7 @@ func (s *Store) CreateBotToken(ctx context.Context, id, botUserID int64, tokenHa
 		ExpiresAt: expiresAt,
 	}
 	if err := s.db.WithContext(ctx).Create(&token).Error; err != nil {
-		return orm.BotToken{}, translate(err)
+		return orm.BotToken{}, err
 	}
 
 	return token, nil
@@ -342,7 +342,7 @@ func (s *Store) ListBotTokensByBot(ctx context.Context, botUserID int64) ([]orm.
 		Where("bot_user_id = ?", botUserID).
 		Order("created_at DESC").
 		Find(&tokens).Error; err != nil {
-		return nil, translate(err)
+		return nil, err
 	}
 
 	return tokens, nil
@@ -361,7 +361,7 @@ WHERE ub.owner_user_id = ?
 
 	var token orm.BotToken
 	if err := s.db.WithContext(ctx).Raw(query, ownerUserID, botUserID, tokenID).Scan(&token).Error; err != nil {
-		return orm.BotToken{}, translate(err)
+		return orm.BotToken{}, err
 	}
 	if token.ID == 0 {
 		return orm.BotToken{}, ErrNotFound
@@ -386,7 +386,7 @@ RETURNING bt.id, bt.bot_user_id, bt.token_hash, bt.name, bt.scopes, bt.expires_a
 
 	var token orm.BotToken
 	if err := s.db.WithContext(ctx).Raw(query, name, expiresAt, ownerUserID, botUserID, tokenID).Scan(&token).Error; err != nil {
-		return orm.BotToken{}, translate(err)
+		return orm.BotToken{}, err
 	}
 	if token.ID == 0 {
 		return orm.BotToken{}, ErrNotFound
@@ -410,7 +410,7 @@ WHERE ub.bot_user_id = bt.bot_user_id
 
 	result := s.db.WithContext(ctx).Exec(query, ownerUserID, botUserID, tokenID)
 	if result.Error != nil {
-		return 0, translate(result.Error)
+		return 0, result.Error
 	}
 
 	return result.RowsAffected, nil
@@ -422,7 +422,7 @@ func (s *Store) ClearBotTokenActions(ctx context.Context, tokenID int64) (int64,
 		Where("token_id = ?", tokenID).
 		Delete(&orm.BotTokenPermission{})
 	if result.Error != nil {
-		return 0, translate(result.Error)
+		return 0, result.Error
 	}
 
 	return result.RowsAffected, nil
@@ -434,7 +434,7 @@ func (s *Store) GrantBotTokenAction(ctx context.Context, tokenID, actionID int64
 	if err := s.db.WithContext(ctx).
 		Clauses(clause.OnConflict{DoNothing: true}).
 		Create(&grant).Error; err != nil {
-		return translate(err)
+		return err
 	}
 
 	return nil
@@ -447,7 +447,7 @@ func (s *Store) ListEnabledBotActions(ctx context.Context) ([]orm.BotAction, err
 		Where("enabled = TRUE").
 		Order("action ASC").
 		Find(&rows).Error; err != nil {
-		return nil, translate(err)
+		return nil, err
 	}
 
 	return rows, nil
@@ -464,7 +464,7 @@ func (s *Store) ListEnabledBotActionsByNames(ctx context.Context, names []string
 		Where("action IN ? AND enabled = TRUE", names).
 		Order("action ASC").
 		Find(&rows).Error; err != nil {
-		return nil, translate(err)
+		return nil, err
 	}
 
 	return rows, nil
@@ -482,7 +482,7 @@ ORDER BY bea.event`
 
 	var rows []BotEvent
 	if err := s.db.WithContext(ctx).Raw(query).Scan(&rows).Error; err != nil {
-		return nil, translate(err)
+		return nil, err
 	}
 
 	return rows, nil

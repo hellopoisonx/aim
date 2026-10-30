@@ -4,7 +4,6 @@ import (
 	"context"
 	"math"
 
-	"github.com/hellopoisonx/aim/app/logic/rpc/internal/service"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
@@ -43,7 +42,7 @@ func (l *UpdateUserInfoStatusLogic) UpdateUserInfoStatus(in *pb.UpdateUserInfoSt
 
 	info, err := userSvc.UpdateUserInfoStatus(l.ctx, in.GetId(), int16(in.GetStatus())) //nolint:gosec // bounded above before conversion.
 	if err != nil {
-		return nil, service.ToGRPCError(err)
+		return nil, errorx.ToGRPCError(err)
 	}
 
 	return &pb.UpdateUserInfoStatusResp{

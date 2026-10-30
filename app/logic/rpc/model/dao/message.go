@@ -17,7 +17,7 @@ type MessageSearchRow struct {
 // the caller leaves it zero.
 func (s *Store) InsertMessage(ctx context.Context, message orm.Message) error {
 	if err := s.db.WithContext(ctx).Create(&message).Error; err != nil {
-		return translate(err)
+		return err
 	}
 
 	return nil
@@ -32,7 +32,7 @@ func (s *Store) ListMessagesByConversation(ctx context.Context, conversationID i
 		Order("created_at DESC, id DESC").
 		Limit(int(limit)).
 		Find(&messages).Error; err != nil {
-		return nil, translate(err)
+		return nil, err
 	}
 
 	return messages, nil
@@ -46,7 +46,7 @@ func (s *Store) ListMessagesByConversationInitial(ctx context.Context, conversat
 		Order("created_at DESC, id DESC").
 		Limit(int(limit)).
 		Find(&messages).Error; err != nil {
-		return nil, translate(err)
+		return nil, err
 	}
 
 	return messages, nil
@@ -59,7 +59,7 @@ func (s *Store) CountMessagesByConversation(ctx context.Context, conversationID 
 		Model(&orm.Message{}).
 		Where("conversation_id = ?", conversationID).
 		Count(&count).Error; err != nil {
-		return 0, translate(err)
+		return 0, err
 	}
 
 	return count, nil
@@ -97,7 +97,7 @@ LIMIT ?`
 		cursor, cursor, cursor, cursorID,
 		limit,
 	).Scan(&rows).Error; err != nil {
-		return nil, translate(err)
+		return nil, err
 	}
 
 	return rows, nil
@@ -135,7 +135,7 @@ LIMIT ?`
 		cursor, cursor, cursor, cursorID,
 		limit,
 	).Scan(&rows).Error; err != nil {
-		return nil, translate(err)
+		return nil, err
 	}
 
 	return rows, nil

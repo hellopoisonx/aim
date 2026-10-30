@@ -37,7 +37,7 @@ func (l *SetFriendTagsLogic) SetFriendTags(in *pb.SetFriendTagsReq) (*pb.SetFrie
 	}
 
 	if err := l.svcCtx.FriendTagService.SetTags(l.ctx, in.GetUserId(), in.GetFriendId(), in.GetTagIds()); err != nil {
-		return nil, service.TagErrToGRPCError(err)
+		return nil, errorx.ToGRPCError(err)
 	}
 
 	friendship := &pb.FriendshipResponse{

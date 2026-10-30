@@ -2,6 +2,7 @@ package jwt
 
 import (
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/golang-jwt/jwt/v4"
@@ -10,6 +11,12 @@ import (
 const (
 	// AccessTokenTTL is 5 minutes
 	AccessTokenTTL = 5 * time.Minute
+)
+
+// Validation errors callers can match with errors.Is.
+var (
+	ErrTokenExpired = errors.New("token expired")
+	ErrTokenInvalid = errors.New("invalid token")
 )
 
 // Claims represents JWT claims with user_id and device_id
@@ -68,18 +75,23 @@ func (m *Manager) GenerateAccessToken(userID int64, deviceID string) (string, in
 func (m *Manager) ValidateAccessToken(tokenString string) (*Claims, error) {
 	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (any, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, errors.New("unexpected signing method")
+			return nil, fmt.Errorf("%w: unexpected signing method", ErrTokenInvalid)
 		}
 
 		return m.secretKey, nil
 	})
 	if err != nil {
-		return nil, err
+		var validationErr *jwt.ValidationError
+		if errors.As(err, &validationErr) && validationErr.Is(jwt.ErrTokenExpired) {
+			return nil, fmt.Errorf("%w: %v", ErrTokenExpired, err)
+		}
+
+		return nil, fmt.Errorf("%w: %v", ErrTokenInvalid, err)
 	}
 
 	claims, ok := token.Claims.(*Claims)
 	if !ok || !token.Valid {
-		return nil, errors.New("invalid token")
+		return nil, ErrTokenInvalid
 	}
 
 	return claims, nil

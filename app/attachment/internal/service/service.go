@@ -16,6 +16,7 @@ import (
 	"github.com/hellopoisonx/aim/app/attachment/model/dao"
 	"github.com/hellopoisonx/aim/app/attachment/model/orm"
 	sharedattachment "github.com/hellopoisonx/aim/app/shared/attachment"
+	"github.com/hellopoisonx/aim/app/shared/errorx"
 	"github.com/hellopoisonx/aim/app/shared/events"
 	"github.com/hellopoisonx/aim/app/shared/gormdb"
 	"github.com/hellopoisonx/aim/app/shared/outbox"
@@ -29,7 +30,13 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-var ErrNotFound = errors.New("attachment not found")
+// Domain errors carry their biz code so the RPC server can return them through
+// errorx.ToGRPCError without inspecting error strings.
+var (
+	ErrNotFound        = errorx.NewCodeError(errorx.CodeNotFound, "attachment not found")
+	ErrNotUploaded     = errorx.NewCodeError(errorx.CodeBadInput, "file is not uploaded")
+	ErrReferenceDenied = errorx.NewCodeError(errorx.CodeForbidden, "attachment reference denied")
+)
 
 type Service struct {
 	cfg          config.Config
@@ -147,16 +154,16 @@ func (s *Service) Close() {
 
 func (s *Service) InitUpload(ctx context.Context, req InitUploadRequest) (*InitUploadResponse, error) {
 	if req.OwnerID <= 0 || req.ConversationID <= 0 {
-		return nil, fmt.Errorf("owner_id and conversation_id are required")
+		return nil, errorx.NewCodeError(errorx.CodeBadInput, "owner_id and conversation_id are required")
 	}
 	if !sharedattachment.ValidKind(req.Kind) {
-		return nil, fmt.Errorf("unsupported kind")
+		return nil, errorx.NewCodeError(errorx.CodeBadInput, "unsupported kind")
 	}
 	if req.Size <= 0 || req.Size > s.cfg.Seaweed.MaxSize() {
-		return nil, fmt.Errorf("size must be between 1 and %d bytes", s.cfg.Seaweed.MaxSize())
+		return nil, errorx.NewCodeErrorf(errorx.CodeBadInput, "size must be between 1 and %d bytes", s.cfg.Seaweed.MaxSize())
 	}
 	if !allowedMime(req.Kind, req.Mime) {
-		return nil, fmt.Errorf("mime %q is not allowed for %s", req.Mime, req.Kind)
+		return nil, errorx.NewCodeErrorf(errorx.CodeBadInput, "mime %q is not allowed for %s", req.Mime, req.Kind)
 	}
 	fileID := uuid.New()
 	key := objectKey(req.ConversationID, fileID.String(), "original")
@@ -328,12 +335,12 @@ func (s *Service) verifyObject(ctx context.Context, key string, expectedSize int
 
 	span.SetAttributes(attribute.Int("http.response.status_code", resp.StatusCode))
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		err := fmt.Errorf("uploaded object not found: status %d", resp.StatusCode)
+		err := errorx.NewCodeErrorf(errorx.CodeBadInput, "uploaded object not found: status %d", resp.StatusCode)
 		tracing.RecordSpanError(span, err)
 		return err
 	}
 	if resp.ContentLength > 0 && expectedSize > 0 && resp.ContentLength != expectedSize {
-		err := fmt.Errorf("uploaded object size mismatch")
+		err := errorx.NewCodeError(errorx.CodeBadInput, "uploaded object size mismatch")
 		tracing.RecordSpanError(span, err)
 		return err
 	}
@@ -384,7 +391,7 @@ func (s *Service) Download(ctx context.Context, userID int64, fileID string) (*D
 		return nil, err
 	}
 	if info.Status != "uploaded" {
-		return nil, fmt.Errorf("file is not uploaded")
+		return nil, ErrNotUploaded
 	}
 	url, headers, err := s.signer.Presign(http.MethodGet, info.ObjectKey, s.cfg.Seaweed.GetDownloadTTL(), nil)
 	if err != nil {
@@ -399,7 +406,7 @@ func (s *Service) ValidateReference(ctx context.Context, userID, conversationID 
 		return nil, err
 	}
 	if info.Status != "uploaded" || info.OwnerID != userID || info.ConversationID != conversationID || info.Kind != kind {
-		return nil, fmt.Errorf("attachment reference denied")
+		return nil, ErrReferenceDenied
 	}
 	return info, nil
 }

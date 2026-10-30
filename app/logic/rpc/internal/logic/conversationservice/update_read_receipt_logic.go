@@ -3,7 +3,6 @@ package conversationservicelogic
 import (
 	"context"
 
-	"github.com/hellopoisonx/aim/app/logic/rpc/internal/service"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
@@ -34,7 +33,7 @@ func (l *UpdateReadReceiptLogic) UpdateReadReceipt(in *pb.UpdateReadReceiptReq) 
 
 	state, err := convSvc.UpdateReadReceipt(l.ctx, in.GetConversationId(), in.GetUserId(), in.GetLastReadMessageId())
 	if err != nil {
-		return nil, service.ConversationToGRPCError(err)
+		return nil, errorx.ToGRPCError(err)
 	}
 
 	return &pb.UpdateReadReceiptResp{

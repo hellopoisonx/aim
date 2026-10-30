@@ -40,10 +40,7 @@ func (l *BotGetWebhookLogic) BotGetWebhook() (*types.BotGetWebhookResponse, erro
 		BotUserId: identity.BotUserID,
 	})
 	if err != nil {
-		if ce := errorx.FromGRPCError(err); ce != nil {
-			return nil, ce
-		}
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "internal error")
+		return nil, errorx.SanitizeGRPCError(l, "bot get webhook", err)
 	}
 
 	cfg := rpcResp.GetWebhook()

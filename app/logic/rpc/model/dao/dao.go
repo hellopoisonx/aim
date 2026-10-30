@@ -47,14 +47,3 @@ func (s *Store) WithTx(ctx context.Context, fn func(tx *Store) error) error {
 		return fn(&Store{db: tx})
 	})
 }
-
-func translate(err error) error {
-	switch {
-	case errors.Is(err, gorm.ErrRecordNotFound):
-		return ErrNotFound
-	case errors.Is(err, gorm.ErrDuplicatedKey):
-		return ErrDuplicateKey
-	default:
-		return err
-	}
-}

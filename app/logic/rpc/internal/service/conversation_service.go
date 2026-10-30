@@ -40,13 +40,15 @@ const (
 	MessageTypeSystem = "system"
 )
 
+// Domain errors carry their biz code directly so every RPC handler can return
+// them through errorx.ToGRPCError without a hand-written converter.
 var (
-	ErrConversationNotFound = errors.New("conversation not found")
-	ErrNotMember            = errors.New("not a member of the conversation")
-	ErrConversationExists   = errors.New("conversation already exists")
-	ErrNotGroupConversation = errors.New("not a group conversation")
-	ErrNotOwner             = errors.New("not the group owner")
-	ErrNotAdmin             = errors.New("not a group admin")
+	ErrConversationNotFound = errorx.NewCodeError(CodeConversationNotFound, "conversation not found")
+	ErrNotMember            = errorx.NewCodeError(CodeNotMember, "not a member of the conversation")
+	ErrConversationExists   = errorx.NewCodeError(CodeConversationExists, "conversation already exists")
+	ErrNotGroupConversation = errorx.NewCodeError(CodeNotGroupConversation, "not a group conversation")
+	ErrNotOwner             = errorx.NewCodeError(CodeNotOwner, "not the group owner")
+	ErrNotAdmin             = errorx.NewCodeError(CodeNotAdmin, "not a group admin")
 )
 
 type ConversationQuerier interface {
@@ -1160,21 +1162,4 @@ func (s ConversationService) ListConversationReadStates(ctx context.Context, con
 	}
 
 	return states, nil
-}
-
-func ConversationToGRPCError(err error) error {
-	switch {
-	case errors.Is(err, ErrConversationNotFound):
-		return errorx.NewCodeError(errorx.CodeNotFound, "conversation not found")
-	case errors.Is(err, ErrNotMember):
-		return errorx.NewCodeError(errorx.CodeForbidden, "not a member of the conversation")
-	case errors.Is(err, ErrNotGroupConversation):
-		return errorx.NewCodeError(errorx.CodeBadInput, "not a group conversation")
-	case errors.Is(err, ErrNotOwner):
-		return errorx.NewCodeError(errorx.CodeForbidden, "not the group owner")
-	case errors.Is(err, ErrNotAdmin):
-		return errorx.NewCodeError(errorx.CodeForbidden, "not a group admin")
-	default:
-		return errorx.NewCodeError(errorx.CodeInternal, "internal error")
-	}
 }

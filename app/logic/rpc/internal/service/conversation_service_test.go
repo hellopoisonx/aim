@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"github.com/hellopoisonx/aim/app/shared/errorx"
 	"testing"
 	"time"
 
@@ -1079,22 +1080,44 @@ func TestConversationService_IsMember_StoreError(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// ConversationToGRPCError tests
+// Domain error contract
 // ---------------------------------------------------------------------------
 
-func TestConversationToGRPCError_ConversationNotFound(t *testing.T) {
-	err := ConversationToGRPCError(ErrConversationNotFound)
-	assert.Contains(t, err.Error(), "conversation not found")
+// Domain sentinels must carry their biz code themselves: RPC handlers return
+// them through errorx.ToGRPCError, which passes *CodeError values through
+// untouched. If a sentinel lost its code, clients would see 50000 instead.
+func TestConversationDomainErrorsCarryBizCodes(t *testing.T) {
+	tests := []struct {
+		name     string
+		err      error
+		wantCode int
+	}{
+		{"not found", ErrConversationNotFound, CodeConversationNotFound},
+		{"not member", ErrNotMember, CodeNotMember},
+		{"exists", ErrConversationExists, CodeConversationExists},
+		{"not group", ErrNotGroupConversation, CodeNotGroupConversation},
+		{"not owner", ErrNotOwner, CodeNotOwner},
+		{"not admin", ErrNotAdmin, CodeNotAdmin},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var codeErr *errorx.CodeError
+			require.ErrorAs(t, tt.err, &codeErr)
+			assert.Equal(t, tt.wantCode, codeErr.Code)
+			// Code-based matching keeps working for callers using errors.Is.
+			assert.ErrorIs(t, tt.err, errorx.NewCodeError(tt.wantCode, "different message"))
+		})
+	}
 }
 
-func TestConversationToGRPCError_NotMember(t *testing.T) {
-	err := ConversationToGRPCError(ErrNotMember)
-	assert.Contains(t, err.Error(), "not a member of the conversation")
-}
-
-func TestConversationToGRPCError_Unknown(t *testing.T) {
-	err := ConversationToGRPCError(errors.New("some random error"))
-	assert.Contains(t, err.Error(), "internal error")
+// A validation error raised by the service must survive the RPC boundary with
+// its own code instead of being flattened into 50000.
+func TestConversationDomainErrorSurvivesRPCConversion(t *testing.T) {
+	validation := errorx.NewCodeError(errorx.CodeBadInput, "id must be positive")
+	got, ok := errorx.ToGRPCError(validation).(*errorx.CodeError)
+	require.True(t, ok)
+	assert.Equal(t, errorx.CodeBadInput, got.Code)
+	assert.Equal(t, "id must be positive", got.Message)
 }
 
 // ---------------------------------------------------------------------------

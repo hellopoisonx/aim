@@ -125,7 +125,7 @@ func TestAddFriend_SelfAdd(t *testing.T) {
 
 	var codeErr *errorx.CodeError
 	require.ErrorAs(t, err, &codeErr)
-	assert.Equal(t, errorx.CodeBadInput, codeErr.Code)
+	assert.Equal(t, service.CodeSelfAdd, codeErr.Code)
 }
 
 func TestAddFriend_InvalidIDs(t *testing.T) {

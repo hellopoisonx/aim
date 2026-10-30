@@ -496,7 +496,7 @@ func (s *BotService) GetUserBot(ctx context.Context, ownerUserID, botUserID int6
 
 	row, err := queries.GetManagedUserBot(ctx, ownerUserID, botUserID)
 	if err != nil {
-		return UserBotInfo{}, botManagementError(err, "bot not found")
+		return UserBotInfo{}, botManagementErr(err, "bot not found")
 	}
 
 	return managedUserBotRowToInfo(row), nil
@@ -520,7 +520,7 @@ func (s *BotService) UpdateUserBotProfile(ctx context.Context, ownerUserID, botU
 
 	info, err := queries.UpdateManagedUserBotProfile(ctx, ownerUserID, botUserID, nickname, avatar)
 	if err != nil {
-		return UserBotInfo{}, botManagementError(err, "bot not found")
+		return UserBotInfo{}, botManagementErr(err, "bot not found")
 	}
 
 	return userInfoToBotInfo(ownerUserID, info), nil
@@ -539,7 +539,7 @@ func (s *BotService) SetUserBotStatus(ctx context.Context, ownerUserID, botUserI
 
 	info, err := queries.UpdateManagedUserBotStatus(ctx, ownerUserID, botUserID, status)
 	if err != nil {
-		return UserBotInfo{}, botManagementError(err, "bot not found")
+		return UserBotInfo{}, botManagementErr(err, "bot not found")
 	}
 
 	if !enabled {
@@ -559,7 +559,7 @@ func (s *BotService) DeleteUserBot(ctx context.Context, ownerUserID, botUserID i
 	}
 
 	if _, err := queries.GetManagedUserBot(ctx, ownerUserID, botUserID); err != nil {
-		return false, botManagementError(err, "bot not found")
+		return false, botManagementErr(err, "bot not found")
 	}
 
 	tokens, _ := queries.ListBotTokensByBot(ctx, botUserID)
@@ -674,7 +674,7 @@ func (s *BotService) UpdateUserBotToken(ctx context.Context, ownerUserID, botUse
 
 	oldToken, err := queries.GetManagedBotToken(ctx, ownerUserID, botUserID, tokenID)
 	if err != nil {
-		return UserBotTokenInfo{}, botManagementError(err, "token not found")
+		return UserBotTokenInfo{}, botManagementErr(err, "token not found")
 	}
 	if oldToken.RevokedAt != nil {
 		return UserBotTokenInfo{}, errorx.NewCodeError(errorx.CodeBadInput, "token is revoked")
@@ -699,7 +699,7 @@ func (s *BotService) UpdateUserBotToken(ctx context.Context, ownerUserID, botUse
 		return nil
 	})
 	if err != nil {
-		return UserBotTokenInfo{}, botManagementError(err, "token not found")
+		return UserBotTokenInfo{}, botManagementErr(err, "token not found")
 	}
 
 	s.invalidateBotTokenHash(ctx, oldToken.TokenHash)
@@ -714,7 +714,7 @@ func (s *BotService) RotateUserBotToken(ctx context.Context, ownerUserID, botUse
 
 	oldToken, err := queries.GetManagedBotToken(ctx, ownerUserID, botUserID, tokenID)
 	if err != nil {
-		return UserBotTokenInfo{}, "", botManagementError(err, "token not found")
+		return UserBotTokenInfo{}, "", botManagementErr(err, "token not found")
 	}
 	if oldToken.RevokedAt != nil {
 		return UserBotTokenInfo{}, "", errorx.NewCodeError(errorx.CodeBadInput, "token is revoked")
@@ -746,7 +746,7 @@ func (s *BotService) RevokeUserBotToken(ctx context.Context, ownerUserID, botUse
 
 	token, err := queries.GetManagedBotToken(ctx, ownerUserID, botUserID, tokenID)
 	if err != nil {
-		return false, botManagementError(err, "token not found")
+		return false, botManagementErr(err, "token not found")
 	}
 
 	rows, err := queries.RevokeManagedBotToken(ctx, ownerUserID, botUserID, tokenID)
@@ -922,7 +922,10 @@ func timeToMillis(ts *time.Time) int64 {
 	return ts.UnixMilli()
 }
 
-func botManagementError(err error, notFoundMsg string) error {
+// botManagementErr maps a DAO miss onto the resource-specific not-found message
+// and leaves every other error untouched; callers pass it to
+// errorx.ToGRPCError, which preserves typed biz errors.
+func botManagementErr(err error, notFoundMsg string) error {
 	if errors.Is(err, dao.ErrNotFound) {
 		return errorx.NewCodeError(errorx.CodeNotFound, notFoundMsg)
 	}

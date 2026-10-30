@@ -3,7 +3,6 @@ package conversationservicelogic
 import (
 	"context"
 
-	"github.com/hellopoisonx/aim/app/logic/rpc/internal/service"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
@@ -38,12 +37,12 @@ func (l *GetConversationMembersLogic) GetConversationMembers(in *pb.GetConversat
 
 	conv, err := convSvc.GetConversationByID(l.ctx, in.GetConversationId())
 	if err != nil {
-		return nil, service.ConversationToGRPCError(err)
+		return nil, errorx.ToGRPCError(err)
 	}
 
 	members, err := convSvc.GetConversationMembers(l.ctx, in.GetConversationId())
 	if err != nil {
-		return nil, service.ConversationToGRPCError(err)
+		return nil, errorx.ToGRPCError(err)
 	}
 
 	memberIDs := make([]int64, len(members))

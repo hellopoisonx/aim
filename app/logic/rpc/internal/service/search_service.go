@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"errors"
 	"strings"
 	"time"
 
@@ -19,7 +18,7 @@ const (
 	maxSearchLimit     = 100
 )
 
-var ErrSearchQueryEmpty = errors.New("search query must not be empty")
+var ErrSearchQueryEmpty = errorx.NewCodeError(CodeSearchQueryEmpty, "search query must not be empty")
 
 // SearchStore defines the DAO queries needed by the search service.
 type SearchStore interface {
@@ -331,15 +330,4 @@ func buildMessageResults(rows []dao.MessageSearchRow, maxRows int32) ([]SearchMe
 	}
 
 	return results, nextCreatedAt, nextID, hasMore, nil
-}
-
-// SearchErrToGRPCError converts search errors to gRPC errors.
-func SearchErrToGRPCError(err error) error {
-	switch {
-	case errors.Is(err, ErrSearchQueryEmpty):
-		return errorx.NewCodeError(CodeSearchQueryEmpty, "search query must not be empty")
-	case err != nil:
-		return errorx.NewCodeError(errorx.CodeInternal, "internal error")
-	}
-	return nil
 }

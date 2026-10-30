@@ -71,10 +71,7 @@ func (l *BotSetWebhookLogic) BotSetWebhook(req *types.BotSetWebhookRequest) (*ty
 		Enabled:   enabled,
 	})
 	if err != nil {
-		if ce := errorx.FromGRPCError(err); ce != nil {
-			return nil, ce
-		}
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "internal error")
+		return nil, errorx.SanitizeGRPCError(l, "bot set webhook", err)
 	}
 
 	cfg := rpcResp.GetWebhook()

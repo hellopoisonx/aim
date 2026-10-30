@@ -35,7 +35,7 @@ func (s *Store) CreateConversation(ctx context.Context, id int64, conversationTy
 		CreatorID:        creatorID,
 	}
 	if err := s.db.WithContext(ctx).Create(&conv).Error; err != nil {
-		return orm.Conversation{}, translate(err)
+		return orm.Conversation{}, err
 	}
 
 	return conv, nil
@@ -45,7 +45,7 @@ func (s *Store) CreateConversation(ctx context.Context, id int64, conversationTy
 func (s *Store) GetConversation(ctx context.Context, id int64) (orm.Conversation, error) {
 	var conv orm.Conversation
 	if err := s.db.WithContext(ctx).Where("id = ?", id).First(&conv).Error; err != nil {
-		return orm.Conversation{}, translate(err)
+		return orm.Conversation{}, err
 	}
 
 	return conv, nil
@@ -62,7 +62,7 @@ ORDER BY c.created_at DESC`
 
 	var rows []orm.Conversation
 	if err := s.db.WithContext(ctx).Raw(query, userID).Scan(&rows).Error; err != nil {
-		return nil, translate(err)
+		return nil, err
 	}
 
 	return rows, nil
@@ -86,7 +86,7 @@ LIMIT 1`
 
 	var conv orm.Conversation
 	if err := s.db.WithContext(ctx).Raw(query, userID, peerID).Scan(&conv).Error; err != nil {
-		return orm.Conversation{}, translate(err)
+		return orm.Conversation{}, err
 	}
 	if conv.ID == 0 {
 		return orm.Conversation{}, ErrNotFound
@@ -104,7 +104,7 @@ func (s *Store) AddConversationMembers(ctx context.Context, conversationID, user
 	}
 	result := s.db.WithContext(ctx).Create(&member)
 	if result.Error != nil {
-		return 0, translate(result.Error)
+		return 0, result.Error
 	}
 
 	return result.RowsAffected, nil
@@ -119,7 +119,7 @@ func (s *Store) AddConversationMemberWithRole(ctx context.Context, conversationI
 	}
 	result := s.db.WithContext(ctx).Create(&member)
 	if result.Error != nil {
-		return 0, translate(result.Error)
+		return 0, result.Error
 	}
 
 	return result.RowsAffected, nil
@@ -131,7 +131,7 @@ func (s *Store) GetConversationMembers(ctx context.Context, conversationID int64
 	if err := s.db.WithContext(ctx).
 		Where("conversation_id = ?", conversationID).
 		Find(&members).Error; err != nil {
-		return nil, translate(err)
+		return nil, err
 	}
 
 	return members, nil
@@ -147,7 +147,7 @@ func (s *Store) RemoveConversationMembers(ctx context.Context, conversationID in
 		Where("conversation_id = ? AND user_id IN ?", conversationID, userIDs).
 		Delete(&orm.ConversationMember{})
 	if result.Error != nil {
-		return 0, translate(result.Error)
+		return 0, result.Error
 	}
 
 	return result.RowsAffected, nil
@@ -160,7 +160,7 @@ func (s *Store) UpdateConversationMemberRole(ctx context.Context, conversationID
 		Where("conversation_id = ? AND user_id = ?", conversationID, userID).
 		Update("role", role)
 	if result.Error != nil {
-		return 0, translate(result.Error)
+		return 0, result.Error
 	}
 
 	return result.RowsAffected, nil
@@ -172,7 +172,7 @@ func (s *Store) UpdateConversationCreator(ctx context.Context, conversationID, c
 		Model(&orm.Conversation{}).
 		Where("id = ?", conversationID).
 		Update("creator_id", creatorID).Error; err != nil {
-		return translate(err)
+		return err
 	}
 
 	return nil
@@ -195,7 +195,7 @@ func (s *Store) UpdateConversation(ctx context.Context, id int64, name, avatar *
 		Model(&orm.Conversation{}).
 		Where("id = ?", id).
 		Updates(updates).Error; err != nil {
-		return translate(err)
+		return err
 	}
 
 	return nil
@@ -207,7 +207,7 @@ func (s *Store) DeactivateConversation(ctx context.Context, id int64) error {
 		Model(&orm.Conversation{}).
 		Where("id = ?", id).
 		Update("is_active", false).Error; err != nil {
-		return translate(err)
+		return err
 	}
 
 	return nil
@@ -217,7 +217,7 @@ func (s *Store) DeactivateConversation(ctx context.Context, id int64) error {
 func (s *Store) GetConversationCreator(ctx context.Context, id int64) (int64, error) {
 	var conv orm.Conversation
 	if err := s.db.WithContext(ctx).Select("creator_id").Where("id = ?", id).First(&conv).Error; err != nil {
-		return 0, translate(err)
+		return 0, err
 	}
 
 	return conv.CreatorID, nil
@@ -230,7 +230,7 @@ func (s *Store) IsConversationMember(ctx context.Context, conversationID, userID
 		Model(&orm.ConversationMember{}).
 		Where("conversation_id = ? AND user_id = ?", conversationID, userID).
 		Count(&count).Error; err != nil {
-		return false, translate(err)
+		return false, err
 	}
 
 	return count > 0, nil
@@ -246,7 +246,7 @@ WHERE cm.conversation_id = ?`
 
 	var rows []ConversationMemberDetail
 	if err := s.db.WithContext(ctx).Raw(query, conversationID).Scan(&rows).Error; err != nil {
-		return nil, translate(err)
+		return nil, err
 	}
 
 	return rows, nil
@@ -270,7 +270,7 @@ LIMIT ?`
 
 	var rows []ConversationSearchRow
 	if err := s.db.WithContext(ctx).Raw(query, search, search, userID, search, limit).Scan(&rows).Error; err != nil {
-		return nil, translate(err)
+		return nil, err
 	}
 
 	return rows, nil

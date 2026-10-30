@@ -52,10 +52,7 @@ func (l *BotDownloadAttachmentLogic) BotDownloadAttachment(req *types.BotDownloa
 		FileId: fileID,
 	})
 	if err != nil {
-		if ce := errorx.FromGRPCError(err); ce != nil {
-			return nil, ce
-		}
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "internal error")
+		return nil, errorx.SanitizeGRPCError(l, "bot download attachment", err)
 	}
 
 	if fileInfo.GetStatus() != "uploaded" {
@@ -77,10 +74,7 @@ func (l *BotDownloadAttachmentLogic) BotDownloadAttachment(req *types.BotDownloa
 			ConversationId: conversationID,
 		})
 	if err != nil {
-		if ce := errorx.FromGRPCError(err); ce != nil {
-			return nil, ce
-		}
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "internal error")
+		return nil, errorx.SanitizeGRPCError(l, "bot download attachment", err)
 	}
 
 	if !slices.Contains(membersResp.GetMemberIds(), identity.BotUserID) {
@@ -93,10 +87,7 @@ func (l *BotDownloadAttachmentLogic) BotDownloadAttachment(req *types.BotDownloa
 		FileId: fileID,
 	})
 	if err != nil {
-		if ce := errorx.FromGRPCError(err); ce != nil {
-			return nil, ce
-		}
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "internal error")
+		return nil, errorx.SanitizeGRPCError(l, "bot download attachment", err)
 	}
 
 	return &types.BotDownloadAttachmentResponse{

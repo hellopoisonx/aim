@@ -77,10 +77,7 @@ func (l *BotSendMessageLogic) BotSendMessage(req *types.BotSendMessageRequest) (
 		Mentions:       req.Mentions,
 	})
 	if err != nil {
-		if ce := errorx.FromGRPCError(err); ce != nil {
-			return nil, ce
-		}
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "internal error")
+		return nil, errorx.SanitizeGRPCError(l, "bot send message", err)
 	}
 
 	return &types.BotSendMessageResponse{
