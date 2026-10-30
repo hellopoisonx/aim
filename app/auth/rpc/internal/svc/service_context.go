@@ -24,6 +24,9 @@ type ServiceContext struct {
 	TokenIssuer  service.TokenIssuer
 	IDGen        *tools.Snowflake
 	OutboxPoller *outbox.Poller
+	// Registrar creates users with the outbox event in one transaction; nil
+	// when outbox publishing is not configured.
+	Registrar service.UserRegistrarStore
 }
 
 func NewServiceContext(c config.Config) *ServiceContext {
@@ -56,6 +59,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		outboxStore := outbox.NewGORMStore(store.DB())
 		publisher := newKafkaPublisher(c.KqPusherConf.Brokers, c.KqPusherConf.Topic)
 		svcCtx.OutboxPoller = outbox.NewPoller(outboxStore, publisher, outbox.Config{})
+		svcCtx.Registrar = service.NewUserRegistrar(store, idGen, c.KqPusherConf.Topic, svcCtx.OutboxPoller.Wake)
 	}
 
 	return svcCtx
