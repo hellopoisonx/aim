@@ -1,6 +1,7 @@
 package mqs
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
@@ -9,9 +10,11 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/hellopoisonx/aim/app/logic/rpc/model/orm"
 	"github.com/hellopoisonx/aim/app/shared/events"
 
 	"github.com/stretchr/testify/require"
@@ -146,4 +149,60 @@ func TestBuildPayload_ContainsAllFields(t *testing.T) {
 func TestConsume_NoDB_ReturnsNil(t *testing.T) {
 	c := &BotWebhookConsumer{}
 	require.NoError(t, c.Consume(t.Context(), "", `{"message_id":1}`))
+}
+
+// Consume must not block on webhook HTTP retries: the partition has to keep
+// moving while a slow bot is retried in the background.
+func TestConsume_ReturnsWithoutWaitingForDelivery(t *testing.T) {
+	var delivered atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		time.Sleep(150 * time.Millisecond)
+		delivered.Add(1)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	c := &BotWebhookConsumer{
+		ctx:        t.Context(),
+		store:      &fakeWebhookStore{hooks: []orm.BotWebhook{{BotUserID: 7, Url: srv.URL, Events: []string{"message.created"}, SecretHash: "secret"}}},
+		httpClient: srv.Client(),
+		now:        time.Now,
+		jobs:       make(chan webhookJob, botWebhookQueueSize),
+		stopCh:     make(chan struct{}),
+	}
+	c.Start()
+	defer c.Stop()
+
+	ctx := t.Context()
+	start := time.Now()
+	require.NoError(t, c.Consume(ctx, "1", mustJSON(t, events.TransferEvent{
+		MessageID: 1, SenderID: 100, ConversationID: 5, MessageType: "text", Content: "hi",
+	})))
+	require.Less(t, time.Since(start), 100*time.Millisecond, "Consume must not wait for the webhook")
+
+	require.Eventually(t, func() bool { return delivered.Load() == 1 }, 2*time.Second, 10*time.Millisecond)
+}
+
+func mustJSON(t *testing.T, v any) string {
+	t.Helper()
+	raw, err := json.Marshal(v)
+	require.NoError(t, err)
+	return string(raw)
+}
+
+// fakeWebhookStore serves the two lookups the consumer needs.
+type fakeWebhookStore struct {
+	hooks []orm.BotWebhook
+	types map[int64]string
+}
+
+func (f *fakeWebhookStore) ListActiveBotWebhooksForConversation(_ context.Context, _ int64) ([]orm.BotWebhook, error) {
+	return f.hooks, nil
+}
+
+func (f *fakeWebhookStore) GetUserType(_ context.Context, id int64) (string, error) {
+	if f.types == nil {
+		return "", nil
+	}
+	return f.types[id], nil
 }

@@ -22,7 +22,13 @@ func Consumers(ctx context.Context, svcCtx *svc.ServiceContext) []service.Servic
 	// `aim-message-transfer` topic as the archive consumer but a separate
 	// consumer group so its offset is independent.
 	if svcCtx.Config.IsBotWebhookConsumerConfigured() {
-		services = append(services, kq.MustNewQueue(svcCtx.Config.BotWebhookConsumerConf, NewBotWebhookConsumer(ctx, svcCtx)))
+		// The handler owns a worker pool, so it joins the service group as well:
+		// the group's Stop drains accepted webhook deliveries.
+		consumer := NewBotWebhookConsumer(ctx, svcCtx)
+		services = append(services,
+			kq.MustNewQueue(svcCtx.Config.BotWebhookConsumerConf, consumer),
+			consumer,
+		)
 	}
 
 	return services
