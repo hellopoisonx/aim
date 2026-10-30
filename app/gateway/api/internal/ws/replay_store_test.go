@@ -125,7 +125,12 @@ func TestReplayStoreTTLExpiration(t *testing.T) {
 	identity := authctx.Identity{UserID: 6, DeviceID: "dev-6"}
 
 	store.Append(identity, buildPushMessageFrame(1))
-	time.Sleep(40 * time.Millisecond)
+
+	// Wait for the first frame's TTL to elapse instead of sleeping past it.
+	require.Eventually(t, func() bool {
+		return len(store.PendingAfter(identity, 0)) == 0
+	}, 2*time.Second, 5*time.Millisecond)
+
 	store.Append(identity, buildPushMessageFrame(2))
 
 	pending := store.PendingAfter(identity, 0)

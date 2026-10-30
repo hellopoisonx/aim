@@ -392,10 +392,11 @@ func TestScanExpiredGraces(t *testing.T) {
 	expired := mgr.ScanExpiredGraces(time.Now())
 	assert.Empty(t, expired)
 
-	// Wait for grace to expire
-	time.Sleep(150 * time.Millisecond)
+	// Poll until the grace deadline passes instead of sleeping a fixed amount.
+	require.Eventually(t, func() bool {
+		return len(mgr.ScanExpiredGraces(time.Now())) == 1
+	}, 2*time.Second, 5*time.Millisecond)
 	expired = mgr.ScanExpiredGraces(time.Now())
-	assert.Len(t, expired, 1)
 	assert.Equal(t, identity, expired[0])
 
 	// Remove expired grace
