@@ -34,7 +34,7 @@ func (l *RevokeUserBotTokenLogic) RevokeUserBotToken(req *types.RevokeUserBotTok
 		OwnerUserId: identity.UserID, BotUserId: req.Id, TokenId: req.TokenId,
 	})
 	if err != nil {
-		return nil, sanitizeError(l, "revoke user bot token", err)
+		return nil, errorx.SanitizeGRPCError(l, "revoke user bot token", err)
 	}
 	return &types.RevokeUserBotTokenResponse{Revoked: rpcResp.GetRevoked()}, nil
 }

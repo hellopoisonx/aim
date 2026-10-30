@@ -31,7 +31,7 @@ func (l *ListBotEventsLogic) ListBotEvents() (resp *types.ListBotEventsResponse,
 	}
 	rpcResp, err := l.svcCtx.LogicBotClient.ListBotEvents(l.ctx, &botservice.ListBotEventsReq{})
 	if err != nil {
-		return nil, sanitizeError(l, "list bot events", err)
+		return nil, errorx.SanitizeGRPCError(l, "list bot events", err)
 	}
 	events := make([]types.BotEventItem, 0, len(rpcResp.GetEvents()))
 	for _, e := range rpcResp.GetEvents() {

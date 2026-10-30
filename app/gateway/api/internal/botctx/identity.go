@@ -31,12 +31,6 @@ func (b BotIdentity) RequireAction(action string) error {
 	return botperm.RequireAction(b.Scopes, action)
 }
 
-// HasScope is kept for compile compatibility with older code. New Bot OpenAPI
-// logic must use HasAction/RequireAction.
-func (b BotIdentity) HasScope(scope string) bool {
-	return b.HasAction(scope)
-}
-
 type ctxKey struct{}
 
 // WithBotIdentity returns ctx with the BotIdentity attached.

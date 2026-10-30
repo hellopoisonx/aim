@@ -2,6 +2,7 @@ package bot
 
 import (
 	"context"
+	"github.com/hellopoisonx/aim/app/shared/errorx"
 
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
@@ -52,7 +53,7 @@ func (l *BotMarkReadLogic) BotMarkRead(req *types.BotMarkReadRequest) (*types.Bo
 		LastReadMessageId: lastReadMessageID,
 	})
 	if err != nil {
-		return nil, sanitizeBotLogicRPCError(err)
+		return nil, errorx.SanitizeGRPCErrorNoLog(err)
 	}
 
 	readState := rpcResp.GetReadState()

@@ -35,7 +35,7 @@ func (l *AddUserBotToConversationLogic) AddUserBotToConversation(req *types.AddU
 		ConversationId: req.ConversationId, OperatorId: identity.UserID, OperatorName: "",
 	})
 	if err != nil {
-		return nil, sanitizeError(l, "add user bot to conversation", err)
+		return nil, errorx.SanitizeGRPCError(l, "add user bot to conversation", err)
 	}
 	conv := rpcResp.GetConversation()
 	if conv == nil {

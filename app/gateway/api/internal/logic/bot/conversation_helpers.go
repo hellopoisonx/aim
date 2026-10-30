@@ -32,10 +32,6 @@ func parseOptionalID(raw string, field string) (int64, error) {
 	return id, nil
 }
 
-func sanitizeBotLogicRPCError(err error) error {
-	return errorx.SanitizeGRPCErrorNoLog(err)
-}
-
 func requireLogicConversationClient(svcCtx *svc.ServiceContext) (conversationservice.ConversationService, error) {
 	if svcCtx == nil || svcCtx.LogicConversationClient == nil {
 		return nil, errorx.NewCodeError(errorx.CodeInternal, "internal error")
@@ -53,7 +49,7 @@ func ensureBotConversationMember(
 		ConversationId: conversationID,
 	})
 	if err != nil {
-		return sanitizeBotLogicRPCError(err)
+		return errorx.SanitizeGRPCErrorNoLog(err)
 	}
 
 	if !slices.Contains(membersResp.GetMemberIds(), identity.BotUserID) {

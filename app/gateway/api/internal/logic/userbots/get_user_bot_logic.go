@@ -34,7 +34,7 @@ func (l *GetUserBotLogic) GetUserBot(req *types.GetUserBotRequest) (resp *types.
 		OwnerUserId: identity.UserID, BotUserId: req.Id,
 	})
 	if err != nil {
-		return nil, sanitizeError(l, "get user bot", err)
+		return nil, errorx.SanitizeGRPCError(l, "get user bot", err)
 	}
 	return &types.GetUserBotResponse{Bot: userBotToType(rpcResp.GetBot())}, nil
 }

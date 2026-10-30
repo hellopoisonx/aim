@@ -34,7 +34,7 @@ func (l *RotateUserBotTokenLogic) RotateUserBotToken(req *types.RotateUserBotTok
 		OwnerUserId: identity.UserID, BotUserId: req.Id, TokenId: req.TokenId,
 	})
 	if err != nil {
-		return nil, sanitizeError(l, "rotate user bot token", err)
+		return nil, errorx.SanitizeGRPCError(l, "rotate user bot token", err)
 	}
 	return &types.RotateUserBotTokenResponse{
 		Token: userBotTokenToType(rpcResp.GetToken()), PlaintextToken: rpcResp.GetPlaintextToken(),

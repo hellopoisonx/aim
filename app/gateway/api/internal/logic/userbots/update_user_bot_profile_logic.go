@@ -34,7 +34,7 @@ func (l *UpdateUserBotProfileLogic) UpdateUserBotProfile(req *types.UpdateUserBo
 		OwnerUserId: identity.UserID, BotUserId: req.Id, Nickname: req.Nickname, Avatar: req.Avatar,
 	})
 	if err != nil {
-		return nil, sanitizeError(l, "update user bot profile", err)
+		return nil, errorx.SanitizeGRPCError(l, "update user bot profile", err)
 	}
 	return &types.UpdateUserBotProfileResponse{Bot: userBotToType(rpcResp.GetBot())}, nil
 }

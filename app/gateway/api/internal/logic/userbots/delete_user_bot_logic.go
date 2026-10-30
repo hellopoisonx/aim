@@ -34,7 +34,7 @@ func (l *DeleteUserBotLogic) DeleteUserBot(req *types.DeleteUserBotRequest) (res
 		OwnerUserId: identity.UserID, BotUserId: req.Id,
 	})
 	if err != nil {
-		return nil, sanitizeError(l, "delete user bot", err)
+		return nil, errorx.SanitizeGRPCError(l, "delete user bot", err)
 	}
 	return &types.DeleteUserBotResponse{Deleted: rpcResp.GetDeleted()}, nil
 }

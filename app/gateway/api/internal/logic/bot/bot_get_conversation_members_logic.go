@@ -2,6 +2,7 @@ package bot
 
 import (
 	"context"
+	"github.com/hellopoisonx/aim/app/shared/errorx"
 
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
@@ -49,19 +50,19 @@ func (l *BotGetConversationMembersLogic) BotGetConversationMembers(req *types.Bo
 		ConversationId: conversationID,
 	})
 	if err != nil {
-		return nil, sanitizeBotLogicRPCError(err)
+		return nil, errorx.SanitizeGRPCErrorNoLog(err)
 	}
 
 	members := rpcResp.GetMembers()
 	items := make([]types.BotMemberDetailItem, 0, len(members))
 	for _, m := range members {
 		items = append(items, types.BotMemberDetailItem{
-			UserId:      formatID(m.GetUserId()),
-			Email:       m.GetEmail(),
-			Avatar:      m.GetAvatar(),
-			Role:        m.GetRole(),
-			JoinedAt:    m.GetJoinedAt(),
-			Name:      m.GetName(),
+			UserId:   formatID(m.GetUserId()),
+			Email:    m.GetEmail(),
+			Avatar:   m.GetAvatar(),
+			Role:     m.GetRole(),
+			JoinedAt: m.GetJoinedAt(),
+			Name:     m.GetName(),
 		})
 	}
 

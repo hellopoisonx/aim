@@ -482,7 +482,7 @@ func (s *BotService) ListUserBots(ctx context.Context, ownerUserID int64) ([]Use
 
 	bots := make([]UserBotInfo, 0, len(rows))
 	for _, row := range rows {
-		bots = append(bots, listManagedUserBotRowToInfo(row))
+		bots = append(bots, managedUserBotRowToInfo(row))
 	}
 
 	return bots, nil
@@ -860,19 +860,6 @@ func (s *BotService) invalidateBotTokenHash(ctx context.Context, tokenHash strin
 }
 
 func managedUserBotRowToInfo(row dao.ManagedUserBot) UserBotInfo {
-	return UserBotInfo{
-		BotUserID:   row.ID,
-		OwnerUserID: row.OwnerUserID,
-		Email:       row.Email,
-		Nickname:    row.Nickname,
-		Avatar:      row.Avatar,
-		Status:      row.Status,
-		CreatedAt:   row.CreatedAt,
-		UpdatedAt:   row.UpdatedAt,
-	}
-}
-
-func listManagedUserBotRowToInfo(row dao.ManagedUserBot) UserBotInfo {
 	return UserBotInfo{
 		BotUserID:   row.ID,
 		OwnerUserID: row.OwnerUserID,

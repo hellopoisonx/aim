@@ -34,7 +34,7 @@ func (l *CreateUserBotDirectConversationLogic) CreateUserBotDirectConversation(r
 		OwnerUserId: identity.UserID, BotUserId: req.Id,
 	})
 	if err != nil {
-		return nil, sanitizeError(l, "create user bot direct conversation", err)
+		return nil, errorx.SanitizeGRPCError(l, "create user bot direct conversation", err)
 	}
 	conv := rpcResp.GetConversation()
 	if conv == nil {

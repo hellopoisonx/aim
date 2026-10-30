@@ -42,7 +42,7 @@ func (l *CreateUserBotLogic) CreateUserBot(req *types.CreateUserBotRequest) (res
 		Nickname: req.Nickname,
 	})
 	if err != nil {
-		return nil, sanitizeError(l, "create bot credential", err)
+		return nil, errorx.SanitizeGRPCError(l, "create bot credential", err)
 	}
 
 	if l.svcCtx.LogicBotClient == nil {
@@ -57,7 +57,7 @@ func (l *CreateUserBotLogic) CreateUserBot(req *types.CreateUserBotRequest) (res
 		Avatar:      req.Avatar,
 	})
 	if err != nil {
-		return nil, sanitizeError(l, "create user bot", err)
+		return nil, errorx.SanitizeGRPCError(l, "create user bot", err)
 	}
 
 	return &types.CreateUserBotResponse{Bot: userBotToType(botResp.GetBot())}, nil

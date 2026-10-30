@@ -34,7 +34,7 @@ func (l *DisableUserBotLogic) DisableUserBot(req *types.DisableUserBotRequest) (
 		OwnerUserId: identity.UserID, BotUserId: req.Id, Enabled: false,
 	})
 	if err != nil {
-		return nil, sanitizeError(l, "disable user bot", err)
+		return nil, errorx.SanitizeGRPCError(l, "disable user bot", err)
 	}
 	return &types.DisableUserBotResponse{Bot: userBotToType(rpcResp.GetBot())}, nil
 }

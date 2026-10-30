@@ -34,7 +34,7 @@ func (l *ListUserBotTokensLogic) ListUserBotTokens(req *types.ListUserBotTokensR
 		OwnerUserId: identity.UserID, BotUserId: req.Id,
 	})
 	if err != nil {
-		return nil, sanitizeError(l, "list user bot tokens", err)
+		return nil, errorx.SanitizeGRPCError(l, "list user bot tokens", err)
 	}
 	tokens := make([]types.UserBotTokenInfo, 0, len(rpcResp.GetTokens()))
 	for _, t := range rpcResp.GetTokens() {

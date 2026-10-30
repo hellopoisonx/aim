@@ -31,7 +31,7 @@ func (l *ListBotActionsLogic) ListBotActions() (resp *types.ListBotActionsRespon
 	}
 	rpcResp, err := l.svcCtx.LogicBotClient.ListBotActions(l.ctx, &botservice.ListBotActionsReq{})
 	if err != nil {
-		return nil, sanitizeError(l, "list bot actions", err)
+		return nil, errorx.SanitizeGRPCError(l, "list bot actions", err)
 	}
 	actions := make([]types.BotActionItem, 0, len(rpcResp.GetActions()))
 	for _, a := range rpcResp.GetActions() {

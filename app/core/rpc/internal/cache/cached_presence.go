@@ -18,7 +18,6 @@ const (
 type PresenceDirectory interface {
 	SetUserOnline(ctx context.Context, userID int64, deviceID, nodeID string) error
 	GetUserGatewayNodes(ctx context.Context, userID int64) ([]string, error)
-	GetUserGateway(ctx context.Context, userID int64) (string, error)
 	IsUserOnline(ctx context.Context, userID int64) (bool, error)
 }
 
@@ -84,18 +83,6 @@ func (s *CachedPresenceStore) GetUserGatewayNodes(ctx context.Context, userID in
 	}
 
 	return nodes, nil
-}
-
-func (s *CachedPresenceStore) GetUserGateway(ctx context.Context, userID int64) (string, error) {
-	nodes, err := s.GetUserGatewayNodes(ctx, userID)
-	if err != nil {
-		return "", err
-	}
-	if len(nodes) == 0 {
-		return "", fmt.Errorf("user %d is offline", userID)
-	}
-
-	return nodes[0], nil
 }
 
 func (s *CachedPresenceStore) IsUserOnline(ctx context.Context, userID int64) (bool, error) {

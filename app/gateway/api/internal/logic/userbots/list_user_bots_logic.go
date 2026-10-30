@@ -32,7 +32,7 @@ func (l *ListUserBotsLogic) ListUserBots() (resp *types.ListUserBotsResponse, er
 	}
 	rpcResp, err := l.svcCtx.LogicBotClient.ListUserBots(l.ctx, &botservice.ListUserBotsReq{OwnerUserId: identity.UserID})
 	if err != nil {
-		return nil, sanitizeError(l, "list user bots", err)
+		return nil, errorx.SanitizeGRPCError(l, "list user bots", err)
 	}
 	bots := make([]types.UserBotInfo, 0, len(rpcResp.GetBots()))
 	for _, b := range rpcResp.GetBots() {

@@ -2,6 +2,7 @@ package bot
 
 import (
 	"context"
+	"github.com/hellopoisonx/aim/app/shared/errorx"
 
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
@@ -65,7 +66,7 @@ func (l *BotGetConversationHistoryLogic) BotGetConversationHistory(req *types.Bo
 		Limit:           limit,
 	})
 	if err != nil {
-		return nil, sanitizeBotLogicRPCError(err)
+		return nil, errorx.SanitizeGRPCErrorNoLog(err)
 	}
 
 	messages := make([]types.BotMessageItem, 0, len(rpcResp.GetMessages()))
@@ -88,8 +89,8 @@ func (l *BotGetConversationHistoryLogic) BotGetConversationHistory(req *types.Bo
 			ConversationId: formatID(msg.GetConversationId()),
 			SenderId:       formatID(msg.GetSenderId()),
 			SenderInfo: types.BotSenderInfo{
-				Name:        senderInfo.GetName(),
-				Email:       senderInfo.GetEmail(),
+				Name:  senderInfo.GetName(),
+				Email: senderInfo.GetEmail(),
 			},
 			MessageType: msg.GetMessageType(),
 			Content:     msg.GetContent(),

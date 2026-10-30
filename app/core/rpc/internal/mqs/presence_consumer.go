@@ -3,7 +3,6 @@ package mqs
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 
 	"github.com/hellopoisonx/aim/app/core/rpc/internal/svc"
 	logicpb "github.com/hellopoisonx/aim/app/logic/rpc/pb"
@@ -11,8 +10,6 @@ import (
 	gwpb "github.com/hellopoisonx/aim/shared/proto/gateway/pb"
 	"github.com/zeromicro/go-zero/core/logx"
 )
-
-const userGatewayKeyPrefix = "aim:user_gateway:"
 
 // presenceEvent is the Kafka message for presence change (mirrors gateway svc.presenceEvent).
 type presenceEvent struct {
@@ -74,11 +71,7 @@ func (c *PresenceConsumer) Consume(ctx context.Context, key string, value string
 			continue
 		}
 
-		nodeIDs, err := c.getGatewayNodes(ctx, friendID)
-		if err != nil {
-			logx.WithContext(ctx).Errorf("getGatewayNodes failed for friend %d: %v", friendID, err)
-			continue
-		}
+		nodeIDs := gatewayNodes(ctx, c.svcCtx, friendID)
 
 		for _, nodeID := range nodeIDs {
 			req := &gwpb.PushPresenceReq{
@@ -99,17 +92,4 @@ func (c *PresenceConsumer) Consume(ctx context.Context, key string, value string
 	}
 
 	return nil
-}
-
-// getGatewayNodes returns the set of gateway node IDs where a user is connected.
-func (c *PresenceConsumer) getGatewayNodes(ctx context.Context, userID int64) ([]string, error) {
-	if c.svcCtx.PresenceStore != nil {
-		return c.svcCtx.PresenceStore.GetUserGatewayNodes(ctx, userID)
-	}
-	if c.svcCtx.RedisClient == nil {
-		return nil, fmt.Errorf("redis client not available")
-	}
-
-	key := fmt.Sprintf("%s%d", userGatewayKeyPrefix, userID)
-	return c.svcCtx.RedisClient.SMembers(ctx, key).Result()
 }

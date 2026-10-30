@@ -35,7 +35,7 @@ func (l *UpdateUserBotTokenLogic) UpdateUserBotToken(req *types.UpdateUserBotTok
 		Name: req.Name, ExpiresAt: req.ExpiresAt, Actions: req.Actions,
 	})
 	if err != nil {
-		return nil, sanitizeError(l, "update user bot token", err)
+		return nil, errorx.SanitizeGRPCError(l, "update user bot token", err)
 	}
 	return &types.UpdateUserBotTokenResponse{Token: userBotTokenToType(rpcResp.GetToken())}, nil
 }

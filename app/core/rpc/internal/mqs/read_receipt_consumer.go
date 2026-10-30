@@ -3,7 +3,6 @@ package mqs
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 
 	"github.com/hellopoisonx/aim/app/core/rpc/internal/svc"
 	logicpb "github.com/hellopoisonx/aim/app/logic/rpc/pb"
@@ -72,11 +71,7 @@ func (c *ReadReceiptConsumer) Consume(ctx context.Context, key string, value str
 			continue
 		}
 
-		nodeIDs, err := c.getGatewayNodes(ctx, memberID)
-		if err != nil {
-			logx.WithContext(ctx).Errorf("getGatewayNodes failed for member %d: %v", memberID, err)
-			continue
-		}
+		nodeIDs := gatewayNodes(ctx, c.svcCtx, memberID)
 
 		for _, nodeID := range nodeIDs {
 			if event.GatewayNodeID != "" && nodeID == event.GatewayNodeID {
@@ -102,17 +97,4 @@ func (c *ReadReceiptConsumer) Consume(ctx context.Context, key string, value str
 	}
 
 	return nil
-}
-
-// getGatewayNodes returns the set of gateway node IDs where a user is connected.
-func (c *ReadReceiptConsumer) getGatewayNodes(ctx context.Context, userID int64) ([]string, error) {
-	if c.svcCtx.PresenceStore != nil {
-		return c.svcCtx.PresenceStore.GetUserGatewayNodes(ctx, userID)
-	}
-	if c.svcCtx.RedisClient == nil {
-		return nil, fmt.Errorf("redis client not available")
-	}
-
-	key := fmt.Sprintf("%s%d", userGatewayKeyPrefix, userID)
-	return c.svcCtx.RedisClient.SMembers(ctx, key).Result()
 }

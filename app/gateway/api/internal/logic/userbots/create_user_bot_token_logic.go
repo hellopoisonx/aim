@@ -34,7 +34,7 @@ func (l *CreateUserBotTokenLogic) CreateUserBotToken(req *types.CreateUserBotTok
 		OwnerUserId: identity.UserID, BotUserId: req.Id, Name: req.Name, ExpiresAt: req.ExpiresAt, Actions: req.Actions,
 	})
 	if err != nil {
-		return nil, sanitizeError(l, "create user bot token", err)
+		return nil, errorx.SanitizeGRPCError(l, "create user bot token", err)
 	}
 	return &types.CreateUserBotTokenResponse{
 		Token: userBotTokenToType(rpcResp.GetToken()), PlaintextToken: rpcResp.GetPlaintextToken(),
