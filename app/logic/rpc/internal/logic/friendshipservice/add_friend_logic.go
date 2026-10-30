@@ -13,24 +13,6 @@ import (
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
-// FriendshipToGRPCError converts domain errors to gRPC status errors.
-func FriendshipToGRPCError(err error) error {
-	switch {
-	case errors.Is(err, service.ErrUserNotFound):
-		return errorx.NewCodeError(errorx.CodeNotFound, "user not found")
-	case errors.Is(err, service.ErrSelfAdd):
-		return errorx.NewCodeError(errorx.CodeBadInput, "cannot add yourself as friend")
-	case errors.Is(err, service.ErrBlocked):
-		return errorx.NewCodeError(errorx.CodeForbidden, "user is blocked")
-	case errors.Is(err, service.ErrNotPending):
-		return errorx.NewCodeError(errorx.CodeForbidden, "no pending friend request found")
-	case errors.Is(err, service.ErrFriendNotFound):
-		return errorx.NewCodeError(errorx.CodeNotFound, "friend request not found")
-	default:
-		return errorx.NewCodeError(errorx.CodeInternal, "internal error")
-	}
-}
-
 type AddFriendLogic struct {
 	ctx    context.Context
 	svcCtx *svc.ServiceContext
@@ -68,7 +50,7 @@ func (l *AddFriendLogic) AddFriend(in *pb.AddFriendReq) (*pb.AddFriendResp, erro
 	_, err := userSvc.GetUserInfo(l.ctx, friendID)
 	if err != nil {
 		if errors.Is(err, service.ErrUserNotFound) {
-			return nil, FriendshipToGRPCError(service.ErrUserNotFound)
+			return nil, errorx.ToGRPCError(service.ErrUserNotFound)
 		}
 
 		return nil, errorx.ToGRPCError(err)
@@ -87,7 +69,7 @@ func (l *AddFriendLogic) AddFriend(in *pb.AddFriendReq) (*pb.AddFriendResp, erro
 
 	for _, f := range existing {
 		if f.Status == service.FriendshipStatusBlocked {
-			return nil, FriendshipToGRPCError(service.ErrBlocked)
+			return nil, errorx.ToGRPCError(service.ErrBlocked)
 		}
 	}
 
