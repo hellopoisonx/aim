@@ -203,7 +203,7 @@ func (s *ConversationService) getConversationRow(ctx context.Context, id int64) 
 		return s.store.GetConversation(ctx, id)
 	}
 
-	return s.convCache.Take(ctx, sharedcache.ConvKey(id), func() (orm.Conversation, error) {
+	return s.convCache.Take(ctx, sharedcache.ConversationKey(id), func() (orm.Conversation, error) {
 		return s.store.GetConversation(ctx, id)
 	})
 }
@@ -213,20 +213,20 @@ func (s *ConversationService) getConversationMemberRows(ctx context.Context, con
 		return s.store.GetConversationMembers(ctx, conversationID)
 	}
 
-	return s.membersCache.Take(ctx, sharedcache.ConvMembersKey(conversationID), func() ([]orm.ConversationMember, error) {
+	return s.membersCache.Take(ctx, sharedcache.ConversationMembersKey(conversationID), func() ([]orm.ConversationMember, error) {
 		return s.store.GetConversationMembers(ctx, conversationID)
 	})
 }
 
 func (s *ConversationService) invalidateConversation(ctx context.Context, conversationID int64) {
 	if s.convCache != nil {
-		_ = s.convCache.Del(ctx, sharedcache.ConvKey(conversationID))
+		_ = s.convCache.Del(ctx, sharedcache.ConversationKey(conversationID))
 	}
 }
 
 func (s *ConversationService) invalidateConversationMembers(ctx context.Context, conversationID int64) {
 	if s.membersCache != nil {
-		_ = s.membersCache.Del(ctx, sharedcache.ConvMembersKey(conversationID))
+		_ = s.membersCache.Del(ctx, sharedcache.ConversationMembersKey(conversationID))
 	}
 }
 

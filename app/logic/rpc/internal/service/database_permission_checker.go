@@ -224,7 +224,7 @@ func (c *DatabasePermissionChecker) getConversation(ctx context.Context, convers
 		return c.queries.GetConversation(ctx, conversationID)
 	}
 
-	return c.convCache.Take(ctx, sharedcache.ConvKey(conversationID), func() (orm.Conversation, error) {
+	return c.convCache.Take(ctx, sharedcache.ConversationKey(conversationID), func() (orm.Conversation, error) {
 		return c.queries.GetConversation(ctx, conversationID)
 	})
 }
@@ -234,7 +234,7 @@ func (c *DatabasePermissionChecker) getConversationMembers(ctx context.Context, 
 		return c.queries.GetConversationMembers(ctx, conversationID)
 	}
 
-	return c.membersCache.Take(ctx, sharedcache.ConvMembersKey(conversationID), func() ([]orm.ConversationMember, error) {
+	return c.membersCache.Take(ctx, sharedcache.ConversationMembersKey(conversationID), func() ([]orm.ConversationMember, error) {
 		return c.queries.GetConversationMembers(ctx, conversationID)
 	})
 }

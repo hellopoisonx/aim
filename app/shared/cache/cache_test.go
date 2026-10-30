@@ -89,3 +89,17 @@ func TestConfigWithDefaults(t *testing.T) {
 	require.Equal(t, defaultL2TTLSeconds, conf.L2TTLSeconds)
 	require.Equal(t, DefaultInvalidateStream, conf.InvalidateStream)
 }
+
+func TestKeyBuildersSharePrefixAndArgumentNaming(t *testing.T) {
+	require.Equal(t, "conv:7", ConversationKey(7))
+	require.Equal(t, "conv:members:7", ConversationMembersKey(7))
+	require.Equal(t, "user:7", UserKey(7))
+	require.Equal(t, "user:type:7", UserTypeKey(7))
+	require.Equal(t, "user:email:a@b.c", UserEmailKey(" A@B.C "))
+	require.Equal(t, "bot:token:hash", BotTokenKey("hash"))
+	require.Equal(t, "presence:7", PresenceKey(7))
+	require.Equal(t, "ws:replay:7:desktop", WsReplayKey(7, "desktop"))
+
+	// Friendship keys are order independent.
+	require.Equal(t, FriendshipKey(3, 9), FriendshipKey(9, 3))
+}
