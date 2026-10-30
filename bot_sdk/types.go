@@ -82,8 +82,9 @@ type ReadState struct {
 	Name              string `json:"name,omitempty"`
 }
 
+// GetConversationHistoryRequest pages a conversation's history; the
+// conversation id is passed to Client.GetConversationHistory separately.
 type GetConversationHistoryRequest struct {
-	ConversationID  string
 	CursorCreatedAt int64
 	CursorID        string
 	Limit           int32
@@ -110,8 +111,9 @@ type GetConversationMembersResponse struct {
 	Members []Member `json:"members"`
 }
 
+// MarkReadRequest carries the cursor to advance to; the conversation id is
+// passed to Client.MarkRead separately.
 type MarkReadRequest struct {
-	ConversationID    string
 	LastReadMessageID string `json:"last_read_message_id"`
 }
 

@@ -46,8 +46,7 @@ func TestClientSendsAuthAndBuildsHistoryQuery(t *testing.T) {
 	client, err := NewClient(server.URL, "token-1")
 	require.NoError(t, err)
 
-	resp, err := client.GetConversationHistory(context.Background(), GetConversationHistoryRequest{
-		ConversationID:  "7",
+	resp, err := client.GetConversationHistory(context.Background(), "7", GetConversationHistoryRequest{
 		CursorCreatedAt: 170,
 		CursorID:        "99",
 		Limit:           25,
