@@ -1,5 +1,5 @@
-// Package handler contains the WebSocket endpoint handler.
-package handler
+// Package wshandler implements the gateway WebSocket endpoint.
+package wshandler
 
 import (
 	"context"

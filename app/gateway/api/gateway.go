@@ -13,7 +13,7 @@ import (
 
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/config"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/handler"
-	handlersws "github.com/hellopoisonx/aim/app/gateway/api/internal/handler/ws"
+	wshandler "github.com/hellopoisonx/aim/app/gateway/api/internal/handler/ws"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/httperr"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/ws"
@@ -54,7 +54,7 @@ func main() {
 	defer restServer.Stop()
 
 	handler.RegisterHandlers(restServer, ctx)
-	wsHandler := handlersws.NewWsHandler(ctx, ctx.WsManager)
+	wsHandler := wshandler.NewWsHandler(ctx, ctx.WsManager)
 	restServer.AddRoute(rest.Route{Method: http.MethodGet, Path: "/ws", Handler: wsHandler.ServeWS})
 
 	gatewayServer := ws.NewGatewayServer(ctx.WsManager)
