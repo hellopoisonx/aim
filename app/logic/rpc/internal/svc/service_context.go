@@ -84,7 +84,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 				UserType:     svcCtx.UserTypeCache,
 			})
 			svcCtx.UserInfoService = service.NewUserInfoService(store, service.WithUserInfoCache(svcCtx.UserCache), service.WithUserTypeCache(svcCtx.UserTypeCache))
-			svcCtx.BotService = service.NewBotService(store,
+			svcCtx.BotService = service.NewBotService(store, store,
 				service.WithBotTokenCache(svcCtx.BotTokenCache),
 				service.WithBotTxRunner(botTxRunner{store: store}),
 				service.WithBotIDGenerator(snowflake),

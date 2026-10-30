@@ -135,6 +135,7 @@ type BotTxRunner interface {
 // BotService implements BotService RPC business logic.
 type BotService struct {
 	queries       BotQuerier
+	management    BotManagementQuerier
 	txRunner      BotTxRunner
 	idGen         *tools.Snowflake
 	botTokenCache *sharedcache.TypedCache[dao.BotTokenWithUser]
@@ -161,8 +162,13 @@ func WithBotIDGenerator(idGen *tools.Snowflake) BotServiceOption {
 }
 
 // NewBotService constructs a BotService backed by the GORM DAO.
-func NewBotService(queries BotQuerier, opts ...BotServiceOption) *BotService {
-	svc := &BotService{queries: queries}
+//
+// Both dependency sets are declared in the constructor so a caller can see the
+// full contract statically; pass a nil management store for token-only usage
+// (WebSocket/HTTP auth), which then reports "not configured" for management
+// calls instead of failing an unchecked type assertion at runtime.
+func NewBotService(queries BotQuerier, management BotManagementQuerier, opts ...BotServiceOption) *BotService {
+	svc := &BotService{queries: queries, management: management}
 	for _, opt := range opts {
 		if opt != nil {
 			opt(svc)
@@ -402,12 +408,11 @@ func (s *BotService) DeleteBotWebhook(ctx context.Context, botUserID int64) (boo
 // --- User-side Bot management ---
 
 func (s *BotService) managementQueries() (BotManagementQuerier, error) {
-	queries, ok := s.queries.(BotManagementQuerier)
-	if !ok {
+	if s.management == nil {
 		return nil, errorx.NewCodeError(errorx.CodeInternal, "bot management service not configured")
 	}
 
-	return queries, nil
+	return s.management, nil
 }
 
 func (s *BotService) inBotManagementTx(ctx context.Context, fn func(BotManagementQuerier) error) error {
