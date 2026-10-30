@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"strconv"
+	"sync"
 	"time"
 
 	sharedkafka "github.com/hellopoisonx/aim/app/shared/kafka"
@@ -192,6 +193,27 @@ type ServiceContext struct {
 	ReadReceiptPub ReadReceiptPublisher
 	WsManager      *ws.Manager
 	reaperCancel   context.CancelFunc // cancels the presence reaper goroutine
+
+	gatewayOnce sync.Once
+	gateway     *ws.GatewayServer
+}
+
+// Gateway returns the in-process pusher for connections held by this node.
+//
+// Handlers must not construct ws.GatewayServer themselves: the adapter is a
+// process-wide view of the connection manager, and only this accessor owns it.
+func (s *ServiceContext) Gateway() *ws.GatewayServer {
+	if s == nil {
+		return nil
+	}
+
+	s.gatewayOnce.Do(func() {
+		if s.WsManager != nil {
+			s.gateway = ws.NewGatewayServer(s.WsManager)
+		}
+	})
+
+	return s.gateway
 }
 
 func NewServiceContext(c config.Config) *ServiceContext {

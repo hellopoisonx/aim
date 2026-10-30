@@ -9,7 +9,6 @@ import (
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/membership"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
-	gatewayws "github.com/hellopoisonx/aim/app/gateway/api/internal/ws"
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/conversationservice"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
@@ -109,7 +108,7 @@ func fanOutBotReadReceiptLocal(
 		return
 	}
 
-	gateway := gatewayws.NewGatewayServer(svcCtx.WsManager)
+	gateway := svcCtx.Gateway()
 	for _, memberID := range membersResp.GetMemberIds() {
 		if memberID <= 0 || memberID == fromUserID || len(svcCtx.WsManager.GetByUserID(memberID)) == 0 {
 			continue

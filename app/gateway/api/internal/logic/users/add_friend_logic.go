@@ -10,7 +10,6 @@ import (
 
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
-	"github.com/hellopoisonx/aim/app/gateway/api/internal/ws"
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/friendshipservice"
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/userservice"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
@@ -18,6 +17,9 @@ import (
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
+
+// friendshipStatusPending is the status of a friend request awaiting acceptance.
+const friendshipStatusPending = "pending"
 
 type AddFriendLogic struct {
 	logx.Logger
@@ -81,8 +83,8 @@ func (l *AddFriendLogic) AddFriend(req *types.AddFriendRequest) (resp *types.Add
 		}
 	}
 
-	if l.svcCtx.WsManager != nil && item.Status == "pending" {
-		_, _ = ws.NewGatewayServer(l.svcCtx.WsManager).PushFriendApplication(l.ctx, &gwpb.PushFriendApplicationReq{
+	if gateway := l.svcCtx.Gateway(); gateway != nil && item.Status == friendshipStatusPending {
+		_, _ = gateway.PushFriendApplication(l.ctx, &gwpb.PushFriendApplicationReq{
 			TargetUserId: item.FriendId,
 			UserId:       item.UserId,
 			FriendId:     item.FriendId,

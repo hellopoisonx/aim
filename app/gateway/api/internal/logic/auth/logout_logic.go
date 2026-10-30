@@ -10,7 +10,6 @@ import (
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/authctx"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
-	"github.com/hellopoisonx/aim/app/gateway/api/internal/ws"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 	gwpb "github.com/hellopoisonx/aim/shared/proto/gateway/pb"
 
@@ -50,7 +49,7 @@ func (l *LogoutLogic) Logout() (resp *types.LogoutResponse, err error) {
 			DeviceId: identity.DeviceID,
 			Reason:   "logout",
 		}
-		if _, kickErr := ws.NewGatewayServer(l.svcCtx.WsManager).KickUser(l.ctx, kickReq); kickErr != nil {
+		if _, kickErr := l.svcCtx.Gateway().KickUser(l.ctx, kickReq); kickErr != nil {
 			l.Errorf("kick on logout failed: user_id=%d device_id=%s err=%v", identity.UserID, identity.DeviceID, kickErr)
 		}
 	}

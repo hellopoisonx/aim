@@ -10,7 +10,6 @@ import (
 
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
-	"github.com/hellopoisonx/aim/app/gateway/api/internal/ws"
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/friendshipservice"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 	gwpb "github.com/hellopoisonx/aim/shared/proto/gateway/pb"
@@ -56,9 +55,8 @@ func (l *RejectFriendLogic) RejectFriend(req *types.RejectFriendRequest) (resp *
 	}
 
 	// Push notification to the requester via WebSocket.
-	if l.svcCtx.WsManager != nil {
-		gs := ws.NewGatewayServer(l.svcCtx.WsManager)
-		_, _ = gs.PushFriendApplication(l.ctx, &gwpb.PushFriendApplicationReq{
+	if gateway := l.svcCtx.Gateway(); gateway != nil {
+		_, _ = gateway.PushFriendApplication(l.ctx, &gwpb.PushFriendApplicationReq{
 			TargetUserId: req.Id,
 			UserId:       identity.UserID,
 			FriendId:     req.Id,
