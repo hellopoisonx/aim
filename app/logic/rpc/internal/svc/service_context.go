@@ -4,6 +4,9 @@ import (
 	"context"
 	"time"
 
+	sharedkafka "github.com/hellopoisonx/aim/app/shared/kafka"
+	"github.com/redis/go-redis/v9"
+
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/config"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/service"
 	"github.com/hellopoisonx/aim/app/logic/rpc/model/dao"
@@ -13,10 +16,7 @@ import (
 	"github.com/hellopoisonx/aim/app/shared/outbox"
 	"github.com/hellopoisonx/aim/app/shared/tools"
 
-	"github.com/segmentio/kafka-go"
-	"github.com/zeromicro/go-queue/kq"
 	"github.com/zeromicro/go-zero/core/logx"
-	gzredis "github.com/zeromicro/go-zero/core/stores/redis"
 )
 
 type FriendshipDAO interface {
@@ -146,7 +146,7 @@ func (r botTxRunner) WithTx(ctx context.Context, fn func(tx service.BotManagemen
 
 // newConversationEventPublisher creates an outbox.PublisherFunc using kq.Pusher.
 func newConversationEventPublisher(brokers []string, topic string) outbox.PublisherFunc {
-	pusher := kq.NewPusher(brokers, topic, kq.WithBalancer(&kafka.Murmur2Balancer{}))
+	pusher := sharedkafka.NewPusher(brokers, topic)
 	return func(ctx context.Context, _, key string, payload []byte) error {
 		return pusher.PushWithKey(ctx, key, string(payload))
 	}
@@ -174,15 +174,7 @@ func initSharedCaches(svcCtx *ServiceContext, c config.Config) {
 	}
 
 	conf := c.Cache.WithDefaults()
-	rds, err := gzredis.NewRedis(gzredis.RedisConf{
-		Host: c.CacheRedis.Addr,
-		Type: gzredis.NodeType,
-		Pass: c.CacheRedis.Password,
-	})
-	if err != nil {
-		logx.WithContext(context.Background()).Errorf("failed to create go-zero Redis cache client: %v", err)
-		return
-	}
+	rds := redis.NewClient(&redis.Options{Addr: c.CacheRedis.Addr, Password: c.CacheRedis.Password})
 
 	manager := sharedcache.NewCacheManager(rds, conf.InvalidateStream)
 	svcCtx.CacheManager = manager

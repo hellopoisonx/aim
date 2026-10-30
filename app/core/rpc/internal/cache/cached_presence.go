@@ -6,8 +6,8 @@ import (
 	"time"
 
 	sharedcache "github.com/hellopoisonx/aim/app/shared/cache"
+	"github.com/redis/go-redis/v9"
 	"github.com/zeromicro/go-zero/core/collection"
-	gzredis "github.com/zeromicro/go-zero/core/stores/redis"
 )
 
 const (
@@ -22,12 +22,12 @@ type PresenceDirectory interface {
 }
 
 type CachedPresenceStore struct {
-	rds *gzredis.Redis
+	rds redis.UniversalClient
 	ttl time.Duration
 	l1  *collection.Cache
 }
 
-func NewCachedPresenceStore(rds *gzredis.Redis, ttlSeconds int) (*CachedPresenceStore, error) {
+func NewCachedPresenceStore(rds redis.UniversalClient, ttlSeconds int) (*CachedPresenceStore, error) {
 	if rds == nil {
 		return nil, fmt.Errorf("redis is required")
 	}
@@ -51,16 +51,12 @@ func (s *CachedPresenceStore) SetUserOnline(ctx context.Context, userID int64, d
 	presKey := fmt.Sprintf("aim:presence:%d", userID)
 	gwKey := fmt.Sprintf("aim:user_gateway:%d", userID)
 
-	if _, err := s.rds.SaddCtx(ctx, presKey, deviceID); err != nil {
-		return err
-	}
-	if err := s.rds.ExpireCtx(ctx, presKey, int(s.ttl.Seconds())); err != nil {
-		return err
-	}
-	if _, err := s.rds.SaddCtx(ctx, gwKey, nodeID); err != nil {
-		return err
-	}
-	if err := s.rds.ExpireCtx(ctx, gwKey, int(s.ttl.Seconds())); err != nil {
+	pipe := s.rds.Pipeline()
+	pipe.SAdd(ctx, presKey, deviceID)
+	pipe.Expire(ctx, presKey, s.ttl)
+	pipe.SAdd(ctx, gwKey, nodeID)
+	pipe.Expire(ctx, gwKey, s.ttl)
+	if _, err := pipe.Exec(ctx); err != nil {
 		return err
 	}
 
@@ -70,7 +66,7 @@ func (s *CachedPresenceStore) SetUserOnline(ctx context.Context, userID int64, d
 
 func (s *CachedPresenceStore) GetUserGatewayNodes(ctx context.Context, userID int64) ([]string, error) {
 	value, err := s.l1.Take(sharedcache.PresenceKey(userID), func() (any, error) {
-		return s.rds.SmembersCtx(ctx, fmt.Sprintf("aim:user_gateway:%d", userID))
+		return s.rds.SMembers(ctx, fmt.Sprintf("aim:user_gateway:%d", userID)).Result()
 	})
 	if err != nil {
 		return nil, err

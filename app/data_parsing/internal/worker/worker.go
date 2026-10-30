@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hellopoisonx/aim/app/shared/pgtypes"
+
 	"github.com/google/uuid"
 	"github.com/hellopoisonx/aim/app/attachment/model/dao"
 	"github.com/hellopoisonx/aim/app/attachment/model/orm"
@@ -26,7 +28,6 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/trace"
-	"gorm.io/datatypes"
 )
 
 type Worker struct {
@@ -140,7 +141,7 @@ func (w *Worker) Consume(ctx context.Context, key string, value string) (err err
 			DurationMs: &res.DurationMS,
 			Width:      &width,
 			Height:     &height,
-			Metadata:   datatypes.JSON(meta),
+			Metadata:   pgtypes.JSON(meta),
 		}); err != nil {
 			return w.fail(ctx, event, err)
 		}

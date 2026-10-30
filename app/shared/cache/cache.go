@@ -7,17 +7,17 @@ import (
 	"sync"
 	"time"
 
+	"encoding/json"
+
+	"github.com/redis/go-redis/v9"
 	"github.com/zeromicro/go-zero/core/collection"
-	gzcache "github.com/zeromicro/go-zero/core/stores/cache"
-	gzredis "github.com/zeromicro/go-zero/core/stores/redis"
-	"github.com/zeromicro/go-zero/core/syncx"
 )
 
 var ErrNotFound = errors.New("cache not found")
 
 // CacheManager owns process-local L1 caches and the Redis-backed invalidation stream.
 type CacheManager struct {
-	rds    *gzredis.Redis
+	rds    redis.UniversalClient
 	stream string
 
 	ctx    context.Context
@@ -28,7 +28,7 @@ type CacheManager struct {
 	l1Caches map[string]*collection.Cache
 }
 
-func NewCacheManager(rds *gzredis.Redis, stream string) *CacheManager {
+func NewCacheManager(rds redis.UniversalClient, stream string) *CacheManager {
 	if stream == "" {
 		stream = DefaultInvalidateStream
 	}
@@ -63,7 +63,53 @@ type TypedCache[T any] struct {
 	manager *CacheManager
 	name    string
 	l1      *collection.Cache
-	l2      gzcache.Cache
+	l2      jsonLayer
+}
+
+// jsonLayer is the Redis-backed layer of a TypedCache.
+//
+// Get reports ErrNotFound when the key is absent so callers can distinguish a
+// miss from a transport failure.
+type jsonLayer interface {
+	Get(ctx context.Context, key string, dest any) error
+	Set(ctx context.Context, key string, value any) error
+	Del(ctx context.Context, keys ...string) error
+}
+
+// redisLayer stores cache entries as JSON in Redis.
+type redisLayer struct {
+	rds redis.UniversalClient
+	ttl time.Duration
+}
+
+func (l *redisLayer) Get(ctx context.Context, key string, dest any) error {
+	raw, err := l.rds.Get(ctx, key).Bytes()
+	if err != nil {
+		if errors.Is(err, redis.Nil) {
+			return ErrNotFound
+		}
+
+		return err
+	}
+
+	if err := json.Unmarshal(raw, dest); err != nil {
+		return fmt.Errorf("cache %q decode: %w", key, err)
+	}
+
+	return nil
+}
+
+func (l *redisLayer) Set(ctx context.Context, key string, value any) error {
+	raw, err := json.Marshal(value)
+	if err != nil {
+		return fmt.Errorf("cache %q encode: %w", key, err)
+	}
+
+	return l.rds.Set(ctx, key, raw, l.ttl).Err()
+}
+
+func (l *redisLayer) Del(ctx context.Context, keys ...string) error {
+	return l.rds.Del(ctx, keys...).Err()
 }
 
 func NewTypedCache[T any](m *CacheManager, name string, l1TTL, l2TTL time.Duration, l1Limit int) (*TypedCache[T], error) {
@@ -92,9 +138,9 @@ func NewTypedCache[T any](m *CacheManager, name string, l1TTL, l2TTL time.Durati
 	m.l1Caches[name] = l1
 	m.mu.Unlock()
 
-	var l2 gzcache.Cache
+	var l2 jsonLayer
 	if m.rds != nil {
-		l2 = gzcache.NewNode(m.rds, syncx.NewSingleFlight(), gzcache.NewStat(name), ErrNotFound, gzcache.WithExpiry(l2TTL))
+		l2 = &redisLayer{rds: m.rds, ttl: l2TTL}
 	}
 
 	return &TypedCache[T]{
@@ -124,10 +170,12 @@ func (c *TypedCache[T]) Take(ctx context.Context, key string, fetch func() (T, e
 	}
 
 	val, err := c.l1.Take(key, func() (any, error) {
-		var out T
-		if err := c.l2.GetCtx(ctx, key, &out); err == nil {
-			return out, nil
-		} else if !c.l2.IsNotFound(err) {
+		var cached T
+		if err := c.l2.Get(ctx, key, &cached); err == nil {
+			return cached, nil
+		} else if !errors.Is(err, ErrNotFound) {
+			// A transport or decode failure must not fail the request: fall back
+			// to the source of truth without populating Redis.
 			fetched, fetchErr := fetch()
 			if fetchErr != nil {
 				return nil, fetchErr
@@ -140,7 +188,7 @@ func (c *TypedCache[T]) Take(ctx context.Context, key string, fetch func() (T, e
 		if err != nil {
 			return nil, err
 		}
-		if err := c.l2.SetCtx(ctx, key, fetched); err != nil {
+		if err := c.l2.Set(ctx, key, fetched); err != nil {
 			return fetched, nil
 		}
 
@@ -170,7 +218,7 @@ func (c *TypedCache[T]) Set(ctx context.Context, key string, val T) error {
 		return nil
 	}
 
-	return c.l2.SetCtx(ctx, key, val)
+	return c.l2.Set(ctx, key, val)
 }
 
 func (c *TypedCache[T]) Del(ctx context.Context, keys ...string) error {
@@ -194,7 +242,7 @@ func (c *TypedCache[T]) Del(ctx context.Context, keys ...string) error {
 
 	var errs []error
 	if c.l2 != nil {
-		if err := c.l2.DelCtx(ctx, filtered...); err != nil {
+		if err := c.l2.Del(ctx, filtered...); err != nil {
 			errs = append(errs, err)
 		}
 	}

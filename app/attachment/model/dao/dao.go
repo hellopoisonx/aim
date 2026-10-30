@@ -5,9 +5,10 @@ import (
 	"context"
 	"errors"
 
+	"github.com/hellopoisonx/aim/app/shared/pgtypes"
+
 	"github.com/google/uuid"
 	"github.com/hellopoisonx/aim/app/attachment/model/orm"
-	"gorm.io/datatypes"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -81,7 +82,7 @@ type FileRow struct {
 	DurationMS         int64
 	Width              int32
 	Height             int32
-	Metadata           datatypes.JSON
+	Metadata           pgtypes.JSON
 }
 
 // CreateAttachmentFile inserts the attachment_files row.

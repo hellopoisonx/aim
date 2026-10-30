@@ -4,10 +4,11 @@ import (
 	"context"
 	"encoding/json"
 
+	"github.com/hellopoisonx/aim/app/shared/pgtypes"
+
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/logic/rpc/model/orm"
 	"github.com/hellopoisonx/aim/app/shared/tracing"
-	"gorm.io/datatypes"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -92,9 +93,9 @@ func (c *ArchiveConsumer) Consume(ctx context.Context, key string, value string)
 		ConversationID: event.ConversationID,
 		SenderID:       event.SenderID,
 		MessageType:    event.MessageType,
-		Content:        datatypes.JSON(contentJSON),
+		Content:        pgtypes.JSON(contentJSON),
 		ClientMsgID:    clientMsgID,
-		Mentions:       datatypes.JSON(mentionsJSON),
+		Mentions:       pgtypes.JSON(mentionsJSON),
 	})
 	if err != nil {
 		span.RecordError(err)

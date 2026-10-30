@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"time"
 
-	gzredis "github.com/zeromicro/go-zero/core/stores/redis"
+	"github.com/redis/go-redis/v9"
 )
 
 const (
@@ -30,16 +30,16 @@ func (m *CacheManager) publishInvalidation(ctx context.Context, cacheName string
 		return err
 	}
 
-	_, err = m.rds.DoCtx(ctx,
+	_, err = m.rds.Do(ctx,
 		"XADD", m.stream, "*",
 		"cache", cacheName,
 		"keys", string(data),
-	)
+	).Result()
 	if err != nil {
 		return err
 	}
 
-	_, _ = m.rds.DoCtx(ctx, "XTRIM", m.stream, "MAXLEN", "~", invalidateTrimMaxLen)
+	_, _ = m.rds.Do(ctx, "XTRIM", m.stream, "MAXLEN", "~", invalidateTrimMaxLen).Result()
 	return nil
 }
 
@@ -54,12 +54,12 @@ func (m *CacheManager) runInvalidationLoop() {
 		default:
 		}
 
-		value, err := m.rds.DoCtx(m.ctx,
+		value, err := m.rds.Do(m.ctx,
 			"XREAD", "BLOCK", invalidateBlockMillis,
 			"STREAMS", m.stream, lastID,
-		)
+		).Result()
 		if err != nil {
-			if errors.Is(err, context.Canceled) || errors.Is(err, gzredis.Nil) {
+			if errors.Is(err, context.Canceled) || errors.Is(err, redis.Nil) {
 				if errors.Is(err, context.Canceled) {
 					return
 				}

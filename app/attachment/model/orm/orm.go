@@ -6,8 +6,9 @@ package orm
 import (
 	"time"
 
+	"github.com/hellopoisonx/aim/app/shared/pgtypes"
+
 	"github.com/google/uuid"
-	"gorm.io/datatypes"
 )
 
 // AttachmentFile maps table attachment_files (000_attachments.sql).
@@ -80,15 +81,15 @@ func (AttachmentParseJob) TableName() string { return "attachment_parse_jobs" }
 
 // AttachmentParseResult maps table attachment_parse_results (000).
 type AttachmentParseResult struct {
-	FileID            uuid.UUID      `gorm:"column:file_id;type:uuid;primaryKey" json:"file_id"`
-	ThumbnailObjectID *int64         `gorm:"column:thumbnail_object_id" json:"thumbnail_object_id"`
-	DurationMs        *int64         `gorm:"column:duration_ms" json:"duration_ms"`
-	Width             *int32         `gorm:"column:width" json:"width"`
-	Height            *int32         `gorm:"column:height" json:"height"`
-	Metadata          datatypes.JSON `gorm:"column:metadata;type:jsonb;not null;default:'{}'" json:"metadata"`
-	Error             *string        `gorm:"column:error" json:"error"`
-	CreatedAt         time.Time      `gorm:"column:created_at;not null" json:"created_at"`
-	UpdatedAt         time.Time      `gorm:"column:updated_at;not null" json:"updated_at"`
+	FileID            uuid.UUID    `gorm:"column:file_id;type:uuid;primaryKey" json:"file_id"`
+	ThumbnailObjectID *int64       `gorm:"column:thumbnail_object_id" json:"thumbnail_object_id"`
+	DurationMs        *int64       `gorm:"column:duration_ms" json:"duration_ms"`
+	Width             *int32       `gorm:"column:width" json:"width"`
+	Height            *int32       `gorm:"column:height" json:"height"`
+	Metadata          pgtypes.JSON `gorm:"column:metadata;type:jsonb;not null;default:'{}'" json:"metadata"`
+	Error             *string      `gorm:"column:error" json:"error"`
+	CreatedAt         time.Time    `gorm:"column:created_at;not null" json:"created_at"`
+	UpdatedAt         time.Time    `gorm:"column:updated_at;not null" json:"updated_at"`
 }
 
 // TableName pins the physical table name.

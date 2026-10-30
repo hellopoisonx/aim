@@ -11,6 +11,8 @@ import (
 	"strings"
 	"time"
 
+	sharedkafka "github.com/hellopoisonx/aim/app/shared/kafka"
+
 	"github.com/google/uuid"
 	"github.com/hellopoisonx/aim/app/attachment/internal/config"
 	"github.com/hellopoisonx/aim/app/attachment/model/dao"
@@ -22,8 +24,6 @@ import (
 	"github.com/hellopoisonx/aim/app/shared/outbox"
 	"github.com/hellopoisonx/aim/app/shared/s3signer"
 	"github.com/hellopoisonx/aim/app/shared/tracing"
-	"github.com/segmentio/kafka-go"
-	"github.com/zeromicro/go-queue/kq"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/propagation"
@@ -135,7 +135,7 @@ func (s *Service) OutboxPoller() *outbox.Poller {
 
 // newOutboxPublisher creates an outbox.PublisherFunc using kq.Pusher.
 func newOutboxPublisher(brokers []string, topic string) outbox.PublisherFunc {
-	pusher := kq.NewPusher(brokers, topic, kq.WithBalancer(&kafka.Murmur2Balancer{}))
+	pusher := sharedkafka.NewPusher(brokers, topic)
 	return func(ctx context.Context, _, key string, payload []byte) error {
 		return pusher.PushWithKey(ctx, key, string(payload))
 	}

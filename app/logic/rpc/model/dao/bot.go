@@ -4,8 +4,9 @@ import (
 	"context"
 	"time"
 
-	"github.com/hellopoisonx/aim/app/logic/rpc/model/orm"
 	"github.com/lib/pq"
+
+	"github.com/hellopoisonx/aim/app/logic/rpc/model/orm"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )

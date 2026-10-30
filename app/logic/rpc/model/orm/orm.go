@@ -6,8 +6,9 @@ package orm
 import (
 	"time"
 
+	"github.com/hellopoisonx/aim/app/shared/pgtypes"
+
 	"github.com/lib/pq"
-	"gorm.io/datatypes"
 )
 
 // Conversation maps table conversations (001, 004).
@@ -51,14 +52,14 @@ func (Friendship) TableName() string { return "friendships" }
 
 // Message maps table messages (002). Content/Mentions are JSONB columns.
 type Message struct {
-	ID             int64          `gorm:"column:id;primaryKey" json:"id"`
-	ConversationID int64          `gorm:"column:conversation_id;not null" json:"conversation_id"`
-	SenderID       int64          `gorm:"column:sender_id;not null" json:"sender_id"`
-	MessageType    string         `gorm:"column:message_type;size:32;not null" json:"message_type"`
-	Content        datatypes.JSON `gorm:"column:content;type:jsonb;not null;default:'{}'" json:"content"`
-	ClientMsgID    *string        `gorm:"column:client_msg_id;size:256" json:"client_msg_id"`
-	Mentions       datatypes.JSON `gorm:"column:mentions;type:jsonb;default:'[]'" json:"mentions"`
-	CreatedAt      time.Time      `gorm:"column:created_at;not null" json:"created_at"`
+	ID             int64        `gorm:"column:id;primaryKey" json:"id"`
+	ConversationID int64        `gorm:"column:conversation_id;not null" json:"conversation_id"`
+	SenderID       int64        `gorm:"column:sender_id;not null" json:"sender_id"`
+	MessageType    string       `gorm:"column:message_type;size:32;not null" json:"message_type"`
+	Content        pgtypes.JSON `gorm:"column:content;type:jsonb;not null;default:'{}'" json:"content"`
+	ClientMsgID    *string      `gorm:"column:client_msg_id;size:256" json:"client_msg_id"`
+	Mentions       pgtypes.JSON `gorm:"column:mentions;type:jsonb;default:'[]'" json:"mentions"`
+	CreatedAt      time.Time    `gorm:"column:created_at;not null" json:"created_at"`
 }
 
 // TableName pins the physical table name.

@@ -7,20 +7,17 @@ import (
 	"time"
 
 	"github.com/alicebob/miniredis/v2"
+	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/require"
-	gzredis "github.com/zeromicro/go-zero/core/stores/redis"
 )
 
-func newTestRedis(t *testing.T) (*miniredis.Miniredis, *gzredis.Redis) {
+func newTestRedis(t *testing.T) (*miniredis.Miniredis, *redis.Client) {
 	t.Helper()
 
 	mr, err := miniredis.Run()
 	require.NoError(t, err)
 
-	rds, err := gzredis.NewRedis(gzredis.RedisConf{Host: mr.Addr(), Type: gzredis.NodeType})
-	require.NoError(t, err)
-
-	return mr, rds
+	return mr, redis.NewClient(&redis.Options{Addr: mr.Addr()})
 }
 
 func TestTypedCacheTakeUsesL1AndL2(t *testing.T) {

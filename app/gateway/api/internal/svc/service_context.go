@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"time"
 
+	sharedkafka "github.com/hellopoisonx/aim/app/shared/kafka"
+
 	attachmentpb "github.com/hellopoisonx/aim/app/attachment/rpc/pb"
 	"github.com/hellopoisonx/aim/app/auth/rpc/authservice"
 	"github.com/hellopoisonx/aim/app/core/rpc/pb"
@@ -27,7 +29,6 @@ import (
 	"github.com/hellopoisonx/aim/app/shared/tracing"
 
 	"github.com/redis/go-redis/v9"
-	"github.com/segmentio/kafka-go"
 	"github.com/zeromicro/go-queue/kq"
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/rest"
@@ -308,7 +309,7 @@ func newPresencePub(c config.Config, redisClient *redis.Client) PresencePublishe
 	if len(c.Kafka.Brokers) > 0 && c.Kafka.PresenceTopic != "" && redisClient != nil {
 		logx.WithContext(context.Background()).Infof("presence publisher: Kafka topic=%s (balancer: murmur2)", c.Kafka.PresenceTopic)
 		return &kafkaPresencePublisher{
-			pusher: kq.NewPusher(c.Kafka.Brokers, c.Kafka.PresenceTopic, kq.WithBalancer(&kafka.Murmur2Balancer{})),
+			pusher: sharedkafka.NewPusher(c.Kafka.Brokers, c.Kafka.PresenceTopic),
 			nodeID: c.GatewayNodeID,
 		}
 	}
@@ -319,7 +320,7 @@ func newPresencePub(c config.Config, redisClient *redis.Client) PresencePublishe
 func newTypingPub(c config.Config, redisClient *redis.Client) TypingPublisher {
 	if len(c.Kafka.Brokers) > 0 && c.Kafka.TypingTopic != "" && redisClient != nil {
 		logx.WithContext(context.Background()).Infof("typing publisher: Kafka topic=%s (balancer: murmur2)", c.Kafka.TypingTopic)
-		return &kafkaTypingPublisher{pusher: kq.NewPusher(c.Kafka.Brokers, c.Kafka.TypingTopic, kq.WithBalancer(&kafka.Murmur2Balancer{})), nodeID: c.GatewayNodeID}
+		return &kafkaTypingPublisher{pusher: sharedkafka.NewPusher(c.Kafka.Brokers, c.Kafka.TypingTopic), nodeID: c.GatewayNodeID}
 	}
 	return &noopPublisher{}
 }
@@ -328,7 +329,7 @@ func newTypingPub(c config.Config, redisClient *redis.Client) TypingPublisher {
 func newReadReceiptPub(c config.Config, redisClient *redis.Client) ReadReceiptPublisher {
 	if len(c.Kafka.Brokers) > 0 && c.Kafka.ReadReceiptTopic != "" && redisClient != nil {
 		logx.WithContext(context.Background()).Infof("read receipt publisher: Kafka topic=%s (balancer: murmur2)", c.Kafka.ReadReceiptTopic)
-		return &kafkaReadReceiptPublisher{pusher: kq.NewPusher(c.Kafka.Brokers, c.Kafka.ReadReceiptTopic, kq.WithBalancer(&kafka.Murmur2Balancer{})), nodeID: c.GatewayNodeID}
+		return &kafkaReadReceiptPublisher{pusher: sharedkafka.NewPusher(c.Kafka.Brokers, c.Kafka.ReadReceiptTopic), nodeID: c.GatewayNodeID}
 	}
 	return &noopPublisher{}
 }
