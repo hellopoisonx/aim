@@ -97,7 +97,7 @@ func (h *WsHandler) handleReadReceipt(ctx context.Context, conn *websocket.Conn,
 	span.SetAttributes(
 		attribute.Int64("ws.user_id", identity.UserID),
 		attribute.Int64("ws.conversation_id", receiptPayload.GetConversationId()),
-		attribute.Int64("ws.last_msg_id", receiptPayload.GetLastMsgId()),
+		attribute.Int64("ws.last_read_message_id", receiptPayload.GetLastReadMessageId()),
 	)
 
 	if h.srv.LogicConversationClient == nil {
@@ -110,7 +110,7 @@ func (h *WsHandler) handleReadReceipt(ctx context.Context, conn *websocket.Conn,
 	resp, err := h.srv.LogicConversationClient.UpdateReadReceipt(upsertCtx, &logicpb.UpdateReadReceiptReq{
 		ConversationId:    receiptPayload.GetConversationId(),
 		UserId:            identity.UserID,
-		LastReadMessageId: receiptPayload.GetLastMsgId(),
+		LastReadMessageId: receiptPayload.GetLastReadMessageId(),
 	})
 	if err != nil {
 		codeErr := errorx.FromGRPCError(err)

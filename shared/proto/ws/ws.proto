@@ -89,7 +89,8 @@ message TypingPayload {
 // ReadReceiptPayload — 已读回执
 message ReadReceiptPayload {
   int64 conversation_id = 1;
-  int64 last_msg_id = 2;
+  // 最后已读消息 ID（与 PushReadReceiptPayload.last_read_message_id 同名）。
+  int64 last_read_message_id = 2;
 }
 
 // ClientAckPayload — 客户端确认收到服务端推送

@@ -504,7 +504,7 @@ func TestServeWSReadReceiptPushesToLocalPeer(t *testing.T) {
 		return manager.CountByUser(42) == 1 && manager.CountByUser(43) == 1
 	}, time.Second, 10*time.Millisecond)
 
-	payload, err := wsmanager.EncodePayload(&pb.ReadReceiptPayload{ConversationId: 100, LastMsgId: 99})
+	payload, err := wsmanager.EncodePayload(&pb.ReadReceiptPayload{ConversationId: 100, LastReadMessageId: 99})
 	require.NoError(t, err)
 
 	frame := wsmanager.BuildFrame(pb.FrameType_FRAME_TYPE_READ_RECEIPT, 32, payload)
