@@ -1062,7 +1062,7 @@ gateway 已启用基于 `LastAckedSeq` / `HeartbeatPayload.last_seq` 的当前�
 │    type = READ_RECEIPT
 │    payload = ReadReceiptPayload{
 │      conversation_id = <会话ID>,
-│      last_msg_id = <当前已读到的最大 message_id>
+│      last_read_message_id = <当前已读到的最大 message_id>
 │    }
 └─ 等待 SERVER_ACK
      code=0 → 成功（当前 ACK status 可能为 UNSPECIFIED）
@@ -1071,9 +1071,9 @@ gateway 已启用基于 `LastAckedSeq` / `HeartbeatPayload.last_seq` 的当前�
 
 **发送时机建议**：
 
-- 用户进入会话时：发最后一次读取位置的 `last_msg_id`
+- 用户进入会话时：发最后一次读取位置的 `last_read_message_id`
 - 用户滚动到新消息时：节流发送，建议每 1s 最多 1 次
-- 不要在本地已经读过的消息上重复发送（`last_msg_id` 没有变化）
+- 不要在本地已经读过的消息上重复发送（`last_read_message_id` 没有变化）
 
 ### 9.2 接收已读回执推送
 

@@ -153,11 +153,11 @@ message TypingPayload {
 ```protobuf
 message ReadReceiptPayload {
   int64 conversation_id = 1;
-  int64 last_msg_id = 2;
+  int64 last_read_message_id = 2;
 }
 ```
 
-- `last_msg_id` 表示当前用户在该会话内已读到的最大消息 ID。
+- `last_read_message_id` 表示当前用户在该会话内已读到的最大消息 ID。
 - gateway 收到后：
   1. 调 logic `UpdateReadReceipt` upsert 已读游标。
   2. 发布 Kafka `aim.read_receipt.events`（key=`conversation_id`）。
