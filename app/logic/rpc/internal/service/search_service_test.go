@@ -85,7 +85,7 @@ func itoa(v int64) string {
 
 func TestSearchRejectsEmptyQuery(t *testing.T) {
 	store := &fakeSearchStore{}
-	_, err := NewSearchService(store).Search(context.Background(), 1, "   ", nil, 0, 0, 0, 20)
+	_, err := NewSearchService(store).Search(context.Background(), SearchParams{UserID: 1, Query: "   ", Scopes: nil, ConversationID: 0, CursorCreatedAt: 0, CursorID: 0, Limit: 20})
 
 	var codeErr *errorx.CodeError
 	require.ErrorAs(t, err, &codeErr)
@@ -95,7 +95,7 @@ func TestSearchRejectsEmptyQuery(t *testing.T) {
 
 func TestSearchAllScopesWhenNoneRequested(t *testing.T) {
 	store := &fakeSearchStore{userRows: []dao.UserSearchRow{{UserInfo: orm.UserInfo{ID: 7}}}}
-	results, err := NewSearchService(store).Search(context.Background(), 1, "alice", nil, 0, 0, 0, 0)
+	results, err := NewSearchService(store).Search(context.Background(), SearchParams{UserID: 1, Query: "alice", Scopes: nil, ConversationID: 0, CursorCreatedAt: 0, CursorID: 0, Limit: 0})
 	require.NoError(t, err)
 
 	require.True(t, store.usersQueried)
@@ -109,7 +109,7 @@ func TestSearchAllScopesWhenNoneRequested(t *testing.T) {
 
 func TestSearchHonoursRequestedScope(t *testing.T) {
 	store := &fakeSearchStore{}
-	_, err := NewSearchService(store).Search(context.Background(), 1, "alice", []string{"messages"}, 0, 0, 0, 5)
+	_, err := NewSearchService(store).Search(context.Background(), SearchParams{UserID: 1, Query: "alice", Scopes: []string{"messages"}, ConversationID: 0, CursorCreatedAt: 0, CursorID: 0, Limit: 5})
 	require.NoError(t, err)
 
 	require.False(t, store.usersQueried)
@@ -118,14 +118,14 @@ func TestSearchHonoursRequestedScope(t *testing.T) {
 
 func TestSearchClampsLimit(t *testing.T) {
 	store := &fakeSearchStore{}
-	_, err := NewSearchService(store).Search(context.Background(), 1, "alice", []string{"users"}, 0, 0, 0, 500)
+	_, err := NewSearchService(store).Search(context.Background(), SearchParams{UserID: 1, Query: "alice", Scopes: []string{"users"}, ConversationID: 0, CursorCreatedAt: 0, CursorID: 0, Limit: 500})
 	require.NoError(t, err)
 	require.Equal(t, int32(maxSearchLimit), store.lastLimit)
 }
 
 func TestSearchRoutesMessagesToConversationScope(t *testing.T) {
 	store := &fakeSearchStore{}
-	_, err := NewSearchService(store).Search(context.Background(), 1, "alice", []string{"messages"}, 99, 1700000000, 5, 20)
+	_, err := NewSearchService(store).Search(context.Background(), SearchParams{UserID: 1, Query: "alice", Scopes: []string{"messages"}, ConversationID: 99, CursorCreatedAt: 1700000000, CursorID: 5, Limit: 20})
 	require.NoError(t, err)
 	require.Equal(t, int64(99), store.lastConversationID)
 	require.NotNil(t, store.lastCursorCreatedAt)
@@ -134,7 +134,7 @@ func TestSearchRoutesMessagesToConversationScope(t *testing.T) {
 
 func TestSearchFriendsEnrichesUserInfo(t *testing.T) {
 	store := &fakeSearchStore{friendRows: []dao.FriendSearchRow{{UserID: 1, FriendID: 2, Snippet: "fr<mark>iend</mark>"}}}
-	results, err := NewSearchService(store).Search(context.Background(), 1, "frie", []string{"friends"}, 0, 0, 0, 20)
+	results, err := NewSearchService(store).Search(context.Background(), SearchParams{UserID: 1, Query: "frie", Scopes: []string{"friends"}, ConversationID: 0, CursorCreatedAt: 0, CursorID: 0, Limit: 20})
 	require.NoError(t, err)
 
 	require.Len(t, results.Friends, 1)
@@ -149,7 +149,7 @@ func TestSearchMessagesMapsContentAndPagination(t *testing.T) {
 			Content: pgtypes.JSON(`{"text":"hi"}`), CreatedAt: createdAt}, Snippet: "h<mark>i</mark>"},
 	}}
 
-	results, err := NewSearchService(store).Search(context.Background(), 1, "hi", []string{"messages"}, 0, 0, 0, 20)
+	results, err := NewSearchService(store).Search(context.Background(), SearchParams{UserID: 1, Query: "hi", Scopes: []string{"messages"}, ConversationID: 0, CursorCreatedAt: 0, CursorID: 0, Limit: 20})
 	require.NoError(t, err)
 	require.Len(t, results.Messages, 1)
 	require.Equal(t, int64(11), results.Messages[0].Message.ID)
@@ -158,6 +158,6 @@ func TestSearchMessagesMapsContentAndPagination(t *testing.T) {
 
 func TestSearchPropagatesStoreError(t *testing.T) {
 	store := &fakeSearchStore{err: errors.New("postgres down")}
-	_, err := NewSearchService(store).Search(context.Background(), 1, "alice", []string{"users"}, 0, 0, 0, 20)
+	_, err := NewSearchService(store).Search(context.Background(), SearchParams{UserID: 1, Query: "alice", Scopes: []string{"users"}, ConversationID: 0, CursorCreatedAt: 0, CursorID: 0, Limit: 20})
 	require.Error(t, err)
 }
