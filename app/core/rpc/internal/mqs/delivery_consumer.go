@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/hellopoisonx/aim/app/shared/events"
+
 	"github.com/hellopoisonx/aim/app/core/rpc/internal/svc"
 	logicpb "github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/tracing"
@@ -12,21 +14,6 @@ import (
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
-
-// transferEvent represents the Kafka message format published by TransferLogic.
-type transferEvent struct {
-	tracing.TraceContextFields
-
-	MessageID      int64    `json:"message_id"`
-	SenderID       int64    `json:"sender_id"`
-	DeviceID       string   `json:"device_id"`
-	ConversationID int64    `json:"conversation_id"`
-	MessageType    string   `json:"message_type"`
-	Content        string   `json:"content"`
-	ClientMsgID    string   `json:"client_msg_id"`
-	Mentions       []string `json:"mentions"`
-	Timestamp      int64    `json:"timestamp"`
-}
 
 type DeliveryConsumer struct {
 	ctx    context.Context
@@ -41,7 +28,7 @@ func NewDeliveryConsumer(ctx context.Context, svcCtx *svc.ServiceContext) *Deliv
 func (c *DeliveryConsumer) Consume(ctx context.Context, key string, value string) error {
 	logx.WithContext(ctx).Infof("consuming delivery event, key=%s", key)
 
-	var event transferEvent
+	var event events.TransferEvent
 	if err := json.Unmarshal([]byte(value), &event); err != nil {
 		// A malformed payload never decodes on redelivery: dropping it keeps the
 		// partition moving instead of replaying the same poison message forever.
@@ -137,7 +124,7 @@ func (c *DeliveryConsumer) userGatewayNodes(ctx context.Context, userID int64) [
 // the message for multi-device sync; gateway skips only the original source device.
 // Falls back to delivering only to the sender when logic is unreachable so that
 // single-instance dev setups still echo messages back to the originator.
-func (c *DeliveryConsumer) resolveConversation(ctx context.Context, event transferEvent) ([]int64, string, error) {
+func (c *DeliveryConsumer) resolveConversation(ctx context.Context, event events.TransferEvent) ([]int64, string, error) {
 	if c.svcCtx.LogicConversationClient == nil {
 		return []int64{event.SenderID}, "", nil
 	}

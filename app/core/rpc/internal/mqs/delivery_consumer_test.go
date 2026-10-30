@@ -6,6 +6,8 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/hellopoisonx/aim/app/shared/events"
+
 	"github.com/alicebob/miniredis/v2"
 	"github.com/hellopoisonx/aim/app/core/rpc/internal/config"
 	"github.com/hellopoisonx/aim/app/core/rpc/internal/rpc"
@@ -177,7 +179,7 @@ func TestDeliveryConsumer_Consume_Success(t *testing.T) {
 	svcCtx := newTestServiceContext(t, fakeGw)
 	consumer := NewDeliveryConsumer(context.Background(), svcCtx)
 
-	event := transferEvent{
+	event := events.TransferEvent{
 		MessageID:      12345,
 		SenderID:       100,
 		DeviceID:       "device-1",
@@ -208,7 +210,7 @@ func TestDeliveryConsumer_Consume_PropagatesTraceContext(t *testing.T) {
 	traceID, err := trace.TraceIDFromHex("4bf92f3577b34da6a3ce929d0e0e4736")
 	require.NoError(t, err)
 
-	event := transferEvent{
+	event := events.TransferEvent{
 		TraceContextFields: tracing.TraceContextFields{TraceParent: "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"},
 		MessageID:          12345,
 		SenderID:           100,
@@ -243,7 +245,7 @@ func TestDeliveryConsumer_Consume_GatewayPushFailure(t *testing.T) {
 	svcCtx := newTestServiceContext(t, fakeGw)
 	consumer := NewDeliveryConsumer(context.Background(), svcCtx)
 
-	event := transferEvent{
+	event := events.TransferEvent{
 		MessageID:      12345,
 		SenderID:       100,
 		ConversationID: 200,
@@ -271,7 +273,7 @@ func TestDeliveryConsumer_Consume_RecordsSpanError(t *testing.T) {
 	svcCtx := newTestServiceContext(t, fakeGw)
 	consumer := NewDeliveryConsumer(context.Background(), svcCtx)
 
-	event := transferEvent{MessageID: 12345, SenderID: 100, ConversationID: 200, MessageType: "text", Content: "hello", ClientMsgID: "client-1", Timestamp: 1700000000000}
+	event := events.TransferEvent{MessageID: 12345, SenderID: 100, ConversationID: 200, MessageType: "text", Content: "hello", ClientMsgID: "client-1", Timestamp: 1700000000000}
 	value, err := json.Marshal(event)
 	require.NoError(t, err)
 
@@ -288,7 +290,7 @@ func TestDeliveryConsumer_Consume_AllFields(t *testing.T) {
 	svcCtx := newTestServiceContext(t, fakeGw)
 	consumer := NewDeliveryConsumer(context.Background(), svcCtx)
 
-	event := transferEvent{
+	event := events.TransferEvent{
 		MessageID:      99999,
 		SenderID:       42,
 		DeviceID:       "dev-x",
@@ -323,7 +325,7 @@ func TestDeliveryConsumer_Consume_EmptyContent(t *testing.T) {
 	svcCtx := newTestServiceContext(t, fakeGw)
 	consumer := NewDeliveryConsumer(context.Background(), svcCtx)
 
-	event := transferEvent{
+	event := events.TransferEvent{
 		MessageID:      111,
 		SenderID:       10,
 		ConversationID: 50,
@@ -346,7 +348,7 @@ func TestDeliveryConsumer_Consume_NoMentions(t *testing.T) {
 	svcCtx := newTestServiceContext(t, fakeGw)
 	consumer := NewDeliveryConsumer(context.Background(), svcCtx)
 
-	event := transferEvent{
+	event := events.TransferEvent{
 		MessageID:      222,
 		SenderID:       20,
 		ConversationID: 60,
@@ -370,7 +372,7 @@ func TestDeliveryConsumer_Consume_MultipleMessages(t *testing.T) {
 	svcCtx := newTestServiceContext(t, fakeGw)
 	consumer := NewDeliveryConsumer(context.Background(), svcCtx)
 
-	event1 := transferEvent{
+	event1 := events.TransferEvent{
 		MessageID: 1, SenderID: 1, ConversationID: 1,
 		MessageType: "text", Content: "msg1", ClientMsgID: "c1", Timestamp: 1000,
 	}
@@ -378,7 +380,7 @@ func TestDeliveryConsumer_Consume_MultipleMessages(t *testing.T) {
 	err := consumer.Consume(context.Background(), "1", string(value1))
 	require.NoError(t, err)
 
-	event2 := transferEvent{
+	event2 := events.TransferEvent{
 		MessageID: 2, SenderID: 2, ConversationID: 2,
 		MessageType: "text", Content: "msg2", ClientMsgID: "c2", Timestamp: 2000,
 	}
@@ -397,7 +399,7 @@ func TestDeliveryConsumer_Consume_FanoutToConversationMembers(t *testing.T) {
 	svcCtx.LogicConversationClient = &fakeConversationClient{memberIDs: []int64{100, 200, 200}}
 	consumer := NewDeliveryConsumer(context.Background(), svcCtx)
 
-	event := transferEvent{
+	event := events.TransferEvent{
 		MessageID:      12345,
 		SenderID:       100,
 		DeviceID:       "sender-device",
@@ -425,7 +427,7 @@ func TestDeliveryConsumer_Consume_MemberLookupFailure(t *testing.T) {
 	svcCtx.LogicConversationClient = &fakeConversationClient{err: errors.New("logic unavailable")}
 	consumer := NewDeliveryConsumer(context.Background(), svcCtx)
 
-	event := transferEvent{MessageID: 12345, SenderID: 100, ConversationID: 200, MessageType: "text", Content: "hello", ClientMsgID: "client-1", Timestamp: 1700000000000}
+	event := events.TransferEvent{MessageID: 12345, SenderID: 100, ConversationID: 200, MessageType: "text", Content: "hello", ClientMsgID: "client-1", Timestamp: 1700000000000}
 	value, err := json.Marshal(event)
 	require.NoError(t, err)
 

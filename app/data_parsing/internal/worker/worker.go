@@ -150,7 +150,7 @@ func (w *Worker) Consume(ctx context.Context, key string, value string) (err err
 		}
 	}
 
-	return w.publish(ctx, events.AttachmentParsedEvent{TraceContextFields: tracing.InjectTraceContext(ctx), FileID: event.FileID, Kind: event.Kind, ParseStatus: attachment.ParseStatusReady, ThumbnailObjectKey: thumbKey, DurationMS: res.DurationMS, Width: res.Width, Height: res.Height, Metadata: res.Metadata, ParsedAt: time.Now().UnixMilli()})
+	return w.publish(ctx, events.AttachmentParsedEvent{TraceContextFields: tracing.InjectTraceContext(ctx), FileID: event.FileID, Kind: event.Kind, ParseStatus: attachment.ParseStatusReady, ThumbnailObjectKey: thumbKey, DurationMS: res.DurationMS, Width: res.Width, Height: res.Height, Metadata: &res.Metadata, ParsedAt: time.Now().UnixMilli()})
 }
 
 func (w *Worker) fail(ctx context.Context, event events.AttachmentUploadedEvent, cause error) error {

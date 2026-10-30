@@ -10,6 +10,8 @@ import (
 	_ "image/jpeg"
 	"image/png"
 	"strings"
+
+	sharedattachment "github.com/hellopoisonx/aim/app/shared/attachment"
 )
 
 const (
@@ -26,7 +28,7 @@ type Result struct {
 	Width       int
 	Height      int
 	DurationMS  int64
-	Metadata    map[string]any
+	Metadata    sharedattachment.MediaMetadata
 }
 
 type Parser interface {
@@ -41,13 +43,13 @@ func (DefaultParser) Parse(ctx context.Context, kind, mime string, data []byte) 
 		return nil, ctx.Err()
 	default:
 	}
-	res := &Result{Metadata: map[string]any{"mime": mime}}
+	res := &Result{Metadata: sharedattachment.MediaMetadata{Mime: mime}}
 	switch kind {
-	case "image":
+	case sharedattachment.KindImage:
 		thumb, thumbWidth, thumbHeight, width, height, format, err := imageThumbnail(data)
 		if err != nil {
-			res.Metadata["parser"] = metadataParserPlaceholder
-			res.Metadata["thumbnail_fallback"] = err.Error()
+			res.Metadata.Parser = metadataParserPlaceholder
+			res.Metadata.ThumbnailFallback = err.Error()
 			res.Thumbnail = transparentPNG()
 			res.ThumbMIME = thumbMIMEPNG
 			res.ThumbWidth = 1
@@ -56,20 +58,20 @@ func (DefaultParser) Parse(ctx context.Context, kind, mime string, data []byte) 
 		}
 		res.Width = width
 		res.Height = height
-		res.Metadata["format"] = format
+		res.Metadata.Format = format
 		res.Thumbnail = thumb
 		res.ThumbMIME = thumbMIMEPNG
 		res.ThumbWidth = thumbWidth
 		res.ThumbHeight = thumbHeight
-	case "video":
-		res.Metadata["parser"] = metadataParserPlaceholder
-		res.Metadata["target_format"] = "h264/mp4+aac"
+	case sharedattachment.KindVideo:
+		res.Metadata.Parser = metadataParserPlaceholder
+		res.Metadata.TargetFormat = "h264/mp4+aac"
 		res.Thumbnail = transparentPNG()
 		res.ThumbMIME = thumbMIMEPNG
 		res.ThumbWidth = 1
 		res.ThumbHeight = 1
-	case "audio":
-		res.Metadata["parser"] = metadataParserPlaceholder
+	case sharedattachment.KindAudio:
+		res.Metadata.Parser = metadataParserPlaceholder
 		res.Thumbnail = transparentPNG()
 		res.ThumbMIME = thumbMIMEPNG
 		res.ThumbWidth = 1
@@ -78,7 +80,7 @@ func (DefaultParser) Parse(ctx context.Context, kind, mime string, data []byte) 
 		return nil, fmt.Errorf("unsupported kind %q", kind)
 	}
 	if strings.HasPrefix(mime, "audio/") {
-		res.Metadata["media_type"] = "audio"
+		res.Metadata.MediaType = sharedattachment.KindAudio
 	}
 	return res, nil
 }

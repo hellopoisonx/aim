@@ -17,7 +17,29 @@ const (
 	ParseStatusPending = "pending"
 	ParseStatusReady   = "ready"
 	ParseStatusFailed  = "failed"
+
+	// Upload lifecycle states stored in attachment_files.status.
+	UploadStatusPending  = "pending"
+	UploadStatusUploaded = "uploaded"
 )
+
+// MediaMetadata is the structured metadata produced by the parsing pipeline and
+// stored in attachment_parse_results.metadata.
+type MediaMetadata struct {
+	Mime              string `json:"mime,omitempty"`
+	Format            string `json:"format,omitempty"`
+	Parser            string `json:"parser,omitempty"`
+	TargetFormat      string `json:"target_format,omitempty"`
+	MediaType         string `json:"media_type,omitempty"`
+	ThumbnailFallback string `json:"thumbnail_fallback,omitempty"`
+	DurationMS        int64  `json:"duration_ms,omitempty"`
+	Width             int    `json:"width,omitempty"`
+	Height            int    `json:"height,omitempty"`
+	BitrateKbps       int    `json:"bitrate_kbps,omitempty"`
+	SampleRateHz      int    `json:"sample_rate_hz,omitempty"`
+	Channels          int    `json:"channels,omitempty"`
+	Frames            int    `json:"frames,omitempty"`
+}
 
 // Content is the JSON shape carried by message.content for image/video/audio/file
 // chat attachments. The value is serialized as a string on protobuf/WebSocket

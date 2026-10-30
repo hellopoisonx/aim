@@ -15,6 +15,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/hellopoisonx/aim/app/shared/events"
+
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/logic/rpc/model/orm"
 	"github.com/hellopoisonx/aim/app/shared/tracing"
@@ -84,7 +86,7 @@ func (c *BotWebhookConsumer) Consume(ctx context.Context, _ string, value string
 		return nil
 	}
 
-	var event transferEvent
+	var event events.TransferEvent
 	if err := json.Unmarshal([]byte(value), &event); err != nil {
 		logx.WithContext(ctx).Errorf("bot-webhook: bad event payload: %v", err)
 		// Bad payload is permanent — return nil to advance offset.
@@ -135,7 +137,7 @@ func (c *BotWebhookConsumer) Consume(ctx context.Context, _ string, value string
 
 // deliver attempts the HTTP POST with retries. It never returns an error
 // because per-bot failures must not stall the consumer.
-func (c *BotWebhookConsumer) deliver(ctx context.Context, hook orm.BotWebhook, event transferEvent, senderType string) {
+func (c *BotWebhookConsumer) deliver(ctx context.Context, hook orm.BotWebhook, event events.TransferEvent, senderType string) {
 	body, eventID, err := c.buildPayload(event, senderType)
 	if err != nil {
 		logx.WithContext(ctx).Errorf("bot-webhook: build payload bot=%d msg=%d: %v", hook.BotUserID, event.MessageID, err)
@@ -187,7 +189,7 @@ type botWebhookMessagePayload struct {
 	Timestamp   int64    `json:"timestamp"`
 }
 
-func (c *BotWebhookConsumer) buildPayload(event transferEvent, senderType string) ([]byte, string, error) {
+func (c *BotWebhookConsumer) buildPayload(event events.TransferEvent, senderType string) ([]byte, string, error) {
 	eventID, err := newEventID()
 	if err != nil {
 		return nil, "", err

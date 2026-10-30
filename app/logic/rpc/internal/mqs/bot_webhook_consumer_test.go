@@ -12,6 +12,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hellopoisonx/aim/app/shared/events"
+
 	"github.com/stretchr/testify/require"
 )
 
@@ -115,7 +117,7 @@ func TestBuildPayload_ContainsAllFields(t *testing.T) {
 		now: func() time.Time { return time.Unix(1700000000, 0) },
 	}
 
-	body, eventID, err := c.buildPayload(transferEvent{
+	body, eventID, err := c.buildPayload(events.TransferEvent{
 		MessageID:      42,
 		SenderID:       1001,
 		ConversationID: 7,

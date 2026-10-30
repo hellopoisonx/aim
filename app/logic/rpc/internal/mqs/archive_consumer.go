@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 
+	"github.com/hellopoisonx/aim/app/shared/events"
+
 	"github.com/hellopoisonx/aim/app/shared/pgtypes"
 
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
@@ -12,21 +14,6 @@ import (
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
-
-// transferEvent is the JSON event published by core TransferLogic.
-type transferEvent struct {
-	tracing.TraceContextFields
-
-	MessageID      int64    `json:"message_id"`
-	SenderID       int64    `json:"sender_id"`
-	DeviceID       string   `json:"device_id"`
-	ConversationID int64    `json:"conversation_id"`
-	MessageType    string   `json:"message_type"`
-	Content        string   `json:"content"`
-	ClientMsgID    string   `json:"client_msg_id"`
-	Mentions       []string `json:"mentions"`
-	Timestamp      int64    `json:"timestamp"`
-}
 
 type archiveStore interface {
 	InsertMessage(ctx context.Context, message orm.Message) error
@@ -52,7 +39,7 @@ func (c *ArchiveConsumer) Consume(ctx context.Context, key string, value string)
 		return nil
 	}
 
-	var event transferEvent
+	var event events.TransferEvent
 	if err := json.Unmarshal([]byte(value), &event); err != nil {
 		// A malformed payload never decodes on redelivery: dropping it keeps the
 		// partition moving instead of replaying the same poison message forever.

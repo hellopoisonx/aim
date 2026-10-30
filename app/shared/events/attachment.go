@@ -1,6 +1,9 @@
 package events
 
-import "github.com/hellopoisonx/aim/app/shared/tracing"
+import (
+	"github.com/hellopoisonx/aim/app/shared/attachment"
+	"github.com/hellopoisonx/aim/app/shared/tracing"
+)
 
 const (
 	TopicAttachmentUploaded = "aim.attachment.uploaded"
@@ -30,15 +33,15 @@ type AttachmentUploadedEvent struct {
 type AttachmentParsedEvent struct {
 	tracing.TraceContextFields
 
-	FileID             string         `json:"file_id"`
-	Kind               string         `json:"kind"`
-	ParseStatus        string         `json:"parse_status"`
-	ThumbnailObjectKey string         `json:"thumbnail_object_key,omitempty"`
-	ThumbnailFileID    string         `json:"thumbnail_file_id,omitempty"`
-	DurationMS         int64          `json:"duration_ms,omitempty"`
-	Width              int            `json:"width,omitempty"`
-	Height             int            `json:"height,omitempty"`
-	Metadata           map[string]any `json:"metadata,omitempty"`
-	Error              string         `json:"error,omitempty"`
-	ParsedAt           int64          `json:"parsed_at"`
+	FileID             string                    `json:"file_id"`
+	Kind               string                    `json:"kind"`
+	ParseStatus        string                    `json:"parse_status"`
+	ThumbnailObjectKey string                    `json:"thumbnail_object_key,omitempty"`
+	ThumbnailFileID    string                    `json:"thumbnail_file_id,omitempty"`
+	DurationMS         int64                     `json:"duration_ms,omitempty"`
+	Width              int                       `json:"width,omitempty"`
+	Height             int                       `json:"height,omitempty"`
+	Metadata           *attachment.MediaMetadata `json:"metadata,omitempty"`
+	Error              string                    `json:"error,omitempty"`
+	ParsedAt           int64                     `json:"parsed_at"`
 }

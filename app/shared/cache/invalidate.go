@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -13,6 +12,7 @@ import (
 const (
 	invalidateBlockMillis = 1000
 	invalidateTrimMaxLen  = 10000
+	invalidateReadBatch   = 64
 )
 
 type InvalidateMsg struct {
@@ -54,15 +54,16 @@ func (m *CacheManager) runInvalidationLoop() {
 		default:
 		}
 
-		value, err := m.rds.Do(m.ctx,
-			"XREAD", "BLOCK", invalidateBlockMillis,
-			"STREAMS", m.stream, lastID,
-		).Result()
+		streams, err := m.rds.XRead(m.ctx, &redis.XReadArgs{
+			Streams: []string{m.stream, lastID},
+			Block:   time.Duration(invalidateBlockMillis) * time.Millisecond,
+			Count:   invalidateReadBatch,
+		}).Result()
 		if err != nil {
-			if errors.Is(err, context.Canceled) || errors.Is(err, redis.Nil) {
-				if errors.Is(err, context.Canceled) {
-					return
-				}
+			if errors.Is(err, context.Canceled) {
+				return
+			}
+			if errors.Is(err, redis.Nil) {
 				continue
 			}
 
@@ -76,83 +77,35 @@ func (m *CacheManager) runInvalidationLoop() {
 			continue
 		}
 
-		messages, err := parseXRead(value)
-		if err != nil {
-			continue
-		}
-		for _, msg := range messages {
-			lastID = msg.id
-			m.deleteLocal(msg.payload.Cache, msg.payload.Keys)
+		for _, stream := range streams {
+			for _, msg := range stream.Messages {
+				payload, err := parseInvalidationFields(msg.Values)
+				if err != nil {
+					continue
+				}
+
+				lastID = msg.ID
+				m.deleteLocal(payload.Cache, payload.Keys)
+			}
 		}
 	}
 }
 
-type streamInvalidation struct {
-	id      string
-	payload InvalidateMsg
-}
-
-func parseXRead(value any) ([]streamInvalidation, error) {
-	streams, ok := value.([]any)
-	if !ok {
-		return nil, fmt.Errorf("unexpected XREAD streams type %T", value)
-	}
-
-	var out []streamInvalidation
-	for _, streamRaw := range streams {
-		stream, ok := streamRaw.([]any)
-		if !ok || len(stream) != 2 {
-			continue
-		}
-
-		entries, ok := stream[1].([]any)
-		if !ok {
-			continue
-		}
-
-		for _, entryRaw := range entries {
-			entry, ok := entryRaw.([]any)
-			if !ok || len(entry) != 2 {
-				continue
-			}
-			id, ok := entry[0].(string)
-			if !ok || id == "" {
-				continue
-			}
-
-			fields, ok := entry[1].([]any)
-			if !ok {
-				continue
-			}
-
-			msg, err := parseInvalidationFields(fields)
-			if err != nil {
-				continue
-			}
-			out = append(out, streamInvalidation{id: id, payload: msg})
-		}
-	}
-
-	return out, nil
-}
-
-func parseInvalidationFields(fields []any) (InvalidateMsg, error) {
-	kv := make(map[string]string, len(fields)/2)
-	for i := 0; i+1 < len(fields); i += 2 {
-		key, ok := fields[i].(string)
-		if !ok || key == "" {
-			continue
-		}
-		kv[key] = fmt.Sprint(fields[i+1])
-	}
-
+// parseInvalidationFields decodes a stream entry into an InvalidateMsg.
+func parseInvalidationFields(values map[string]any) (InvalidateMsg, error) {
 	var msg InvalidateMsg
-	msg.Cache = kv["cache"]
-	if msg.Cache == "" {
+
+	cacheName, _ := values["cache"].(string)
+	if cacheName == "" {
 		return InvalidateMsg{}, errors.New("missing cache field")
 	}
-	if err := json.Unmarshal([]byte(kv["keys"]), &msg.Keys); err != nil {
-		return InvalidateMsg{}, err
+	msg.Cache = cacheName
+
+	rawKeys, _ := values["keys"].(string)
+	if rawKeys != "" {
+		if err := json.Unmarshal([]byte(rawKeys), &msg.Keys); err != nil {
+			return InvalidateMsg{}, err
+		}
 	}
 
 	return msg, nil

@@ -86,15 +86,10 @@ WHERE (
 ORDER BY m.created_at DESC, m.id DESC
 LIMIT ?`
 
-	var cursor any
-	if cursorCreatedAt != nil {
-		cursor = *cursorCreatedAt
-	}
-
 	var rows []MessageSearchRow
 	if err := s.db.WithContext(ctx).Raw(query,
 		search, userID, search, search,
-		cursor, cursor, cursor, cursorID,
+		cursorCreatedAt, cursorCreatedAt, cursorCreatedAt, cursorID,
 		limit,
 	).Scan(&rows).Error; err != nil {
 		return nil, err
@@ -124,15 +119,10 @@ WHERE m.conversation_id = ?
 ORDER BY m.created_at DESC, m.id DESC
 LIMIT ?`
 
-	var cursor any
-	if cursorCreatedAt != nil {
-		cursor = *cursorCreatedAt
-	}
-
 	var rows []MessageSearchRow
 	if err := s.db.WithContext(ctx).Raw(query,
 		search, userID, conversationID, search, search,
-		cursor, cursor, cursor, cursorID,
+		cursorCreatedAt, cursorCreatedAt, cursorCreatedAt, cursorID,
 		limit,
 	).Scan(&rows).Error; err != nil {
 		return nil, err

@@ -65,8 +65,9 @@ type InitUploadResponse struct {
 	ExpiresAt    int64             `json:"expires_at"`
 }
 
+// CompleteUploadRequest carries the client-reported checksum for the uploaded
+// object; the caller identity is passed separately as an int64 user id.
 type CompleteUploadRequest struct {
-	UserID string `json:"-"`
 	SHA256 string `json:"sha256,omitempty"`
 }
 
@@ -185,8 +186,8 @@ func (s *Service) InitUpload(ctx context.Context, req InitUploadRequest) (*InitU
 			Mime:           req.Mime,
 			SizeBytes:      req.Size,
 			Sha256:         sha256,
-			Status:         "pending",
-			ParseStatus:    "pending",
+			Status:         sharedattachment.UploadStatusPending,
+			ParseStatus:    sharedattachment.ParseStatusPending,
 		}
 		if err := s.store.CreateAttachmentFile(ctx, file); err != nil {
 			return nil, err
@@ -390,7 +391,7 @@ func (s *Service) Download(ctx context.Context, userID int64, fileID string) (*D
 	if err != nil {
 		return nil, err
 	}
-	if info.Status != "uploaded" {
+	if info.Status != sharedattachment.UploadStatusUploaded {
 		return nil, ErrNotUploaded
 	}
 	url, headers, err := s.signer.Presign(http.MethodGet, info.ObjectKey, s.cfg.Seaweed.GetDownloadTTL(), nil)
@@ -405,7 +406,7 @@ func (s *Service) ValidateReference(ctx context.Context, userID, conversationID 
 	if err != nil {
 		return nil, err
 	}
-	if info.Status != "uploaded" || info.OwnerID != userID || info.ConversationID != conversationID || info.Kind != kind {
+	if info.Status != sharedattachment.UploadStatusUploaded || info.OwnerID != userID || info.ConversationID != conversationID || info.Kind != kind {
 		return nil, ErrReferenceDenied
 	}
 	return info, nil
