@@ -64,7 +64,7 @@ func (l *ListFriendsLogic) ListFriends() (resp *types.ListFriendsResponse, err e
 		friends = append(friends, item)
 	}
 
-	enrichPeerInfos(l.ctx, l.svcCtx, friends)
+	enrichPeerInfos(l.ctx, l.svcCtx, identity.UserID, friends)
 
 	return &types.ListFriendsResponse{Friends: friends}, nil
 }
@@ -78,7 +78,7 @@ const peerEnrichWorkers = 8
 // Lookups run concurrently because the user service has no batch RPC: a serial
 // loop makes the endpoint latency grow linearly with the friend count.
 // Failures are ignored — the fields stay empty and the client falls back.
-func enrichPeerInfos(ctx context.Context, svcCtx *svc.ServiceContext, items []types.FriendshipItem) {
+func enrichPeerInfos(ctx context.Context, svcCtx *svc.ServiceContext, viewerID int64, items []types.FriendshipItem) {
 	if svcCtx == nil || svcCtx.LogicUserClient == nil || len(items) == 0 {
 		return
 	}
@@ -87,11 +87,13 @@ func enrichPeerInfos(ctx context.Context, svcCtx *svc.ServiceContext, items []ty
 	var wg sync.WaitGroup
 
 	for i := range items {
+		// A friendship row stores both directions: the peer is whichever side is
+		// not the authenticated viewer.
 		peerID := items[i].FriendId
-		if peerID <= 0 {
+		if peerID == viewerID {
 			peerID = items[i].UserId
 		}
-		if peerID <= 0 {
+		if peerID <= 0 || peerID == viewerID {
 			continue
 		}
 
