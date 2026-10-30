@@ -2,6 +2,7 @@ package svc
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	sharedkafka "github.com/hellopoisonx/aim/app/shared/kafka"
@@ -68,7 +69,10 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	if c.Postgres.DataSource != "" {
 		db, err := gormdb.Open(c.Postgres.DataSource)
 		if err != nil {
-			logx.WithContext(context.Background()).Errorf("failed to create Postgres connection: %v, falling back to DenyAll", err)
+			// Fail fast: a half-booted logic service answers every permission
+			// check with DenyAll and cannot serve conversations, so the
+			// container should restart until Postgres is reachable.
+			logx.Must(fmt.Errorf("logic service requires Postgres: %w", err))
 		} else {
 			store := dao.New(db)
 			svcCtx.DAO = store

@@ -8,6 +8,7 @@ import (
 	"flag"
 	"fmt"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/config"
@@ -38,6 +39,7 @@ func main() {
 
 	var c config.Config
 	conf.MustLoad(*configFile, &c)
+	c.ApplyEnv(os.Getenv)
 
 	ctx := svc.NewServiceContext(c)
 	defer ctx.Close()

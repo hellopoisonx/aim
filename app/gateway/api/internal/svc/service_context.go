@@ -7,7 +7,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"os"
 	"strconv"
 	"time"
 
@@ -196,12 +195,10 @@ type ServiceContext struct {
 }
 
 func NewServiceContext(c config.Config) *ServiceContext {
-	// Read GatewayNodeID from environment variable (required).
+	// GatewayNodeID is resolved by config.ApplyEnv during startup; a constructor
+	// without it is a programming error.
 	if c.GatewayNodeID == "" {
-		c.GatewayNodeID = os.Getenv("AIM_GATEWAY_NODE_ID")
-	}
-	if c.GatewayNodeID == "" {
-		logx.Must(errors.New("AIM_GATEWAY_NODE_ID environment variable is required but not set"))
+		logx.Must(errors.New("gateway node id is required: set AIM_GATEWAY_NODE_ID or Config.GatewayNodeID"))
 	}
 
 	if c.Auth.AccessSecret == "" {

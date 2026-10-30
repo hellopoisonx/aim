@@ -82,3 +82,17 @@ type CorsConf struct {
 	// Origins is the list of allowed origins. Defaults to ["*"] when empty.
 	Origins []string `json:",optional"`
 }
+
+// nodeIDEnvVar is where the deployment injects this gateway's node identity.
+const nodeIDEnvVar = "AIM_GATEWAY_NODE_ID"
+
+// ApplyEnv derives configuration from the process environment.
+//
+// It is the single place where the gateway reads deployment identity from the
+// environment, so NewServiceContext stays a pure constructor that tests can
+// call with an explicit config.
+func (c *Config) ApplyEnv(getenv func(string) string) {
+	if c.GatewayNodeID == "" && getenv != nil {
+		c.GatewayNodeID = getenv(nodeIDEnvVar)
+	}
+}
