@@ -13,11 +13,11 @@ import (
 	"github.com/hellopoisonx/aim/app/shared/pgtypes"
 
 	"github.com/google/uuid"
-	"github.com/hellopoisonx/aim/app/attachment/model/dao"
-	"github.com/hellopoisonx/aim/app/attachment/model/orm"
 	"github.com/hellopoisonx/aim/app/data_parsing/internal/config"
 	"github.com/hellopoisonx/aim/app/data_parsing/internal/parser"
 	"github.com/hellopoisonx/aim/app/shared/attachment"
+	"github.com/hellopoisonx/aim/app/shared/attachmentstore/dao"
+	"github.com/hellopoisonx/aim/app/shared/attachmentstore/orm"
 	"github.com/hellopoisonx/aim/app/shared/events"
 	"github.com/hellopoisonx/aim/app/shared/gormdb"
 	"github.com/hellopoisonx/aim/app/shared/s3signer"

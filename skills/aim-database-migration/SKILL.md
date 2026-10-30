@@ -9,7 +9,7 @@ description: AIM 数据库迁移规范与 Docker Compose 集成。当修改 migr
 
 AIM 使用 PostgreSQL + GORM DAO 栈，迁移文件在 `app/{auth,logic}/rpc/model/migrations/` 以及 `app/attachment/model/migrations/` 下，由 Docker Compose 的 `*-migrate` init 容器调用 `deploy/scripts/migrate-postgres.sh` 执行。脚本会显式创建数据库，并按 `NNN_*.sql` 字典序执行目录内所有 SQL，避免在 Compose command 中硬编码迁移文件列表。
 
-GORM 结构体定义位于 `app/auth/rpc/model/orm`、`app/logic/rpc/model/orm`、`app/attachment/model/orm`，与迁移 SQL 逐列对齐；GORM DAO 位于对应的 `model/dao`（attachment DAO 同时被 attachment 服务与 data_parsing worker 复用）。**schema 唯一事实来源仍是迁移 SQL**：改动表结构只改 `model/migrations/*.sql` 并同步 `model/orm` 与 `model/dao`，永不使用 `AutoMigrate`（GORM 结构体只提供映射，不生成 DDL）。
+GORM 结构体定义位于 `app/auth/rpc/model/orm`、`app/logic/rpc/model/orm`、`app/shared/attachmentstore/orm`，与迁移 SQL 逐列对齐；GORM DAO 位于对应的 `model/dao`（attachment DAO 在 `app/shared/attachmentstore/dao`，同时被 attachment 服务与 data_parsing worker 复用）。**schema 唯一事实来源仍是迁移 SQL**：改动表结构只改 `model/migrations/*.sql` 并同步 `model/orm` 与 `model/dao`，永不使用 `AutoMigrate`（GORM 结构体只提供映射，不生成 DDL）。
 
 ## 域特定参考
 

@@ -1,4 +1,4 @@
-// Package orm holds GORM model definitions for the aim_attachment database.
+// Package orm holds the GORM models of the aim_attachment database.
 // Structs mirror app/attachment/model/migrations 1:1. Migration SQL remains
 // the single source of truth for the schema; never run AutoMigrate.
 package orm

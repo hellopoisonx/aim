@@ -1,4 +1,8 @@
 // Package dao is the GORM data-access layer for the aim_attachment database.
+//
+// It lives under app/shared because two processes touch these tables: the
+// attachment service and the data_parsing worker. Keeping one store here avoids
+// one service importing the other's internal package tree.
 package dao
 
 import (
@@ -8,7 +12,7 @@ import (
 	"github.com/hellopoisonx/aim/app/shared/pgtypes"
 
 	"github.com/google/uuid"
-	"github.com/hellopoisonx/aim/app/attachment/model/orm"
+	"github.com/hellopoisonx/aim/app/shared/attachmentstore/orm"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )

@@ -15,9 +15,9 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/hellopoisonx/aim/app/attachment/internal/config"
-	"github.com/hellopoisonx/aim/app/attachment/model/dao"
-	"github.com/hellopoisonx/aim/app/attachment/model/orm"
 	sharedattachment "github.com/hellopoisonx/aim/app/shared/attachment"
+	"github.com/hellopoisonx/aim/app/shared/attachmentstore/dao"
+	"github.com/hellopoisonx/aim/app/shared/attachmentstore/orm"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 	"github.com/hellopoisonx/aim/app/shared/events"
 	"github.com/hellopoisonx/aim/app/shared/gormdb"
