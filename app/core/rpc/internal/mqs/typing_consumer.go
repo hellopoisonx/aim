@@ -11,7 +11,7 @@ import (
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
-// typingEvent is the Kafka message for typing notification (mirrors gateway svc.typingEvent).
+// typingEvent is the broker message for typing notification (mirrors gateway svc.typingEvent).
 type typingEvent struct {
 	tracing.TraceContextFields
 
@@ -21,7 +21,7 @@ type typingEvent struct {
 	GatewayNodeID  string `json:"gateway_node_id"`
 }
 
-// TypingConsumer consumes aim.typing.events and fans out to conversation members' gateway nodes.
+// TypingConsumer consumes aim-typing-events and fans out to conversation members' gateway nodes.
 type TypingConsumer struct {
 	ctx    context.Context
 	svcCtx *svc.ServiceContext
@@ -31,7 +31,7 @@ func NewTypingConsumer(ctx context.Context, svcCtx *svc.ServiceContext) *TypingC
 	return &TypingConsumer{ctx: ctx, svcCtx: svcCtx}
 }
 
-// Consume implements the kq.ConsumeHandler interface.
+// Consume implements the rocketmq handler interface.
 func (c *TypingConsumer) Consume(ctx context.Context, key string, value string) error {
 	logx.WithContext(ctx).Infof("consuming typing event, key=%s", key)
 
@@ -43,7 +43,7 @@ func (c *TypingConsumer) Consume(ctx context.Context, key string, value string) 
 
 	ctx = tracing.ExtractTraceContext(ctx, event.TraceContextFields)
 
-	ctx, span := tracing.StartKafkaConsumerSpan(ctx, "core.kafka.typing.consume")
+	ctx, span := tracing.StartMQConsumerSpan(ctx, "core.rocketmq.typing.consume")
 	defer span.End()
 
 	logx.WithContext(ctx).Infof("typing event: from=%d conv=%d", event.FromUserID, event.ConversationID)

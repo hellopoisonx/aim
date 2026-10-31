@@ -18,9 +18,10 @@
 - 小回拨: 时间戳不变序列号递增
 - 大回拨: 等待系统时钟追赶/直接抛出错误
 
-### [发件箱模式](app/shared/outbox/outbox.go)
+### [事务消息](app/shared/rocketmq/transactional.go)
 
-- 通过本地数据库事务的原子性保证发往 kafka 的消息至少能被成功发送一次
+- 需要与业务事务同生共死的事件（`user-created`、群管理通知、附件上传完成）走 RocketMQ 事务消息：half message → 本地事务（业务行 + `event_journal` 行）→ commit/rollback
+- commit 丢失时由 broker 回查 `event_journal` 决定最终结果，因此不再需要发件箱轮询器
 
 ### [穿透 读/写 缓存模式](app/shared/cache/cache.go)
 
@@ -90,7 +91,7 @@ graph TB
         DataParsing[aim-data-parsing<br/>数据解析]
     end
     subgraph Infrastructure
-        Kafka[(Kafka)]
+        RocketMQ[(RocketMQ)]
         Redis[(Redis Stack)]
         PG[(PostgreSQL)]
         SeaweedFS[SeaweedFS]
@@ -105,19 +106,19 @@ graph TB
     GW -->|gRPC| Attachment
     Core -->|gRPC| Logic
 
-    Core -->|produce| Kafka
-    Kafka -->|consume| Core
+    Core -->|produce| RocketMQ
+    RocketMQ -->|consume| Core
 
-    Auth -.->|发件箱写入<br/>同 DB 事务| PG
-    Logic -.->|发件箱写入<br/>同 DB 事务| PG
-    Attachment -.->|发件箱写入<br/>同 DB 事务| PG
+    Auth -.->|事务消息 + 本地事务<br/>写 event_journal| PG
+    Logic -.->|事务消息 + 本地事务<br/>写 event_journal| PG
+    Attachment -.->|事务消息 + 本地事务<br/>写 event_journal| PG
 
-    Auth -->|Poller 发布| Kafka
-    Logic -->|Poller 发布| Kafka
-    Attachment -->|Poller 发布| Kafka
+    RocketMQ -->|consume| Logic
+    RocketMQ -->|consume| DataParsing
 
-    Kafka -->|consume| Logic
-    Kafka -->|consume| DataParsing
+    RocketMQ -.->|回查 event_journal| Auth
+    RocketMQ -.->|回查 event_journal| Logic
+    RocketMQ -.->|回查 event_journal| Attachment
 
     Auth --> Redis & PG
     Logic --> Redis & PG
@@ -143,8 +144,8 @@ graph TB
 | 服务                 | 职责                                                                                  |
 | -------------------- | ------------------------------------------------------------------------------------- |
 | **aim-gateway**      | 对外入口，REST API 代理 + WebSocket 连接管理，JWT 验签                                |
-| **aim-auth**         | 注册/登录、JWT 签发与刷新、多设备会话管理；注册成功后发布 `UserCreatedEvent` 到 Kafka |
-| **aim-core**         | 消息路由与投递，Kafka 消费者集群                                                      |
+| **aim-auth**         | 注册/登录、JWT 签发与刷新、多设备会话管理；注册成功后以事务消息发布 `UserCreatedEvent` |
+| **aim-core**         | 消息路由与投递，RocketMQ 消费者集群                                                    |
 | **aim-logic**        | 用户/好友/群组/Bot 业务逻辑、聚合搜索                                                 |
 | **aim-attachment**   | 附件上传预签名、元数据管理、下载授权                                                  |
 | **aim-data-parsing** | 异步提取附件媒体元数据、生成缩略图                                                    |
@@ -161,7 +162,7 @@ graph TB
 | **微服务框架** | go-zero v1.10.1                             |
 | **WebSocket**  | coder/websocket + Protobuf 帧协议           |
 | **RPC**        | Protobuf / gRPC                             |
-| **消息队列**   | Kafka（`conversation_id` 分区保序）         |
+| **消息队列**   | RocketMQ 5（FIFO topic 按 `conversation_id` 保序、事务消息、gRPC Proxy） |
 | **缓存**       | Redis Stack                                 |
 | **持久化**     | PostgreSQL（GORM DAO）                      |
 | **文件存储**   | SeaweedFS（S3 协议）                        |

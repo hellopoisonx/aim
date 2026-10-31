@@ -39,13 +39,13 @@
 │  │ Gateway API  │◄──│ 客户端 / 第三方 Bot   │ │
 │  │ (唯一入口)    │   │  REST + WebSocket     │ │
 │  └──────┬───────┘   └──────────────────────┘ │
-│         │ gRPC/Kafka                          │
+│         │ gRPC/RocketMQ                          │
 │  ┌──────┼──────┬──────┬───────────────┐       │
 │  │  Auth  │ Core │ Logic │ Attachment  │      │
 │  └───────┴──────┴──────┴───────────────┘      │
 │         │       │                            │
 │  ┌──────┴───────┴──────────────┐             │
-│  │ Kafka / Redis / PostgreSQL │             │
+│  │ RocketMQ / Redis / PostgreSQL │             │
 │  └────────────────────────────┘             │
 └──────────────────────────────────────────────┘
 ```
@@ -613,7 +613,7 @@ message WsFrame {
   │                                │   权限检查 (Logic)            │
   │                                │   配额检查 (Redis 滑动窗口)   │
   │                                │   Snowflake 生成 message_id   │
-  │                                │   发布 Kafka                  │
+  │                                │   发布 RocketMQ                  │
   │                                │   ◄──── TransferResp ────────│
   │                                │                              │
   │  WsFrame{                      │                              │
@@ -1405,7 +1405,7 @@ if response.code != 0 {
 TTL: 24 小时
 
 检查时机：消息到达 Transfer 的第一个步骤
-命中 → 返回已有 message_id，不重新发布 Kafka
+命中 → 返回已有 message_id，不重新发布 RocketMQ
 
 注意：
   - 幂等键以 (sender_id, device_id, client_msg_id) 三元组为范围

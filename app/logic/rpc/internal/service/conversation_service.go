@@ -14,6 +14,7 @@ import (
 	sharedcache "github.com/hellopoisonx/aim/app/shared/cache"
 	sharedconversation "github.com/hellopoisonx/aim/app/shared/conversation"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
+	"github.com/hellopoisonx/aim/app/shared/rocketmq"
 	"github.com/hellopoisonx/aim/app/shared/tools"
 	"github.com/hellopoisonx/aim/app/shared/tracing"
 
@@ -110,7 +111,6 @@ type ConversationStore interface {
 	IsConversationMember(ctx context.Context, conversationID, userID int64) (bool, error)
 	GetConversationMembersDetail(ctx context.Context, conversationID int64) ([]dao.ConversationMemberDetail, error)
 	InsertMessage(ctx context.Context, message orm.Message) error
-	InsertOutboxRecord(ctx context.Context, topic, key string, payload []byte) (int64, error)
 	UpsertConversationReadState(ctx context.Context, conversationID, userID, lastReadMessageID int64) (orm.ConversationReadState, error)
 	ListConversationReadStates(ctx context.Context, conversationID int64) ([]orm.ConversationReadState, error)
 }
@@ -119,6 +119,14 @@ type ConversationStore interface {
 // bound to that transaction.
 type ConversationTxRunner interface {
 	WithTx(ctx context.Context, fn func(tx ConversationStore) error) error
+}
+
+// TransactionalConversationTxRunner additionally publishes an event atomically
+// with the callback: the message becomes visible only when the transaction
+// commits. It is implemented when RocketMQ transactional publishing is
+// configured.
+type TransactionalConversationTxRunner interface {
+	WithEventTx(ctx context.Context, message rocketmq.TransactionalMessage, fn func(tx ConversationStore) error) error
 }
 
 type systemMessageContent struct {
@@ -144,8 +152,7 @@ type ConversationService struct {
 	store        ConversationStore
 	txRunner     ConversationTxRunner
 	idGen        *tools.Snowflake
-	outboxTopic  string
-	outboxWakeFn func()
+	eventTopic   string
 	convCache    *sharedcache.TypedCache[orm.Conversation]
 	membersCache *sharedcache.TypedCache[[]orm.ConversationMember]
 }
@@ -159,11 +166,12 @@ func WithConversationCaches(convCache *sharedcache.TypedCache[orm.Conversation],
 	}
 }
 
-// WithOutbox configures the outbox topic and a wake function for the Poller.
-func WithOutbox(topic string, wakeFn func()) ConversationServiceOption {
+// WithTransactionalEvents publishes group management notifications on topic as
+// RocketMQ transactional messages. It only takes effect together with a
+// [TransactionalConversationTxRunner].
+func WithTransactionalEvents(topic string) ConversationServiceOption {
 	return func(s *ConversationService) {
-		s.outboxTopic = topic
-		s.outboxWakeFn = wakeFn
+		s.eventTopic = topic
 	}
 }
 
@@ -184,18 +192,46 @@ func (s *ConversationService) InTx(ctx context.Context, fn func(tx ConversationS
 	return s.txRunner.WithTx(ctx, fn)
 }
 
-// recordConversationEvent inserts an outbox record using the given tx store.
-func (s *ConversationService) recordConversationEvent(ctx context.Context, tx ConversationStore, event conversationEventPayload) error {
-	event.TraceContextFields = tracing.InjectTraceContext(ctx)
-	data, err := json.Marshal(event)
+// inTxWithEvent runs fn inside a database transaction and publishes payload as
+// a transactional event in the same commit. Without a transactional runner it
+// degrades to a plain transaction and no event is published.
+//
+// The payload must therefore be complete before the transaction starts: the
+// half message body is fixed at send time.
+func (s *ConversationService) inTxWithEvent(ctx context.Context, payload conversationEventPayload, fn func(tx ConversationStore) error) error {
+	runner, ok := s.txRunner.(TransactionalConversationTxRunner)
+	if !ok || s.eventTopic == "" {
+		return s.InTx(ctx, fn)
+	}
+
+	payload.TraceContextFields = tracing.InjectTraceContext(ctx)
+	body, err := json.Marshal(payload)
 	if err != nil {
 		logx.WithContext(ctx).Errorf("failed to marshal conversation event: %v", err)
 		return err
 	}
 
-	key := strconv.FormatInt(event.ConversationID, 10)
-	_, err = tx.InsertOutboxRecord(ctx, s.outboxTopic, key, data)
-	return err
+	return runner.WithEventTx(ctx, rocketmq.TransactionalMessage{
+		Topic:    s.eventTopic,
+		EventUID: conversationEventUID(payload.MessageID),
+		Key:      strconv.FormatInt(payload.ConversationID, 10),
+		Body:     body,
+	}, fn)
+}
+
+// conversationEventUID is the deterministic event identity used by the
+// transaction check-back.
+func conversationEventUID(messageID int64) string {
+	return "conversation.event:" + strconv.FormatInt(messageID, 10)
+}
+
+// memberUserIDs projects member rows onto their user ids.
+func memberUserIDs(members []orm.ConversationMember) []int64 {
+	ids := make([]int64, 0, len(members))
+	for _, member := range members {
+		ids = append(ids, member.UserID)
+	}
+	return ids
 }
 
 func (s *ConversationService) getConversationRow(ctx context.Context, id int64) (orm.Conversation, error) {
@@ -499,10 +535,48 @@ func (s *ConversationService) AddGroupMembers(ctx context.Context, conversationI
 		return orm.Conversation{}, ErrNotAdmin
 	}
 
-	var targetUserIDs []int64
-	var messageID int64
+	for _, mid := range newMemberIDs {
+		if mid <= 0 {
+			return orm.Conversation{}, errorx.NewCodeError(errorx.CodeBadInput, "member_ids must contain positive user ids")
+		}
+	}
 
-	err = s.InTx(ctx, func(tx ConversationStore) error {
+	// The notification body is fixed before the transaction opens, so the
+	// recipient list is derived from the members visible right now plus the
+	// requested ones; the writes below still re-read the members under the
+	// transaction to decide what to insert.
+	currentMembers, err := s.GetConversationMembers(ctx, conversationID)
+	if err != nil {
+		return orm.Conversation{}, err
+	}
+	targetUserIDs := memberUserIDs(currentMembers)
+	seen := make(map[int64]struct{}, len(targetUserIDs))
+	for _, id := range targetUserIDs {
+		seen[id] = struct{}{}
+	}
+	for _, mid := range newMemberIDs {
+		if _, ok := seen[mid]; ok {
+			continue
+		}
+		seen[mid] = struct{}{}
+		targetUserIDs = append(targetUserIDs, mid)
+	}
+
+	messageID, err := s.idGen.NextID()
+	if err != nil {
+		return orm.Conversation{}, err
+	}
+
+	content := s.buildSystemMessage("member_joined", operatorID, operatorName, newMemberIDs)
+	err = s.inTxWithEvent(ctx, conversationEventPayload{
+		MessageID:      messageID,
+		ConversationID: conversationID,
+		SenderID:       0,
+		MessageType:    MessageTypeSystem,
+		Content:        string(content),
+		TargetUserIDs:  targetUserIDs,
+		Timestamp:      time.Now().UnixMilli(),
+	}, func(tx ConversationStore) error {
 		existingMembers, err := tx.GetConversationMembers(ctx, conversationID)
 		if err != nil {
 			return err
@@ -514,64 +588,24 @@ func (s *ConversationService) AddGroupMembers(ctx context.Context, conversationI
 		}
 
 		for _, mid := range newMemberIDs {
-			if mid <= 0 {
-				return errorx.NewCodeError(errorx.CodeBadInput, "member_ids must contain positive user ids")
-			}
 			if _, ok := existingSet[mid]; ok {
 				continue
 			}
-			_, err := tx.AddConversationMemberWithRole(ctx, conversationID, mid, RoleMember)
-			if err != nil {
+			if _, err := tx.AddConversationMemberWithRole(ctx, conversationID, mid, RoleMember); err != nil {
 				return err
 			}
 		}
 
-		allMembers, err := tx.GetConversationMembers(ctx, conversationID)
-		if err != nil {
-			return err
-		}
-		targetUserIDs = make([]int64, 0, len(allMembers))
-		for _, m := range allMembers {
-			targetUserIDs = append(targetUserIDs, m.UserID)
-		}
-
-		id, err := s.idGen.NextID()
-		if err != nil {
-			return err
-		}
-		messageID = id
-
-		content := s.buildSystemMessage("member_joined", operatorID, operatorName, newMemberIDs)
-		if err := tx.InsertMessage(ctx, orm.Message{
+		return tx.InsertMessage(ctx, orm.Message{
 			ID:             messageID,
 			ConversationID: conversationID,
 			SenderID:       0,
 			MessageType:    MessageTypeSystem,
 			Content:        content,
-		}); err != nil {
-			return err
-		}
-
-		// Record outbox event inside the transaction
-		if s.outboxTopic != "" {
-			return s.recordConversationEvent(ctx, tx, conversationEventPayload{
-				MessageID:      messageID,
-				ConversationID: conversationID,
-				SenderID:       0,
-				MessageType:    MessageTypeSystem,
-				Content:        string(content),
-				TargetUserIDs:  targetUserIDs,
-				Timestamp:      time.Now().UnixMilli(),
-			})
-		}
-		return nil
+		})
 	})
 	if err != nil {
 		return orm.Conversation{}, err
-	}
-
-	if s.outboxWakeFn != nil {
-		s.outboxWakeFn()
 	}
 
 	s.invalidateConversationMembers(ctx, conversationID)
@@ -611,61 +645,41 @@ func (s *ConversationService) RemoveGroupMembers(ctx context.Context, conversati
 		}
 	}
 
-	var targetUserIDs []int64
-	var messageID int64
+	// Recipients are everyone still in the group before the removal commits.
+	members, err := s.GetConversationMembers(ctx, conversationID)
+	if err != nil {
+		return err
+	}
 
-	err = s.InTx(ctx, func(tx ConversationStore) error {
-		members, err := tx.GetConversationMembers(ctx, conversationID)
-		if err != nil {
+	messageID, err := s.idGen.NextID()
+	if err != nil {
+		return err
+	}
+
+	content := s.buildSystemMessage("member_removed", operatorID, operatorName, removeMemberIDs)
+	err = s.inTxWithEvent(ctx, conversationEventPayload{
+		MessageID:      messageID,
+		ConversationID: conversationID,
+		SenderID:       0,
+		MessageType:    MessageTypeSystem,
+		Content:        string(content),
+		TargetUserIDs:  memberUserIDs(members),
+		Timestamp:      time.Now().UnixMilli(),
+	}, func(tx ConversationStore) error {
+		if _, err := tx.RemoveConversationMembers(ctx, conversationID, removeMemberIDs); err != nil {
 			return err
 		}
 
-		targetUserIDs = make([]int64, 0, len(members))
-		for _, m := range members {
-			targetUserIDs = append(targetUserIDs, m.UserID)
-		}
-
-		_, err = tx.RemoveConversationMembers(ctx, conversationID, removeMemberIDs)
-		if err != nil {
-			return err
-		}
-
-		id, err := s.idGen.NextID()
-		if err != nil {
-			return err
-		}
-		messageID = id
-
-		content := s.buildSystemMessage("member_removed", operatorID, operatorName, removeMemberIDs)
-		if err := tx.InsertMessage(ctx, orm.Message{
+		return tx.InsertMessage(ctx, orm.Message{
 			ID:             messageID,
 			ConversationID: conversationID,
 			SenderID:       0,
 			MessageType:    MessageTypeSystem,
 			Content:        content,
-		}); err != nil {
-			return err
-		}
-
-		if s.outboxTopic != "" {
-			return s.recordConversationEvent(ctx, tx, conversationEventPayload{
-				MessageID:      messageID,
-				ConversationID: conversationID,
-				SenderID:       0,
-				MessageType:    MessageTypeSystem,
-				Content:        string(content),
-				TargetUserIDs:  targetUserIDs,
-				Timestamp:      time.Now().UnixMilli(),
-			})
-		}
-		return nil
+		})
 	})
 	if err != nil {
 		return err
-	}
-
-	if s.outboxWakeFn != nil {
-		s.outboxWakeFn()
 	}
 
 	s.invalidateConversationMembers(ctx, conversationID)
@@ -685,61 +699,41 @@ func (s *ConversationService) LeaveGroup(ctx context.Context, conversationID, us
 		return ErrNotOwner
 	}
 
-	var targetUserIDs []int64
-	var messageID int64
+	// Recipients are everyone still in the group before the leave commits.
+	members, err := s.GetConversationMembers(ctx, conversationID)
+	if err != nil {
+		return err
+	}
 
-	err = s.InTx(ctx, func(tx ConversationStore) error {
-		members, err := tx.GetConversationMembers(ctx, conversationID)
-		if err != nil {
+	messageID, err := s.idGen.NextID()
+	if err != nil {
+		return err
+	}
+
+	content := s.buildSystemMessage("member_left", userID, userName, []int64{userID})
+	err = s.inTxWithEvent(ctx, conversationEventPayload{
+		MessageID:      messageID,
+		ConversationID: conversationID,
+		SenderID:       0,
+		MessageType:    MessageTypeSystem,
+		Content:        string(content),
+		TargetUserIDs:  memberUserIDs(members),
+		Timestamp:      time.Now().UnixMilli(),
+	}, func(tx ConversationStore) error {
+		if _, err := tx.RemoveConversationMembers(ctx, conversationID, []int64{userID}); err != nil {
 			return err
 		}
 
-		targetUserIDs = make([]int64, 0, len(members))
-		for _, m := range members {
-			targetUserIDs = append(targetUserIDs, m.UserID)
-		}
-
-		_, err = tx.RemoveConversationMembers(ctx, conversationID, []int64{userID})
-		if err != nil {
-			return err
-		}
-
-		id, err := s.idGen.NextID()
-		if err != nil {
-			return err
-		}
-		messageID = id
-
-		content := s.buildSystemMessage("member_left", userID, userName, []int64{userID})
-		if err := tx.InsertMessage(ctx, orm.Message{
+		return tx.InsertMessage(ctx, orm.Message{
 			ID:             messageID,
 			ConversationID: conversationID,
 			SenderID:       0,
 			MessageType:    MessageTypeSystem,
 			Content:        content,
-		}); err != nil {
-			return err
-		}
-
-		if s.outboxTopic != "" {
-			return s.recordConversationEvent(ctx, tx, conversationEventPayload{
-				MessageID:      messageID,
-				ConversationID: conversationID,
-				SenderID:       0,
-				MessageType:    MessageTypeSystem,
-				Content:        string(content),
-				TargetUserIDs:  targetUserIDs,
-				Timestamp:      time.Now().UnixMilli(),
-			})
-		}
-		return nil
+		})
 	})
 	if err != nil {
 		return err
-	}
-
-	if s.outboxWakeFn != nil {
-		s.outboxWakeFn()
 	}
 
 	s.invalidateConversationMembers(ctx, conversationID)
@@ -759,60 +753,41 @@ func (s *ConversationService) DismissGroup(ctx context.Context, conversationID, 
 		return ErrNotOwner
 	}
 
-	var targetUserIDs []int64
-	var messageID int64
+	// Everyone in the group is notified before it is deactivated.
+	members, err := s.GetConversationMembers(ctx, conversationID)
+	if err != nil {
+		return err
+	}
 
-	err = s.InTx(ctx, func(tx ConversationStore) error {
-		members, err := tx.GetConversationMembers(ctx, conversationID)
-		if err != nil {
-			return err
-		}
+	messageID, err := s.idGen.NextID()
+	if err != nil {
+		return err
+	}
 
-		targetUserIDs = make([]int64, 0, len(members))
-		for _, m := range members {
-			targetUserIDs = append(targetUserIDs, m.UserID)
-		}
-
+	content := s.buildSystemMessage("group_dismissed", operatorID, "", nil)
+	err = s.inTxWithEvent(ctx, conversationEventPayload{
+		MessageID:      messageID,
+		ConversationID: conversationID,
+		SenderID:       0,
+		MessageType:    MessageTypeSystem,
+		Content:        string(content),
+		TargetUserIDs:  memberUserIDs(members),
+		Timestamp:      time.Now().UnixMilli(),
+	}, func(tx ConversationStore) error {
 		if err := tx.DeactivateConversation(ctx, conversationID); err != nil {
 			return err
 		}
 
-		id, err := s.idGen.NextID()
-		if err != nil {
-			return err
-		}
-		messageID = id
-
-		content := s.buildSystemMessage("group_dismissed", operatorID, "", nil)
-		if err := tx.InsertMessage(ctx, orm.Message{
+		return tx.InsertMessage(ctx, orm.Message{
 			ID:             messageID,
 			ConversationID: conversationID,
 			SenderID:       0,
 			MessageType:    MessageTypeSystem,
 			Content:        content,
-		}); err != nil {
-			return err
-		}
-
-		if s.outboxTopic != "" {
-			return s.recordConversationEvent(ctx, tx, conversationEventPayload{
-				MessageID:      messageID,
-				ConversationID: conversationID,
-				SenderID:       0,
-				MessageType:    MessageTypeSystem,
-				Content:        string(content),
-				TargetUserIDs:  targetUserIDs,
-				Timestamp:      time.Now().UnixMilli(),
-			})
-		}
-		return nil
+		})
 	})
 	if err != nil {
 		return err
-	}
-
-	if s.outboxWakeFn != nil {
-		s.outboxWakeFn()
 	}
 
 	s.invalidateConversationAll(ctx, conversationID)
@@ -856,64 +831,45 @@ func (s *ConversationService) UpdateGroupInfo(ctx context.Context, conversationI
 		return conv, nil
 	}
 
-	var targetUserIDs []int64
-	var messageID int64
 	eventType := "group_renamed"
+	if avatar != nil {
+		eventType = "group_avatar_changed"
+	}
 
-	err = s.InTx(ctx, func(tx ConversationStore) error {
+	members, err := s.GetConversationMembers(ctx, conversationID)
+	if err != nil {
+		return orm.Conversation{}, err
+	}
+
+	messageID, err := s.idGen.NextID()
+	if err != nil {
+		return orm.Conversation{}, err
+	}
+
+	content := s.buildSystemMessage(eventType, operatorID, operatorName, nil)
+	err = s.inTxWithEvent(ctx, conversationEventPayload{
+		MessageID:      messageID,
+		ConversationID: conversationID,
+		SenderID:       0,
+		MessageType:    MessageTypeSystem,
+		Content:        string(content),
+		TargetUserIDs:  memberUserIDs(members),
+		Timestamp:      time.Now().UnixMilli(),
+	}, func(tx ConversationStore) error {
 		if err := tx.UpdateConversation(ctx, conversationID, name, avatar); err != nil {
 			return err
 		}
 
-		if avatar != nil {
-			eventType = "group_avatar_changed"
-		}
-
-		members, err := tx.GetConversationMembers(ctx, conversationID)
-		if err != nil {
-			return err
-		}
-		targetUserIDs = make([]int64, 0, len(members))
-		for _, m := range members {
-			targetUserIDs = append(targetUserIDs, m.UserID)
-		}
-
-		id, err := s.idGen.NextID()
-		if err != nil {
-			return err
-		}
-		messageID = id
-
-		content := s.buildSystemMessage(eventType, operatorID, operatorName, nil)
-		if err := tx.InsertMessage(ctx, orm.Message{
+		return tx.InsertMessage(ctx, orm.Message{
 			ID:             messageID,
 			ConversationID: conversationID,
 			SenderID:       0,
 			MessageType:    MessageTypeSystem,
 			Content:        content,
-		}); err != nil {
-			return err
-		}
-
-		if s.outboxTopic != "" {
-			return s.recordConversationEvent(ctx, tx, conversationEventPayload{
-				MessageID:      messageID,
-				ConversationID: conversationID,
-				SenderID:       0,
-				MessageType:    MessageTypeSystem,
-				Content:        string(content),
-				TargetUserIDs:  targetUserIDs,
-				Timestamp:      time.Now().UnixMilli(),
-			})
-		}
-		return nil
+		})
 	})
 	if err != nil {
 		return orm.Conversation{}, err
-	}
-
-	if s.outboxWakeFn != nil {
-		s.outboxWakeFn()
 	}
 
 	s.invalidateConversation(ctx, conversationID)

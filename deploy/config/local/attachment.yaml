@@ -26,7 +26,7 @@ Seaweed:
   PresignTTL: 900
   DownloadTTL: 300
   MaxSizeBytes: 5368709120
-Kafka:
-  Brokers:
-    - kafka:9092
-  Topic: aim.attachment.uploaded
+UploadedProducer:
+  Endpoint: rocketmq-proxy:8081
+  Group: aim-attachment-producer
+  Topic: aim-attachment-uploaded

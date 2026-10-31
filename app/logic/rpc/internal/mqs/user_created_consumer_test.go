@@ -11,9 +11,9 @@ import (
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/logic/rpc/model/orm"
 	"github.com/hellopoisonx/aim/app/shared/events"
+	"github.com/hellopoisonx/aim/app/shared/rocketmq"
 	"github.com/hellopoisonx/aim/app/shared/tracing"
 	"github.com/stretchr/testify/require"
-	"github.com/zeromicro/go-queue/kq"
 	"go.opentelemetry.io/otel"
 	tracesdk "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
@@ -72,7 +72,7 @@ func (f *fakeUserInfoService) SearchUserInfoByNickname(_ context.Context, nickna
 func newTestSvcCtxWithUserSvc(userSvc *fakeUserInfoService) *svc.ServiceContext {
 	return &svc.ServiceContext{
 		Config: config.Config{
-			UserCreatedConsumerConf: kq.KqConf{},
+			UserCreatedConsumerConf: rocketmq.ConsumerConf{EndpointConf: rocketmq.EndpointConf{Endpoint: "127.0.0.1:8081"}, Concurrency: 1},
 		},
 		UserInfoService: userSvc,
 	}
@@ -205,7 +205,7 @@ func TestUserCreatedConsumer_Consume_DuplicateIdempotentSuccess(t *testing.T) {
 func TestUserCreatedConsumer_Consume_NilServiceSkips(t *testing.T) {
 	svcCtx := &svc.ServiceContext{
 		Config: config.Config{
-			UserCreatedConsumerConf: kq.KqConf{},
+			UserCreatedConsumerConf: rocketmq.ConsumerConf{EndpointConf: rocketmq.EndpointConf{Endpoint: "127.0.0.1:8081"}, Concurrency: 1},
 		},
 		UserInfoService: nil,
 	}

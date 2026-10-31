@@ -71,7 +71,7 @@ jobs:
           echo "等待基础设施 healthy ..."
           for i in $(seq 1 120); do
             unhealthy=$(docker ps --format '{{.Names}} {{.State}}' \
-              | grep -E "aim-(gateway|auth|core|logic|postgres|redis|kafka|etcd)" \
+              | grep -E "aim-(gateway|auth|core|logic|postgres|redis|rocketmq-namesrv|rocketmq-broker|rocketmq-proxy|etcd)" \
               | grep -v "running (healthy)" | wc -l)
             if [ "$unhealthy" = "0" ]; then
               echo "  ✓ 基础设施就绪"

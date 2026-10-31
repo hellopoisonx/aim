@@ -21,7 +21,7 @@ import (
 
 // Typing and read-receipt frame handling with local fan-out.
 
-// handleTyping publishes a typing notice to Kafka for fan-out by core.
+// handleTyping publishes a typing notice for fan-out by core.
 func (h *WsHandler) handleTyping(ctx context.Context, _ *websocket.Conn, frame *pb.WsFrame) error {
 	tracer := otel.Tracer("github.com/hellopoisonx/aim/app/gateway/api")
 	ctx, span := tracer.Start(ctx, "ws.handle_typing")
@@ -49,14 +49,14 @@ func (h *WsHandler) handleTyping(ctx context.Context, _ *websocket.Conn, frame *
 		attribute.Int64("ws.conversation_id", typingPayload.GetConversationId()),
 	)
 
-	// Publish to Kafka via TypingPublisher (non-blocking best-effort; typing is transient).
+	// Publish via TypingPublisher (non-blocking best-effort; typing is transient).
 	if h.srv.TypingPub != nil {
 		if err := h.srv.TypingPub.PublishTyping(ctx, identity.UserID, typingPayload.GetConversationId()); err != nil {
 			logx.WithContext(ctx).Errorf("failed to publish typing event: %v", err)
 		}
 	}
 
-	// Also fan out to local gateway connections immediately. Kafka/core remains
+	// Also fan out to local gateway connections immediately. The broker/core fan-out remains
 	// the cross-node path, while this local best-effort push avoids transient UI
 	// stalls when the consumer group is starting or a topic is not ready yet.
 	go h.fanOutTypingLocal(context.WithoutCancel(ctx), identity.UserID, typingPayload.GetConversationId())
@@ -138,8 +138,8 @@ func (h *WsHandler) handleReadReceipt(ctx context.Context, conn *websocket.Conn,
 	}
 
 	// Local immediate push keeps the active Desktop peer in sync even before the
-	// Kafka/core fan-out loop catches up. Cross-node delivery still goes through
-	// the Kafka event above. Run it independently so read-receipt ACK latency only
+	// broker/core fan-out loop catches up. Cross-node delivery still goes through
+	// the published event above. Run it independently so read-receipt ACK latency only
 	// depends on the durable cursor update.
 	go h.fanOutReadReceiptLocal(context.WithoutCancel(ctx), identity.UserID, receiptPayload.GetConversationId(), resp.GetReadState().GetLastReadMessageId(), resp.GetReadState().GetUpdatedAt())
 

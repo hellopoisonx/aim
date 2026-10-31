@@ -11,10 +11,9 @@ import (
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/config"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/logic/rpc/model/orm"
+	"github.com/hellopoisonx/aim/app/shared/rocketmq"
 	"github.com/hellopoisonx/aim/app/shared/tracing"
 	"github.com/stretchr/testify/require"
-	"github.com/zeromicro/go-queue/kq"
-	"github.com/zeromicro/go-zero/core/service"
 	"go.opentelemetry.io/otel"
 	tracesdk "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
@@ -40,7 +39,7 @@ func (f *fakeArchiveStore) InsertMessage(ctx context.Context, message orm.Messag
 func newTestServiceContextWithDBNil() *svc.ServiceContext {
 	return &svc.ServiceContext{
 		Config: config.Config{
-			KqConsumerConf: kq.KqConf{},
+			ArchiveConsumerConf: rocketmq.ConsumerConf{EndpointConf: rocketmq.EndpointConf{Endpoint: "127.0.0.1:8081"}, Concurrency: 1},
 		},
 	}
 }
@@ -290,18 +289,7 @@ func TestArchiveConsumer_TransferEventFields(t *testing.T) {
 func TestConsumers_ReturnsQueueService(t *testing.T) {
 	svcCtx := &svc.ServiceContext{
 		Config: config.Config{
-			KqConsumerConf: kq.KqConf{
-				ServiceConf: service.ServiceConf{
-					Name: "test-archive-consumer",
-					Mode: "dev",
-				},
-				Brokers:    []string{"127.0.0.1:9092"},
-				Group:      "test-group",
-				Topic:      "test-topic",
-				Offset:     "first",
-				Consumers:  1,
-				Processors: 1,
-			},
+			ArchiveConsumerConf: rocketmq.ConsumerConf{EndpointConf: rocketmq.EndpointConf{Endpoint: "127.0.0.1:8081"}, Group: "test-group", Topic: "test-topic", Concurrency: 1},
 		},
 	}
 
@@ -312,30 +300,8 @@ func TestConsumers_ReturnsQueueService(t *testing.T) {
 func TestConsumers_ReturnsTwoQueuesWhenBothConfigsSet(t *testing.T) {
 	svcCtx := &svc.ServiceContext{
 		Config: config.Config{
-			KqConsumerConf: kq.KqConf{
-				ServiceConf: service.ServiceConf{
-					Name: "test-archive-consumer",
-					Mode: "dev",
-				},
-				Brokers:    []string{"127.0.0.1:9092"},
-				Group:      "test-group-archive",
-				Topic:      "test-topic-archive",
-				Offset:     "first",
-				Consumers:  1,
-				Processors: 1,
-			},
-			UserCreatedConsumerConf: kq.KqConf{
-				ServiceConf: service.ServiceConf{
-					Name: "test-user-created-consumer",
-					Mode: "dev",
-				},
-				Brokers:    []string{"127.0.0.1:9092"},
-				Group:      "test-group-user-created",
-				Topic:      "test-topic-user-created",
-				Offset:     "first",
-				Consumers:  1,
-				Processors: 1,
-			},
+			ArchiveConsumerConf:    rocketmq.ConsumerConf{EndpointConf: rocketmq.EndpointConf{Endpoint: "127.0.0.1:8081"}, Group: "test-group-archive", Topic: "test-topic-archive", Concurrency: 1},
+			UserCreatedConsumerConf: rocketmq.ConsumerConf{EndpointConf: rocketmq.EndpointConf{Endpoint: "127.0.0.1:8081"}, Group: "test-group-user-created", Topic: "test-topic-user-created", Concurrency: 1},
 		},
 	}
 
@@ -346,18 +312,7 @@ func TestConsumers_ReturnsTwoQueuesWhenBothConfigsSet(t *testing.T) {
 func TestConsumers_ReturnsOneQueueWhenUserCreatedNotConfigured(t *testing.T) {
 	svcCtx := &svc.ServiceContext{
 		Config: config.Config{
-			KqConsumerConf: kq.KqConf{
-				ServiceConf: service.ServiceConf{
-					Name: "test-archive-consumer",
-					Mode: "dev",
-				},
-				Brokers:    []string{"127.0.0.1:9092"},
-				Group:      "test-group",
-				Topic:      "test-topic",
-				Offset:     "first",
-				Consumers:  1,
-				Processors: 1,
-			},
+			ArchiveConsumerConf: rocketmq.ConsumerConf{EndpointConf: rocketmq.EndpointConf{Endpoint: "127.0.0.1:8081"}, Group: "test-group", Topic: "test-topic", Concurrency: 1},
 			// UserCreatedConsumerConf not set
 		},
 	}

@@ -24,56 +24,41 @@ LogicRpc:
     Hosts:
       - bench-etcd:2379
     Key: logic.rpc
-KqPusherConf:
-  Brokers:
-    - bench-kafka:9092
+TransferProducerConf:
+  Endpoint: bench-rocketmq-proxy:8081
+  Group: aim-core-transfer
   Topic: aim-message-transfer
-KqConsumerConf:
+DeliveryConsumerConf:
   Name: core-delivery-consumer
-  Brokers:
-    - bench-kafka:9092
+  Endpoint: bench-rocketmq-proxy:8081
   Group: aim-core-delivery
   Topic: aim-message-transfer
-  Offset: first
-  Consumers: 1
-  Processors: 1
+  Concurrency: 1
 PresenceConsumerConf:
   Name: core-presence-consumer
-  Brokers:
-    - bench-kafka:9092
+  Endpoint: bench-rocketmq-proxy:8081
   Group: aim-core-presence
-  Topic: aim.presence.events
-  Offset: first
-  Consumers: 1
-  Processors: 1
+  Topic: aim-presence-events
+  Concurrency: 1
 TypingConsumerConf:
   Name: core-typing-consumer
-  Brokers:
-    - bench-kafka:9092
+  Endpoint: bench-rocketmq-proxy:8081
   Group: aim-core-typing
-  Topic: aim.typing.events
-  Offset: first
-  Consumers: 1
-  Processors: 1
+  Topic: aim-typing-events
+  Concurrency: 1
 ReadReceiptConsumerConf:
   Name: core-read-receipt-consumer
-  Brokers:
-    - bench-kafka:9092
+  Endpoint: bench-rocketmq-proxy:8081
   Group: aim-core-read-receipt
-  Topic: aim.read_receipt.events
-  Offset: first
-  Consumers: 1
-  Processors: 1
+  Topic: aim-read-receipt-events
+  Concurrency: 1
 # 群管理系统消息消费者：消费 logic 发布的群变更事件并推送到目标用户所在 Gateway。
 ConversationEventConsumerConf:
   Name: core-conversation-event-consumer
-  Brokers:
-    - bench-kafka:9092
+  Endpoint: bench-rocketmq-proxy:8081
   Group: aim-core-conversation-events
-  Topic: aim.conversation.events
-  Offset: first
-  Consumers: 1
-  Processors: 1
+  Topic: aim-conversation-events
+  Concurrency: 1
 GatewayRpc:
   ServiceName: gateway.rpc
   Target: bench-gateway:9091

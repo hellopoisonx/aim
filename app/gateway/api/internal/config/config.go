@@ -37,18 +37,22 @@ type Config struct {
 		// PresenceTTL is the TTL for presence heartbeat in seconds.
 		PresenceTTL int `json:",default=45"` //nolint:staticcheck // go-zero conf uses json tag options for defaults.
 	}
-	Kafka struct {
-		// Brokers is the list of Kafka broker addresses.
-		Brokers []string `json:",default=127.0.0.1:9092"` //nolint:staticcheck // go-zero conf uses json tag options for defaults.
-		// PresenceTopic is the Kafka topic for presence events.
-		PresenceTopic string `json:",default=aim.presence.events"` //nolint:staticcheck // go-zero conf uses json tag options for defaults.
-		// TypingTopic is the Kafka topic for typing events.
-		TypingTopic string `json:",default=aim.typing.events"` //nolint:staticcheck // go-zero conf uses json tag options for defaults.
-		// ReadReceiptTopic is the Kafka topic for read receipt events.
-		ReadReceiptTopic string `json:",default=aim.read_receipt.events"` //nolint:staticcheck // go-zero conf uses json tag options for defaults.
-		// FriendApplicationTopic is the Kafka topic core consumes to fan friend
+	RocketMQ struct {
+		// Endpoint is the RocketMQ proxy gRPC address.
+		Endpoint string `json:",default=rocketmq-proxy:8081"` //nolint:staticcheck // go-zero conf uses json tag options for defaults.
+		// AccessKey and SecretKey are optional ACL credentials.
+		AccessKey string `json:",optional"` //nolint:staticcheck // go-zero conf uses json tag options for defaults.
+		SecretKey string `json:",optional"` //nolint:staticcheck // go-zero conf uses json tag options for defaults.
+		// PresenceTopic carries presence events.
+		PresenceTopic string `json:",default=aim-presence-events"` //nolint:staticcheck // go-zero conf uses json tag options for defaults.
+		// TypingTopic carries typing events.
+		TypingTopic string `json:",default=aim-typing-events"` //nolint:staticcheck // go-zero conf uses json tag options for defaults.
+		// ReadReceiptTopic carries read receipt events. It is a FIFO topic keyed
+		// by conversation id.
+		ReadReceiptTopic string `json:",default=aim-read-receipt-events"` //nolint:staticcheck // go-zero conf uses json tag options for defaults.
+		// FriendApplicationTopic is the topic core consumes to fan friend
 		// application pushes out to every gateway node.
-		FriendApplicationTopic string `json:",default=aim.friend_application.events"` //nolint:staticcheck // go-zero conf uses json tag options for defaults.
+		FriendApplicationTopic string `json:",default=aim-friend-application-events"` //nolint:staticcheck // go-zero conf uses json tag options for defaults.
 	}
 	AttachmentRpc zrpc.RpcClientConf
 	// GatewayNodeID identifies this gateway instance for the directory service.

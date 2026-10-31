@@ -32,7 +32,7 @@ func NewArchiveConsumer(ctx context.Context, svcCtx *svc.ServiceContext) *Archiv
 	return &ArchiveConsumer{ctx: ctx, store: store}
 }
 
-// Consume implements the kq.ConsumeHandler interface.
+// Consume implements the rocketmq handler interface.
 func (c *ArchiveConsumer) Consume(ctx context.Context, key string, value string) error {
 	if c.store == nil {
 		logx.WithContext(ctx).Debugf("no database configured, skipping archive (topic=archive)")
@@ -51,7 +51,7 @@ func (c *ArchiveConsumer) Consume(ctx context.Context, key string, value string)
 
 	ctx = tracing.ExtractTraceContext(ctx, event.TraceContextFields)
 
-	ctx, span := tracing.StartKafkaConsumerSpan(ctx, "logic.kafka.archive.consume")
+	ctx, span := tracing.StartMQConsumerSpan(ctx, "logic.rocketmq.archive.consume")
 	defer span.End()
 
 	contentJSON := json.RawMessage(event.Content)

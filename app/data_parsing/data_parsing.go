@@ -7,7 +7,7 @@ import (
 
 	"github.com/hellopoisonx/aim/app/data_parsing/internal/config"
 	"github.com/hellopoisonx/aim/app/data_parsing/internal/worker"
-	"github.com/zeromicro/go-queue/kq"
+	"github.com/hellopoisonx/aim/app/shared/rocketmq"
 	"github.com/zeromicro/go-zero/core/conf"
 	"github.com/zeromicro/go-zero/core/logx"
 	zservice "github.com/zeromicro/go-zero/core/service"
@@ -29,8 +29,15 @@ func main() {
 	}
 	defer w.Close()
 
+	consumer, err := rocketmq.NewConsumerService(c.UploadedConsumer, w.Consume)
+	if err != nil {
+		logx.Must(fmt.Errorf("failed to create attachment uploaded consumer: %w", err))
+	}
+
 	group := zservice.NewServiceGroup()
-	group.Add(kq.MustNewQueue(c.UploadedConsumer, w))
+	if consumer != nil {
+		group.Add(consumer)
+	}
 	defer group.Stop()
 	fmt.Println("Starting data_parsing service...")
 	group.Start()
@@ -50,6 +57,6 @@ func applyDefaults(c *config.Config) {
 		c.Seaweed.Bucket = "aim-attachments"
 	}
 	if c.ParsedProducer.Topic == "" {
-		c.ParsedProducer.Topic = "aim.attachment.parsed"
+		c.ParsedProducer.Topic = "aim-attachment-parsed"
 	}
 }

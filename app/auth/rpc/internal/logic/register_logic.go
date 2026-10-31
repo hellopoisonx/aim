@@ -41,8 +41,8 @@ func (l *RegisterLogic) Register(in *pb.RegisterReq) (*pb.RegisterResp, error) {
 
 	var user service.UserCredential
 
-	// With outbox publishing configured the registrar owns the transaction and
-	// the UserCreated event; otherwise the plain user store is enough.
+	// With transactional publishing configured the registrar owns the transaction
+	// and the user.created event; otherwise the plain user store is enough.
 	if l.svcCtx.Registrar != nil {
 		user, err = l.svcCtx.Registrar.CreateUser(l.ctx, email, passwordHash, name)
 	} else {

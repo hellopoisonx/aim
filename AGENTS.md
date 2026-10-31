@@ -9,7 +9,7 @@
 
 ## 概览
 
-AIM 是多人在线即时通讯系统，内置可自部署 AI 助手。后端为 go-zero 微服务（gateway/auth/core/logic），基础设施包含 Kafka、Redis/Redis Stack、PostgreSQL、etcd、Grafana Tempo。
+AIM 是多人在线即时通讯系统，内置可自部署 AI 助手。后端为 go-zero 微服务（gateway/auth/core/logic），基础设施包含 RocketMQ 5（namesrv + broker + gRPC proxy）、Redis/Redis Stack、PostgreSQL、etcd、Grafana Tempo。
 
 ## 工作流
 
@@ -56,7 +56,8 @@ aim/
 - API/RPC 业务错误使用 `errorx.NewCodeError` / `NewCodeErrorf`；对外基础设施错误清洗为 `internal error`。
 - Request 类型必须带 `validate` tag；配置结构体用 `json:",default=value"` / `json:",optional"`。
 - core 可以通过 gRPC 调 logic；logic 绝不导入 core，也不负责消息投递。
-- Kafka 消息顺序靠 `conversation_id` 作为 key；跨 Kafka 链路通过 payload 中的 `traceparent`/`tracestate` 传播。
+- 有序投递靠 FIFO topic + `conversation_id` 作为 MessageGroup/ShardingKey；跨消息链路通过 payload 中的 `traceparent`/`tracestate` 传播。
+- 需要与数据库事务一致的事件走 RocketMQ 事务消息（`app/shared/rocketmq`）：本地事务同时写 `event_journal`，broker 回查据此决定 commit/rollback；不要再引入发件箱轮询。
 - 客户端只和 gateway 通信；客户端通过 REST/WS client 调用 gateway。
 
 ## 反模式
@@ -73,5 +74,5 @@ aim/
 ```bash
 go mod tidy
 go build ./...
-docker compose up -d postgres redis kafka etcd tempo grafana
+docker compose up -d postgres redis rocketmq-namesrv rocketmq-broker rocketmq-proxy rocketmq-init etcd tempo grafana
 ```

@@ -1,6 +1,6 @@
 ---
 name: aim-attachment-domain
-description: AIM 的附件域。涉及 `app/attachment`、AttachmentService gRPC、上传/下载授权、SeaweedFS/S3 签名、附件元数据、`aim.attachment.uploaded` 事件时使用。
+description: AIM 的附件域。涉及 `app/attachment`、AttachmentService gRPC、上传/下载授权、SeaweedFS/S3 签名、附件元数据、`aim-attachment-uploaded` 事件时使用。
 ---
 
 # aim-attachment-domain
@@ -10,7 +10,7 @@ description: AIM 的附件域。涉及 `app/attachment`、AttachmentService gRPC
 - `attachment` 是内部 gRPC 服务，不向客户端/公网暴露 REST/WS。
 - 客户端附件能力只能经 gateway 的 `/api/attachments/*` REST 入口访问；gateway 通过 `AttachmentRpc` 调用 `attachment.rpc`。
 - core 校验附件消息引用只能通过 `AttachmentService.ValidateReference` gRPC，不再调用内部 HTTP。
-- `attachment` 可直接访问 SeaweedFS/S3 与 PostgreSQL；媒体附件（`image`/`video`/`audio`）上传完成后发布 `aim.attachment.uploaded`，普通文件（`file`）上传完成后直接置为解析完成，不进入 data_parsing。
+- `attachment` 可直接访问 SeaweedFS/S3 与 PostgreSQL；媒体附件（`image`/`video`/`audio`）上传完成后发布 `aim-attachment-uploaded`，普通文件（`file`）上传完成后直接置为解析完成，不进入 data_parsing。
 - 不要恢复 `internal/httpx`、`http.Server`、`/v1/attachments/*` 等模块间 HTTP 接口。
 
 ## 关键位置
@@ -21,7 +21,7 @@ description: AIM 的附件域。涉及 `app/attachment`、AttachmentService gRPC
 - `app/attachment/internal/server/`：gRPC server 适配层，负责 pb 与业务 service DTO 转换、错误映射。
 - `app/attachment/internal/service/`：附件核心业务、SeaweedFS/S3 预签名与对象校验。
 - `app/attachment/model/migrations/`：附件表结构。
-- `app/shared/attachmentstore/orm/`：GORM 结构体；`app/shared/attachmentstore/dao/`：附件与 outbox 的唯一数据访问入口（attachment 服务与 data_parsing worker 共用，因此放在 shared，避免跨服务的 internal 导入）。迁移 SQL 仍在 `app/attachment/model/migrations/`（compose init container 挂载）。
+- `app/shared/attachmentstore/orm/`：GORM 结构体；`app/shared/attachmentstore/dao/`：附件的唯一数据访问入口（attachment 服务与 data_parsing worker 共用，因此放在 shared，避免跨服务的 internal 导入）。迁移 SQL 仍在 `app/attachment/model/migrations/`（compose init container 挂载）。
 - `app/attachment/rpc/etc/attachment.yaml`：本地 `go run` / 单服务调试默认配置；Docker Compose 部署挂载 `deploy/config/<env>/attachment.yaml` 到 `/app/etc/attachment.yaml`。
 
 ## 变更规则
@@ -32,7 +32,7 @@ description: AIM 的附件域。涉及 `app/attachment`、AttachmentService gRPC
 - 对外 REST 字段转换在 gateway 完成；attachment 只暴露内部 pb 类型。
 - gRPC 业务错误使用 `errorx.NewCodeError` 映射：参数错误 `CodeBadInput`，无记录 `CodeNotFound`，权限/引用不匹配 `CodeForbidden`，基础设施错误对外清洗为 `internal error`。
 - SeaweedFS/S3 HTTP 调用是对象存储协议，不是 AIM 模块间 API；必须用 context-aware request 并保留 tracing。
-- 媒体上传完成事件使用 `aim.attachment.uploaded`，key 使用 `file_id`，payload 要携带 trace context；`file` 普通附件不得发布给 data_parsing。
+- 媒体上传完成事件使用 `aim-attachment-uploaded`，key 使用 `file_id`，payload 要携带 trace context；`file` 普通附件不得发布给 data_parsing。
 
 ## 常用验证
 
@@ -41,3 +41,7 @@ go test ./app/attachment/...
 go test ./app/gateway/api/internal/handler/attachments/... ./app/core/rpc/internal/logic/...
 go build ./app/attachment/... ./app/gateway/api/... ./app/core/rpc/...
 ```
+
+## 最近变更
+
+- 2026-11-01: `attachment.uploaded` 改为 RocketMQ 事务消息。`UploadedProducer`（`rocketmq.ProducerConf`，group `aim-attachment-producer`，topic `aim-attachment-uploaded` 为 TRANSACTION 类型）取代 `Kafka` 配置块；`CompleteUpload` 先发 half message，再在同一事务里 `MarkUploaded` + 写 `event_journal`（`event_uid = attachment.uploaded:<file_id>`）；`OutboxPoller` 与 `outbox_records` 删除（migration `003_event_journal.sql`）。

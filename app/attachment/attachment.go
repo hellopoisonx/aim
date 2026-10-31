@@ -12,7 +12,6 @@ import (
 	rpcutil "github.com/hellopoisonx/aim/app/shared/rpc"
 	"github.com/zeromicro/go-zero/core/conf"
 	"github.com/zeromicro/go-zero/core/logx"
-	"github.com/zeromicro/go-zero/core/proc"
 	zservice "github.com/zeromicro/go-zero/core/service"
 	"github.com/zeromicro/go-zero/zrpc"
 	"google.golang.org/grpc"
@@ -32,14 +31,6 @@ func main() {
 	svc, err := attachmentservice.New(ctx, c)
 	logx.Must(err)
 	defer svc.Close()
-
-	// Start outbox poller if configured
-	if poller := svc.OutboxPoller(); poller != nil {
-		poller.Start(context.Background())
-		proc.AddWrapUpListener(func() {
-			poller.Stop()
-		})
-	}
 
 	s := zrpc.MustNewServer(c.RpcServerConf, func(grpcServer *grpc.Server) {
 		pb.RegisterAttachmentServiceServer(grpcServer, server.NewAttachmentServiceServer(svc))
@@ -83,7 +74,7 @@ func applyDefaults(c *config.Config) {
 	if c.Seaweed.DownloadTTL == 0 {
 		c.Seaweed.DownloadTTL = 300
 	}
-	if c.Kafka.Topic == "" {
-		c.Kafka.Topic = "aim.attachment.uploaded"
+	if c.UploadedProducer.Topic == "" {
+		c.UploadedProducer.Topic = "aim-attachment-uploaded"
 	}
 }

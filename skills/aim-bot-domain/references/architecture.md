@@ -14,7 +14,7 @@ flowchart LR
   end
   subgraph core ["core"]
     Transfer["Transfer RPC"]
-    Kafka[("aim-message-transfer")]
+    RocketMQ[("aim-message-transfer")]
   end
   subgraph logic ["logic"]
     Perm["CheckMessagePermission"]
@@ -30,10 +30,10 @@ flowchart LR
   SendAPI --> Transfer
   Transfer -- "permission check" --> Perm
   Perm --> DB
-  Transfer --> Kafka
-  Kafka --> Archive
+  Transfer --> RocketMQ
+  RocketMQ --> Archive
   Archive --> DB
-  Kafka --> WebhookConsumer
+  RocketMQ --> WebhookConsumer
   WebhookConsumer -- "ListActiveBotWebhooksForConversation" --> DB
   WebhookConsumer -- "HMAC-signed POST" --> BotSvc
 ```
@@ -67,7 +67,7 @@ sequenceDiagram
   participant GW as gateway /api/bot/v1/messages
   participant Core as core.Transfer
   participant LG as logic.PermissionService
-  participant K as Kafka aim-message-transfer
+  participant K as RocketMQ aim-message-transfer
   participant DC as core DeliveryConsumer
   participant AC as logic ArchiveConsumer
   participant BWC as logic BotWebhookConsumer
@@ -111,7 +111,7 @@ sequenceDiagram
 | `app/logic/rpc/model/dao/bot.go` | Bot Webhook GORM DAO |
 | `app/logic/rpc/logic.proto` | `BotService` RPC 定义 |
 | `app/logic/rpc/internal/service/bot_service.go` | 业务逻辑（token 校验、webhook CRUD） |
-| `app/logic/rpc/internal/mqs/bot_webhook_consumer.go` | Kafka consumer + HTTP 投递 |
+| `app/logic/rpc/internal/mqs/bot_webhook_consumer.go` | RocketMQ consumer + HTTP 投递 |
 | `app/gateway/api/gateway.api` | `/api/bot/v1/*` 路由声明 |
 | `app/gateway/api/internal/middleware/botauth_middleware.go` | BotAuth |
 | `app/gateway/api/internal/botctx/identity.go` | 上下文工具 |
@@ -129,12 +129,10 @@ sequenceDiagram
 ```yaml
 BotWebhookConsumerConf:
   Name: logic-bot-webhook-consumer
-  Brokers: [kafka:9092]
+  Endpoint: rocketmq-proxy:8081
   Group: aim-logic-bot-webhook
   Topic: aim-message-transfer
-  Offset: last
-  Consumers: 1
-  Processors: 1
+  Concurrency: 1
 ```
 
 `Offset: last` 是有意为之 —— Bot 投递不应回放历史消息。归档消费者继续用

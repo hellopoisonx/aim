@@ -5,7 +5,7 @@
 ## 外部接口边界
 
 - AIM 的客户端入口统一收敛到 gateway：REST API 只在 `app/gateway/api/gateway.api` 声明并由 `app/gateway/api` 实现；WebSocket 只由 gateway 暴露 `/ws`。
-- 非 gateway 模块（auth/core/logic/attachment/data_parsing 等）不得面向客户端或宿主机新增 REST/WS 入口；需要客户端访问的能力必须通过 gateway 代理或编排内部 gRPC/Kafka 完成。
+- 非 gateway 模块（auth/core/logic/attachment/data_parsing 等）不得面向客户端或宿主机新增 REST/WS 入口；需要客户端访问的能力必须通过 gateway 代理或编排内部 gRPC/RocketMQ 完成。
 - 服务间接口统一优先使用 gRPC：`aim-attachment` 暴露 `AttachmentService` gRPC（etcd key `attachment.rpc`），gateway/core 通过 `AttachmentRpc` 调用；`docker-compose.yaml` 只能 `expose` 内部端口，不能 `ports` publish 到宿主机。
 - 排查边界时重点检查：非 gateway 目录是否新增 `.api`、`rest.MustNewServer`、`http.ListenAndServe`/`http.Server`、`websocket.Accept`，以及 Compose 是否将非 gateway REST/WS 端口映射到宿主机；服务间能力应落到 gRPC proto + etcd 服务发现。
 
@@ -33,7 +33,7 @@
 - 目录结构决策：gateway 作为 go-zero API 服务保留 `app/gateway/api` 布局；auth/core/logic 作为 go-zero RPC 服务保留 `app/{module}/rpc` 布局。不要为了“统一”机械搬迁 `api/`/`rpc/`，新增 REST handler/logic 应按 `gateway.api` 的 `group` 生成到对应分组目录（如 `internal/handler/users`、`internal/logic/users`）。
 - go-zero OTel/Tempo：`app/gateway/api/etc/gateway-api.yaml` 的顶层 `Telemetry` 块覆盖 REST 服务，`GatewayRpc.Telemetry` 块覆盖 GatewayService RPC 服务；两者均使用 `Batcher: otlphttp`、`Endpoint: tempo:4318`、`OtlpHttpPath: /v1/traces`。REST 依赖 `rest.RestConf` 内嵌的 `service.ServiceConf.Telemetry` 自动启动 trace agent，GatewayService 依赖 `zrpc.RpcServerConf.Telemetry` 自动接入 go-zero RPC tracing interceptor。
 - go-zero Prometheus：YAML 中 `Prometheus` 配置块（`Host: 0.0.0.0`、`Port: 9191`、`Path: /metrics`）由 `rest.RestConf` / `zrpc.RpcServerConf` 自动启动独立 HTTP server。REST/RPC middleware 默认开启，自动采集请求 QPS、延迟、错误率等指标。Grafana 仪表盘见 `deploy/grafana/dashboards/`。
-- Core → GatewayService 的客户端位于 `app/core/rpc/internal/rpc/gateway_client.go`，不是 go-zero `zrpc` client；该 raw gRPC client 必须保留自定义 unary interceptor 注入 W3C trace metadata，使 `core.kafka.delivery.consume` 后续的 `PushMessage` 调用能进入 GatewayService trace。
+- Core → GatewayService 的客户端位于 `app/core/rpc/internal/rpc/gateway_client.go`，不是 go-zero `zrpc` client；该 raw gRPC client 必须保留自定义 unary interceptor 注入 W3C trace metadata，使 `core.rocketmq.delivery.consume` 后续的 `PushMessage` 调用能进入 GatewayService trace。
 
 ### 闭环边界
 
@@ -171,7 +171,7 @@ Proto 定义：`shared/proto/gateway/gateway.proto`，生成的 pb 代码在 `sh
 | 被禁言/拉黑/非会话成员 | `ACK_STATUS_REJECTED` | `40300` | 显示业务错误，不自动重试 |
 | 会话不存在 | `ACK_STATUS_REJECTED` | `40400` | 显示业务错误，不自动重试 |
 | 配额/限流（滑动窗口触发） | `ACK_STATUS_REJECTED` | `42900` | 显示配额错误，仅在策略延迟后重试 |
-| core 不可用/deadline/Kafka 瞬时故障 | `ACK_STATUS_RETRYABLE` | `50000` | 保留本地 pending 消息，用相同 client_msg_id 重试 |
+| core 不可用/deadline/RocketMQ 瞬时故障 | `ACK_STATUS_RETRYABLE` | `50000` | 保留本地 pending 消息，用相同 client_msg_id 重试 |
 
 ### ServerAckPayload 结构
 
@@ -202,7 +202,7 @@ message ServerAckPayload {
 
 - `Manager.Register` 时 SADD `aim:user_gateway:{user_id}`（node_id）和 `aim:presence:{user_id}`（device_id），检测 SCARD 0→≥1 则触发 `online` 事件。
 - `Manager.Unregister` 时 SREM 对应 member，若本节点无该用户其他连接则 SREM gateway set，检测 SCARD ≥1→0 则触发 `offline` 事件。
-- 仅状态 0↔1 切换时发布 Kafka 事件（topic: `aim.presence.events`，key=`user_id`）。
+- 仅状态 0↔1 切换时发布 RocketMQ 事件（topic: `aim-presence-events`，key=`user_id`）。
 
 ### 心跳
 
@@ -216,7 +216,7 @@ message ServerAckPayload {
 
 ### Typing 输入状态
 
-- `FRAME_TYPE_TYPING` 由网关直接发布到 Kafka（topic: `aim.typing.events`，key=`conversation_id`），不查成员。
+- `FRAME_TYPE_TYPING` 由网关直接发布到 RocketMQ（topic: `aim-typing-events`，key=`conversation_id`），不查成员。
 - core 的 `TypingConsumer` 消费后查会话成员 → 查 `aim:user_gateway:{member_id}` → 调 `gateway.PushTyping`。
 - 网关 `PushTyping` gRPC 按 `target_user_id` 将 `FRAME_TYPE_PUSH_TYPING` 投到本节点所有连接。
 - 客户端按 2.5s 节流发送 typing 帧；收到 PUSH_TYPING 后 4s 超时自动清除。

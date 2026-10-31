@@ -158,11 +158,11 @@ PYTHONIOENCODING=utf-8 python aim_test.py run-all
 
 `run-all` 注册 Alice/Bob 后立即调 `add_friend` 可能返回 `[40400] user not found`。根因：
 
-1. 注册 → auth 服务写入 auth 库 → Kafka `UserCreated` 事件
-2. logic 服务消费 Kafka 事件 → 写入 logic 库用户信息表
+1. 注册 → auth 服务写入 auth 库 → RocketMQ `UserCreated` 事件
+2. logic 服务消费 RocketMQ 事件 → 写入 logic 库用户信息表
 3. `add_friend` 走 logic 查询用户 → 步骤 2 未完成则失败
 
-延迟约 2-3 秒。`run-all` 已在注册完成后 `time.sleep(5)` 等待 Kafka 事件消费。
+延迟约 2-3 秒。`run-all` 已在注册完成后 `time.sleep(5)` 等待 RocketMQ 事件消费。
 手动测试时需自行加延迟或重试。
 
 ### 接口 404（路由不存在）
@@ -204,9 +204,9 @@ func (f *fakeQuerier) ListFriends(ctx context.Context, userID int64) ([]model.Fr
 | gateway gRPC | 19091 | 9091 | +10000 |
 | auth gRPC | 18989 | 8989 | +10000 |
 | core gRPC | 18081 | 8080 | +10000 |
+| RocketMQ proxy (gRPC) | 18082 | 8081 | — |
 | PostgreSQL | 15432 | 5432 | +10000 |
 | Redis | 16379 | 6379 | +10000 |
-| Kafka | 19092 | 9092 | +10000 |
 | etcd | 12379 | 2379 | +10000 |
 
 | etcd peer | 12380 | 2380 | +10000 |
@@ -252,7 +252,7 @@ python generate_fixtures.py --count 5000   # 自定义数量
 
 - 2026-05-30: `WSClient` 自动跟踪已连续处理的白名单 pending 推送 `seq`，自动心跳携带 `HeartbeatPayload.last_seq` 以触发服务端 L1 pending 补发；`ws-heartbeat` 新增 `--last-seq` 覆盖参数，交互模式支持 `ws-heartbeat N`。
 - 2026-05-28: 压测配置统一 GatewayRpc 监听 `9091`（宿主机 `19091`），修复 `dev-tool/etc/core.yaml` 中重复 `Consumers` 与误缩进的 `Presence.TTLSeconds`；压测 Compose 迁移/Kafka topic 初始化改用 `deploy/scripts/`，避免遗漏新 migration 或 topic。
-- 2026-05-28: 压测 compose 的 `bench-tempo` 镜像固定为 `grafana/tempo:2.8.1`，避免 `latest` 拉到 Tempo v3 RC 后无法解析仓库共用的 `deploy/tempo/tempo.yaml`；压测 `etc/logic.yaml`/`etc/core.yaml` 已启用 `aim.conversation.events` 群管理系统消息链路。
+- 2026-05-28: 压测 compose 的 `bench-tempo` 镜像固定为 `grafana/tempo:2.8.1`，避免 `latest` 拉到 Tempo v3 RC 后无法解析仓库共用的 `deploy/tempo/tempo.yaml`；压测 `etc/logic.yaml`/`etc/core.yaml` 已启用 `aim-conversation-events` 群管理系统消息链路。
 - 2026-05-24: 重新生成 `ws_pb2.py`/`gateway_pb2.py`，同步 `PUSH_READ_RECEIPT`、`PushReadReceiptPayload`、`PushMessagePayload.sender_info/is_system/mentions`、`GatewayService.PushReadReceipt` 等协议字段；`aim_test.py` 的帧名称表和解码表新增 `PUSH_READ_RECEIPT`，`ws-send` 支持 `--mentions`，会话创建未传 `name` 时自动生成默认名；`benchmark.py` 修复并发建会话索引竞争，并将非 ACCEPTED 的 `SERVER_ACK` 直接计入错误；压测 compose 的 tracing 后端已改为 Grafana Tempo，HTTP API 暴露在 `13200`；压测 `logic.yaml` 将 `TemporaryConversationMessageLimit` 改为 `-1`，避免 `0` 被服务上下文归一化为默认 10。
 - 2026-05-23: 交互模式改用 `prompt_toolkit.patch_stdout` 包裹输入循环，后台 WS 推送/接收打印会显示在 prompt 上方并保留当前输入；新增 `presence-friends` REST 命令、`ws-read-receipt`/`ws-ack` WS 命令；`run-all` 覆盖好友在线状态接口；`benchmark.py` 新增 `presence` 场景，`mixed` REST 负载补充 presence 查询。
 - 2026-05-22: 新增 `group-create` CLI 命令和交互命令，调用 `POST /api/conversations/group` 专用创建群聊端点。`RESTClient` 新增 `create_group()` 方法（支持 `name`/`avatar` 可选参数）。详见 `references/commands.md`。

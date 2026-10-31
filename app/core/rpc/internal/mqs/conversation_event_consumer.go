@@ -46,7 +46,7 @@ func (c *ConversationEventConsumer) Consume(ctx context.Context, key string, val
 
 	ctx = tracing.ExtractTraceContext(ctx, event.TraceContextFields)
 
-	ctx, span := tracing.StartKafkaConsumerSpan(ctx, "core.kafka.conversation_event.consume")
+	ctx, span := tracing.StartMQConsumerSpan(ctx, "core.rocketmq.conversation_event.consume")
 	defer span.End()
 
 	logx.WithContext(ctx).Infof("conversation event: conv=%d msg_id=%d type=%s targets=%d",

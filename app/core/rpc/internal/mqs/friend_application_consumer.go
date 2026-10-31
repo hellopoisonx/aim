@@ -12,7 +12,7 @@ import (
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
-// FriendApplicationConsumer consumes aim.friend_application.events and pushes
+// FriendApplicationConsumer consumes aim-friend-application-events and pushes
 // the change to the target user on every gateway node that holds their
 // connections.
 //
@@ -29,7 +29,7 @@ func NewFriendApplicationConsumer(ctx context.Context, svcCtx *svc.ServiceContex
 	return &FriendApplicationConsumer{ctx: ctx, svcCtx: svcCtx}
 }
 
-// Consume implements the kq.ConsumeHandler interface.
+// Consume implements the rocketmq handler interface.
 func (c *FriendApplicationConsumer) Consume(ctx context.Context, key string, value string) error {
 	var event events.FriendApplicationEvent
 	if err := json.Unmarshal([]byte(value), &event); err != nil {
@@ -41,7 +41,7 @@ func (c *FriendApplicationConsumer) Consume(ctx context.Context, key string, val
 	}
 
 	ctx = tracing.ExtractTraceContext(ctx, event.TraceContextFields)
-	ctx, span := tracing.StartKafkaConsumerSpan(ctx, "core.kafka.friend_application.consume")
+	ctx, span := tracing.StartMQConsumerSpan(ctx, "core.rocketmq.friend_application.consume")
 	defer span.End()
 
 	if c.svcCtx.GatewayClient == nil {

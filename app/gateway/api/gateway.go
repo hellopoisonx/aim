@@ -47,6 +47,9 @@ func main() {
 	// Start presence reaper for stale connection and token-refresh grace detection.
 	ctx.StartPresenceReaper()
 
+	// Connect the RocketMQ producer used by presence/typing/read-receipt pushes.
+	ctx.StartEventProducer()
+
 	// Install the shared JSON envelope before any route is served.
 	httperr.Register()
 

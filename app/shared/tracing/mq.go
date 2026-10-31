@@ -53,11 +53,13 @@ func DetachSpanContext(ctx context.Context) context.Context {
 	return trace.ContextWithSpanContext(ctx, trace.SpanContext{})
 }
 
-func StartKafkaConsumerSpan(ctx context.Context, name string, attrs ...attribute.KeyValue) (context.Context, trace.Span) {
+// StartMQConsumerSpan opens a consumer span for a broker message.
+func StartMQConsumerSpan(ctx context.Context, name string, attrs ...attribute.KeyValue) (context.Context, trace.Span) {
 	return otel.Tracer(tracerName).Start(ctx, name, trace.WithSpanKind(trace.SpanKindConsumer), trace.WithAttributes(attrs...))
 }
 
-func StartKafkaProducerSpan(ctx context.Context, name string, attrs ...attribute.KeyValue) (context.Context, trace.Span) {
+// StartMQProducerSpan opens a producer span for a broker message.
+func StartMQProducerSpan(ctx context.Context, name string, attrs ...attribute.KeyValue) (context.Context, trace.Span) {
 	return otel.Tracer(tracerName).Start(ctx, name, trace.WithSpanKind(trace.SpanKindProducer), trace.WithAttributes(attrs...))
 }
 

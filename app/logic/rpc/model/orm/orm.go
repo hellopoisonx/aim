@@ -196,16 +196,3 @@ type UserBot struct {
 
 // TableName pins the physical table name.
 func (UserBot) TableName() string { return "user_bots" }
-
-// OutboxRecord maps table outbox_records (014).
-type OutboxRecord struct {
-	ID          int64      `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
-	Topic       string     `gorm:"column:topic;not null" json:"topic"`
-	Key         string     `gorm:"column:key;not null;default:''" json:"key"`
-	Payload     []byte     `gorm:"column:payload;type:bytea;not null" json:"payload"`
-	CreatedAt   time.Time  `gorm:"column:created_at;not null" json:"created_at"`
-	ProcessedAt *time.Time `gorm:"column:processed_at" json:"processed_at"`
-}
-
-// TableName pins the physical table name.
-func (OutboxRecord) TableName() string { return "outbox_records" }

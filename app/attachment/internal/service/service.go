@@ -1,5 +1,6 @@
 // Package service implements the attachment domain: presigned uploads, object
-// verification, download authorization and the attachment.uploaded outbox event.
+// verification, download authorization and the transactional
+// attachment.uploaded event.
 //
 // The package is split by concern: service.go holds wiring, upload.go the write
 // path, download.go the read path and content.go the message-content helpers.
@@ -10,14 +11,13 @@ import (
 	"fmt"
 	"time"
 
-	sharedkafka "github.com/hellopoisonx/aim/app/shared/kafka"
-
 	"github.com/hellopoisonx/aim/app/attachment/internal/config"
 	"github.com/hellopoisonx/aim/app/shared/attachmentstore/dao"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 	"github.com/hellopoisonx/aim/app/shared/gormdb"
-	"github.com/hellopoisonx/aim/app/shared/outbox"
+	"github.com/hellopoisonx/aim/app/shared/rocketmq"
 	"github.com/hellopoisonx/aim/app/shared/s3signer"
+	"github.com/zeromicro/go-zero/core/logx"
 )
 
 // Domain errors carry their biz code so the RPC server can return them through
@@ -29,11 +29,14 @@ var (
 )
 
 type Service struct {
-	cfg          config.Config
-	store        *dao.Store
-	signer       s3signer.S3Signer
-	outboxPoller *outbox.Poller
+	cfg      config.Config
+	store    *dao.Store
+	signer   s3signer.S3Signer
+	producer *rocketmq.Producer
 }
+
+// attachmentProducerGroup is the broker-visible producer group of attachment.
+const attachmentProducerGroup = "aim-attachment-producer"
 
 type InitUploadRequest struct {
 	OwnerID        int64  `json:"owner_id"`
@@ -110,29 +113,30 @@ func New(ctx context.Context, cfg config.Config) (*Service, error) {
 		},
 	}
 
-	// Initialize outbox Poller if Kafka is configured
-	if store != nil && len(cfg.Kafka.Brokers) > 0 && cfg.Kafka.Topic != "" {
-		outboxStore := outbox.NewGORMStore(store.DB())
-		publisher := newOutboxPublisher(cfg.Kafka.Brokers, cfg.Kafka.Topic)
-		svc.outboxPoller = outbox.NewPoller(outboxStore, publisher, outbox.Config{})
+	// Transactional attachment.uploaded publishing, when configured. A broker
+	// that refuses the first connection does not block startup: uploads then
+	// fail loudly instead of the whole service crash-looping.
+	if store != nil && cfg.UploadedProducer.IsConfigured() {
+		producer, err := rocketmq.NewProducer(cfg.UploadedProducer.EndpointConf, attachmentProducerGroup, cfg.UploadedProducer.Topic)
+		if err != nil {
+			return nil, err
+		}
+		producer.WithJournalChecker(store.DB())
+		if err := producer.Start(); err != nil {
+			logx.WithContext(ctx).Errorf("failed to start rocketmq attachment producer: %v", err)
+		}
+		svc.producer = producer
 	}
 
 	return svc, nil
 }
 
-func (s *Service) OutboxPoller() *outbox.Poller {
-	return s.outboxPoller
-}
-
-// newOutboxPublisher creates an outbox.PublisherFunc using kq.Pusher.
-func newOutboxPublisher(brokers []string, topic string) outbox.PublisherFunc {
-	pusher := sharedkafka.NewPusher(brokers, topic)
-	return func(ctx context.Context, _, key string, payload []byte) error {
-		return pusher.PushWithKey(ctx, key, string(payload))
-	}
-}
-
 func (s *Service) Close() {
+	if s.producer != nil {
+		if err := s.producer.GracefulStop(); err != nil {
+			logx.WithContext(context.Background()).Errorf("failed to stop rocketmq attachment producer: %v", err)
+		}
+	}
 	if s.store == nil {
 		return
 	}

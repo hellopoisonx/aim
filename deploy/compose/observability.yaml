@@ -82,20 +82,6 @@ services:
     networks:
       - aim-network
 
-  kafka-exporter:
-    image: danielqsj/kafka-exporter:latest
-    container_name: aim-kafka-exporter
-    command:
-      - --kafka.server=kafka:9092
-      - --web.listen-address=:9308
-    expose:
-      - "9308"
-    depends_on:
-      kafka:
-        condition: service_healthy
-    networks:
-      - aim-network
-
 volumes:
   prometheus_data:
   loki_data:

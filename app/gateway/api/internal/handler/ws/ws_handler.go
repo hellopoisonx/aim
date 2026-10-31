@@ -67,7 +67,7 @@ func (h *WsHandler) ServeWS(w http.ResponseWriter, r *http.Request) {
 
 	// 3. Create per-connection context with cancellation.
 	// Detach it from the short-lived HTTP upgrade span: the WebSocket connection
-	// can stay open for a long time, while per-frame spans and downstream RPC/Kafka
+	// can stay open for a long time, while per-frame spans and downstream RPC/broker
 	// spans complete quickly. Keeping the upgrade span as their parent can make
 	// tracing backends see children whose parent span has not been exported yet.
 	ctx, cancel := context.WithCancel(sharedtracing.DetachSpanContext(r.Context()))

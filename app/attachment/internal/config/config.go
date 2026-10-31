@@ -5,6 +5,7 @@ package config
 import (
 	"time"
 
+	"github.com/hellopoisonx/aim/app/shared/rocketmq"
 	"github.com/zeromicro/go-zero/zrpc"
 )
 
@@ -14,7 +15,9 @@ type Config struct {
 	zrpc.RpcServerConf
 	Postgres PostgresConf
 	Seaweed  SeaweedConf
-	Kafka    KqPusherConf `json:",optional"`
+	// UploadedProducer configures the transactional producer for
+	// aim-attachment-uploaded.
+	UploadedProducer rocketmq.ProducerConf `json:",optional"`
 }
 
 type PostgresConf struct {
@@ -32,11 +35,6 @@ type SeaweedConf struct {
 	DownloadTTL    int    `json:",default=300"`
 	MaxSizeBytes   int64  `json:",default=5368709120"`
 	ForcePathStyle bool   `json:",default=true"`
-}
-
-type KqPusherConf struct {
-	Brokers []string `json:",optional"`
-	Topic   string   `json:",default=aim.attachment.uploaded"`
 }
 
 func (c SeaweedConf) UploadTTL() time.Duration {

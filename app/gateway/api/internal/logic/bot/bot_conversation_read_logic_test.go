@@ -227,7 +227,7 @@ func TestBotListReadStates(t *testing.T) {
 
 func TestBotMarkReadPublishesBestEffort(t *testing.T) {
 	client := &fakeBotConversationClient{}
-	publisher := &fakeReadReceiptPublisher{err: errors.New("kafka down")}
+	publisher := &fakeReadReceiptPublisher{err: errors.New("broker down")}
 	logic := NewBotMarkReadLogic(ctxWithBot(botperm.ActionReadReceiptWrite), &svc.ServiceContext{
 		LogicConversationClient: client,
 		ReadReceiptPub:          publisher,

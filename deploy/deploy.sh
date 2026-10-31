@@ -33,7 +33,7 @@ NEED_ROOT_CMDS=(init up down restart backup rollback config)
 # 部署必须存在的服务配置。
 REQUIRED_CONFIG_FILES=(auth.yaml logic.yaml core.yaml gateway-api.yaml attachment.yaml data_parsing.yaml seaweed-s3.json)
 # 一键迁移服务（按顺序跑，依赖图来自 deploy/compose/base.yaml）。
-INIT_SERVICES=(auth-migrate logic-migrate attachment-migrate kafka-init seaweed-bucket-init)
+INIT_SERVICES=(auth-migrate logic-migrate attachment-migrate rocketmq-init seaweed-bucket-init)
 
 # === 输出样式 ================================================================
 
@@ -648,7 +648,7 @@ cmd_config_check() {
 }
 
 cmd_migrate() {
-  section "migrate: 跑 PostgreSQL 迁移 + Kafka topic + SeaweedFS bucket"
+  section "migrate: 跑 PostgreSQL 迁移 + RocketMQ topic/group + SeaweedFS bucket"
   cmd_preflight
   local targets=("$@")
   if [[ ${#targets[@]} -eq 0 ]]; then
@@ -766,7 +766,7 @@ AIM 生产部署自动化。
                           --no-backup: 不创建 before-config 快照。
                           会先备份 /etc/aim，再写入，最后跑 preflight。
   migrate [svc...]        跑 init 服务（默认全跑：auth-migrate logic-migrate
-                          kafka-init seaweed-bucket-init）。可指定单个服务。
+                          rocketmq-init seaweed-bucket-init）。可指定单个服务。
   up [compose-args...]    流程：preflight -> 备份当前 /etc/aim -> migrate
                                 -> docker compose up -d --build [args...]
   down [compose-args...]  流程：备份当前 /etc/aim -> docker compose down [args...]

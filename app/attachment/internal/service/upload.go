@@ -14,11 +14,13 @@ import (
 	"github.com/hellopoisonx/aim/app/shared/attachmentstore/orm"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 	"github.com/hellopoisonx/aim/app/shared/events"
+	"github.com/hellopoisonx/aim/app/shared/rocketmq"
 	"github.com/hellopoisonx/aim/app/shared/tracing"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/trace"
+	"gorm.io/gorm"
 )
 
 // Upload lifecycle: presigned PUT, verification and the uploaded event.
@@ -92,29 +94,8 @@ func (s *Service) CompleteUpload(ctx context.Context, userID int64, fileID strin
 			return nil, err
 		}
 
-		// Use transaction: update status + insert outbox record atomically
-		err = s.store.WithTx(ctx, func(tx *dao.Store) error {
-			rows, err := tx.MarkUploaded(ctx, id, userID, req.SHA256, sharedattachment.KindFile)
-			if err != nil {
-				return err
-			}
-			if rows == 0 {
-				return ErrNotFound
-			}
-
-			// Insert outbox event atomically if enabled
-			if s.outboxPoller != nil {
-				return s.insertOutboxEvent(ctx, tx, pending)
-			}
-			return nil
-		})
-		if err != nil {
+		if err := s.markUploaded(ctx, userID, id, req.SHA256, pending); err != nil {
 			return nil, err
-		}
-
-		// Fast path: wake the poller immediately
-		if s.outboxPoller != nil {
-			s.outboxPoller.Wake()
 		}
 	}
 	info, err := s.GetFile(ctx, userID, fileID)
@@ -124,9 +105,60 @@ func (s *Service) CompleteUpload(ctx context.Context, userID int64, fileID strin
 	return info, nil
 }
 
-// insertOutboxEvent inserts an AttachmentUploadedEvent into the outbox table
-// using the given transaction.
-func (s *Service) insertOutboxEvent(ctx context.Context, tx *dao.Store, info *FileInfo) error {
+// markUploaded flips the file to uploaded and, when transactional publishing is
+// configured, publishes attachment.uploaded in the same commit.
+func (s *Service) markUploaded(ctx context.Context, userID int64, id uuid.UUID, sha256 string, info *FileInfo) error {
+	markUploaded := func(tx *dao.Store) (int64, error) {
+		return tx.MarkUploaded(ctx, id, userID, sha256, sharedattachment.KindFile)
+	}
+
+	if s.producer == nil {
+		return s.store.WithTx(ctx, func(tx *dao.Store) error {
+			rows, err := markUploaded(tx)
+			if err != nil {
+				return err
+			}
+			if rows == 0 {
+				return ErrNotFound
+			}
+			return nil
+		})
+	}
+
+	// The half message body is fixed before the transaction opens, so the payload
+	// is built from the pending upload row read above.
+	body, err := attachmentUploadedPayload(ctx, info)
+	if err != nil {
+		return err
+	}
+
+	eventUID := AttachmentUploadedEventUID(info.FileID)
+	return s.producer.SendTransactional(ctx, s.store.DB(), rocketmq.TransactionalMessage{
+		Topic:    s.cfg.UploadedProducer.Topic,
+		EventUID: eventUID,
+		Key:      info.FileID,
+		Body:     body,
+	}, func(ctx context.Context, tx *gorm.DB) error {
+		rows, err := markUploaded(dao.New(tx))
+		if err != nil {
+			return err
+		}
+		if rows == 0 {
+			return ErrNotFound
+		}
+		return nil
+	})
+}
+
+// AttachmentUploadedEventUID is the deterministic event identity of
+// attachment.uploaded; it is the event_journal primary key and the message key
+// used for transaction check-back.
+func AttachmentUploadedEventUID(fileID string) string {
+	return "attachment.uploaded:" + fileID
+}
+
+// attachmentUploadedPayload marshals the attachment.uploaded event.
+func attachmentUploadedPayload(ctx context.Context, info *FileInfo) ([]byte, error) {
 	e := events.AttachmentUploadedEvent{
 		TraceContextFields: tracing.InjectTraceContext(ctx),
 		FileID:             info.FileID,
@@ -143,11 +175,10 @@ func (s *Service) insertOutboxEvent(ctx context.Context, tx *dao.Store, info *Fi
 	}
 	payload, err := json.Marshal(e)
 	if err != nil {
-		return fmt.Errorf("marshal outbox event: %w", err)
+		return nil, fmt.Errorf("marshal attachment uploaded event: %w", err)
 	}
 
-	_, err = tx.InsertOutboxRecord(ctx, s.cfg.Kafka.Topic, info.FileID, payload)
-	return err
+	return payload, nil
 }
 
 func (s *Service) getPendingOriginal(ctx context.Context, userID int64, fileID uuid.UUID) (*FileInfo, error) {

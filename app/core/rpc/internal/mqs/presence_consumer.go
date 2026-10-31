@@ -11,7 +11,7 @@ import (
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
-// presenceEvent is the Kafka message for presence change (mirrors gateway svc.presenceEvent).
+// presenceEvent is the broker message for presence change (mirrors gateway svc.presenceEvent).
 type presenceEvent struct {
 	tracing.TraceContextFields
 
@@ -22,7 +22,7 @@ type presenceEvent struct {
 	GatewayNodeID string `json:"gateway_node_id"`
 }
 
-// PresenceConsumer consumes aim.presence.events and fans out to friends' gateway nodes.
+// PresenceConsumer consumes aim-presence-events and fans out to friends' gateway nodes.
 type PresenceConsumer struct {
 	ctx    context.Context
 	svcCtx *svc.ServiceContext
@@ -32,7 +32,7 @@ func NewPresenceConsumer(ctx context.Context, svcCtx *svc.ServiceContext) *Prese
 	return &PresenceConsumer{ctx: ctx, svcCtx: svcCtx}
 }
 
-// Consume implements the kq.ConsumeHandler interface.
+// Consume implements the rocketmq handler interface.
 func (c *PresenceConsumer) Consume(ctx context.Context, key string, value string) error {
 	logx.WithContext(ctx).Infof("consuming presence event, key=%s", key)
 
@@ -48,7 +48,7 @@ func (c *PresenceConsumer) Consume(ctx context.Context, key string, value string
 
 	ctx = tracing.ExtractTraceContext(ctx, event.TraceContextFields)
 
-	ctx, span := tracing.StartKafkaConsumerSpan(ctx, "core.kafka.presence.consume")
+	ctx, span := tracing.StartMQConsumerSpan(ctx, "core.rocketmq.presence.consume")
 	defer span.End()
 
 	logx.WithContext(ctx).Infof("presence event: user=%d status=%s node=%s",

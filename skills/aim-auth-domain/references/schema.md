@@ -34,7 +34,7 @@ CREATE INDEX idx_user_credentials_email ON user_credentials (email);
 
 ## 当前实现
 
-- schema：`app/auth/rpc/model/migrations/000_init.sql`、`001_require_user_name.sql`、`002_outbox_records.sql`
+- schema：`app/auth/rpc/model/migrations/000_init.sql`、`001_require_user_name.sql`、`002_outbox_records.sql`（历史）、`003_event_journal.sql`（事务消息回查依据，并删除 `outbox_records`）
 - ORM：`app/auth/rpc/model/orm/orm.go`
 - DAO：`app/auth/rpc/model/dao/dao.go`
 
@@ -43,7 +43,7 @@ CREATE INDEX idx_user_credentials_email ON user_credentials (email);
 - `CreateUser`：参数包含 `id`、`email`、`password_hash`、`name`，不要依赖数据库自增或默认值
 - `CreateBotCredential`
 - `GetUserByEmail`
-- outbox：`InsertOutboxRecord`、`FetchPendingOutboxRecords`、`MarkOutboxRecordsProcessed`、`DeleteOutboxRecordsBefore`
+- 事件可靠发布不再经 DAO：`service.UserRegistrar` 调 `rocketmq.Producer.SendTransactional`，事务内由 `app/shared/rocketmq` 写 `event_journal`
 
 ## 雪花 ID
 

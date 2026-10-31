@@ -10,7 +10,8 @@ services:
 
   aim-core:
     ports:
-      - "127.0.0.1:8081:8080"
+      # 8081 belongs to the RocketMQ gRPC proxy on the host.
+      - "127.0.0.1:8085:8080"
 
   postgres:
     ports:
@@ -20,14 +21,20 @@ services:
     ports:
       - "127.0.0.1:6379:6379"
 
-  kafka:
-    environment:
-      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,EXTERNAL://0.0.0.0:19092,CONTROLLER://0.0.0.0:9093
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,EXTERNAL://127.0.0.1:9092
-      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
+  # Host-side access for `go run` of a single service and for mqadmin:
+  # the proxy gRPC endpoint (8081) and the name server (9876).
+  rocketmq-proxy:
     ports:
-      - "127.0.0.1:9092:19092"
+      - "127.0.0.1:8081:8081"
+      - "127.0.0.1:8080:8080"
+
+  rocketmq-namesrv:
+    ports:
+      - "127.0.0.1:9876:9876"
+
+  rocketmq-broker:
+    ports:
+      - "127.0.0.1:10911:10911"
 
   etcd:
     ports:
@@ -63,7 +70,3 @@ services:
   redis-exporter:
     ports:
       - "127.0.0.1:9121:9121"
-
-  kafka-exporter:
-    ports:
-      - "127.0.0.1:9308:9308"

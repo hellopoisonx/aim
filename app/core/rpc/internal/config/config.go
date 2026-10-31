@@ -3,38 +3,33 @@ package config
 //lint:file-ignore SA5008 go-zero conf uses json tag options for defaults.
 
 import (
-	"github.com/zeromicro/go-queue/kq"
+	"github.com/hellopoisonx/aim/app/shared/rocketmq"
 
 	"github.com/zeromicro/go-zero/zrpc"
 )
 
 type Config struct {
 	zrpc.RpcServerConf
-	KqPusherConf                  KqPusherConf       `json:",optional"`
-	KqConsumerConf                kq.KqConf          `json:",optional"`
-	PresenceConsumerConf          kq.KqConf          `json:",optional"`
-	TypingConsumerConf            kq.KqConf          `json:",optional"`
-	ReadReceiptConsumerConf       kq.KqConf          `json:",optional"`
-	ConversationEventConsumerConf kq.KqConf          `json:",optional"`
-	AttachmentParsedConsumerConf  kq.KqConf          `json:",optional"`
-	FriendApplicationConsumerConf kq.KqConf          `json:",optional"`
-	LogicRpc                      zrpc.RpcClientConf `json:",optional"`
-	GatewayRpc                    GatewayRpcConf     `json:",optional"`
-	AttachmentRpc                 zrpc.RpcClientConf `json:",optional"`
-	CacheRedis                    RedisConf          `json:",optional"`
-	SnowflakeMachineID            int64              `json:",default=1"`
-	Presence                      PresenceConf       `json:",optional"`
+	TransferProducerConf          rocketmq.ProducerConf `json:",optional"`
+	DeliveryConsumerConf          rocketmq.ConsumerConf `json:",optional"`
+	PresenceConsumerConf          rocketmq.ConsumerConf `json:",optional"`
+	TypingConsumerConf            rocketmq.ConsumerConf `json:",optional"`
+	ReadReceiptConsumerConf       rocketmq.ConsumerConf `json:",optional"`
+	ConversationEventConsumerConf rocketmq.ConsumerConf `json:",optional"`
+	AttachmentParsedConsumerConf  rocketmq.ConsumerConf `json:",optional"`
+	FriendApplicationConsumerConf rocketmq.ConsumerConf `json:",optional"`
+	LogicRpc                      zrpc.RpcClientConf    `json:",optional"`
+	GatewayRpc                    GatewayRpcConf        `json:",optional"`
+	AttachmentRpc                 zrpc.RpcClientConf    `json:",optional"`
+	CacheRedis                    RedisConf             `json:",optional"`
+	SnowflakeMachineID            int64                 `json:",default=1"`
+	Presence                      PresenceConf          `json:",optional"`
 }
 
 type RedisConf struct {
 	Addr     string `json:",default=127.0.0.1:6379"`
 	Password string `json:",optional"`
 	DB       int    `json:",default=0"`
-}
-
-type KqPusherConf struct {
-	Brokers []string `json:",optional"`
-	Topic   string   `json:",optional"`
 }
 
 type GatewayRpcConf struct {

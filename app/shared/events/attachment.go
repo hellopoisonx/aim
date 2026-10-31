@@ -6,8 +6,8 @@ import (
 )
 
 const (
-	TopicAttachmentUploaded = "aim.attachment.uploaded"
-	TopicAttachmentParsed   = "aim.attachment.parsed"
+	TopicAttachmentUploaded = "aim-attachment-uploaded"
+	TopicAttachmentParsed   = "aim-attachment-parsed"
 )
 
 // AttachmentUploadedEvent is published after AIM confirms a client-direct

@@ -36,13 +36,9 @@ func main() {
 	ctx := svc.NewServiceContext(c)
 	defer ctx.Close()
 
-	// Start outbox poller if configured
-	if ctx.OutboxPoller != nil {
-		ctx.OutboxPoller.Start(context.Background())
-		proc.AddWrapUpListener(func() {
-			ctx.OutboxPoller.Stop()
-		})
-	}
+	// Connect the transactional conversation event producer.
+	ctx.StartEventProducer()
+	proc.AddWrapUpListener(ctx.StopEventProducer)
 
 	s := zrpc.MustNewServer(c.RpcServerConf, func(grpcServer *grpc.Server) {
 		registerLogicServers(grpcServer, ctx, c.Mode)
@@ -50,7 +46,7 @@ func main() {
 	s.AddUnaryInterceptors(rpcutil.UnaryErrorInterceptor())
 	defer s.Stop()
 
-	// Run Kafka consumer alongside the RPC server via ServiceGroup
+	// Run the RocketMQ consumers alongside the RPC server via ServiceGroup
 	group := service.NewServiceGroup()
 	group.Add(s)
 

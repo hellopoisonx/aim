@@ -59,7 +59,7 @@ message WsFrame {
 |---|---:|---|---|---|
 | `FRAME_TYPE_SEND_MESSAGE` | 1 | `SendMessagePayload` | 是 | 发送聊天消息，经 gateway 调 core `Transfer`。 |
 | `FRAME_TYPE_HEARTBEAT` | 2 | `HeartbeatPayload` | 是 | 心跳保活，续约 presence TTL。 |
-| `FRAME_TYPE_TYPING` | 3 | `TypingPayload` | 否 | 输入状态，best-effort 发布 Kafka 并本节点即时 fan-out。 |
+| `FRAME_TYPE_TYPING` | 3 | `TypingPayload` | 否 | 输入状态，best-effort 发布 RocketMQ 并本节点即时 fan-out。 |
 | `FRAME_TYPE_READ_RECEIPT` | 4 | `ReadReceiptPayload` | 是 | 已读回执，持久化已读游标并 fan-out。 |
 | `FRAME_TYPE_ACK` | 5 | `ClientAckPayload` | 否 | 客户端确认收到服务端推送。 |
 
@@ -143,7 +143,7 @@ message TypingPayload {
 }
 ```
 
-- gateway 收到后发布 `aim.typing.events`（key=`conversation_id`），并对本节点在线成员做即时 fan-out。
+- gateway 收到后发布 `aim-typing-events`（key=`conversation_id`），并对本节点在线成员做即时 fan-out。
 - core 的 TypingConsumer 会跨节点查询会话成员并推送 `PushTypingPayload`。
 - 当前该帧不返回 `SERVER_ACK`。
 - 客户端建议：输入中事件按约 `2.5s` 节流发送；收到 `PUSH_TYPING` 后约 `4s` 未再次收到则清除 UI 状态。
@@ -160,7 +160,7 @@ message ReadReceiptPayload {
 - `last_read_message_id` 表示当前用户在该会话内已读到的最大消息 ID。
 - gateway 收到后：
   1. 调 logic `UpdateReadReceipt` upsert 已读游标。
-  2. 发布 Kafka `aim.read_receipt.events`（key=`conversation_id`）。
+  2. 发布 RocketMQ `aim-read-receipt-events`（key=`conversation_id`）。
   3. 对本节点其他在线会话成员即时 fan-out `PUSH_READ_RECEIPT`。
   4. 返回 `SERVER_ACK`。
 - 成功 ACK 当前使用基础 `ServerAckPayload`，`code=0`，`status=ACK_STATUS_UNSPECIFIED`，客户端应按 `code=0` 视为成功。
@@ -361,7 +361,7 @@ message ServerAckPayload {
 | 会话不存在 | `ACK_STATUS_REJECTED` | `40400` | 刷新会话列表或提示不存在。 |
 | 业务冲突 | `ACK_STATUS_REJECTED` | `40900` | 展示业务错误，不自动重试。 |
 | 触发限流 | `ACK_STATUS_REJECTED` | `42900` | 按策略退避后再尝试。 |
-| core 不可用、deadline、Kafka 瞬时故障、未知基础设施错误 | `ACK_STATUS_RETRYABLE` | `50000` | 保留本地 pending 消息，用相同 `client_msg_id` 重试。 |
+| core 不可用、deadline、RocketMQ 瞬时故障、未知基础设施错误 | `ACK_STATUS_RETRYABLE` | `50000` | 保留本地 pending 消息，用相同 `client_msg_id` 重试。 |
 
 `FRAME_TYPE_READ_RECEIPT` 错误 ACK 也使用类似策略：参数/认证/权限/不存在/冲突/限流为 `REJECTED`，内部错误为 `RETRYABLE`。
 

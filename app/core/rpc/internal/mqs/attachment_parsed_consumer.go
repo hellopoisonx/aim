@@ -15,7 +15,7 @@ import (
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
-// AttachmentParsedConsumer 消费 aim.attachment.parsed 事件，
+// AttachmentParsedConsumer 消费 aim-attachment-parsed 事件，
 // 将附件解析结果（缩略图、尺寸、时长等）以系统消息形式推送至会话所有成员。
 type AttachmentParsedConsumer struct {
 	ctx    context.Context
@@ -26,7 +26,7 @@ func NewAttachmentParsedConsumer(ctx context.Context, svcCtx *svc.ServiceContext
 	return &AttachmentParsedConsumer{ctx: ctx, svcCtx: svcCtx}
 }
 
-// Consume 实现 kq.ConsumeHandler 接口。
+// Consume 实现 rocketmq 消息处理接口。
 func (c *AttachmentParsedConsumer) Consume(ctx context.Context, key string, value string) error {
 	var event struct {
 		tracing.TraceContextFields
@@ -54,7 +54,7 @@ func (c *AttachmentParsedConsumer) Consume(ctx context.Context, key string, valu
 
 	ctx = tracing.ExtractTraceContext(ctx, event.TraceContextFields)
 
-	ctx, span := tracing.StartKafkaConsumerSpan(ctx, "core.kafka.attachment_parsed.consume")
+	ctx, span := tracing.StartMQConsumerSpan(ctx, "core.rocketmq.attachment_parsed.consume")
 	defer span.End()
 
 	// 仅处理解析成功的事件；失败事件暂不推送，客户端可通过轮询 GetFile 感知。

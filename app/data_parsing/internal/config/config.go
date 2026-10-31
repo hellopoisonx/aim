@@ -3,7 +3,8 @@ package config
 //lint:file-ignore SA5008 go-zero conf uses json tag options for defaults.
 
 import (
-	"github.com/zeromicro/go-queue/kq"
+	"github.com/hellopoisonx/aim/app/shared/rocketmq"
+
 	"github.com/zeromicro/go-zero/core/prometheus"
 	"github.com/zeromicro/go-zero/core/trace"
 )
@@ -14,9 +15,9 @@ type Config struct {
 	Telemetry         trace.Config      `json:",optional"`
 	Postgres          PostgresConf
 	Seaweed           SeaweedConf
-	UploadedConsumer  kq.KqConf    `json:",optional"`
-	ParsedProducer    KqPusherConf `json:",optional"`
-	ThumbnailMaxWidth int          `json:",default=320"`
+	UploadedConsumer  rocketmq.ConsumerConf `json:",optional"`
+	ParsedProducer    rocketmq.ProducerConf `json:",optional"`
+	ThumbnailMaxWidth int                   `json:",default=320"`
 }
 
 type PostgresConf struct {
@@ -28,9 +29,4 @@ type SeaweedConf struct {
 	Bucket    string `json:",default=aim-attachments"`
 	AccessKey string `json:",optional"`
 	SecretKey string `json:",optional"`
-}
-
-type KqPusherConf struct {
-	Brokers []string `json:",optional"`
-	Topic   string   `json:",default=aim.attachment.parsed"`
 }

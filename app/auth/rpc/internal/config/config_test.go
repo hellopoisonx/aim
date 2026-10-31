@@ -31,21 +31,22 @@ func TestConfigLoadsAuthYAML(t *testing.T) {
 	require.Equal(t, "/metrics", c.Prometheus.Path)
 }
 
-func TestConfigKqPusherConf(t *testing.T) {
+func TestConfigUserEventProducerConf(t *testing.T) {
 	t.Parallel()
 
 	var c Config
 	require.NoError(t, conf.Load("../../etc/auth.yaml", &c))
-	require.True(t, c.IsKqPusherConfigured())
-	require.Equal(t, []string{"kafka:9092"}, c.KqPusherConf.Brokers)
-	require.Equal(t, "aim.user.events", c.KqPusherConf.Topic)
+	require.True(t, c.IsUserEventProducerConfigured())
+	require.Equal(t, "rocketmq-proxy:8081", c.UserEventProducerConf.Endpoint)
+	require.Equal(t, "aim-auth-producer", c.UserEventProducerConf.Group)
+	require.Equal(t, "aim-user-events", c.UserEventProducerConf.Topic)
 }
 
-func TestConfigKqPusherConf_NotConfigured(t *testing.T) {
+func TestConfigUserEventProducerConf_NotConfigured(t *testing.T) {
 	t.Parallel()
 
 	c := Config{}
-	require.False(t, c.IsKqPusherConfigured())
-	require.Empty(t, c.KqPusherConf.Brokers)
-	require.Empty(t, c.KqPusherConf.Topic)
+	require.False(t, c.IsUserEventProducerConfigured())
+	require.Empty(t, c.UserEventProducerConf.Endpoint)
+	require.Empty(t, c.UserEventProducerConf.Topic)
 }

@@ -14,8 +14,9 @@
 | core RPC | 8081 | 11081 |
 | PostgreSQL | 5432 | 8432 |
 | Redis | 6379 | 9379 |
-| Kafka | 9092 | 12092 |
-| Kafbat UI | 8000 | 11000 |
+| RocketMQ proxy (gRPC) | 8081 | 18081 |
+| RocketMQ name server | 9876 | 19876 |
+| RocketMQ dashboard | 8080 | 11000 |
 | SeaweedFS master | 9333 | 12333 |
 | SeaweedFS volume | 8088 | 11088 |
 | SeaweedFS filer | 8889 | 11889 |
@@ -44,7 +45,7 @@ docker compose -f bot_sdk/testdata/integration/docker-compose.yaml up -d
 export AIM_BOTSDK_INTEGRATION_GATEWAY=http://127.0.0.1:11888
 export AIM_BOTSDK_INTEGRATION_POSTGRES='postgres://user:password@127.0.0.1:8432/aim_logic?sslmode=disable'
 export AIM_BOTSDK_INTEGRATION_REDIS=127.0.0.1:9379
-export AIM_BOTSDK_INTEGRATION_KAFKA=127.0.0.1:12092
+export AIM_BOTSDK_INTEGRATION_ROCKETMQ=127.0.0.1:18081
 ```
 
 停止并清理数据：
@@ -55,4 +56,4 @@ docker compose -f bot_sdk/testdata/integration/docker-compose.yaml down -v
 
 ## 配置说明
 
-`etc/` 下的 YAML 是从主环境配置复制出的集成测试专用配置。由于 Compose 内部服务名仍保持 `postgres`、`redis`、`kafka`、`etcd`、`aim-auth` 等，服务内部连接无需端口偏移。仅附件服务的 `Seaweed.PublicEndpoint` 改为宿主机可访问的 `http://localhost:11333`。
+`etc/` 下的 YAML 是从主环境配置复制出的集成测试专用配置。由于 Compose 内部服务名仍保持 `postgres`、`redis`、`rocketmq-proxy`、`etcd`、`aim-auth` 等，服务内部连接无需端口偏移。仅附件服务的 `Seaweed.PublicEndpoint` 改为宿主机可访问的 `http://localhost:11333`。

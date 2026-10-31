@@ -5,7 +5,7 @@ import "github.com/hellopoisonx/aim/app/shared/tracing"
 // TopicFriendApplication carries friend-application state changes from the
 // gateway to core, which fans them out to every gateway node the target user is
 // connected to.
-const TopicFriendApplication = "aim.friend_application.events"
+const TopicFriendApplication = "aim-friend-application-events"
 
 // FriendApplicationEvent announces a new or updated friendship to the target
 // user's connected devices.

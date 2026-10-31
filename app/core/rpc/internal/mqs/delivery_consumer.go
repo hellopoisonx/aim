@@ -24,7 +24,7 @@ func NewDeliveryConsumer(ctx context.Context, svcCtx *svc.ServiceContext) *Deliv
 	return &DeliveryConsumer{ctx: ctx, svcCtx: svcCtx}
 }
 
-// Consume implements the kq.ConsumeHandler interface.
+// Consume implements the rocketmq handler interface.
 func (c *DeliveryConsumer) Consume(ctx context.Context, key string, value string) error {
 	logx.WithContext(ctx).Infof("consuming delivery event, key=%s", key)
 
@@ -40,7 +40,7 @@ func (c *DeliveryConsumer) Consume(ctx context.Context, key string, value string
 
 	ctx = tracing.ExtractTraceContext(ctx, event.TraceContextFields)
 
-	ctx, span := tracing.StartKafkaConsumerSpan(ctx, "core.kafka.delivery.consume")
+	ctx, span := tracing.StartMQConsumerSpan(ctx, "core.rocketmq.delivery.consume")
 	defer span.End()
 
 	logx.WithContext(ctx).Infof("delivery event: msg_id=%d sender=%d conv=%d type=%s",
@@ -61,7 +61,7 @@ func (c *DeliveryConsumer) Consume(ctx context.Context, key string, value string
 	for _, targetUserID := range targetUserIDs {
 		nodeIDs := c.userGatewayNodes(ctx, targetUserID)
 		if len(nodeIDs) == 0 {
-			// User offline on every gateway: skip — Kafka offset advances and downstream
+			// User offline on every gateway: skip — the message is acknowledged and downstream
 			// catch-up should rely on history fetch.
 			logx.WithContext(ctx).Debugf("no gateway nodes for user %d, skipping message push", targetUserID)
 			continue

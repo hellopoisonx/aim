@@ -29,7 +29,7 @@ import (
 const botWebhookEventType = "message.created"
 
 // botWebhookHTTPTimeout is the per-attempt HTTP timeout. Combined with
-// botWebhookMaxRetries this caps the worst-case time spent on one Kafka
+// botWebhookMaxRetries this caps the worst-case time spent on one broker
 // message at roughly maxRetries * (timeout + backoff_max).
 const botWebhookHTTPTimeout = 5 * time.Second
 
@@ -79,7 +79,7 @@ type webhookJob struct {
 }
 
 // botWebhookQueueSize and botWebhookWorkers bound the asynchronous fan-out.
-// Delivery no longer blocks the Kafka partition: Consume enqueues and returns,
+// Delivery no longer blocks the consumer loop: Consume enqueues and returns,
 // and the workers absorb per-bot retry backoff.
 const (
 	botWebhookQueueSize = 256
@@ -166,7 +166,7 @@ func (c *BotWebhookConsumer) drain() {
 	}
 }
 
-// Consume implements the kq.ConsumeHandler interface.
+// Consume implements the rocketmq handler interface.
 func (c *BotWebhookConsumer) Consume(ctx context.Context, _ string, value string) error {
 	if c.store == nil {
 		// No DB means nothing to look up; skip cleanly so the consumer
@@ -182,7 +182,7 @@ func (c *BotWebhookConsumer) Consume(ctx context.Context, _ string, value string
 	}
 
 	ctx = tracing.ExtractTraceContext(ctx, event.TraceContextFields)
-	ctx, span := tracing.StartKafkaConsumerSpan(ctx, "logic.kafka.bot_webhook.consume")
+	ctx, span := tracing.StartMQConsumerSpan(ctx, "logic.rocketmq.bot_webhook.consume")
 	defer span.End()
 
 	hooks, err := c.store.ListActiveBotWebhooksForConversation(ctx, event.ConversationID)

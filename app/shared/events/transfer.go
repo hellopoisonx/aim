@@ -1,4 +1,4 @@
-// Package events defines the Kafka payloads exchanged between AIM services.
+// Package events defines the broker payloads exchanged between AIM services.
 //
 // One struct per topic keeps producers and consumers on the same contract:
 // a service that publishes untyped maps or redeclares a private copy of the

@@ -11,7 +11,7 @@ import (
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
-// readReceiptEvent mirrors the Kafka payload produced by the gateway when a
+// readReceiptEvent mirrors the payload produced by the gateway when a
 // member advances their read cursor for a conversation.
 type readReceiptEvent struct {
 	tracing.TraceContextFields
@@ -23,7 +23,7 @@ type readReceiptEvent struct {
 	GatewayNodeID     string `json:"gateway_node_id"`
 }
 
-// ReadReceiptConsumer consumes aim.read_receipt.events and fans out to
+// ReadReceiptConsumer consumes aim-read-receipt-events and fans out to
 // conversation members' gateway nodes via the GatewayService.PushReadReceipt RPC.
 type ReadReceiptConsumer struct {
 	ctx    context.Context
@@ -34,7 +34,7 @@ func NewReadReceiptConsumer(ctx context.Context, svcCtx *svc.ServiceContext) *Re
 	return &ReadReceiptConsumer{ctx: ctx, svcCtx: svcCtx}
 }
 
-// Consume implements the kq.ConsumeHandler interface.
+// Consume implements the rocketmq handler interface.
 func (c *ReadReceiptConsumer) Consume(ctx context.Context, key string, value string) error {
 	logx.WithContext(ctx).Infof("consuming read receipt event, key=%s", key)
 
@@ -46,7 +46,7 @@ func (c *ReadReceiptConsumer) Consume(ctx context.Context, key string, value str
 
 	ctx = tracing.ExtractTraceContext(ctx, event.TraceContextFields)
 
-	ctx, span := tracing.StartKafkaConsumerSpan(ctx, "core.kafka.read_receipt.consume")
+	ctx, span := tracing.StartMQConsumerSpan(ctx, "core.rocketmq.read_receipt.consume")
 	defer span.End()
 
 	logx.WithContext(ctx).Infof("read receipt event: from=%d conv=%d last_msg=%d",

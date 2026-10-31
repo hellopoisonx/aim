@@ -35,7 +35,7 @@ const (
 //   - 检查发送者是否被禁言或拉黑
 //   - 配额检查（滑动窗口限流）
 //   - 消息去重（基于 client_msg_id）
-//   - 发布消息到 Kafka
+//   - 发布消息到 RocketMQ
 //
 // 返回：core.Transfer 返回 gRPC 状态码，网关负责映射到 WebSocket ACK 状态码
 type TransferServiceClient interface {
@@ -72,7 +72,7 @@ func (c *transferServiceClient) Transfer(ctx context.Context, in *TransferReq, o
 //   - 检查发送者是否被禁言或拉黑
 //   - 配额检查（滑动窗口限流）
 //   - 消息去重（基于 client_msg_id）
-//   - 发布消息到 Kafka
+//   - 发布消息到 RocketMQ
 //
 // 返回：core.Transfer 返回 gRPC 状态码，网关负责映射到 WebSocket ACK 状态码
 type TransferServiceServer interface {

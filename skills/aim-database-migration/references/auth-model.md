@@ -27,7 +27,7 @@ model/
 
 ## DAO 规则
 
-- DAO 方法按聚合命名：`CreateUser`、`GetUserByEmail`、`InsertOutboxRecord` 等。
+- DAO 方法按聚合命名：`CreateUser`、`GetUserByEmail` 等；`event_journal` 由 `app/shared/rocketmq` 在事务内写入，不再有 outbox DAO。
 - 业务层不得直接使用 `*gorm.DB` 或手写 SQL。
 - 事务统一用 `(*dao.Store).WithTx(ctx, func(tx *dao.Store) error { ... })`。
 - 唯一冲突/记录不存在通过 `dao.ErrDuplicateKey` / `dao.ErrNotFound` 暴露。

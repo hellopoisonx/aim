@@ -13,12 +13,11 @@ import (
 	"github.com/hellopoisonx/aim/app/core/rpc/internal/rpc"
 	"github.com/hellopoisonx/aim/app/core/rpc/internal/svc"
 	logicpb "github.com/hellopoisonx/aim/app/logic/rpc/pb"
+	"github.com/hellopoisonx/aim/app/shared/rocketmq"
 	"github.com/hellopoisonx/aim/app/shared/tracing"
 	gwpb "github.com/hellopoisonx/aim/shared/proto/gateway/pb"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/require"
-	"github.com/zeromicro/go-queue/kq"
-	"github.com/zeromicro/go-zero/core/service"
 	"go.opentelemetry.io/otel"
 	tracesdk "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
@@ -447,18 +446,7 @@ func TestConsumers_ReturnsQueueService(t *testing.T) {
 	svcCtx := &svc.ServiceContext{
 		GatewayClient: fakeGw,
 		Config: config.Config{
-			KqConsumerConf: kq.KqConf{
-				ServiceConf: service.ServiceConf{
-					Name: "test-consumer",
-					Mode: "dev",
-				},
-				Brokers:    []string{"127.0.0.1:9092"},
-				Group:      "test-group",
-				Topic:      "test-topic",
-				Offset:     "first",
-				Consumers:  1,
-				Processors: 1,
-			},
+			DeliveryConsumerConf: rocketmq.ConsumerConf{EndpointConf: rocketmq.EndpointConf{Endpoint: "127.0.0.1:8081"}, Group: "test-group", Topic: "test-topic", Concurrency: 1},
 		},
 	}
 

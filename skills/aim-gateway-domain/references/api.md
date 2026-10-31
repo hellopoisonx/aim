@@ -3,7 +3,7 @@
 ## 外部接口边界
 
 - Gateway 是 AIM 唯一面向客户端/公网的 REST API 与 WebSocket 入口；所有新增客户端 REST/WS 协议必须先落到 `app/gateway/api/gateway.api`。
-- 其他模块不得新增对外 REST/WS 端点；若需要访问 auth/core/logic/attachment/data_parsing 能力，由 gateway 通过内部 gRPC/Kafka 编排，并负责鉴权、错误清洗与响应包装。
+- 其他模块不得新增对外 REST/WS 端点；若需要访问 auth/core/logic/attachment/data_parsing 能力，由 gateway 通过内部 gRPC/RocketMQ 编排，并负责鉴权、错误清洗与响应包装。
 
 ## REST API - `/api`
 
@@ -148,7 +148,7 @@ goctl api go -api app/gateway/api/gateway.api -dir app/gateway/api --style go_ze
 - 从 `ws.IdentityFromContext` 提取当前用户 ID，调用 `LogicFriendshipClient.ListFriends` 获取好友列表
 - 通过 Redis pipeline 批量 SCARD `aim:presence:{friend_id}` 得到各好友设备数，`>0` 为 `online` 否则 `offline`
 - 返回 `[{user_id, status}]` 列表，用于客户端 WS 连接/重连后填充初始在线状态
-- 不在 Redis 中记录 `updated_at`，`PresenceItem.updated_at` 字段保留为 0；实时时间戳由 Kafka 事件侧维护
+- 不在 Redis 中记录 `updated_at`，`PresenceItem.updated_at` 字段保留为 0；实时时间戳由 RocketMQ 事件侧维护
 
 ### 附件代理接口 - `/api/attachments`
 
@@ -181,7 +181,7 @@ option go_package = "github.com/hellopoisonx/aim/shared/proto/gateway;pb";
 // Gateway 对内暴露 gRPC 接口，供 aim-core 的 Delivery Consumer 调用。
 service GatewayService {
   // PushMessage 推送聊天消息到目标用户的 WebSocket 连接。
-  // 调用方：aim-core/Delivery Consumer 从 Kafka 消费消息后，查找目标用户所在网关节点，调用此方法投递。
+  // 调用方：aim-core/Delivery Consumer 从 RocketMQ 消费消息后，查找目标用户所在网关节点，调用此方法投递。
   rpc PushMessage(PushMessageReq) returns (PushMessageResp);
 
   // PushPresence 推送用户在线状态变更通知给目标用户。

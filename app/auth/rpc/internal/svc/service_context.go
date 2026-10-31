@@ -4,29 +4,53 @@ import (
 	"context"
 	"time"
 
-	sharedkafka "github.com/hellopoisonx/aim/app/shared/kafka"
-
 	"github.com/hellopoisonx/aim/app/auth/rpc/internal/config"
 	"github.com/hellopoisonx/aim/app/auth/rpc/internal/service"
 	"github.com/hellopoisonx/aim/app/auth/rpc/model/dao"
 	"github.com/hellopoisonx/aim/app/shared/gormdb"
-	"github.com/hellopoisonx/aim/app/shared/outbox"
+	"github.com/hellopoisonx/aim/app/shared/rocketmq"
 	"github.com/hellopoisonx/aim/app/shared/tools"
 
 	"github.com/redis/go-redis/v9"
+	"github.com/zeromicro/go-zero/core/logx"
 )
 
 type ServiceContext struct {
-	Config       config.Config
-	DAO          *dao.Store
-	Users        service.UserStore
-	Sessions     service.SessionStore
-	TokenIssuer  service.TokenIssuer
-	IDGen        *tools.Snowflake
-	OutboxPoller *outbox.Poller
-	// Registrar creates users with the outbox event in one transaction; nil
-	// when outbox publishing is not configured.
+	Config      config.Config
+	DAO         *dao.Store
+	Users       service.UserStore
+	Sessions    service.SessionStore
+	TokenIssuer service.TokenIssuer
+	IDGen       *tools.Snowflake
+	// EventProducer publishes user.created as a transactional message. Nil when
+	// RocketMQ is not configured.
+	EventProducer *rocketmq.Producer
+	// Registrar creates users with the user.created event published atomically;
+	// nil when transactional publishing is not configured.
 	Registrar service.UserRegistrarStore
+}
+
+// authProducerGroup is the broker-visible producer group of auth.
+const authProducerGroup = "aim-auth-producer"
+
+// StartEventProducer connects the transactional user event producer.
+func (s *ServiceContext) StartEventProducer() {
+	if s == nil || s.EventProducer == nil {
+		return
+	}
+	if err := s.EventProducer.Start(); err != nil {
+		logx.WithContext(context.Background()).Errorf("failed to start rocketmq user event producer: %v", err)
+	}
+}
+
+// StopEventProducer flushes and disconnects the transactional producer.
+func (s *ServiceContext) StopEventProducer() {
+	if s == nil || s.EventProducer == nil {
+		return
+	}
+	if err := s.EventProducer.GracefulStop(); err != nil {
+		logx.WithContext(context.Background()).Errorf("failed to stop rocketmq user event producer: %v", err)
+	}
 }
 
 func NewServiceContext(c config.Config) *ServiceContext {
@@ -54,23 +78,22 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		IDGen:       idGen,
 	}
 
-	// Initialize outbox Poller if Kafka pusher is configured
-	if c.IsKqPusherConfigured() {
-		outboxStore := outbox.NewGORMStore(store.DB())
-		publisher := newKafkaPublisher(c.KqPusherConf.Brokers, c.KqPusherConf.Topic)
-		svcCtx.OutboxPoller = outbox.NewPoller(outboxStore, publisher, outbox.Config{})
-		svcCtx.Registrar = service.NewUserRegistrar(store, idGen, c.KqPusherConf.Topic, svcCtx.OutboxPoller.Wake)
+	// Transactional user.created publishing, when configured.
+	if c.IsUserEventProducerConfigured() {
+		producer, err := rocketmq.NewProducer(
+			c.UserEventProducerConf.EndpointConf,
+			authProducerGroup,
+			c.UserEventProducerConf.Topic,
+		)
+		if err != nil {
+			panic(err)
+		}
+		producer.WithJournalChecker(store.DB())
+		svcCtx.EventProducer = producer
+		svcCtx.Registrar = service.NewUserRegistrar(store.DB(), idGen, producer, c.UserEventProducerConf.Topic)
 	}
 
 	return svcCtx
-}
-
-// newKafkaPublisher creates an outbox.PublisherFunc using kq.Pusher.
-func newKafkaPublisher(brokers []string, topic string) outbox.PublisherFunc {
-	pusher := sharedkafka.NewPusher(brokers, topic)
-	return func(ctx context.Context, _, key string, payload []byte) error {
-		return pusher.PushWithKey(ctx, key, string(payload))
-	}
 }
 
 // NewServiceContextWithStores allows tests to inject fake stores.

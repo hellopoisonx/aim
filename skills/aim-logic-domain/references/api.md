@@ -9,7 +9,7 @@ Proto 定义：`app/logic/rpc/logic.proto`，生成的 pb 代码在 `app/logic/r
 ```protobuf
 service PermissionService {
   // CheckMessagePermission checks whether a sender can publish into a conversation.
-  // aim-core calls this before accepting a message into Kafka.
+  // aim-core calls this before accepting a message into the broker.
   rpc CheckMessagePermission(CheckMessagePermissionReq) returns (CheckMessagePermissionResp);
 }
 
@@ -296,7 +296,7 @@ message ListFriendsResp {
 
 ## 群管理 RPC
 
-ConversationService 新增 6 个群管理 RPC，用于群聊成员管理和群信息变更。所有群变更操作遵循统一模式：事务内 DB 操作 + 计算 target_user_ids → 事务提交 → 生产 Kafka 事件到 `aim.conversation.events`。
+ConversationService 新增 6 个群管理 RPC，用于群聊成员管理和群信息变更。所有群变更操作遵循统一模式：先按当前成员计算 target_user_ids 并发送 half message → 同一本地事务内完成 DB 操作与 `event_journal` 写入 → 提交后 commit 事务消息到 `aim-conversation-events`。
 
 ### AddGroupMembers
 
@@ -317,7 +317,7 @@ message AddGroupMembersResp {
 
 - 请求：conversation_id、operator_id（操作者）、operator_name（操作者昵称）、member_ids（新增成员列表）。
 - 响应：更新后的 `ConversationResponse`。
-- 行为：事务内检查 operator 是群成员 → 插入新成员（role=member）→ 插入 system message（event=member_joined）→ 提交 → 生产 Kafka 事件。
+- 行为：事务内检查 operator 是群成员 → 插入新成员（role=member）→ 插入 system message（event=member_joined）→ 提交 → commit 事务消息。
 - 错误码：40000（conversation_id 必须正数、member_ids 不能为空）、40400（会话不存在）、40300（operator 非成员）、50000（基础设施错误）。
 
 ### RemoveGroupMembers
@@ -335,7 +335,7 @@ message RemoveGroupMembersReq {
 message RemoveGroupMembersResp {}
 ```
 
-- 行为：事务内检查 operator 是群成员 → 删除成员 → 插入 system message（event=member_removed）→ 提交 → 生产 Kafka 事件。target_user_ids 包含将被移除的成员。
+- 行为：事务内检查 operator 是群成员 → 删除成员 → 插入 system message（event=member_removed）→ 提交 → commit 事务消息。target_user_ids 取删除前的全员。
 - 错误码：40000（conversation_id 必须正数、member_ids 不能为空）、40400（会话不存在）、40300（operator 非成员）、50000。
 
 ### LeaveGroup
@@ -352,7 +352,7 @@ message LeaveGroupReq {
 message LeaveGroupResp {}
 ```
 
-- 行为：事务内检查 user 是群成员 → 删除成员 → 插入 system message（event=member_left）→ 提交 → 生产 Kafka 事件。target_user_ids 包含退出者。
+- 行为：事务内检查 user 是群成员 → 删除成员 → 插入 system message（event=member_left）→ 提交 → commit 事务消息。target_user_ids 取退出前的全员。
 - 错误码：40000、40400、40300、50000。
 
 ### DismissGroup
@@ -368,7 +368,7 @@ message DismissGroupReq {
 message DismissGroupResp {}
 ```
 
-- 行为：事务内检查 operator 是群成员 → 查询全员 → 设置 is_active=false → 插入 system message（event=group_dismissed）→ 提交 → 生产 Kafka 事件。
+- 行为：事务内检查 operator 是群成员 → 查询全员 → 设置 is_active=false → 插入 system message（event=group_dismissed）→ 提交 → commit 事务消息。
 - 错误码：40000、40400、40300、50000。
 
 ### UpdateGroupInfo
@@ -389,7 +389,7 @@ message UpdateGroupInfoResp {
 }
 ```
 
-- 行为：事务内检查 operator 是群成员 → 更新 name/avatar（至少提供一个）→ 插入 system message（event=group_renamed / group_avatar_changed）→ 提交 → 生产 Kafka 事件。
+- 行为：事务内检查 operator 是群成员 → 更新 name/avatar（至少提供一个）→ 插入 system message（event=group_renamed / group_avatar_changed）→ 提交 → commit 事务消息。
 - 错误码：40000（至少提供 name 或 avatar）、40400、40300、50000。
 
 ### GetConversationMembersDetail
@@ -432,9 +432,9 @@ message GetConversationMembersDetailResp {
 }
 ```
 
-### Kafka 事件设计
+### 事件设计（RocketMQ 事务消息）
 
-logic 事务提交后生产事件到 `aim.conversation.events`（best-effort，失败仅日志告警）：
+logic 事务提交后生产事件到 `aim-conversation-events`（best-effort，失败仅日志告警）：
 
 | 字段 | 说明 |
 |------|------|

@@ -193,10 +193,6 @@ func (f *ConversationStore) InsertMessage(ctx context.Context, message orm.Messa
 	return nil
 }
 
-func (f *ConversationStore) InsertOutboxRecord(context.Context, string, string, []byte) (int64, error) {
-	return 0, nil
-}
-
 func (f *ConversationStore) UpsertConversationReadState(_ context.Context, conversationID, userID, lastReadMessageID int64) (orm.ConversationReadState, error) {
 	if f.UpsertReadErr != nil {
 		return orm.ConversationReadState{}, f.UpsertReadErr

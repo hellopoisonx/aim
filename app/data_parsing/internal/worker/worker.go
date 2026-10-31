@@ -20,9 +20,9 @@ import (
 	"github.com/hellopoisonx/aim/app/shared/attachmentstore/orm"
 	"github.com/hellopoisonx/aim/app/shared/events"
 	"github.com/hellopoisonx/aim/app/shared/gormdb"
+	"github.com/hellopoisonx/aim/app/shared/rocketmq"
 	"github.com/hellopoisonx/aim/app/shared/s3signer"
 	"github.com/hellopoisonx/aim/app/shared/tracing"
-	"github.com/zeromicro/go-queue/kq"
 	"github.com/zeromicro/go-zero/core/logx"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -30,11 +30,15 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
+// parsedProducerGroup is the broker-visible producer group of the parsing
+// worker.
+const parsedProducerGroup = "aim-data-parsing-producer"
+
 type Worker struct {
-	cfg    config.Config
-	store  *dao.Store
-	parser parser.Parser
-	pusher *kq.Pusher
+	cfg      config.Config
+	store    *dao.Store
+	parser   parser.Parser
+	producer *rocketmq.Producer
 }
 
 func New(ctx context.Context, cfg config.Config) (*Worker, error) {
@@ -46,14 +50,26 @@ func New(ctx context.Context, cfg config.Config) (*Worker, error) {
 		}
 		store = dao.New(db)
 	}
-	var pusher *kq.Pusher
-	if len(cfg.ParsedProducer.Brokers) > 0 && cfg.ParsedProducer.Topic != "" {
-		pusher = kq.NewPusher(cfg.ParsedProducer.Brokers, cfg.ParsedProducer.Topic)
+	var producer *rocketmq.Producer
+	if cfg.ParsedProducer.IsConfigured() {
+		created, err := rocketmq.NewProducer(cfg.ParsedProducer.EndpointConf, parsedProducerGroup, cfg.ParsedProducer.Topic)
+		if err != nil {
+			return nil, err
+		}
+		if err := created.Start(); err != nil {
+			return nil, err
+		}
+		producer = created
 	}
-	return &Worker{cfg: cfg, store: store, parser: parser.DefaultParser{}, pusher: pusher}, nil
+	return &Worker{cfg: cfg, store: store, parser: parser.DefaultParser{}, producer: producer}, nil
 }
 
 func (w *Worker) Close() {
+	if w.producer != nil {
+		if err := w.producer.GracefulStop(); err != nil {
+			logx.WithContext(context.Background()).Errorf("failed to stop rocketmq parsed producer: %v", err)
+		}
+	}
 	if w.store == nil {
 		return
 	}
@@ -74,10 +90,10 @@ func (w *Worker) Consume(ctx context.Context, key string, value string) (err err
 		return nil
 	}
 	ctx = tracing.ExtractTraceContext(ctx, event.TraceContextFields)
-	ctx, span := tracing.StartKafkaConsumerSpan(
+	ctx, span := tracing.StartMQConsumerSpan(
 		ctx,
-		"data_parsing.kafka.attachment_uploaded.consume",
-		attribute.String("messaging.kafka.message_key", key),
+		"data_parsing.rocketmq.attachment_uploaded.consume",
+		attribute.String("messaging.rocketmq.message_key", key),
 		attribute.String("attachment.file_id", event.FileID),
 	)
 	defer func() {
@@ -163,16 +179,16 @@ func (w *Worker) fail(ctx context.Context, event events.AttachmentUploadedEvent,
 	}
 	_ = w.publish(ctx, events.AttachmentParsedEvent{TraceContextFields: tracing.InjectTraceContext(ctx), FileID: event.FileID, Kind: event.Kind, ParseStatus: attachment.ParseStatusFailed, Error: cause.Error(), ParsedAt: time.Now().UnixMilli()})
 	// The failure is already recorded on the attachment and announced downstream;
-	// returning nil lets Kafka commit the offset instead of replaying the same
+	// returning nil acknowledges the message instead of replaying the same
 	// unparsable object forever.
 	return nil
 }
 
 func (w *Worker) publish(ctx context.Context, event events.AttachmentParsedEvent) error {
-	if w.pusher == nil {
+	if w.producer == nil {
 		return nil
 	}
-	ctx, span := tracing.StartKafkaProducerSpan(ctx, "data_parsing.kafka.attachment_parsed.publish", attribute.String("attachment.file_id", event.FileID))
+	ctx, span := tracing.StartMQProducerSpan(ctx, "data_parsing.rocketmq.attachment_parsed.publish", attribute.String("attachment.file_id", event.FileID))
 	defer span.End()
 
 	event.TraceContextFields = tracing.InjectTraceContext(ctx)
@@ -181,7 +197,11 @@ func (w *Worker) publish(ctx context.Context, event events.AttachmentParsedEvent
 		tracing.RecordSpanError(span, err)
 		return err
 	}
-	err = w.pusher.PushWithKey(ctx, event.FileID, string(b))
+	err = w.producer.Publish(ctx, rocketmq.Message{
+		Topic: w.cfg.ParsedProducer.Topic,
+		Key:   event.FileID,
+		Body:  b,
+	})
 	if err != nil {
 		tracing.RecordSpanError(span, err)
 	}

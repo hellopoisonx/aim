@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	sharedkafka "github.com/hellopoisonx/aim/app/shared/kafka"
 	"github.com/redis/go-redis/v9"
 
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/config"
@@ -14,10 +13,11 @@ import (
 	"github.com/hellopoisonx/aim/app/logic/rpc/model/orm"
 	sharedcache "github.com/hellopoisonx/aim/app/shared/cache"
 	"github.com/hellopoisonx/aim/app/shared/gormdb"
-	"github.com/hellopoisonx/aim/app/shared/outbox"
+	"github.com/hellopoisonx/aim/app/shared/rocketmq"
 	"github.com/hellopoisonx/aim/app/shared/tools"
 
 	"github.com/zeromicro/go-zero/core/logx"
+	"gorm.io/gorm"
 )
 
 type FriendshipDAO interface {
@@ -48,7 +48,9 @@ type ServiceContext struct {
 	UserTypeCache       *sharedcache.TypedCache[string]
 	FriendshipCache     *sharedcache.TypedCache[[]orm.Friendship]
 	BotTokenCache       *sharedcache.TypedCache[dao.BotTokenWithUser]
-	OutboxPoller        *outbox.Poller
+	// EventProducer publishes conversation events as transactional messages.
+	// Nil when RocketMQ is not configured.
+	EventProducer *rocketmq.Producer
 }
 
 func NewServiceContext(c config.Config) *ServiceContext {
@@ -96,23 +98,33 @@ func NewServiceContext(c config.Config) *ServiceContext {
 			svcCtx.FriendTagService = service.NewFriendshipTagService(store, snowflake)
 			svcCtx.SearchService = service.NewSearchService(store)
 
-			// Build ConversationService with optional outbox support
+			// Build ConversationService with optional transactional event publishing.
 			var convOpts []service.ConversationServiceOption
 
-			hasProducer := len(c.ConversationEventProducerConf.Brokers) > 0 && c.ConversationEventProducerConf.Topic != ""
-			if hasProducer {
-				outboxStore := outbox.NewGORMStore(store.DB())
-				publisher := newConversationEventPublisher(c.ConversationEventProducerConf.Brokers, c.ConversationEventProducerConf.Topic)
-				svcCtx.OutboxPoller = outbox.NewPoller(outboxStore, publisher, outbox.Config{})
-				convOpts = append(convOpts, service.WithOutbox(
+			if c.ConversationEventProducerConf.IsConfigured() {
+				producer, err := rocketmq.NewProducer(
+					c.ConversationEventProducerConf.EndpointConf,
+					logicProducerGroup,
 					c.ConversationEventProducerConf.Topic,
-					func() { svcCtx.OutboxPoller.Wake() },
-				))
-				logx.WithContext(context.Background()).Infof("conversation event outbox initialized: topic=%s", c.ConversationEventProducerConf.Topic)
+				)
+				if err != nil {
+					logx.Must(fmt.Errorf("logic service: conversation event producer: %w", err))
+				}
+				producer.WithJournalChecker(store.DB())
+				svcCtx.EventProducer = producer
+				convOpts = append(convOpts, service.WithTransactionalEvents(c.ConversationEventProducerConf.Topic))
+				logx.WithContext(context.Background()).Infof(
+					"conversation events: transactional topic=%s endpoint=%s",
+					c.ConversationEventProducerConf.Topic, c.ConversationEventProducerConf.Endpoint,
+				)
 			}
 
 			convOpts = append(convOpts, service.WithConversationCaches(svcCtx.ConvCache, svcCtx.ConvMembersCache))
-			svcCtx.ConversationService = service.NewConversationService(store, snowflake, conversationTxRunner{store: store}, convOpts...)
+			svcCtx.ConversationService = service.NewConversationService(
+				store, snowflake,
+				conversationTxRunner{store: store, producer: svcCtx.EventProducer},
+				convOpts...,
+			)
 
 			if limit != service.DefaultTemporaryConversationMessageLimit {
 				logx.WithContext(context.Background()).Infof("Postgres connected, using DatabasePermissionChecker (temporary conversation message limit=%d), UserInfoService and ConversationService", limit)
@@ -125,14 +137,24 @@ func NewServiceContext(c config.Config) *ServiceContext {
 }
 
 // conversationTxRunner adapts *dao.Store.WithTx to the service-level
-// ConversationStore callback contract.
+// ConversationStore callback contract. With a producer installed it also
+// publishes the conversation event as a RocketMQ transactional message.
 type conversationTxRunner struct {
-	store *dao.Store
+	store    *dao.Store
+	producer *rocketmq.Producer
 }
 
 func (r conversationTxRunner) WithTx(ctx context.Context, fn func(tx service.ConversationStore) error) error {
 	return r.store.WithTx(ctx, func(tx *dao.Store) error {
 		return fn(tx)
+	})
+}
+
+// WithEventTx commits the business rows and the event journal in one database
+// transaction and resolves the half message accordingly.
+func (r conversationTxRunner) WithEventTx(ctx context.Context, message rocketmq.TransactionalMessage, fn func(tx service.ConversationStore) error) error {
+	return r.producer.SendTransactional(ctx, r.store.DB(), message, func(ctx context.Context, tx *gorm.DB) error {
+		return fn(dao.New(tx))
 	})
 }
 
@@ -148,11 +170,26 @@ func (r botTxRunner) WithTx(ctx context.Context, fn func(tx service.BotManagemen
 	})
 }
 
-// newConversationEventPublisher creates an outbox.PublisherFunc using kq.Pusher.
-func newConversationEventPublisher(brokers []string, topic string) outbox.PublisherFunc {
-	pusher := sharedkafka.NewPusher(brokers, topic)
-	return func(ctx context.Context, _, key string, payload []byte) error {
-		return pusher.PushWithKey(ctx, key, string(payload))
+// logicProducerGroup is the broker-visible producer group of logic.
+const logicProducerGroup = "aim-logic-producer"
+
+// StartEventProducer connects the conversation event producer.
+func (s *ServiceContext) StartEventProducer() {
+	if s == nil || s.EventProducer == nil {
+		return
+	}
+	if err := s.EventProducer.Start(); err != nil {
+		logx.WithContext(context.Background()).Errorf("failed to start rocketmq event producer: %v", err)
+	}
+}
+
+// StopEventProducer flushes and disconnects the conversation event producer.
+func (s *ServiceContext) StopEventProducer() {
+	if s == nil || s.EventProducer == nil {
+		return
+	}
+	if err := s.EventProducer.GracefulStop(); err != nil {
+		logx.WithContext(context.Background()).Errorf("failed to stop rocketmq event producer: %v", err)
 	}
 }
 

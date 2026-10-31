@@ -53,7 +53,7 @@ Proto 定义：`shared/proto/gateway/gateway.proto`，生成的 pb 代码在 `sh
 
 ## PermissionService（调用方）
 
-aim-core 的 Transfer Service 调用 `app/logic/rpc/logic.proto` 定义的 PermissionService，查询消息进入 Kafka 前所需的业务上下文。
+aim-core 的 Transfer Service 调用 `app/logic/rpc/logic.proto` 定义的 PermissionService，查询消息进入 broker 前所需的业务上下文。
 
 | RPC | 用途 |
 | --- | --- |

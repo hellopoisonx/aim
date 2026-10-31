@@ -2,7 +2,7 @@
  * AIM Docker Data Stores Extension
  *
  * Project-local pi extension for inspecting and interacting with the Docker
- * Compose Kafka, Redis, and PostgreSQL services used by AIM.
+ * Compose RocketMQ, Redis, and PostgreSQL services used by AIM.
  */
 
 import { mkdtemp, writeFile } from "node:fs/promises";
@@ -29,9 +29,9 @@ const DEFAULT_TIMEOUT_MS = 30_000;
 const SHORT_TIMEOUT_MS = 8_000;
 
 const SERVICES = {
-	kafka: {
-		service: "kafka",
-		container: "aim-kafka",
+	rocketmq: {
+		service: "rocketmq-broker",
+		container: "aim-rocketmq-broker",
 	},
 	redis: {
 		service: "redis",
@@ -162,8 +162,8 @@ async function probeService(pi: ExtensionAPI, ctx: ExtensionContext, store: Stor
 
 function healthCommand(store: StoreName): string[] {
 	switch (store) {
-		case "kafka":
-			return ["/opt/kafka/bin/kafka-broker-api-versions.sh", "--bootstrap-server", "localhost:9092"];
+		case "rocketmq":
+			return ["sh", "mqadmin", "clusterList", "-n", "rocketmq-namesrv:9876"];
 		case "redis":
 			return ["redis-cli", "ping"];
 		case "postgres":
@@ -175,21 +175,21 @@ const dockerStatusTool = defineTool({
 	name: "aim_docker_status",
 	label: "AIM Docker Status",
 	description:
-		"检查 AIM Docker Compose 中 Kafka、Redis、PostgreSQL 的运行与连接状态。输出会按 2000 行或 50KB 截断。",
-	promptSnippet: "检查 AIM Docker Compose 数据存储（Kafka、Redis、PostgreSQL）的运行与连接状态",
+		"检查 AIM Docker Compose 中 RocketMQ、Redis、PostgreSQL 的运行与连接状态。输出会按 2000 行或 50KB 截断。",
+	promptSnippet: "检查 AIM Docker Compose 数据存储（RocketMQ、Redis、PostgreSQL）的运行与连接状态",
 	promptGuidelines: [
-		"Use aim_docker_status before aim_kafka/aim_redis/aim_pg when the user asks to inspect Docker data stores and service availability is unclear.",
+		"Use aim_docker_status before aim_rocketmq/aim_redis/aim_pg when the user asks to inspect Docker data stores and service availability is unclear.",
 	],
 	parameters: Type.Object({
 		services: Type.Optional(
-			Type.Array(StringEnum(["kafka", "redis", "postgres"] as const), {
-				description: "要检查的服务；默认检查 kafka、redis、postgres。",
+			Type.Array(StringEnum(["rocketmq", "redis", "postgres"] as const), {
+				description: "要检查的服务；默认检查 rocketmq、redis、postgres。",
 			}),
 		),
 	}),
 
 	async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-		const services = (params.services?.length ? params.services : ["kafka", "redis", "postgres"]) as StoreName[];
+		const services = (params.services?.length ? params.services : ["rocketmq", "redis", "postgres"]) as StoreName[];
 		const compose = await runDocker(pi, ctx, ["compose", "ps", ...services.map((s) => SERVICES[s].service)], signal, SHORT_TIMEOUT_MS);
 
 		const probes = await Promise.all(
@@ -205,7 +205,7 @@ const dockerStatusTool = defineTool({
 	},
 
 	renderCall(args, theme) {
-		const services = args.services?.length ? args.services.join(", ") : "kafka, redis, postgres";
+		const services = args.services?.length ? args.services.join(", ") : "rocketmq, redis, postgres";
 		return new Text(`${theme.fg("toolTitle", theme.bold("aim_docker_status "))}${theme.fg("accent", services)}`, 0, 0);
 	},
 
@@ -222,85 +222,84 @@ const dockerStatusTool = defineTool({
 	},
 });
 
-const kafkaTool = defineTool({
-	name: "aim_kafka",
-	label: "AIM Kafka",
+const NAMESRV = "rocketmq-namesrv:9876";
+const MQADMIN = ["sh", "mqadmin"];
+
+const rocketmqTool = defineTool({
+	name: "aim_rocketmq",
+	label: "AIM RocketMQ",
 	description:
-		"连接 Docker 中的 AIM Kafka（容器 aim-kafka），支持 list_topics、describe_topic、consume、list_groups、describe_group。输出会按 2000 行或 50KB 截断。",
-	promptSnippet: "通过 Docker 连接 AIM Kafka，列出/描述 topic、消费消息、查看 consumer group",
+		"连接 Docker 中的 AIM RocketMQ（容器 aim-rocketmq-broker，mqadmin 经 namesrv 操作），支持 list_topics、describe_topic、consume、list_groups、describe_group、query_by_key。输出会按 2000 行或 50KB 截断。",
+	promptSnippet: "通过 Docker 连接 AIM RocketMQ，列出/描述 topic、预览消息、查看 consumer group",
 	promptGuidelines: [
-		"Use aim_kafka for Kafka inspection instead of raw docker exec when working with AIM's local Docker Compose Kafka.",
-		"Use aim_kafka consume with a small maxMessages value unless the user explicitly asks for more messages.",
+		"Use aim_rocketmq for RocketMQ inspection instead of raw docker exec when working with AIM's local Docker Compose RocketMQ.",
+		"Use aim_rocketmq consume with a small maxMessages value unless the user explicitly asks for more messages.",
+		"Topic message types matter: FIFO topics (aim-message-transfer, aim-read-receipt-events) need a message group, TRANSACTION topics (aim-user-events, aim-conversation-events, aim-attachment-uploaded) only accept transactional sends.",
 	],
 	parameters: Type.Object({
-		action: StringEnum(["list_topics", "describe_topic", "consume", "list_groups", "describe_group"] as const, {
-			description: "Kafka 操作。",
+		action: StringEnum(["list_topics", "describe_topic", "consume", "list_groups", "describe_group", "query_by_key"] as const, {
+			description: "RocketMQ 操作。",
 		}),
-		topic: Type.Optional(Type.String({ description: "topic 名称；describe_topic/consume 必填。" })),
+		topic: Type.Optional(Type.String({ description: "topic 名称；describe_topic/consume/query_by_key 必填。" })),
 		group: Type.Optional(Type.String({ description: "consumer group 名称；describe_group 必填。" })),
-		fromBeginning: Type.Optional(Type.Boolean({ description: "consume 时是否从头读取；默认 false。" })),
+		key: Type.Optional(Type.String({ description: "消息 key；query_by_key 必填（例如 user.created:7）。" })),
 		maxMessages: Type.Optional(Type.Number({ description: "consume 最多读取消息数；默认 10。" })),
 		timeoutMs: Type.Optional(Type.Number({ description: "命令超时时间；默认 30000ms。" })),
 	}),
 
 	async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-		const args: string[] = [];
-		const kafkaBin = "/opt/kafka/bin";
-		const bootstrap = ["--bootstrap-server", "localhost:9092"];
+		const args: string[] = [...MQADMIN];
+		const namesrv = ["-n", NAMESRV];
 
 		switch (params.action) {
 			case "list_topics":
-				args.push(`${kafkaBin}/kafka-topics.sh`, ...bootstrap, "--list");
+				args.push("topicList", ...namesrv);
 				break;
 			case "describe_topic":
 				if (!params.topic) throw new Error("describe_topic 需要 topic 参数");
-				args.push(`${kafkaBin}/kafka-topics.sh`, ...bootstrap, "--describe", "--topic", params.topic);
+				args.push("topicRoute", ...namesrv, "-t", params.topic);
 				break;
 			case "consume": {
 				if (!params.topic) throw new Error("consume 需要 topic 参数");
 				const maxMessages = Math.max(1, Math.min(500, Math.trunc(params.maxMessages ?? 10)));
-				args.push(
-					`${kafkaBin}/kafka-console-consumer.sh`,
-					...bootstrap,
-					"--topic",
-					params.topic,
-					"--max-messages",
-					String(maxMessages),
-					"--timeout-ms",
-					String(Math.max(1000, Math.trunc(params.timeoutMs ?? DEFAULT_TIMEOUT_MS))),
-				);
-				if (params.fromBeginning) args.push("--from-beginning");
+				args.push("consumeMessage", ...namesrv, "-t", params.topic, "-c", String(maxMessages));
 				break;
 			}
 			case "list_groups":
-				args.push(`${kafkaBin}/kafka-consumer-groups.sh`, ...bootstrap, "--list");
+				args.push("consumerProgress", ...namesrv);
 				break;
 			case "describe_group":
 				if (!params.group) throw new Error("describe_group 需要 group 参数");
-				args.push(`${kafkaBin}/kafka-consumer-groups.sh`, ...bootstrap, "--describe", "--group", params.group);
+				args.push("consumerProgress", ...namesrv, "-g", params.group);
+				break;
+			case "query_by_key":
+				if (!params.topic) throw new Error("query_by_key 需要 topic 参数");
+				if (!params.key) throw new Error("query_by_key 需要 key 参数");
+				args.push("queryMsgByKey", ...namesrv, "-t", params.topic, "-k", params.key);
 				break;
 		}
 
 		return runDockerForTool(
 			pi,
 			ctx,
-			dockerExecArgs(SERVICES.kafka.container, args),
+			dockerExecArgs(SERVICES.rocketmq.container, args),
 			signal,
 			Math.max(1000, Math.trunc(params.timeoutMs ?? DEFAULT_TIMEOUT_MS)) + 5_000,
 		);
 	},
 
 	renderCall(args, theme) {
-		let text = theme.fg("toolTitle", theme.bold("aim_kafka ")) + theme.fg("accent", args.action ?? "");
+		let text = theme.fg("toolTitle", theme.bold("aim_rocketmq ")) + theme.fg("accent", args.action ?? "");
 		if (args.topic) text += theme.fg("muted", ` topic=${args.topic}`);
 		if (args.group) text += theme.fg("muted", ` group=${args.group}`);
+		if (args.key) text += theme.fg("muted", ` key=${args.key}`);
 		return new Text(text, 0, 0);
 	},
 
 	renderResult(result, { expanded, isPartial }, theme) {
-		if (isPartial) return new Text(theme.fg("warning", "连接 Kafka 中..."), 0, 0);
+		if (isPartial) return new Text(theme.fg("warning", "连接 RocketMQ 中..."), 0, 0);
 		const details = result.details as CommandDetails | undefined;
-		let text = theme.fg(details?.exitCode === 0 ? "success" : "error", details?.exitCode === 0 ? "✓ Kafka 命令完成" : "✗ Kafka 命令失败");
+		let text = theme.fg(details?.exitCode === 0 ? "success" : "error", details?.exitCode === 0 ? "✓ RocketMQ 命令完成" : "✗ RocketMQ 命令失败");
 		if (details?.truncation?.truncated) text += theme.fg("warning", "（输出已截断）");
 		if (expanded) {
 			const content = result.content[0];
@@ -466,7 +465,7 @@ export default function (api: ExtensionAPI) {
 	pi = api;
 
 	api.registerTool(dockerStatusTool);
-	api.registerTool(kafkaTool);
+	api.registerTool(rocketmqTool);
 	api.registerTool(redisTool);
 	api.registerTool(pgTool);
 
@@ -475,7 +474,7 @@ export default function (api: ExtensionAPI) {
 
 		try {
 			const statuses = await Promise.all(
-				(["kafka", "redis", "postgres"] as StoreName[]).map(async (store) => {
+				(["rocketmq", "redis", "postgres"] as StoreName[]).map(async (store) => {
 					const running = await serviceIsRunning(pi, ctx, store);
 					return `${store}:${running ? "up" : "down"}`;
 				}),
@@ -487,10 +486,10 @@ export default function (api: ExtensionAPI) {
 	});
 
 	api.registerCommand("aim-docker-status", {
-		description: "检查 AIM Docker Compose 中 Kafka、Redis、PostgreSQL 的运行与连接状态",
+		description: "检查 AIM Docker Compose 中 RocketMQ、Redis、PostgreSQL 的运行与连接状态",
 		handler: async (_args, ctx) => {
 			const lines = await Promise.all(
-				(["kafka", "redis", "postgres"] as StoreName[]).map(async (store) => {
+				(["rocketmq", "redis", "postgres"] as StoreName[]).map(async (store) => {
 					return `${store}: ${await probeService(pi, ctx, store)}`;
 				}),
 			);

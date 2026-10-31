@@ -22,7 +22,7 @@ deploy/
 │   └── prod.example.env
 ├── scripts/
 │   ├── migrate-postgres.sh
-│   ├── init-kafka-topics.sh
+│   ├── init-rocketmq-topics.sh
 │   └── init-seaweed-bucket.sh
 ├── grafana/  loki/  prometheus/  promtail/  tempo/   # 可观测性组件配置
 ```
@@ -60,7 +60,7 @@ docker compose --env-file deploy/env/local.env \
   up -d
 ```
 
-本地发布端口均绑定 `127.0.0.1`，避免在远程开发机上误暴露数据库、Redis、Kafka、etcd 或管理 UI。
+本地发布端口均绑定 `127.0.0.1`，避免在远程开发机上误暴露数据库、Redis、RocketMQ、etcd 或管理 UI。
 
 > 注意：`AIM_CONFIG_DIR` / `AIM_ENV_FILE` 如果使用相对路径，会按 Compose 文件所在目录解析。本仓库的 `deploy/env/local.env` 已使用 `../config/local` 与 `../env/local.env`，建议直接通过 `--env-file deploy/env/local.env` 使用；生产环境建议使用绝对路径。
 
@@ -103,7 +103,7 @@ Seaweed:
 ### 3. 启动 / 停止 / 回滚
 
 ```bash
-deploy/deploy.sh migrate     # 显式跑一次 auth / logic 的 PostgreSQL 迁移 + Kafka topic + SeaweedFS bucket
+deploy/deploy.sh migrate     # 显式跑一次 auth / logic 的 PostgreSQL 迁移 + RocketMQ topic + SeaweedFS bucket
 deploy/deploy.sh up          # docker compose up -d --build（自动包含 migrate）
 deploy/deploy.sh status      # 容器与 healthcheck 状态
 deploy/deploy.sh logs aim-gateway --tail 200
@@ -111,7 +111,7 @@ deploy/deploy.sh down
 deploy/deploy.sh rollback    # 回滚到上一次 deploy 前的 /etc/aim 快照（详见脚本说明）
 ```
 
-`up` / `down` / `rollback` 都会先在 `/var/backups/aim/YYYYmmdd-HHMMSS/` 留一份当前 `/etc/aim` 快照，`rollback [id]` 可按时间戳回退到任一历史快照。生产默认只暴露宿主或集群侧反代的 80/443；PostgreSQL、Redis、Kafka、etcd、gateway gRPC 等只在 Docker 内部网络访问。
+`up` / `down` / `rollback` 都会先在 `/var/backups/aim/YYYYmmdd-HHMMSS/` 留一份当前 `/etc/aim` 快照，`rollback [id]` 可按时间戳回退到任一历史快照。生产默认只暴露宿主或集群侧反代的 80/443；PostgreSQL、Redis、RocketMQ、etcd、gateway gRPC 等只在 Docker 内部网络访问。
 
 ### 4. 自接反向代理
 
@@ -125,7 +125,7 @@ deploy/deploy.sh rollback    # 回滚到上一次 deploy 前的 /etc/aim 快照�
 ## 初始化与迁移
 
 - auth / logic / attachment 的 PostgreSQL 迁移由 `deploy/scripts/migrate-postgres.sh` 执行，按 `NNN_*.sql` 字典序自动执行目录内所有 SQL，避免在 Compose command 中硬编码迁移文件列表。
-- Kafka topic 由 `deploy/scripts/init-kafka-topics.sh` 创建，使用 `--if-not-exists` 保证幂等。
+- RocketMQ topic 与消费/生产 group 由 `deploy/scripts/init-rocketmq-topics.sh` 创建（`rocketmq-init` 容器在 broker healthy 后执行），`updateTopic`/`updateSubGroup` 可重复执行；broker 关闭 auto-create，topic 必须预创建才能发送。
 - SeaweedFS bucket 由 `deploy/scripts/init-seaweed-bucket.sh` 创建。
 
 `app/*/etc/*.yaml` 仍保留为本地 `go run` / 单服务调试默认配置；Docker Compose 部署统一挂载 `deploy/config/<env>/*.yaml`。
@@ -139,4 +139,4 @@ deploy/deploy.sh rollback    # 回滚到上一次 deploy 前的 /etc/aim 快照�
 - `deploy/compose/observability.yaml`
 - `deploy/compose/tools.yaml`
 
-旧命令如 `docker compose up -d postgres redis kafka etcd tempo grafana` 仍可作为兼容入口启动部分本地依赖；完整服务、迁移与新增部署请直接使用上面的分层 Compose 命令。
+旧命令如 `docker compose up -d postgres redis rocketmq-namesrv rocketmq-broker rocketmq-proxy etcd tempo grafana` 仍可作为兼容入口启动部分本地依赖；完整服务、迁移与新增部署请直接使用上面的分层 Compose 命令。

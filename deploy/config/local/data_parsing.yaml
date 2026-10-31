@@ -10,7 +10,7 @@ Telemetry:
   Batcher: otlphttp
   OtlpHttpPath: /v1/traces
 Postgres:
-  DataSource: postgres://user:password@postgres:5432/aim_logic?sslmode=disable
+  DataSource: postgres://user:password@postgres:5432/aim_attachment?sslmode=disable
 Seaweed:
   Endpoint: http://seaweed-s3:8333
   Bucket: aim-attachments
@@ -18,15 +18,12 @@ Seaweed:
   SecretKey: aim-secret
 UploadedConsumer:
   Name: data-parsing-uploaded-consumer
-  Brokers:
-    - kafka:9092
+  Endpoint: rocketmq-proxy:8081
   Group: aim-data-parsing-uploaded
-  Topic: aim.attachment.uploaded
-  Offset: first
-  Consumers: 1
-  Processors: 1
+  Topic: aim-attachment-uploaded
+  Concurrency: 1
 ParsedProducer:
-  Brokers:
-    - kafka:9092
-  Topic: aim.attachment.parsed
+  Endpoint: rocketmq-proxy:8081
+  Group: aim-data-parsing-producer
+  Topic: aim-attachment-parsed
 ThumbnailMaxWidth: 320

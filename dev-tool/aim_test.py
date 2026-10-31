@@ -2063,9 +2063,9 @@ def cmd_run_all(args):
     bob_id = client_bob.token.user_id
     print(f"  ✓ Bob logged in as #{bob_id}")
 
-    # Wait for Kafka UserCreated events to be consumed and user info
+    # Wait for broker user-created events to be consumed and user info
     # to be created in the logic service database (~2-3s propagation delay).
-    print("  ⏳ Waiting for Kafka user sync...")
+    print("  ⏳ Waiting for message-queue user sync...")
     time.sleep(5)
 
     # 2. Search users

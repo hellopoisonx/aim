@@ -45,7 +45,8 @@ model/
 | 011 | `011_bot_conversation_read_actions.sql` | 已读相关 Bot action |
 | 012 | `012_friend_tags_and_search.sql` | 好友标签与搜索索引 |
 | 013 | `013_user_bots.sql` | 用户侧 Bot 所有权 |
-| 014 | `014_outbox_records.sql` | 事务发件箱 |
+| 014 | `014_outbox_records.sql` | 事务发件箱（已被 015 删除） |
+| 015 | `015_event_journal.sql` | 事务消息回查表 `event_journal`，并 `DROP TABLE outbox_records` |
 
 ### 004_group_management.sql 详细
 
@@ -64,7 +65,7 @@ ALTER TABLE conversation_members ADD COLUMN IF NOT EXISTS role VARCHAR(16) NOT N
 | conversations | `creator_id` | BIGINT | `0` | 创建者/群主 |
 | conversation_members | `role` | VARCHAR(16) | `'member'` | 取值：owner / admin / member |
 
-Docker Compose 的 `logic-migrate` 调用 `deploy/scripts/migrate-postgres.sh`，会按 `migrations/*.sql` 字典序执行所有迁移；Kafka topic 由 `deploy/scripts/init-kafka-topics.sh` 统一创建，包含 `aim.conversation.events`。
+Docker Compose 的 `logic-migrate` 调用 `deploy/scripts/migrate-postgres.sh`，会按 `migrations/*.sql` 字典序执行所有迁移；RocketMQ topic 由 `deploy/scripts/init-rocketmq-topics.sh` 统一创建，包含 `aim-conversation-events`。
 
 ## DAO 规则
 
