@@ -1,6 +1,6 @@
 # AGENTS.md
 
-**Generated:** 2026-05-20 | **Commit:** 9ee4acf | **Branch:** main
+**Generated:** 2026-11-01 | **Commit:** e34920d | **Branch:** v2
 
 ## 语言
 
@@ -9,7 +9,7 @@
 
 ## 概览
 
-AIM 是多人在线即时通讯系统，内置可自部署 AI 助手。后端为 go-zero 微服务（gateway/auth/core/logic），基础设施包含 RocketMQ 5（namesrv + broker + gRPC proxy）、Redis/Redis Stack、PostgreSQL、etcd、Grafana Tempo。
+AIM 是多人在线即时通讯系统，内置可自部署 AI 助手。后端为 go-zero 微服务（gateway/auth/core/logic/attachment/data_parsing），基础设施包含 RocketMQ 5（namesrv + broker + gRPC proxy）、Redis/Redis Stack、PostgreSQL、SeaweedFS、etcd、Grafana Tempo。
 
 ## 工作流
 
@@ -21,13 +21,19 @@ AIM 是多人在线即时通讯系统，内置可自部署 AI 助手。后端为
 
 ```text
 aim/
-├── app/auth/rpc/       # 认证
+├── app/auth/rpc/        # 认证
 ├── app/core/rpc/        # 消息投递
 ├── app/gateway/api/     # 对外入口
 ├── app/logic/rpc/       # 业务上下文
+├── app/attachment/      # 附件服务
+├── app/data_parsing/    # 数据解析
 ├── app/shared/          # 共享库
+├── bot_sdk/             # Bot Go SDK
+├── dev-tool/            # 调试压测工具
+├── deploy/              # 部署编排
+├── docs/                # 文档与协议规范
 ├── shared/proto/        # Protobuf 协议
-├── skills/             # 领域 Skill（.opencode/skills、.pi/skills 均为 junction）
+├── skills/              # 领域 Skill（.opencode/skills、.pi/skills 均为 junction）
 └── docker-compose.yaml  # 本地基础设施
 ```
 
@@ -47,6 +53,8 @@ aim/
 - aim-dev-tool: 开发测试工具
 - zero-skills: go-zero 框架
 - aim-ws-token-management: WebSocket 连接 Token 生命周期管理
+- aim-attachment-domain: 附件上传/下载/存储域
+- aim-data-parsing-domain: 附件媒体数据解析域
 
 ## 约定
 

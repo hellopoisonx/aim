@@ -12,7 +12,7 @@ deploy/
 │   ├── dev.yaml           # 本地开发端口映射，全部绑定 127.0.0.1
 │   ├── prod.yaml          # 生产覆盖钩子（默认空，宿主或集群侧反代负责 80/443）
 │   ├── observability.yaml # Prometheus / Loki / Promtail / Grafana
-│   └── tools.yaml         # Kafbat UI 等调试工具
+│   └── tools.yaml         # RocketMQ Dashboard 等调试工具
 ├── config/
 │   ├── local/             # 本地 Docker Compose 配置
 │   ├── prod.example/      # 生产配置模板，真实生产文件不要提交
@@ -49,7 +49,7 @@ docker compose --env-file deploy/env/local.env \
   up -d
 ```
 
-启动 Kafbat UI 等工具：
+启动 RocketMQ Dashboard 等调试工具：
 
 ```bash
 docker compose --env-file deploy/env/local.env \
