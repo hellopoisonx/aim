@@ -6,7 +6,6 @@ import (
 	attachmentpb "github.com/hellopoisonx/aim/app/attachment/rpc/pb"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
-	"github.com/hellopoisonx/aim/app/shared/errorx"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -29,9 +28,6 @@ func (l *GetAttachmentLogic) GetAttachment(req *types.GetAttachmentRequest) (res
 	userID, err := currentUserID(l.ctx)
 	if err != nil {
 		return nil, err
-	}
-	if l.svcCtx.AttachmentClient == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "attachment service unavailable")
 	}
 
 	info, err := l.svcCtx.AttachmentClient.GetFile(l.ctx, &attachmentpb.GetFileReq{

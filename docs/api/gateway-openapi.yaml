@@ -7,7 +7,7 @@ info:
 
     ## 边界
     - 只有 gateway 面向客户端/公网暴露 REST API 与 WebSocket：REST 前缀为 `/api/*`，WebSocket 入口为 `GET /ws`。
-    - auth / core / logic / attachment / data_parsing 等服务只通过内部 gRPC / Kafka 被 gateway 编排，不直接暴露给客户端。
+    - auth / core / logic / attachment / data_parsing 等服务只通过内部 gRPC / RocketMQ 被 gateway 编排，不直接暴露给客户端。
     - WebSocket 二进制帧协议不适合用 OpenAPI 完整表达，详见 `docs/ws.md`。
 
     ## HTTP 响应封装
@@ -826,7 +826,7 @@ paths:
       operationId: attachmentsCompleteUpload
       summary: 标记附件上传完成
       description: |
-        需要 Bearer JWT。客户端完成对象存储直传后调用本接口，attachment 服务会校验对象并回写状态；媒体附件会发布 `aim.attachment.uploaded` 事件供解析服务处理，普通文件附件直接标记为解析完成。
+        需要 Bearer JWT。客户端完成对象存储直传后调用本接口，attachment 服务会校验对象并回写状态；媒体附件会发布 `aim-attachment-uploaded` 事件供解析服务处理，普通文件附件直接标记为解析完成。
       security:
         - BearerAuth: []
       parameters:

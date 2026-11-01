@@ -7,20 +7,17 @@ import (
 	"time"
 
 	"github.com/alicebob/miniredis/v2"
+	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/require"
-	gzredis "github.com/zeromicro/go-zero/core/stores/redis"
 )
 
-func newTestRedis(t *testing.T) (*miniredis.Miniredis, *gzredis.Redis) {
+func newTestRedis(t *testing.T) (*miniredis.Miniredis, *redis.Client) {
 	t.Helper()
 
 	mr, err := miniredis.Run()
 	require.NoError(t, err)
 
-	rds, err := gzredis.NewRedis(gzredis.RedisConf{Host: mr.Addr(), Type: gzredis.NodeType})
-	require.NoError(t, err)
-
-	return mr, rds
+	return mr, redis.NewClient(&redis.Options{Addr: mr.Addr()})
 }
 
 func TestTypedCacheTakeUsesL1AndL2(t *testing.T) {
@@ -91,4 +88,18 @@ func TestConfigWithDefaults(t *testing.T) {
 	require.Equal(t, defaultL1TTLSeconds, conf.L1TTLSeconds)
 	require.Equal(t, defaultL2TTLSeconds, conf.L2TTLSeconds)
 	require.Equal(t, DefaultInvalidateStream, conf.InvalidateStream)
+}
+
+func TestKeyBuildersSharePrefixAndArgumentNaming(t *testing.T) {
+	require.Equal(t, "conv:7", ConversationKey(7))
+	require.Equal(t, "conv:members:7", ConversationMembersKey(7))
+	require.Equal(t, "user:7", UserKey(7))
+	require.Equal(t, "user:type:7", UserTypeKey(7))
+	require.Equal(t, "user:email:a@b.c", UserEmailKey(" A@B.C "))
+	require.Equal(t, "bot:token:hash", BotTokenKey("hash"))
+	require.Equal(t, "presence:7", PresenceKey(7))
+	require.Equal(t, "ws:replay:7:desktop", WsReplayKey(7, "desktop"))
+
+	// Friendship keys are order independent.
+	require.Equal(t, FriendshipKey(3, 9), FriendshipKey(9, 3))
 }

@@ -102,10 +102,10 @@ func (r *PresenceReaper) scanExpiredGraces(ctx context.Context) {
 
 		result, err := r.manager.ForceOfflineForExpiredGrace(ctx, identity)
 		if err != nil {
+			// Keep the grace entry: presence keys carry a TTL, so retrying next
+			// tick is bounded and avoids silently leaving the device "online".
 			logx.WithContext(ctx).Errorf("reaper: force offline for expired grace %d/%s: %v",
 				identity.UserID, identity.DeviceID, err)
-			// Remove grace even on error to avoid infinite retry.
-			r.manager.RemoveExpiredGrace(identity)
 			continue
 		}
 

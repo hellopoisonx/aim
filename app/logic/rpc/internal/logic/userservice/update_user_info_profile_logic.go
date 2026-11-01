@@ -3,7 +3,6 @@ package userservicelogic
 import (
 	"context"
 
-	"github.com/hellopoisonx/aim/app/logic/rpc/internal/service"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
@@ -42,7 +41,7 @@ func (l *UpdateUserInfoProfileLogic) UpdateUserInfoProfile(in *pb.UpdateUserInfo
 
 	info, err := userSvc.UpdateUserInfoProfile(l.ctx, in.GetId(), in.GetNickname(), in.GetAvatar())
 	if err != nil {
-		return nil, service.ToGRPCError(err)
+		return nil, errorx.ToGRPCError(err)
 	}
 
 	return &pb.UpdateUserInfoProfileResp{

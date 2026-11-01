@@ -17,12 +17,12 @@ description: aim 的 Bot OpenAPI 域。覆盖第三方 Bot 接入、token 鉴权
 ## 设计原则（V0）
 
 - **Bot = 特殊用户**：Bot 拥有真实 `user_id`、`user_info` 资料、`conversation_members`
-  身份；与人类用户共用主消息链路（core.Transfer → Kafka `aim-message-transfer`
+  身份；与人类用户共用主消息链路（core.Transfer → RocketMQ FIFO `aim-message-transfer`
   → WebSocket 推送 + DB 归档）。
 - **Token 哈希存储**：plaintext 仅在 provision 时输出一次，服务端只持有 SHA-256
   哈希，撤销靠 `revoked_at` 时间戳。
 - **运维 provision**：V0 不暴露用户侧 Bot 创建 / 安装 REST；脚本一次性写入两个 DB。
-- **Webhook 异步**：独立 Kafka consumer group `aim-logic-bot-webhook`，与归档 offset
+- **Webhook 异步**：独立 consumer group `aim-logic-bot-webhook`，与归档 offset
   解耦，单 Bot 故障不会拖累整体消息持久化。
 
 ## 模块边界
@@ -98,10 +98,11 @@ description: aim 的 Bot OpenAPI 域。覆盖第三方 Bot 接入、token 鉴权
 
 ## 最近变更
 
+- 2026-11-01: 消息总线迁移到 RocketMQ，`aim-message-transfer` 变为 FIFO topic（MessageGroup = `conversation_id`），webhook consumer group `aim-logic-bot-webhook` 以 `Concurrency: 1` 顺序消费；topic 名改连字符（`aim-` 前缀，broker 不接受点号）。
 - 2026-05-30: 用户侧 Bot 管理落地。新增 migration 013（`user_bots` 归属/软删除表）、`BotService` 管理 RPC（Bot CRUD、Token 签发/轮换/撤销/action 配置、加入群聊/创建 direct 会话）、Gateway `/api/user/bots/*` 与 `/api/user/bot-actions` `/api/user/bot-events` 用户侧 REST。auth + logic 双写保留兼容。Webhook 仍由 Bot Token 在 `/api/bot/v1/webhook` 自行注册。
 - 2026-05-29: Bot 开发者文档同步 `docs/api/gateway-openapi.yaml`。Action 表补齐 `bot.attachment.download`，附件下载端点以 OpenAPI schema 为准。
-- 2026-05-28: `bot_sdk/testdata/integration/etc/` 从标准本地 Docker 配置重新同步，补齐 Prometheus 配置块并统一 GatewayRpc `9091`；集成 Compose 迁移/Kafka 初始化改用 `deploy/scripts/`。
-- 2026-05-28: `bot_sdk/testdata/integration/docker-compose.yaml` 的 Tempo 镜像固定为 `grafana/tempo:2.8.1`，避免 `latest` 拉到不兼容的 v3 RC schema；集成测试 `etc/logic.yaml`/`etc/core.yaml` 已启用 `aim.conversation.events` 群管理系统消息链路。
+- 2026-05-28: `bot_sdk/testdata/integration/etc/` 从标准本地 Docker 配置重新同步，补齐 Prometheus 配置块并统一 GatewayRpc `9091`；集成 Compose 迁移/消息队列初始化改用 `deploy/scripts/`。
+- 2026-05-28: `bot_sdk/testdata/integration/docker-compose.yaml` 的 Tempo 镜像固定为 `grafana/tempo:2.8.1`，避免 `latest` 拉到不兼容的 v3 RC schema；集成测试 `etc/logic.yaml`/`etc/core.yaml` 已启用 `aim-conversation-events` 群管理系统消息链路。
 - 2026-05-27: `bot_sdk.AsyncProcessor` 新增 `UpdateSecret` 方法，支持运行时 webhook 密钥轮换无需重启；`ServeHTTP` 中 `p.secret` 读取加锁防止 data race。
 - 2026-05-27: `bot_sdk/testdata/integration/` 新增真实服务栈 Docker Compose 环境，所有宿主机发布端口相对主环境 `+3000` 偏移。
 - 2026-05-27: `bot_sdk` 新增 `integration` build tag 集成测试环境，使用内存 Gateway 覆盖 REST Client、APIError、Webhook 投递到 `AsyncProcessor` 的端到端流程。

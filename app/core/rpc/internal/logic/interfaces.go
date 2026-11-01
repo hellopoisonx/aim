@@ -17,7 +17,7 @@ type idempotencyStore interface {
 	Set(ctx context.Context, key string, messageID int64, ttl time.Duration) error
 }
 
-// messagePublisher publishes transfer events to a message queue (Kafka).
+// messagePublisher publishes transfer events to the delivery topic.
 // The key is used for partition routing; the value is the serialized event payload.
 type messagePublisher interface {
 	// Publish sends the event to the queue. The key is used for partition routing.

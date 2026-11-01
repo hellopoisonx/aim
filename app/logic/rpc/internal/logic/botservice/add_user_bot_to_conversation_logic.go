@@ -48,9 +48,9 @@ func (l *AddUserBotToConversationLogic) AddUserBotToConversation(in *pb.AddUserB
 	return &pb.AddUserBotToConversationResp{
 		Conversation: &pb.ConversationResponse{
 			Id:               conv.ID,
-			ConversationType: conv.ConversationType,
+			ConversationType: string(conv.ConversationType),
 			IsActive:         conv.IsActive,
-			CreatedAt:        conv.CreatedAt.Time.UnixMilli(),
+			CreatedAt:        conv.CreatedAt.UnixMilli(),
 			Name:             conv.Name,
 			Avatar:           conv.Avatar,
 			CreatorId:        conv.CreatorID,

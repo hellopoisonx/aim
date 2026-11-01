@@ -3,9 +3,11 @@ package conversations
 import (
 	"context"
 
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/authctx"
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/membership"
+
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
-	"github.com/hellopoisonx/aim/app/gateway/api/internal/ws"
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/conversationservice"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 
@@ -27,10 +29,8 @@ func NewGetConversationHistoryLogic(ctx context.Context, svcCtx *svc.ServiceCont
 }
 
 func (l *GetConversationHistoryLogic) GetConversationHistory(req *types.GetConversationHistoryRequest) (resp *types.GetConversationHistoryResponse, err error) {
-	// Verify the caller is authenticated; the middleware guarantees this,
-	// but a defensive check prevents misuse if the handler is wired without Auth.
-	_, ok := ws.IdentityFromContext(l.ctx)
-	if !ok {
+	identity, ok := authctx.IdentityFromContext(l.ctx)
+	if !ok || identity.UserID <= 0 {
 		return nil, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
 	}
 
@@ -38,8 +38,9 @@ func (l *GetConversationHistoryLogic) GetConversationHistory(req *types.GetConve
 		return nil, errorx.NewCodeError(errorx.CodeBadInput, "id is required and must be positive")
 	}
 
-	if l.svcCtx.LogicConversationClient == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "internal error")
+	// History is conversation-scoped data: only members may read it.
+	if err := membership.RequireMember(l.ctx, l, l.svcCtx.LogicConversationClient, req.Id, identity.UserID, membership.ActorUser); err != nil {
+		return nil, err
 	}
 
 	limit := req.Limit

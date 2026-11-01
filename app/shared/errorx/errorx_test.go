@@ -50,8 +50,10 @@ func TestGRPCStatusMapping(t *testing.T) {
 		{50000, codes.Internal},
 		{59999, codes.Internal},
 		{CodeInvalidCredentials, codes.Unauthenticated},
-		{CodeUserNotFound, codes.Unauthenticated},
-		{CodeUserBanned, codes.Unauthenticated},
+		{CodeUserNotFound, codes.NotFound},
+		{CodeUserExists, codes.AlreadyExists},
+		{CodeUserBanned, codes.PermissionDenied},
+		{CodeTokenExpired, codes.Unauthenticated},
 		{999, codes.Unauthenticated},
 	}
 

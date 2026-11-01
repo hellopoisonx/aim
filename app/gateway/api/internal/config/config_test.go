@@ -54,3 +54,17 @@ func TestConfigLoadsGatewayYAML(t *testing.T) {
 	//nolint:staticcheck
 	require.Equal(t, "/metrics", c.GatewayRpc.Prometheus.Path)
 }
+
+func TestApplyEnvResolvesNodeID(t *testing.T) {
+	var c Config
+	c.ApplyEnv(func(string) string { return "" })
+	require.Empty(t, c.GatewayNodeID, "empty environment must leave the node id unset")
+
+	c.ApplyEnv(func(key string) string { return "gw-1" })
+	require.Equal(t, "gw-1", c.GatewayNodeID)
+
+	// An explicit config value wins over the environment.
+	explicit := Config{GatewayNodeID: "from-config"}
+	explicit.ApplyEnv(func(string) string { return "from-env" })
+	require.Equal(t, "from-config", explicit.GatewayNodeID)
+}

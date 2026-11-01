@@ -3,9 +3,10 @@ package friends
 import (
 	"context"
 
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/authctx"
+
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
-	"github.com/hellopoisonx/aim/app/gateway/api/internal/ws"
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/friendshipservice"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 
@@ -48,12 +49,9 @@ func NewCreateFriendTagLogic(ctx context.Context, svcCtx *svc.ServiceContext) *C
 }
 
 func (l *CreateFriendTagLogic) CreateFriendTag(req *types.CreateFriendTagRequest) (resp *types.CreateFriendTagResponse, err error) {
-	identity, ok := ws.IdentityFromContext(l.ctx)
+	identity, ok := authctx.IdentityFromContext(l.ctx)
 	if !ok {
 		return nil, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
-	}
-	if l.svcCtx.LogicFriendshipClient == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "internal error")
 	}
 
 	rpcResp, err := l.svcCtx.LogicFriendshipClient.CreateFriendTag(l.ctx, &friendshipservice.CreateFriendTagReq{

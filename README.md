@@ -18,9 +18,10 @@
 - 小回拨: 时间戳不变序列号递增
 - 大回拨: 等待系统时钟追赶/直接抛出错误
 
-### [发件箱模式](app/shared/outbox/outbox.go)
+### [事务消息](app/shared/rocketmq/transactional.go)
 
-- 通过本地数据库事务的原子性保证发往 kafka 的消息至少能被成功发送一次
+- 需要与业务事务同生共死的事件（`user-created`、群管理通知、附件上传完成）走 RocketMQ 事务消息：half message → 本地事务（业务行 + `event_journal` 行）→ commit/rollback
+- commit 丢失时由 broker 回查 `event_journal` 决定最终结果，因此不再需要发件箱轮询器
 
 ### [穿透 读/写 缓存模式](app/shared/cache/cache.go)
 
@@ -90,7 +91,7 @@ graph TB
         DataParsing[aim-data-parsing<br/>数据解析]
     end
     subgraph Infrastructure
-        Kafka[(Kafka)]
+        RocketMQ[(RocketMQ)]
         Redis[(Redis Stack)]
         PG[(PostgreSQL)]
         SeaweedFS[SeaweedFS]
@@ -105,19 +106,19 @@ graph TB
     GW -->|gRPC| Attachment
     Core -->|gRPC| Logic
 
-    Core -->|produce| Kafka
-    Kafka -->|consume| Core
+    GW -->|produce presence/typing/read-receipt| RocketMQ
+    Core -->|produce FIFO transfer| RocketMQ
+    RocketMQ -->|consume| Core
+    Auth -.->|事务消息 + 本地事务<br/>写 event_journal| PG
+    Logic -.->|事务消息 + 本地事务<br/>写 event_journal| PG
+    Attachment -.->|事务消息 + 本地事务<br/>写 event_journal| PG
 
-    Auth -.->|发件箱写入<br/>同 DB 事务| PG
-    Logic -.->|发件箱写入<br/>同 DB 事务| PG
-    Attachment -.->|发件箱写入<br/>同 DB 事务| PG
+    RocketMQ -->|consume| Logic
+    RocketMQ -->|consume| DataParsing
 
-    Auth -->|Poller 发布| Kafka
-    Logic -->|Poller 发布| Kafka
-    Attachment -->|Poller 发布| Kafka
-
-    Kafka -->|consume| Logic
-    Kafka -->|consume| DataParsing
+    RocketMQ -.->|回查 event_journal| Auth
+    RocketMQ -.->|回查 event_journal| Logic
+    RocketMQ -.->|回查 event_journal| Attachment
 
     Auth --> Redis & PG
     Logic --> Redis & PG
@@ -143,8 +144,8 @@ graph TB
 | 服务                 | 职责                                                                                  |
 | -------------------- | ------------------------------------------------------------------------------------- |
 | **aim-gateway**      | 对外入口，REST API 代理 + WebSocket 连接管理，JWT 验签                                |
-| **aim-auth**         | 注册/登录、JWT 签发与刷新、多设备会话管理；注册成功后发布 `UserCreatedEvent` 到 Kafka |
-| **aim-core**         | 消息路由与投递，Kafka 消费者集群                                                      |
+| **aim-auth**         | 注册/登录、JWT 签发与刷新、多设备会话管理；注册成功后以事务消息发布 `UserCreatedEvent` |
+| **aim-core**         | 消息路由与投递，RocketMQ 消费者集群                                                    |
 | **aim-logic**        | 用户/好友/群组/Bot 业务逻辑、聚合搜索                                                 |
 | **aim-attachment**   | 附件上传预签名、元数据管理、下载授权                                                  |
 | **aim-data-parsing** | 异步提取附件媒体元数据、生成缩略图                                                    |
@@ -161,9 +162,9 @@ graph TB
 | **微服务框架** | go-zero v1.10.1                             |
 | **WebSocket**  | coder/websocket + Protobuf 帧协议           |
 | **RPC**        | Protobuf / gRPC                             |
-| **消息队列**   | Kafka（`conversation_id` 分区保序）         |
+| **消息队列**   | RocketMQ 5（FIFO topic 按 `conversation_id` 保序、事务消息、gRPC Proxy） |
 | **缓存**       | Redis Stack                                 |
-| **持久化**     | PostgreSQL（sqlc）                          |
+| **持久化**     | PostgreSQL（GORM DAO）                      |
 | **文件存储**   | SeaweedFS（S3 协议）                        |
 | **注册中心**   | etcd                                        |
 | **可观测性**   | OpenTelemetry + Prometheus + Loki → Grafana |
@@ -262,13 +263,14 @@ aim/
 │   ├── attachment/        # 附件服务
 │   ├── data_parsing/      # 数据解析服务
 │   └── shared/            # 进程内共享包
-├── .githooks/            # Git pre-commit hook（自动格式化）
+├── bot_sdk/               # AIM Bot Go SDK
+├── dev-tool/              # 开发与压测工具 CLI
+├── deploy/                # 部署编排与环境配置
+├── docs/                  # 客户端开发与协议规范文档
 ├── shared/proto/          # Protobuf 协议定义
 ├── skills/                # 领域 Skill 文档
-├── deploy/                # 部署编排
-├── model/                 # sqlc 全局数据模型
+├── .githooks/             # Git pre-commit hook（自动格式化）
 └── docker-compose.yaml    # 本地兼容入口
-```
 
 ---
 
@@ -296,7 +298,7 @@ API 契约定义在 [`app/gateway/api/gateway.api`](app/gateway/api/gateway.api)
 ## 测试与代码质量
 
 ```bash
-go test ./...                       # 运行全部测试（73 个测试文件）
+go test ./...                       # 运行全部测试（52 个测试包，87 个测试文件）
 go test -coverprofile=coverage.out ./...  # 覆盖率
 golangci-lint run                   # 代码检查
 goctl api validate                  # API 契约校验
@@ -314,13 +316,11 @@ git config core.hooksPath .githooks
 钩子使用 `gofumpt`（优先）/ `gofmt`（fallback）格式化 staged Go 文件，
 并在 `go.mod` 变更时自动执行 `go mod tidy`。
 
-## 详见 [aim-dev-tool Skill](skills/aim-dev-tool/SKILL.md)。
-
 ## 开发指南
 
 - **Spec-first**：REST 先改 `.api`，RPC 先改 `.proto`，再 goctl/protoc 生成
 - **Skill 驱动开发**：领域知识文档化为 Skill，Agent 渐进式加载
-- **数据模型**：使用 sqlc，SQL 源文件在 `model/{migrations,queries}`
+- **数据模型**：使用 GORM DAO；schema 源文件在 `app/*/model/migrations`，结构体在 `model/orm`，查询在 `model/dao`
 - **错误处理**：业务错误使用 `errorx.NewCodeError`
 - 详细约定见 [AGENTS.md](AGENTS.md)
 

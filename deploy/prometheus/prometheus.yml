@@ -37,10 +37,6 @@ scrape_configs:
     static_configs:
       - targets: ["aim-redis-exporter:9121"]
 
-  - job_name: "kafka"
-    static_configs:
-      - targets: ["aim-kafka-exporter:9308"]
-
   # ────────────────── Service Discovery ──────────────────
   # etcd 自带 Prometheus 指标在 /metrics 端点；非集群环境可视需要启用。
   # - job_name: "etcd"

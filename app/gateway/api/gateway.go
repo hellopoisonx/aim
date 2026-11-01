@@ -8,11 +8,13 @@ import (
 	"flag"
 	"fmt"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/config"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/handler"
-	handlersws "github.com/hellopoisonx/aim/app/gateway/api/internal/handler/ws"
+	wshandler "github.com/hellopoisonx/aim/app/gateway/api/internal/handler/ws"
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/httperr"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/ws"
 	gwpb "github.com/hellopoisonx/aim/shared/proto/gateway/pb"
@@ -37,6 +39,7 @@ func main() {
 
 	var c config.Config
 	conf.MustLoad(*configFile, &c)
+	c.ApplyEnv(os.Getenv)
 
 	ctx := svc.NewServiceContext(c)
 	defer ctx.Close()
@@ -44,11 +47,17 @@ func main() {
 	// Start presence reaper for stale connection and token-refresh grace detection.
 	ctx.StartPresenceReaper()
 
+	// Connect the RocketMQ producer used by presence/typing/read-receipt pushes.
+	ctx.StartEventProducer()
+
+	// Install the shared JSON envelope before any route is served.
+	httperr.Register()
+
 	restServer := rest.MustNewServer(c.RestConf, corsOptions(c.Cors)...)
 	defer restServer.Stop()
 
 	handler.RegisterHandlers(restServer, ctx)
-	wsHandler := handlersws.NewWsHandler(ctx, ctx.WsManager)
+	wsHandler := wshandler.NewWsHandler(ctx, ctx.WsManager)
 	restServer.AddRoute(rest.Route{Method: http.MethodGet, Path: "/ws", Handler: wsHandler.ServeWS})
 
 	gatewayServer := ws.NewGatewayServer(ctx.WsManager)

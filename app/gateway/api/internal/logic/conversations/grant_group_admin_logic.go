@@ -6,9 +6,10 @@ package conversations
 import (
 	"context"
 
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/authctx"
+
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
-	"github.com/hellopoisonx/aim/app/gateway/api/internal/ws"
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/conversationservice"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 
@@ -30,17 +31,14 @@ func NewGrantGroupAdminLogic(ctx context.Context, svcCtx *svc.ServiceContext) *G
 }
 
 func (l *GrantGroupAdminLogic) GrantGroupAdmin(req *types.GrantGroupAdminRequest) error {
-	identity, ok := ws.IdentityFromContext(l.ctx)
+	identity, ok := authctx.IdentityFromContext(l.ctx)
 	if !ok {
 		return errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
-	}
-	if l.svcCtx.LogicConversationClient == nil {
-		return errorx.NewCodeError(errorx.CodeInternal, "internal error")
 	}
 	_, err := l.svcCtx.LogicConversationClient.GrantGroupAdmin(l.ctx, &conversationservice.GrantGroupAdminReq{
 		ConversationId: req.Id,
 		OperatorId:     identity.UserID,
-		TargetUserId:   req.Uid,
+		TargetUserId:   req.UserId,
 	})
 	if err != nil {
 		return errorx.SanitizeGRPCError(l, "grant group admin", err)

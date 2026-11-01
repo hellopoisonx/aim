@@ -846,10 +846,13 @@ class WSClient:
         payload.conversation_id = conversation_id
         self._send_frame(ws_pb2.FRAME_TYPE_TYPING, payload)
 
-    def send_read_receipt(self, conversation_id: int, last_msg_id: int):
+    def send_read_receipt(self, conversation_id: int, last_read_message_id: int):
         payload = ws_pb2.ReadReceiptPayload()
         payload.conversation_id = conversation_id
-        payload.last_msg_id = last_msg_id
+        # The checked-in dev-tool descriptor predates the field rename
+        # (last_msg_id -> last_read_message_id); the wire field number is 2 in
+        # both versions, so this stays compatible with the gateway.
+        payload.last_msg_id = last_read_message_id
         self._send_frame(ws_pb2.FRAME_TYPE_READ_RECEIPT, payload)
 
     def send_ack(self, ack_seq: int):
@@ -1282,7 +1285,7 @@ def cmd_ws_read_receipt(args):
     if not ws or not ws.is_connected():
         print("✗ Not connected. Run 'ws-connect' first.")
         return
-    ws.send_read_receipt(args.conversation_id, args.last_msg_id)
+    ws.send_read_receipt(args.conversation_id, args.last_read_message_id)
 
 
 def cmd_ws_ack(args):
@@ -1352,7 +1355,7 @@ def _print_help():
 │  ws-send <conv_id> <text> [--profile NAME]        │
 │  ws-heartbeat [last_seq] [--profile NAME]         │
 │  ws-typing <id> [--profile NAME]                  │
-│  ws-read-receipt <conv_id> <last_msg_id>          │
+│  ws-read-receipt <conv_id> <last_read_message_id> │
 │  ws-ack <ack_seq> [--profile NAME]                │
 │  ws-recv (wait for incoming frames)               │
 ├─ Profiles ────────────────────────────────────────┤
@@ -2060,9 +2063,9 @@ def cmd_run_all(args):
     bob_id = client_bob.token.user_id
     print(f"  ✓ Bob logged in as #{bob_id}")
 
-    # Wait for Kafka UserCreated events to be consumed and user info
+    # Wait for broker user-created events to be consumed and user info
     # to be created in the logic service database (~2-3s propagation delay).
-    print("  ⏳ Waiting for Kafka user sync...")
+    print("  ⏳ Waiting for message-queue user sync...")
     time.sleep(5)
 
     # 2. Search users
@@ -2440,7 +2443,7 @@ Examples:
     p.add_argument("--profile", default="", help="Profile name")
     p = sub.add_parser("ws-read-receipt", help="Send read receipt via WebSocket")
     p.add_argument("--conversation-id", type=int, required=True)
-    p.add_argument("--last-msg-id", type=int, required=True)
+    p.add_argument("--last-read-message-id", "--last-msg-id", dest="last_read_message_id", type=int, required=True)
     p.add_argument("--profile", default="", help="Profile name")
     p = sub.add_parser("ws-ack", help="Send client ACK via WebSocket")
     p.add_argument("--ack-seq", type=int, required=True)

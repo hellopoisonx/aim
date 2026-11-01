@@ -136,7 +136,7 @@ func TestDecodePayloadAllFrameTypes(t *testing.T) {
 		{
 			name:      "read receipt",
 			frameType: pb.FrameType_FRAME_TYPE_READ_RECEIPT,
-			payload:   &pb.ReadReceiptPayload{ConversationId: 4, LastMsgId: 5},
+			payload:   &pb.ReadReceiptPayload{ConversationId: 4, LastReadMessageId: 5},
 			wantType:  &pb.ReadReceiptPayload{},
 		},
 		{

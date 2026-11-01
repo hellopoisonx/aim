@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/authctx"
+
 	"github.com/coder/websocket"
 	pb "github.com/hellopoisonx/aim/shared/proto/gateway/pb"
 	wspb "github.com/hellopoisonx/aim/shared/proto/ws/pb"
@@ -75,7 +77,7 @@ func setupGatewayTest(t *testing.T) *gatewayTestEnv {
 type wsTestServer struct {
 	manager  *Manager
 	server   *httptest.Server
-	identity Identity
+	identity authctx.Identity
 	conn     *websocket.Conn
 	mu       sync.Mutex
 	// done channel signals the handler to clean up
@@ -88,7 +90,7 @@ func newWSTestServer(t *testing.T, manager *Manager, userID int64, deviceID stri
 
 	wsServer := &wsTestServer{
 		manager:  manager,
-		identity: Identity{UserID: userID, DeviceID: deviceID},
+		identity: authctx.Identity{UserID: userID, DeviceID: deviceID},
 		done:     make(chan struct{}),
 	}
 
@@ -133,8 +135,8 @@ func (s *wsTestServer) close() {
 	// to cancel the context, close the connection, and unregister
 	close(s.done)
 
-	// Wait for handler to process the signal and clean up
-	time.Sleep(50 * time.Millisecond)
+	// Wait for the handler to unregister instead of guessing a delay.
+	waitForManagerEmpty(s.manager, 2*time.Second)
 
 	// Close the HTTP server
 	s.server.Close()
@@ -300,7 +302,7 @@ func TestConnectionWriteQueueAssignsSeqForConcurrentWrites(t *testing.T) {
 	env := setupGatewayTest(t)
 	t.Cleanup(env.cleanup)
 
-	identity := Identity{UserID: 22346, DeviceID: "queue-device"}
+	identity := authctx.Identity{UserID: 22346, DeviceID: "queue-device"}
 	wsServer := newWSTestServer(t, env.manager, identity.UserID, identity.DeviceID)
 	t.Cleanup(wsServer.close)
 
@@ -378,7 +380,7 @@ func TestConnectionWriteFrameAfterUnregisterReturnsError(t *testing.T) {
 	env := setupGatewayTest(t)
 	t.Cleanup(env.cleanup)
 
-	identity := Identity{UserID: 22347, DeviceID: "closed-writer-device"}
+	identity := authctx.Identity{UserID: 22347, DeviceID: "closed-writer-device"}
 	wsServer := newWSTestServer(t, env.manager, identity.UserID, identity.DeviceID)
 	t.Cleanup(wsServer.close)
 
@@ -514,8 +516,8 @@ func TestGatewayServerKickUser(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, int32(1), resp.GetKickedCount())
 
-	// Wait for handler cleanup to complete (Cancel triggers Unregister async)
-	time.Sleep(50 * time.Millisecond)
+	// Cancel triggers Unregister asynchronously; wait for it rather than sleeping.
+	waitForManagerEmpty(env.manager, 2*time.Second)
 
 	// Verify connection is closed - read should fail
 	_, _, err = conn.Read(ctx)
@@ -628,21 +630,15 @@ func TestGatewayServerDrainNotify(t *testing.T) {
 	require.Equal(t, drainTimeoutMs, reconnect1.GetReconnectDelayMs())
 	require.Equal(t, "test-node-1", reconnect1.GetGatewayNodeId())
 
-	// Wait for drain timeout and verify connections are closed
-	// Use longer sleep to ensure goroutines complete cleanup
-	time.Sleep(300 * time.Millisecond)
+	// DrainNotify schedules a close after drainTimeoutMs; wait for the manager to
+	// observe the cleanup instead of sleeping past it.
+	waitForManagerEmpty(env.manager, 5*time.Second)
 
 	_, _, err = conn1.Read(ctx)
 	require.Error(t, err) // should be closed after drain timeout
 
 	_, _, err = conn2.Read(ctx)
 	require.Error(t, err) // should be closed after drain timeout
-
-	// Give extra time for goroutines to complete unregister
-	time.Sleep(100 * time.Millisecond)
-
-	// Verify manager is empty
-	require.Equal(t, 0, env.manager.Count())
 }
 
 func TestGatewayServerPushMessageUserNotFound(t *testing.T) {
@@ -889,4 +885,17 @@ func TestGatewayServerPushMessageDoesNotSkipSameDeviceIDForOtherUser(t *testing.
 	frame, err := readFrame(ctx, conn)
 	require.NoError(t, err)
 	require.Equal(t, wspb.FrameType_FRAME_TYPE_PUSH_MESSAGE, frame.GetType())
+}
+
+// waitForManagerEmpty blocks until the manager has no registered connections or
+// the timeout elapses, so tests observe real cleanup instead of fixed sleeps.
+func waitForManagerEmpty(manager *Manager, timeout time.Duration) {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if manager.Count() == 0 {
+			return
+		}
+
+		time.Sleep(2 * time.Millisecond)
+	}
 }

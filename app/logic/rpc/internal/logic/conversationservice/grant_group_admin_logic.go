@@ -3,7 +3,6 @@ package conversationservicelogic
 import (
 	"context"
 
-	"github.com/hellopoisonx/aim/app/logic/rpc/internal/service"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
@@ -41,7 +40,7 @@ func (l *GrantGroupAdminLogic) GrantGroupAdmin(in *pb.GrantGroupAdminReq) (*pb.G
 		return nil, errorx.NewCodeError(errorx.CodeInternal, "conversation service is not configured")
 	}
 	if err := convSvc.GrantGroupAdmin(l.ctx, in.GetConversationId(), in.GetOperatorId(), in.GetTargetUserId()); err != nil {
-		return nil, service.ConversationToGRPCError(err)
+		return nil, errorx.ToGRPCError(err)
 	}
 	return &pb.GrantGroupAdminResp{}, nil
 }

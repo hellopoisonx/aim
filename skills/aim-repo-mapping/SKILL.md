@@ -19,6 +19,6 @@ description: aim 仓库导航 Skill。用于快速判断需求应该落到哪个
 ## 参考资料
 
 - `references/docker-build.md`
-- `references/kafka-ops.md`
+- `references/mq-ops.md`（RocketMQ topic/group 预创建与诊断）
 - `references/module-routing.md`
 - `references/request-to-module-map.md`

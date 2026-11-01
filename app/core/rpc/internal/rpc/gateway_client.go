@@ -23,6 +23,7 @@ type GatewayPusher interface {
 	PushTyping(ctx context.Context, req *gwpb.PushTypingReq) (*gwpb.PushTypingResp, error)
 	PushReadReceipt(ctx context.Context, req *gwpb.PushReadReceiptReq) (*gwpb.PushReadReceiptResp, error)
 	PushNotification(ctx context.Context, req *gwpb.PushNotificationReq) (*gwpb.PushNotificationResp, error)
+	PushFriendApplication(ctx context.Context, req *gwpb.PushFriendApplicationReq) (*gwpb.PushFriendApplicationResp, error)
 }
 
 type GatewayClient struct {
@@ -100,6 +101,20 @@ func (c *GatewayClient) PushNotification(ctx context.Context, req *gwpb.PushNoti
 	}
 
 	return c.client.PushNotification(ctx, req)
+}
+
+// PushFriendApplication delivers a friend application to the connections held
+// by this gateway node.
+func (c *GatewayClient) PushFriendApplication(ctx context.Context, req *gwpb.PushFriendApplicationReq) (*gwpb.PushFriendApplicationResp, error) {
+	if c.initErr != nil {
+		return nil, c.initErr
+	}
+
+	if c.client == nil {
+		return nil, fmt.Errorf("gateway client for %s is not initialized", c.target)
+	}
+
+	return c.client.PushFriendApplication(ctx, req)
 }
 
 func (c *GatewayClient) Close() error {

@@ -7,8 +7,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/authctx"
+
 	"github.com/alicebob/miniredis/v2"
-	"github.com/hellopoisonx/aim/app/gateway/api/internal/ws"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 	"github.com/hellopoisonx/aim/app/shared/quota"
 	"github.com/redis/go-redis/v9"
@@ -56,7 +57,7 @@ func TestUserRateLimitMiddleware_AllowsWithinBudget(t *testing.T) {
 	fire, calls := recorderAndHandler(t, store, NewUserRateLimitMiddleware(store).Handle)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/conversations", nil)
-	req = req.WithContext(ws.WithIdentity(req.Context(), ws.Identity{UserID: 1, DeviceID: "device-a"}))
+	req = req.WithContext(authctx.WithIdentity(req.Context(), authctx.Identity{UserID: 1, DeviceID: "device-a"}))
 
 	for i := range 3 {
 		code, _ := fire(req)
@@ -71,7 +72,7 @@ func TestUserRateLimitMiddleware_RejectsOverBudget(t *testing.T) {
 
 	mkReq := func() *http.Request {
 		req := httptest.NewRequest(http.MethodGet, "/api/conversations", nil)
-		return req.WithContext(ws.WithIdentity(req.Context(), ws.Identity{UserID: 7, DeviceID: "phone"}))
+		return req.WithContext(authctx.WithIdentity(req.Context(), authctx.Identity{UserID: 7, DeviceID: "phone"}))
 	}
 
 	for range 2 {
@@ -97,7 +98,7 @@ func TestUserRateLimitMiddleware_BucketIsolation(t *testing.T) {
 
 	fire2 := func(userID int64, device string) int {
 		req := httptest.NewRequest(http.MethodGet, "/x", nil)
-		req = req.WithContext(ws.WithIdentity(req.Context(), ws.Identity{UserID: userID, DeviceID: device}))
+		req = req.WithContext(authctx.WithIdentity(req.Context(), authctx.Identity{UserID: userID, DeviceID: device}))
 		code, _ := fire(req)
 		return code
 	}
@@ -114,7 +115,7 @@ func TestUserRateLimitMiddleware_BucketIsolation(t *testing.T) {
 func TestUserRateLimitMiddleware_NilStorePassesThrough(t *testing.T) {
 	fire, calls := recorderAndHandler(t, nil, NewUserRateLimitMiddleware(nil).Handle)
 	req := httptest.NewRequest(http.MethodGet, "/x", nil)
-	req = req.WithContext(ws.WithIdentity(req.Context(), ws.Identity{UserID: 99, DeviceID: "d"}))
+	req = req.WithContext(authctx.WithIdentity(req.Context(), authctx.Identity{UserID: 99, DeviceID: "d"}))
 	for range 50 {
 		code, _ := fire(req)
 		require.Equal(t, http.StatusOK, code)
@@ -135,7 +136,7 @@ func TestUserRateLimitMiddleware_RedisErrorFailsOpen(t *testing.T) {
 	store, mr := newRedisStore(t, "aim:gateway:quota", time.Minute, 1)
 	fire, calls := recorderAndHandler(t, store, NewUserRateLimitMiddleware(store).Handle)
 	req := httptest.NewRequest(http.MethodGet, "/x", nil)
-	req = req.WithContext(ws.WithIdentity(req.Context(), ws.Identity{UserID: 42, DeviceID: "x"}))
+	req = req.WithContext(authctx.WithIdentity(req.Context(), authctx.Identity{UserID: 42, DeviceID: "x"}))
 
 	code, _ := fire(req)
 	require.Equal(t, http.StatusOK, code)
@@ -152,7 +153,7 @@ func TestUserRateLimitMiddleware_RedisKeyShape(t *testing.T) {
 	store, mr := newRedisStore(t, "aim:gateway:quota", time.Minute, 5)
 	fire, _ := recorderAndHandler(t, store, NewUserRateLimitMiddleware(store).Handle)
 	req := httptest.NewRequest(http.MethodGet, "/x", nil)
-	req = req.WithContext(ws.WithIdentity(req.Context(), ws.Identity{UserID: 42, DeviceID: "phone"}))
+	req = req.WithContext(authctx.WithIdentity(req.Context(), authctx.Identity{UserID: 42, DeviceID: "phone"}))
 	code, _ := fire(req)
 	require.Equal(t, http.StatusOK, code)
 	keys := mr.Keys()

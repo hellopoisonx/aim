@@ -33,10 +33,6 @@ func (l *BotSetWebhookLogic) BotSetWebhook(req *types.BotSetWebhookRequest) (*ty
 		return nil, err
 	}
 
-	if l.svcCtx.LogicBotClient == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "internal error")
-	}
-
 	if req.Url == "" {
 		return nil, errorx.NewCodeError(errorx.CodeBotWebhookInvalid, "url is required")
 	}
@@ -71,10 +67,7 @@ func (l *BotSetWebhookLogic) BotSetWebhook(req *types.BotSetWebhookRequest) (*ty
 		Enabled:   enabled,
 	})
 	if err != nil {
-		if ce := errorx.FromGRPCError(err); ce != nil {
-			return nil, ce
-		}
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "internal error")
+		return nil, errorx.SanitizeGRPCError(l, "bot set webhook", err)
 	}
 
 	cfg := rpcResp.GetWebhook()

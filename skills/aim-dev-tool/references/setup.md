@@ -86,7 +86,7 @@ protoc --python_out=../../../dev-tool gateway.proto
 | bench-logic | — | gRPC（内部） |
 | bench-postgres | `15432` | PostgreSQL |
 | bench-redis | `16379` | Redis |
-| bench-kafka | `19092` | Kafka |
+| bench-rocketmq-proxy | `18082` | RocketMQ gRPC proxy |
 | bench-etcd | `12379` | etcd HTTP API（注册中心） |
 
 | bench-tempo | `13200` | Tempo HTTP API（Grafana 数据源） |

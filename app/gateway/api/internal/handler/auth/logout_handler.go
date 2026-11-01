@@ -6,7 +6,6 @@ package auth
 import (
 	"net/http"
 
-	"github.com/hellopoisonx/aim/app/gateway/api/internal/authctx"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/logic/auth"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/zeromicro/go-zero/rest/httpx"
@@ -14,8 +13,7 @@ import (
 
 func LogoutHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		ctx := authctx.WithAuthorization(r.Context(), r.Header.Get("Authorization"))
-		l := auth.NewLogoutLogic(ctx, svcCtx)
+		l := auth.NewLogoutLogic(r.Context(), svcCtx)
 
 		resp, err := l.Logout()
 		if err != nil {

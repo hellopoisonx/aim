@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"flag"
 	"fmt"
 
@@ -29,13 +28,9 @@ func main() {
 
 	ctx := svc.NewServiceContext(c)
 
-	// Start outbox poller if configured
-	if ctx.OutboxPoller != nil {
-		ctx.OutboxPoller.Start(context.Background())
-		proc.AddWrapUpListener(func() {
-			ctx.OutboxPoller.Stop()
-		})
-	}
+	// Connect the transactional user.created producer.
+	ctx.StartEventProducer()
+	proc.AddWrapUpListener(ctx.StopEventProducer)
 
 	s := zrpc.MustNewServer(c.RpcServerConf, func(grpcServer *grpc.Server) {
 		pb.RegisterAuthServiceServer(grpcServer, server.NewAuthServiceServer(ctx))

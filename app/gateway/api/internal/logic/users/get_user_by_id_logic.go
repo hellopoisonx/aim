@@ -33,10 +33,6 @@ func (l *GetUserByIdLogic) GetUserById(req *types.GetUserByIdRequest) (resp *typ
 		return nil, errorx.NewCodeError(errorx.CodeBadInput, "id is required")
 	}
 
-	if l.svcCtx.LogicUserClient == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "internal error")
-	}
-
 	rpcResp, err := l.svcCtx.LogicUserClient.GetUserInfo(l.ctx, &userservice.GetUserInfoReq{
 		Id: req.Id,
 	})

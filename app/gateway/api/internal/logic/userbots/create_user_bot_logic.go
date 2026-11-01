@@ -3,10 +3,11 @@ package userbots
 import (
 	"context"
 
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/authctx"
+
 	"github.com/hellopoisonx/aim/app/auth/rpc/authservice"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
-	"github.com/hellopoisonx/aim/app/gateway/api/internal/ws"
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/botservice"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 
@@ -28,13 +29,9 @@ func NewCreateUserBotLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Cre
 }
 
 func (l *CreateUserBotLogic) CreateUserBot(req *types.CreateUserBotRequest) (resp *types.CreateUserBotResponse, err error) {
-	identity, ok := ws.IdentityFromContext(l.ctx)
+	identity, ok := authctx.IdentityFromContext(l.ctx)
 	if !ok {
 		return nil, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
-	}
-
-	if l.svcCtx.AuthClient == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "auth service not configured")
 	}
 
 	credentialResp, err := l.svcCtx.AuthClient.CreateBotCredential(l.ctx, &authservice.CreateBotCredentialReq{
@@ -42,11 +39,7 @@ func (l *CreateUserBotLogic) CreateUserBot(req *types.CreateUserBotRequest) (res
 		Nickname: req.Nickname,
 	})
 	if err != nil {
-		return nil, sanitizeError(l, "create bot credential", err)
-	}
-
-	if l.svcCtx.LogicBotClient == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "bot service not configured")
+		return nil, errorx.SanitizeGRPCError(l, "create bot credential", err)
 	}
 
 	botResp, err := l.svcCtx.LogicBotClient.CreateUserBot(l.ctx, &botservice.CreateUserBotReq{
@@ -57,7 +50,7 @@ func (l *CreateUserBotLogic) CreateUserBot(req *types.CreateUserBotRequest) (res
 		Avatar:      req.Avatar,
 	})
 	if err != nil {
-		return nil, sanitizeError(l, "create user bot", err)
+		return nil, errorx.SanitizeGRPCError(l, "create user bot", err)
 	}
 
 	return &types.CreateUserBotResponse{Bot: userBotToType(botResp.GetBot())}, nil

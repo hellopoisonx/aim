@@ -3,9 +3,10 @@ package conversations
 import (
 	"context"
 
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/authctx"
+
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
-	"github.com/hellopoisonx/aim/app/gateway/api/internal/ws"
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/conversationservice"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 
@@ -27,20 +28,16 @@ func NewRemoveGroupMemberLogic(ctx context.Context, svcCtx *svc.ServiceContext) 
 }
 
 func (l *RemoveGroupMemberLogic) RemoveGroupMember(req *types.RemoveGroupMemberRequest) (err error) {
-	identity, ok := ws.IdentityFromContext(l.ctx)
+	identity, ok := authctx.IdentityFromContext(l.ctx)
 	if !ok {
 		return errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
-	}
-
-	if l.svcCtx.LogicConversationClient == nil {
-		return errorx.NewCodeError(errorx.CodeInternal, "internal error")
 	}
 
 	_, err = l.svcCtx.LogicConversationClient.RemoveGroupMembers(l.ctx, &conversationservice.RemoveGroupMembersReq{
 		ConversationId: req.Id,
 		OperatorId:     identity.UserID,
 		OperatorName:   "",
-		MemberIds:      []int64{req.Uid},
+		MemberIds:      []int64{req.UserId},
 	})
 	if err != nil {
 		return errorx.SanitizeGRPCError(l, "remove group member", err)

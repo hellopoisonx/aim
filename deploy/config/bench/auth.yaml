@@ -24,7 +24,7 @@ Token:
   AccessTTL: 30m
   RefreshTTL: 168h
   SnowflakeMachineID: 1
-KqPusherConf:
-  Brokers:
-    - bench-kafka:9092
-  Topic: aim.user.events
+UserEventProducerConf:
+  Endpoint: rocketmq-proxy:8081
+  Group: aim-auth-producer
+  Topic: aim-user-events

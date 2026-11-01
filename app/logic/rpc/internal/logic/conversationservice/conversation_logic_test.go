@@ -2,296 +2,49 @@ package conversationservicelogic
 
 import (
 	"context"
-	"strconv"
 	"testing"
 	"time"
 
+	"github.com/hellopoisonx/aim/app/shared/tools"
+
+	"github.com/hellopoisonx/aim/app/logic/rpc/internal/servicefakes"
+
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/service"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
-	"github.com/hellopoisonx/aim/app/logic/rpc/model"
+	"github.com/hellopoisonx/aim/app/logic/rpc/model/orm"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
-	"github.com/hellopoisonx/aim/app/shared/tools"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func newTS() pgtype.Timestamptz {
-	return pgtype.Timestamptz{Time: time.Now().UTC(), Valid: true}
-}
-
-// fakeConversationStore implements service.ConversationStore for testing.
-type fakeConversationStore struct {
-	conversations map[int64]model.GetConversationRow
-	members       map[int64][]model.GetConversationMembersRow
-	messages      map[int64][]model.Message
-	readStates    map[int64]map[int64]model.ConversationReadState // conv_id -> user_id -> state
-}
-
-func newFakeStore() *fakeConversationStore {
-	return &fakeConversationStore{
-		conversations: make(map[int64]model.GetConversationRow),
-		members:       make(map[int64][]model.GetConversationMembersRow),
-		messages:      make(map[int64][]model.Message),
-		readStates:    make(map[int64]map[int64]model.ConversationReadState),
-	}
-}
-
-func (f *fakeConversationStore) CreateConversation(_ context.Context, arg model.CreateConversationParams) (model.CreateConversationRow, error) {
-	conv := model.GetConversationRow{
-		ID:               arg.ID,
-		ConversationType: arg.ConversationType,
-		IsActive:         true,
-		CreatedAt:        newTS(),
-		Name:             arg.Name,
-		Avatar:           arg.Avatar,
-		CreatorID:        arg.CreatorID,
-	}
-	f.conversations[arg.ID] = conv
-	return model.CreateConversationRow(conv), nil
-}
-
-func (f *fakeConversationStore) GetConversation(_ context.Context, id int64) (model.GetConversationRow, error) {
-	conv, ok := f.conversations[id]
-	if !ok {
-		return model.GetConversationRow{}, pgx.ErrNoRows
-	}
-	return conv, nil
-}
-
-func (f *fakeConversationStore) AddConversationMembers(_ context.Context, arg model.AddConversationMembersParams) (int64, error) {
-	f.members[arg.ConversationID] = append(f.members[arg.ConversationID], model.GetConversationMembersRow{
-		ConversationID: arg.ConversationID,
-		UserID:         arg.UserID,
-		JoinedAt:       newTS(),
-	})
-	return 1, nil
-}
-
-func (f *fakeConversationStore) GetConversationMembers(_ context.Context, conversationID int64) ([]model.GetConversationMembersRow, error) {
-	return f.members[conversationID], nil
-}
-
-func (f *fakeConversationStore) GetConversationsByUserID(_ context.Context, userID int64) ([]model.GetConversationsByUserIDRow, error) {
-	var result []model.GetConversationsByUserIDRow
-	for convID, conv := range f.conversations {
-		for _, m := range f.members[convID] {
-			if m.UserID == userID {
-				result = append(result, model.GetConversationsByUserIDRow(conv))
-				break
-			}
-		}
-	}
-	return result, nil
-}
-
-func (f *fakeConversationStore) ListMessagesByConversation(_ context.Context, arg model.ListMessagesByConversationParams) ([]model.Message, error) {
-	return f.messages[arg.ConversationID], nil
-}
-
-func (f *fakeConversationStore) ListMessagesByConversationInitial(_ context.Context, arg model.ListMessagesByConversationInitialParams) ([]model.Message, error) {
-	return f.messages[arg.ConversationID], nil
-}
-
-func (f *fakeConversationStore) CountMessagesByConversation(_ context.Context, conversationID int64) (int64, error) {
-	return int64(len(f.messages[conversationID])), nil
-}
-
-func (f *fakeConversationStore) GetDirectConversationByMembers(_ context.Context, arg model.GetDirectConversationByMembersParams) (model.GetDirectConversationByMembersRow, error) {
-	for convID, conv := range f.conversations {
-		if conv.ConversationType != "direct" || !conv.IsActive {
-			continue
-		}
-		memberSet := make(map[int64]bool)
-		for _, m := range f.members[convID] {
-			memberSet[m.UserID] = true
-		}
-		if memberSet[arg.UserID] && memberSet[arg.UserID_2] {
-			return model.GetDirectConversationByMembersRow(conv), nil
-		}
-	}
-	return model.GetDirectConversationByMembersRow{}, pgx.ErrNoRows
-}
-
-func (f *fakeConversationStore) AddConversationMemberWithRole(_ context.Context, arg model.AddConversationMemberWithRoleParams) (int64, error) {
-	f.members[arg.ConversationID] = append(f.members[arg.ConversationID], model.GetConversationMembersRow{
-		ConversationID: arg.ConversationID,
-		UserID:         arg.UserID,
-		Role:           arg.Role,
-		JoinedAt:       newTS(),
-	})
-	return 1, nil
-}
-
-func (f *fakeConversationStore) RemoveConversationMembers(_ context.Context, arg model.RemoveConversationMembersParams) (int64, error) {
-	removeSet := make(map[int64]bool)
-	for _, uid := range arg.Column2 {
-		removeSet[uid] = true
-	}
-	kept := make([]model.GetConversationMembersRow, 0, len(f.members[arg.ConversationID]))
-	removed := int64(0)
-	for _, m := range f.members[arg.ConversationID] {
-		if removeSet[m.UserID] {
-			removed++
-		} else {
-			kept = append(kept, m)
-		}
-	}
-	f.members[arg.ConversationID] = kept
-	return removed, nil
-}
-
-func (f *fakeConversationStore) UpdateConversation(_ context.Context, arg model.UpdateConversationParams) error {
-	conv, ok := f.conversations[arg.ID]
-	if !ok {
-		return pgx.ErrNoRows
-	}
-	if arg.Name != nil {
-		conv.Name = *arg.Name
-	}
-	if arg.Avatar != nil {
-		conv.Avatar = *arg.Avatar
-	}
-	f.conversations[arg.ID] = conv
-	return nil
-}
-
-func (f *fakeConversationStore) UpdateConversationCreator(_ context.Context, arg model.UpdateConversationCreatorParams) error {
-	conv, ok := f.conversations[arg.ID]
-	if !ok {
-		return pgx.ErrNoRows
-	}
-	conv.CreatorID = arg.CreatorID
-	f.conversations[arg.ID] = conv
-	return nil
-}
-
-func (f *fakeConversationStore) UpdateConversationMemberRole(_ context.Context, arg model.UpdateConversationMemberRoleParams) (int64, error) {
-	members := f.members[arg.ConversationID]
-	for i, m := range members {
-		if m.UserID == arg.UserID {
-			members[i].Role = arg.Role
-			f.members[arg.ConversationID] = members
-			return 1, nil
-		}
-	}
-	return 0, nil
-}
-
-func (f *fakeConversationStore) DeactivateConversation(_ context.Context, id int64) error {
-	conv, ok := f.conversations[id]
-	if !ok {
-		return pgx.ErrNoRows
-	}
-	conv.IsActive = false
-	f.conversations[id] = conv
-	return nil
-}
-
-func (f *fakeConversationStore) GetConversationCreator(_ context.Context, id int64) (int64, error) {
-	conv, ok := f.conversations[id]
-	if !ok {
-		return 0, pgx.ErrNoRows
-	}
-	return conv.CreatorID, nil
-}
-
-func (f *fakeConversationStore) IsConversationMember(_ context.Context, arg model.IsConversationMemberParams) (bool, error) {
-	for _, m := range f.members[arg.ConversationID] {
-		if m.UserID == arg.UserID {
-			return true, nil
-		}
-	}
-	return false, nil
-}
-
-func (f *fakeConversationStore) GetConversationMembersDetail(_ context.Context, conversationID int64) ([]model.GetConversationMembersDetailRow, error) {
-	var result []model.GetConversationMembersDetailRow
-	for _, m := range f.members[conversationID] {
-		result = append(result, model.GetConversationMembersDetailRow{
-			UserID:   m.UserID,
-			Email:    userEmail(m.UserID),
-			Avatar:   "avatar-" + userEmail(m.UserID),
-			Role:     m.Role,
-			JoinedAt: m.JoinedAt,
-		})
-	}
-	return result, nil
-}
-
-func userEmail(userID int64) string {
-	return "user" + strconv.FormatInt(userID, 10) + "@example.com"
-}
-
-func (f *fakeConversationStore) UpsertConversationReadState(_ context.Context, arg model.UpsertConversationReadStateParams) (model.ConversationReadState, error) {
-	conv, ok := f.readStates[arg.ConversationID]
-	if !ok {
-		conv = make(map[int64]model.ConversationReadState)
-		f.readStates[arg.ConversationID] = conv
-	}
-
-	state, exists := conv[arg.UserID]
-	if !exists {
-		state = model.ConversationReadState{
-			ConversationID:    arg.ConversationID,
-			UserID:            arg.UserID,
-			LastReadMessageID: arg.LastReadMessageID,
-			UpdatedAt:         newTS(),
-		}
-	} else if arg.LastReadMessageID > state.LastReadMessageID {
-		state.LastReadMessageID = arg.LastReadMessageID
-		state.UpdatedAt = newTS()
-	}
-
-	conv[arg.UserID] = state
-	return state, nil
-}
-
-func (f *fakeConversationStore) ListConversationReadStates(_ context.Context, conversationID int64) ([]model.ConversationReadState, error) {
-	conv := f.readStates[conversationID]
-	items := make([]model.ConversationReadState, 0, len(conv))
-	for _, state := range conv {
-		items = append(items, state)
-	}
-	return items, nil
-}
-
-func (f *fakeConversationStore) InsertMessage(_ context.Context, arg model.InsertMessageParams) error {
-	f.messages[arg.ConversationID] = append(f.messages[arg.ConversationID], model.Message{
-		ID:             arg.ID,
-		ConversationID: arg.ConversationID,
-		SenderID:       arg.SenderID,
-		MessageType:    arg.MessageType,
-		Content:        arg.Content,
-		CreatedAt:      newTS(),
-	})
-	return nil
-}
-
-// testSnowflake is a shared Snowflake instance for tests.
 var testSnowflake = func() *tools.Snowflake {
-	s, err := tools.NewSnowflake(1)
+	gen, err := tools.NewSnowflake(1)
 	if err != nil {
 		panic(err)
 	}
-	return s
+
+	return gen
 }()
 
+func newTS() time.Time {
+	return time.Now().UTC()
+}
+
+// generateTestConversationID returns a unique id for the fake store.
 func generateTestConversationID() int64 {
 	id, err := testSnowflake.NextID()
 	if err != nil {
 		panic(err)
 	}
+
 	return id
 }
 
 func setupTestSvc() *svc.ServiceContext {
-	store := newFakeStore()
-	convSvc := service.NewConversationService(store, testSnowflake, nil, nil)
-	return &svc.ServiceContext{
-		ConversationService: convSvc,
-	}
+	store := servicefakes.NewConversationStore()
+	convSvc := service.NewConversationService(store, testSnowflake, nil)
+
+	return &svc.ServiceContext{ConversationService: convSvc}
 }
 
 func TestCreateConversationLogic(t *testing.T) {
@@ -400,20 +153,20 @@ func TestCreateConversationLogic(t *testing.T) {
 }
 
 func TestGetConversationHistoryLogic(t *testing.T) {
-	store := newFakeStore()
+	store := servicefakes.NewConversationStore()
 	convID := generateTestConversationID()
-	store.conversations[convID] = model.GetConversationRow{
+	store.Conversations[convID] = orm.Conversation{
 		ID:               convID,
 		ConversationType: "direct",
 		IsActive:         true,
 		CreatedAt:        newTS(),
 	}
-	store.members[convID] = []model.GetConversationMembersRow{
+	store.Members[convID] = []orm.ConversationMember{
 		{ConversationID: convID, UserID: 1, JoinedAt: newTS()},
 		{ConversationID: convID, UserID: 2, JoinedAt: newTS()},
 	}
 	clientMsg := "client-1"
-	store.messages[convID] = []model.Message{
+	store.Messages[convID] = []orm.Message{
 		{ID: 1, ConversationID: convID, SenderID: 1, MessageType: "text", Content: []byte(`"hello"`), ClientMsgID: &clientMsg, Mentions: []byte(`["2"]`), CreatedAt: newTS()},
 		{ID: 2, ConversationID: convID, SenderID: 2, MessageType: "text", Content: []byte(`"world"`), CreatedAt: newTS()},
 	}
@@ -421,7 +174,7 @@ func TestGetConversationHistoryLogic(t *testing.T) {
 	convSvc := service.NewConversationService(store, testSnowflake, nil, nil)
 	svcCtx := &svc.ServiceContext{
 		ConversationService: convSvc,
-		UserInfoService: &fakeUserInfoService{users: map[int64]model.UserInfo{
+		UserInfoService: &fakeUserInfoService{users: map[int64]orm.UserInfo{
 			1: {ID: 1, Email: "user1@example.com", Nickname: "User 1"},
 			2: {ID: 2, Email: "user2@example.com", Nickname: "User 2"},
 		}},
@@ -517,26 +270,26 @@ func TestMessageContentFromJSONB(t *testing.T) {
 }
 
 func TestGetConversationHistoryLogic_ReadDetails(t *testing.T) {
-	store := newFakeStore()
+	store := servicefakes.NewConversationStore()
 	convID := generateTestConversationID()
-	store.conversations[convID] = model.GetConversationRow{
+	store.Conversations[convID] = orm.Conversation{
 		ID:               convID,
 		ConversationType: "group",
 		IsActive:         true,
 		CreatedAt:        newTS(),
 	}
-	store.members[convID] = []model.GetConversationMembersRow{
+	store.Members[convID] = []orm.ConversationMember{
 		{ConversationID: convID, UserID: 1, JoinedAt: newTS()},
 		{ConversationID: convID, UserID: 2, JoinedAt: newTS()},
 		{ConversationID: convID, UserID: 3, JoinedAt: newTS()},
 	}
-	store.messages[convID] = []model.Message{
+	store.Messages[convID] = []orm.Message{
 		{ID: 10, ConversationID: convID, SenderID: 1, MessageType: "text", Content: []byte(`"hi"`), CreatedAt: newTS()},
 		{ID: 20, ConversationID: convID, SenderID: 2, MessageType: "text", Content: []byte(`"hello"`), CreatedAt: newTS()},
 	}
 
 	// User 2 has read up to message 20 (both messages), User 3 only up to message 10.
-	store.readStates[convID] = map[int64]model.ConversationReadState{
+	store.ReadStates[convID] = map[int64]orm.ConversationReadState{
 		2: {ConversationID: convID, UserID: 2, LastReadMessageID: 20, UpdatedAt: newTS()},
 		3: {ConversationID: convID, UserID: 3, LastReadMessageID: 10, UpdatedAt: newTS()},
 	}
@@ -544,7 +297,7 @@ func TestGetConversationHistoryLogic_ReadDetails(t *testing.T) {
 	convSvc := service.NewConversationService(store, testSnowflake, nil, nil)
 	svcCtx := &svc.ServiceContext{
 		ConversationService: convSvc,
-		UserInfoService: &fakeUserInfoService{users: map[int64]model.UserInfo{
+		UserInfoService: &fakeUserInfoService{users: map[int64]orm.UserInfo{
 			1: {ID: 1, Email: "u1@x.com", Nickname: "U1"},
 			2: {ID: 2, Email: "u2@x.com", Nickname: "U2"},
 			3: {ID: 3, Email: "u3@x.com", Nickname: "U3"},
@@ -602,15 +355,15 @@ func TestCreateConversationLogic_NilService(t *testing.T) {
 }
 
 func TestGetConversationMembersLogic(t *testing.T) {
-	store := newFakeStore()
+	store := servicefakes.NewConversationStore()
 	convID := generateTestConversationID()
-	store.conversations[convID] = model.GetConversationRow{
+	store.Conversations[convID] = orm.Conversation{
 		ID:               convID,
 		ConversationType: "direct",
 		IsActive:         true,
 		CreatedAt:        newTS(),
 	}
-	store.members[convID] = []model.GetConversationMembersRow{
+	store.Members[convID] = []orm.ConversationMember{
 		{ConversationID: convID, UserID: 1, JoinedAt: newTS()},
 		{ConversationID: convID, UserID: 2, JoinedAt: newTS()},
 	}
@@ -628,15 +381,15 @@ func TestGetConversationMembersLogic_InvalidRequest(t *testing.T) {
 }
 
 func TestUpdateReadReceiptLogic_HappyPath(t *testing.T) {
-	store := newFakeStore()
+	store := servicefakes.NewConversationStore()
 	convID := generateTestConversationID()
-	store.conversations[convID] = model.GetConversationRow{
+	store.Conversations[convID] = orm.Conversation{
 		ID:               convID,
 		ConversationType: "group",
 		IsActive:         true,
 		CreatedAt:        newTS(),
 	}
-	store.members[convID] = []model.GetConversationMembersRow{
+	store.Members[convID] = []orm.ConversationMember{
 		{ConversationID: convID, UserID: 11, JoinedAt: newTS()},
 		{ConversationID: convID, UserID: 22, JoinedAt: newTS()},
 	}
@@ -656,15 +409,15 @@ func TestUpdateReadReceiptLogic_HappyPath(t *testing.T) {
 }
 
 func TestUpdateReadReceiptLogic_NotMemberRejected(t *testing.T) {
-	store := newFakeStore()
+	store := servicefakes.NewConversationStore()
 	convID := generateTestConversationID()
-	store.conversations[convID] = model.GetConversationRow{
+	store.Conversations[convID] = orm.Conversation{
 		ID:               convID,
 		ConversationType: "group",
 		IsActive:         true,
 		CreatedAt:        newTS(),
 	}
-	store.members[convID] = []model.GetConversationMembersRow{
+	store.Members[convID] = []orm.ConversationMember{
 		{ConversationID: convID, UserID: 11, JoinedAt: newTS()},
 	}
 
@@ -680,15 +433,15 @@ func TestUpdateReadReceiptLogic_NotMemberRejected(t *testing.T) {
 }
 
 func TestListConversationReadStatesLogic_HappyPath(t *testing.T) {
-	store := newFakeStore()
+	store := servicefakes.NewConversationStore()
 	convID := generateTestConversationID()
-	store.conversations[convID] = model.GetConversationRow{
+	store.Conversations[convID] = orm.Conversation{
 		ID:               convID,
 		ConversationType: "group",
 		IsActive:         true,
 		CreatedAt:        newTS(),
 	}
-	store.members[convID] = []model.GetConversationMembersRow{
+	store.Members[convID] = []orm.ConversationMember{
 		{ConversationID: convID, UserID: 11, JoinedAt: newTS()},
 		{ConversationID: convID, UserID: 22, JoinedAt: newTS()},
 	}

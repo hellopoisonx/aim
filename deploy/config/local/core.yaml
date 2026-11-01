@@ -24,67 +24,49 @@ LogicRpc:
     Hosts:
       - etcd:2379
     Key: logic.rpc
-KqPusherConf:
-  Brokers:
-    - kafka:9092
+TransferProducerConf:
+  Endpoint: rocketmq-proxy:8081
+  Group: aim-core-transfer
   Topic: aim-message-transfer
-KqConsumerConf:
+DeliveryConsumerConf:
   Name: core-delivery-consumer
-  Brokers:
-    - kafka:9092
+  Endpoint: rocketmq-proxy:8081
   Group: aim-core-delivery
   Topic: aim-message-transfer
-  Offset: first
-  Consumers: 1
-  Processors: 1
+  Concurrency: 1
 PresenceConsumerConf:
   Name: core-presence-consumer
-  Brokers:
-    - kafka:9092
+  Endpoint: rocketmq-proxy:8081
   Group: aim-core-presence
-  Topic: aim.presence.events
-  Offset: first
-  Consumers: 1
-  Processors: 1
+  Topic: aim-presence-events
+  Concurrency: 1
 TypingConsumerConf:
   Name: core-typing-consumer
-  Brokers:
-    - kafka:9092
+  Endpoint: rocketmq-proxy:8081
   Group: aim-core-typing
-  Topic: aim.typing.events
-  Offset: first
-  Consumers: 1
-  Processors: 1
+  Topic: aim-typing-events
+  Concurrency: 1
 ReadReceiptConsumerConf:
   Name: core-read-receipt-consumer
-  Brokers:
-    - kafka:9092
+  Endpoint: rocketmq-proxy:8081
   Group: aim-core-read-receipt
-  Topic: aim.read_receipt.events
-  Offset: first
-  Consumers: 1
-  Processors: 1
+  Topic: aim-read-receipt-events
+  Concurrency: 1
 # 群管理系统消息消费者：消费 logic 发布的群变更事件并推送到目标用户所在 Gateway。
 ConversationEventConsumerConf:
   Name: core-conversation-event-consumer
-  Brokers:
-    - kafka:9092
+  Endpoint: rocketmq-proxy:8081
   Group: aim-core-conversation-events
-  Topic: aim.conversation.events
-  Offset: first
-  Consumers: 1
-  Processors: 1
-# 附件解析完成消费者：消费 data_parsing 发布的 aim.attachment.parsed 事件，
+  Topic: aim-conversation-events
+  Concurrency: 1
+# 附件解析完成消费者：消费 data_parsing 发布的 aim-attachment-parsed 事件，
 # 将解析结果（缩略图、尺寸等）以系统消息推送至会话成员。
 AttachmentParsedConsumerConf:
   Name: core-attachment-parsed-consumer
-  Brokers:
-    - kafka:9092
+  Endpoint: rocketmq-proxy:8081
   Group: aim-core-attachment-parsed
-  Topic: aim.attachment.parsed
-  Offset: first
-  Consumers: 1
-  Processors: 1
+  Topic: aim-attachment-parsed
+  Concurrency: 1
 GatewayRpc:
   ServiceName: gateway.rpc
   Target: aim-gateway:9091

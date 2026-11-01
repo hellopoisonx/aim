@@ -6,18 +6,24 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"strings"
 	"time"
 
+	"github.com/hellopoisonx/aim/app/shared/pgtypes"
+
+	"github.com/google/uuid"
 	"github.com/hellopoisonx/aim/app/data_parsing/internal/config"
 	"github.com/hellopoisonx/aim/app/data_parsing/internal/parser"
 	"github.com/hellopoisonx/aim/app/shared/attachment"
+	"github.com/hellopoisonx/aim/app/shared/attachmentstore/dao"
+	"github.com/hellopoisonx/aim/app/shared/attachmentstore/orm"
 	"github.com/hellopoisonx/aim/app/shared/events"
+	"github.com/hellopoisonx/aim/app/shared/gormdb"
+	"github.com/hellopoisonx/aim/app/shared/rocketmq"
 	"github.com/hellopoisonx/aim/app/shared/s3signer"
 	"github.com/hellopoisonx/aim/app/shared/tracing"
-	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/zeromicro/go-queue/kq"
 	"github.com/zeromicro/go-zero/core/logx"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -25,45 +31,70 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
+// parsedProducerGroup is the broker-visible producer group of the parsing
+// worker.
+const parsedProducerGroup = "aim-data-parsing-producer"
+
 type Worker struct {
-	cfg    config.Config
-	db     *pgxpool.Pool
-	parser parser.Parser
-	pusher *kq.Pusher
+	cfg      config.Config
+	store    *dao.Store
+	parser   parser.Parser
+	producer *rocketmq.Producer
 }
 
 func New(ctx context.Context, cfg config.Config) (*Worker, error) {
-	var pool *pgxpool.Pool
-	var err error
+	var store *dao.Store
 	if cfg.Postgres.DataSource != "" {
-		pool, err = pgxpool.New(ctx, cfg.Postgres.DataSource)
+		db, err := gormdb.Open(cfg.Postgres.DataSource)
 		if err != nil {
 			return nil, err
 		}
+		store = dao.New(db)
 	}
-	var pusher *kq.Pusher
-	if len(cfg.ParsedProducer.Brokers) > 0 && cfg.ParsedProducer.Topic != "" {
-		pusher = kq.NewPusher(cfg.ParsedProducer.Brokers, cfg.ParsedProducer.Topic)
+	var producer *rocketmq.Producer
+	if cfg.ParsedProducer.IsConfigured() {
+		created, err := rocketmq.NewProducer(cfg.ParsedProducer.EndpointConf, parsedProducerGroup, cfg.ParsedProducer.Topic)
+		if err != nil {
+			return nil, err
+		}
+		if err := created.Start(); err != nil {
+			return nil, err
+		}
+		producer = created
 	}
-	return &Worker{cfg: cfg, db: pool, parser: parser.DefaultParser{}, pusher: pusher}, nil
+	return &Worker{cfg: cfg, store: store, parser: parser.DefaultParser{}, producer: producer}, nil
 }
 
 func (w *Worker) Close() {
-	if w.db != nil {
-		w.db.Close()
+	if w.producer != nil {
+		if err := w.producer.GracefulStop(); err != nil {
+			logx.WithContext(context.Background()).Errorf("failed to stop rocketmq parsed producer: %v", err)
+		}
+	}
+	if w.store == nil {
+		return
+	}
+	if db := w.store.DB(); db != nil {
+		if sqlDB, err := db.DB(); err == nil {
+			_ = sqlDB.Close()
+		}
 	}
 }
 
 func (w *Worker) Consume(ctx context.Context, key string, value string) (err error) {
 	var event events.AttachmentUploadedEvent
 	if err := json.Unmarshal([]byte(value), &event); err != nil {
-		return err
+		// Undecodable payloads cannot be repaired by redelivery.
+		logx.WithContext(ctx).Errorf(
+			"dropping undecodable attachment uploaded event key=%s: %v payload=%q", key, err, value,
+		)
+		return nil
 	}
 	ctx = tracing.ExtractTraceContext(ctx, event.TraceContextFields)
-	ctx, span := tracing.StartKafkaConsumerSpan(
+	ctx, span := tracing.StartMQConsumerSpan(
 		ctx,
-		"data_parsing.kafka.attachment_uploaded.consume",
-		attribute.String("messaging.kafka.message_key", key),
+		"data_parsing.rocketmq.attachment_uploaded.consume",
+		attribute.String("messaging.rocketmq.message_key", key),
 		attribute.String("attachment.file_id", event.FileID),
 	)
 	defer func() {
@@ -74,8 +105,12 @@ func (w *Worker) Consume(ctx context.Context, key string, value string) (err err
 	}()
 
 	if !attachment.RequiresDataParsing(event.Kind) {
-		if w.db != nil {
-			_, err = w.db.Exec(ctx, `UPDATE attachment_files SET parse_status='ready', updated_at=NOW() WHERE file_id=$1`, event.FileID)
+		if w.store != nil {
+			fileID, parseErr := uuid.Parse(event.FileID)
+			if parseErr != nil {
+				return parseErr
+			}
+			_, err = w.store.SetParseStatus(ctx, fileID, attachment.ParseStatusReady)
 		}
 		return err
 	}
@@ -95,43 +130,80 @@ func (w *Worker) Consume(ctx context.Context, key string, value string) (err err
 		}
 	}
 	meta, _ := json.Marshal(res.Metadata)
-	if w.db != nil {
-		_, err = w.db.Exec(ctx, `INSERT INTO attachment_objects(file_id, object_role, bucket, object_key, mime, size_bytes, width, height, duration_ms)
-VALUES ($1,'thumbnail',$2,$3,$4,$5,$6,$7,$8)
-ON CONFLICT (file_id, object_role) DO UPDATE SET object_key=EXCLUDED.object_key, mime=EXCLUDED.mime, size_bytes=EXCLUDED.size_bytes, width=EXCLUDED.width, height=EXCLUDED.height, duration_ms=EXCLUDED.duration_ms`, event.FileID, event.Bucket, thumbKey, res.ThumbMIME, len(res.Thumbnail), res.ThumbWidth, res.ThumbHeight, res.DurationMS)
-		if err != nil {
+	if w.store != nil {
+		fileID, parseErr := uuid.Parse(event.FileID)
+		if parseErr != nil {
+			return w.fail(ctx, event, parseErr)
+		}
+		size := int64(len(res.Thumbnail))
+		thumbWidth := clampInt32(res.ThumbWidth)
+		thumbHeight := clampInt32(res.ThumbHeight)
+		width := clampInt32(res.Width)
+		height := clampInt32(res.Height)
+		if err = w.store.UpsertAttachmentObject(ctx, orm.AttachmentObject{
+			FileID:     fileID,
+			ObjectRole: "thumbnail",
+			Bucket:     event.Bucket,
+			ObjectKey:  thumbKey,
+			Mime:       res.ThumbMIME,
+			SizeBytes:  &size,
+			Width:      &thumbWidth,
+			Height:     &thumbHeight,
+			DurationMs: &res.DurationMS,
+		}); err != nil {
 			return w.fail(ctx, event, err)
 		}
-		_, err = w.db.Exec(ctx, `INSERT INTO attachment_parse_results(file_id, duration_ms, width, height, metadata)
-VALUES ($1,$2,$3,$4,$5)
-ON CONFLICT (file_id) DO UPDATE SET duration_ms=EXCLUDED.duration_ms, width=EXCLUDED.width, height=EXCLUDED.height, metadata=EXCLUDED.metadata, error=NULL, updated_at=NOW()`, event.FileID, res.DurationMS, res.Width, res.Height, meta)
-		if err != nil {
+		if err = w.store.UpsertAttachmentParseResult(ctx, orm.AttachmentParseResult{
+			FileID:     fileID,
+			DurationMs: &res.DurationMS,
+			Width:      &width,
+			Height:     &height,
+			Metadata:   pgtypes.JSON(meta),
+		}); err != nil {
 			return w.fail(ctx, event, err)
 		}
-		_, err = w.db.Exec(ctx, `UPDATE attachment_files SET parse_status='ready', updated_at=NOW() WHERE file_id=$1`, event.FileID)
-		if err != nil {
+		if _, err = w.store.SetParseStatus(ctx, fileID, attachment.ParseStatusReady); err != nil {
 			return w.fail(ctx, event, err)
 		}
 	}
 
-	return w.publish(ctx, events.AttachmentParsedEvent{TraceContextFields: tracing.InjectTraceContext(ctx), FileID: event.FileID, Kind: event.Kind, ParseStatus: attachment.ParseStatusReady, ThumbnailObjectKey: thumbKey, DurationMS: res.DurationMS, Width: res.Width, Height: res.Height, Metadata: res.Metadata, ParsedAt: time.Now().UnixMilli()})
+	return w.publish(ctx, events.AttachmentParsedEvent{TraceContextFields: tracing.InjectTraceContext(ctx), FileID: event.FileID, Kind: event.Kind, ParseStatus: attachment.ParseStatusReady, ThumbnailObjectKey: thumbKey, DurationMS: res.DurationMS, Width: res.Width, Height: res.Height, Metadata: &res.Metadata, ParsedAt: time.Now().UnixMilli()})
+}
+
+// clampInt32 narrows a parser-reported dimension to the int32 column range.
+// Media dimensions are far below the limit in practice; clamping keeps a
+// corrupt header from wrapping into a negative size.
+func clampInt32(v int) int32 {
+	switch {
+	case v > math.MaxInt32:
+		return math.MaxInt32
+	case v < math.MinInt32:
+		return math.MinInt32
+	default:
+		return int32(v)
+	}
 }
 
 func (w *Worker) fail(ctx context.Context, event events.AttachmentUploadedEvent, cause error) error {
 	logx.WithContext(ctx).Errorf("parse attachment %s failed: %v", event.FileID, cause)
-	if w.db != nil {
-		_, _ = w.db.Exec(ctx, `UPDATE attachment_files SET parse_status='failed', updated_at=NOW() WHERE file_id=$1`, event.FileID)
-		_, _ = w.db.Exec(ctx, `INSERT INTO attachment_parse_results(file_id, error, metadata) VALUES ($1,$2,'{}') ON CONFLICT (file_id) DO UPDATE SET error=EXCLUDED.error, updated_at=NOW()`, event.FileID, cause.Error())
+	if w.store != nil {
+		if fileID, parseErr := uuid.Parse(event.FileID); parseErr == nil {
+			_, _ = w.store.SetParseStatus(ctx, fileID, attachment.ParseStatusFailed)
+			_ = w.store.SetParseResultError(ctx, fileID, cause.Error())
+		}
 	}
 	_ = w.publish(ctx, events.AttachmentParsedEvent{TraceContextFields: tracing.InjectTraceContext(ctx), FileID: event.FileID, Kind: event.Kind, ParseStatus: attachment.ParseStatusFailed, Error: cause.Error(), ParsedAt: time.Now().UnixMilli()})
-	return cause
+	// The failure is already recorded on the attachment and announced downstream;
+	// returning nil acknowledges the message instead of replaying the same
+	// unparsable object forever.
+	return nil
 }
 
 func (w *Worker) publish(ctx context.Context, event events.AttachmentParsedEvent) error {
-	if w.pusher == nil {
+	if w.producer == nil {
 		return nil
 	}
-	ctx, span := tracing.StartKafkaProducerSpan(ctx, "data_parsing.kafka.attachment_parsed.publish", attribute.String("attachment.file_id", event.FileID))
+	ctx, span := tracing.StartMQProducerSpan(ctx, "data_parsing.rocketmq.attachment_parsed.publish", attribute.String("attachment.file_id", event.FileID))
 	defer span.End()
 
 	event.TraceContextFields = tracing.InjectTraceContext(ctx)
@@ -140,7 +212,11 @@ func (w *Worker) publish(ctx context.Context, event events.AttachmentParsedEvent
 		tracing.RecordSpanError(span, err)
 		return err
 	}
-	err = w.pusher.PushWithKey(ctx, event.FileID, string(b))
+	err = w.producer.Publish(ctx, rocketmq.Message{
+		Topic: w.cfg.ParsedProducer.Topic,
+		Key:   event.FileID,
+		Body:  b,
+	})
 	if err != nil {
 		tracing.RecordSpanError(span, err)
 	}

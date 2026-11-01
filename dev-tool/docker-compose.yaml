@@ -32,9 +32,9 @@ services:
         condition: service_healthy
       bench-postgres:
         condition: service_healthy
-      bench-kafka:
-        condition: service_healthy
-      bench-kafka-init:
+      bench-rocketmq-proxy:
+        condition: service_started
+      bench-rocketmq-init:
         condition: service_completed_successfully
       bench-etcd:
         condition: service_healthy
@@ -82,9 +82,9 @@ services:
         condition: service_healthy
       bench-postgres:
         condition: service_healthy
-      bench-kafka:
-        condition: service_healthy
-      bench-kafka-init:
+      bench-rocketmq-proxy:
+        condition: service_started
+      bench-rocketmq-init:
         condition: service_completed_successfully
       bench-etcd:
         condition: service_healthy
@@ -109,9 +109,9 @@ services:
         condition: service_completed_successfully
       bench-redis:
         condition: service_healthy
-      bench-kafka:
-        condition: service_healthy
-      bench-kafka-init:
+      bench-rocketmq-proxy:
+        condition: service_started
+      bench-rocketmq-init:
         condition: service_completed_successfully
       bench-etcd:
         condition: service_healthy
@@ -158,9 +158,9 @@ services:
         condition: service_healthy
       bench-postgres:
         condition: service_healthy
-      bench-kafka:
-        condition: service_healthy
-      bench-kafka-init:
+      bench-rocketmq-proxy:
+        condition: service_started
+      bench-rocketmq-init:
         condition: service_completed_successfully
       bench-etcd:
         condition: service_healthy
@@ -208,64 +208,94 @@ services:
     networks:
       - bench-network
 
-  bench-kafka:
-    image: apache/kafka:4.0.2
-    container_name: bench-kafka
-    environment:
-      - KAFKA_NODE_ID=0
-      - KAFKA_PROCESS_ROLES=broker,controller
-      - KAFKA_LISTENERS=PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
-      - KAFKA_CONTROLLER_QUORUM_VOTERS=0@127.0.0.1:9093
-      - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://bench-kafka:9092
-      - KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER
-      - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
-      - KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1
-      - KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1
-      - KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1
-      - KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0
-      - KAFKA_NUM_PARTITIONS=3
-    ports:
-      - "19092:9092"
-    volumes:
-      - bench_kafka_data:/var/lib/kafka/data
+  bench-rocketmq-namesrv:
+    image: apache/rocketmq:5.3.3
+    container_name: bench-rocketmq-namesrv
+    command: ["sh", "mqnamesrv"]
+    expose:
+      - "9876"
     healthcheck:
-      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 || exit 1"]
+      test: ["CMD-SHELL", "sh mqadmin clusterList -n 127.0.0.1:9876 >/dev/null 2>&1 || exit 1"]
       interval: 10s
-      timeout: 5s
-      retries: 5
+      timeout: 10s
+      retries: 10
+      start_period: 20s
+    networks:
+      - bench-network
+
+  bench-rocketmq-broker:
+    image: apache/rocketmq:5.3.3
+    container_name: bench-rocketmq-broker
+    command: ["sh", "mqbroker", "-n", "bench-rocketmq-namesrv:9876", "-c", "/home/rocketmq/conf/broker.conf"]
+    expose:
+      - "10909"
+      - "10911"
+      - "10912"
+    # Named volumes are root-owned; the broker must write its store as root.
+    user: "0:0"
+    volumes:
+      - ../deploy/rocketmq/broker.conf:/home/rocketmq/conf/broker.conf:ro
+      - bench_rocketmq_broker_store:/home/rocketmq/store
+    depends_on:
+      bench-rocketmq-namesrv:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "sh mqadmin clusterList -n bench-rocketmq-namesrv:9876 2>/dev/null | grep -q broker-a || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
       start_period: 30s
     networks:
       - bench-network
 
-  bench-kafbat-ui:
-    container_name: bench-kafbat-ui
-    image: ghcr.io/kafbat/kafka-ui:latest
+  bench-rocketmq-proxy:
+    image: apache/rocketmq:5.3.3
+    container_name: bench-rocketmq-proxy
+    command: ["sh", "mqproxy", "-n", "bench-rocketmq-namesrv:9876"]
+    expose:
+      - "8080"
+      - "8081"
     ports:
-      - 18000:8080
-    environment:
-      DYNAMIC_CONFIG_ENABLED: 'true'
-      SWAGGER_UI_ENABLED: 'true'
+      - "18082:8081"
     depends_on:
-      bench-kafka:
+      bench-rocketmq-broker:
         condition: service_healthy
-    volumes:
-      - ./kui/config.yaml:/etc/kafkaui/dynamic_config.yaml:ro
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/127.0.0.1/8081' || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 20s
     networks:
       - bench-network
 
-  bench-kafka-init:
-    image: apache/kafka:4.0.2
-    container_name: bench-kafka-init
+  bench-rocketmq-dashboard:
+    container_name: bench-rocketmq-dashboard
+    image: apacherocketmq/rocketmq-dashboard:latest
+    ports:
+      - 18000:8080
+    environment:
+      JAVA_OPTS: "-Drocketmq.namesrv.addr=bench-rocketmq-namesrv:9876 -Dcom.rocketmq.sendMessageWithVIPChannel=false"
     depends_on:
-      bench-kafka:
+      bench-rocketmq-namesrv:
+        condition: service_healthy
+    networks:
+      - bench-network
+
+  bench-rocketmq-init:
+    image: apache/rocketmq:5.3.3
+    container_name: bench-rocketmq-init
+    depends_on:
+      bench-rocketmq-broker:
         condition: service_healthy
     environment:
-      KAFKA_BOOTSTRAP: bench-kafka:9092
-      KAFKA_PARTITIONS: 3
-      KAFKA_REPLICATION_FACTOR: 1
+      ROCKETMQ_NAMESRV: bench-rocketmq-namesrv:9876
+      ROCKETMQ_CLUSTER: DefaultCluster
+      ROCKETMQ_QUEUES: 4
     volumes:
-      - ../deploy/scripts/init-kafka-topics.sh:/scripts/init-kafka-topics.sh:ro
-    command: ["/bin/sh", "/scripts/init-kafka-topics.sh"]
+      - ../deploy/scripts/init-rocketmq-topics.sh:/scripts/init-rocketmq-topics.sh:ro
+    entrypoint: ["/bin/sh", "/scripts/init-rocketmq-topics.sh"]
+    restart: "no"
     networks:
       - bench-network
 
@@ -377,7 +407,7 @@ networks:
 volumes:
   bench_postgres_data:
   bench_redis_data:
-  bench_kafka_data:
+  bench_rocketmq_broker_store:
   bench_etcd_data:
   bench_gateway_log:
 

@@ -23,7 +23,7 @@ func NewUserCreatedConsumer(ctx context.Context, svcCtx *svc.ServiceContext) *Us
 	return &UserCreatedConsumer{ctx: ctx, svcCtx: svcCtx}
 }
 
-// Consume implements the kq.ConsumeHandler interface.
+// Consume implements the rocketmq handler interface.
 func (c *UserCreatedConsumer) Consume(ctx context.Context, key string, value string) error {
 	var event events.UserCreatedEvent
 	if err := json.Unmarshal([]byte(value), &event); err != nil {
@@ -33,7 +33,7 @@ func (c *UserCreatedConsumer) Consume(ctx context.Context, key string, value str
 
 	ctx = tracing.ExtractTraceContext(ctx, event.TraceContextFields)
 
-	ctx, span := tracing.StartKafkaConsumerSpan(ctx, "logic.kafka.user_created.consume")
+	ctx, span := tracing.StartMQConsumerSpan(ctx, "logic.rocketmq.user_created.consume")
 	defer span.End()
 
 	// Skip if UserInfoService is not available (DB disabled)

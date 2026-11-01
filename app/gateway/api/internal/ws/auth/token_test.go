@@ -24,25 +24,22 @@ func TestExtractTokenFromBearerHeader(t *testing.T) {
 func TestExtractTokenRejectsRawHeader(t *testing.T) {
 	t.Parallel()
 
-	_, codeErr := wsauth.ExtractToken("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9")
-	require.NotNil(t, codeErr)
-	assert.Equal(t, errorx.CodeTokenInvalid, codeErr.Code)
+	_, err := wsauth.ExtractToken("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9")
+	requireCode(t, err, errorx.CodeTokenInvalid)
 }
 
 func TestExtractTokenRejectsQueryOnly(t *testing.T) {
 	t.Parallel()
 
-	_, codeErr := wsauth.ExtractToken("")
-	require.NotNil(t, codeErr)
-	assert.Equal(t, errorx.CodeTokenInvalid, codeErr.Code)
+	_, err := wsauth.ExtractToken("")
+	requireCode(t, err, errorx.CodeTokenInvalid)
 }
 
 func TestExtractTokenMissing(t *testing.T) {
 	t.Parallel()
 
-	_, codeErr := wsauth.ExtractToken("")
-	require.NotNil(t, codeErr)
-	assert.Equal(t, errorx.CodeTokenInvalid, codeErr.Code)
+	_, err := wsauth.ExtractToken("")
+	requireCode(t, err, errorx.CodeTokenInvalid)
 }
 
 func TestValidateToken(t *testing.T) {
@@ -57,7 +54,7 @@ func TestValidateToken(t *testing.T) {
 
 	// Validate it
 	claims, codeErr := wsauth.ValidateToken(validToken, secretKey)
-	require.Nil(t, codeErr)
+	require.NoError(t, codeErr)
 	require.NotNil(t, claims)
 	assert.Equal(t, int64(123), claims.UserID)
 	assert.Equal(t, "device-abc", claims.DeviceID)
@@ -67,15 +64,14 @@ func TestValidateTokenInvalid(t *testing.T) {
 	t.Parallel()
 
 	_, codeErr := wsauth.ValidateToken("invalid-token", "secret")
-	require.NotNil(t, codeErr)
+	require.Error(t, codeErr)
 }
 
 func TestValidateTokenEmpty(t *testing.T) {
 	t.Parallel()
 
-	_, codeErr := wsauth.ValidateToken("", "secret")
-	require.NotNil(t, codeErr)
-	assert.Equal(t, errorx.CodeTokenInvalid, codeErr.Code)
+	_, err := wsauth.ValidateToken("", "secret")
+	requireCode(t, err, errorx.CodeTokenInvalid)
 }
 
 func TestExtractAndValidate(t *testing.T) {
@@ -87,8 +83,8 @@ func TestExtractAndValidate(t *testing.T) {
 	validToken, _, err := manager.GenerateAccessToken(456, "device-xyz")
 	require.NoError(t, err)
 
-	claims, codeErr := wsauth.ExtractAndValidate("Bearer "+validToken, secretKey)
-	require.Nil(t, codeErr)
+	claims, err := wsauth.ExtractAndValidate("Bearer "+validToken, secretKey)
+	require.NoError(t, err)
 	require.NotNil(t, claims)
 	assert.Equal(t, int64(456), claims.UserID)
 	assert.Equal(t, "device-xyz", claims.DeviceID)
@@ -97,8 +93,15 @@ func TestExtractAndValidate(t *testing.T) {
 func TestExtractAndValidateRejectsMissingAuthorization(t *testing.T) {
 	t.Parallel()
 
-	claims, codeErr := wsauth.ExtractAndValidate("", "test-secret")
+	claims, err := wsauth.ExtractAndValidate("", "test-secret")
 	require.Nil(t, claims)
-	require.NotNil(t, codeErr)
-	assert.Equal(t, errorx.CodeTokenInvalid, codeErr.Code)
+	requireCode(t, err, errorx.CodeTokenInvalid)
+}
+
+// requireCode asserts that err carries the expected biz code.
+func requireCode(t *testing.T, err error, want int) {
+	t.Helper()
+	var codeErr *errorx.CodeError
+	require.ErrorAs(t, err, &codeErr)
+	assert.Equal(t, want, codeErr.Code)
 }

@@ -42,12 +42,11 @@ Redis:
   Password: ""
   DB: 0
   PresenceTTL: 45
-Kafka:
-  Brokers:
-    - bench-kafka:9092
-  PresenceTopic: aim.presence.events
-  TypingTopic: aim.typing.events
-  ReadReceiptTopic: aim.read_receipt.events
+RocketMQ:
+  Endpoint: rocketmq-proxy:8081
+  PresenceTopic: aim-presence-events
+  TypingTopic: aim-typing-events
+  ReadReceiptTopic: aim-read-receipt-events
 GatewayRpc:
   Name: gateway.rpc
   ListenOn: 0.0.0.0:9091

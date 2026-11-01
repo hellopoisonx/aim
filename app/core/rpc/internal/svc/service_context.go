@@ -8,21 +8,21 @@ import (
 	"github.com/hellopoisonx/aim/app/core/rpc/internal/config"
 	"github.com/hellopoisonx/aim/app/core/rpc/internal/rpc"
 	logicpb "github.com/hellopoisonx/aim/app/logic/rpc/pb"
+	"github.com/hellopoisonx/aim/app/shared/rocketmq"
 	"github.com/hellopoisonx/aim/app/shared/tools"
 
 	"github.com/redis/go-redis/v9"
-	"github.com/segmentio/kafka-go"
-	"github.com/zeromicro/go-queue/kq"
 	"github.com/zeromicro/go-zero/core/logx"
-	gzredis "github.com/zeromicro/go-zero/core/stores/redis"
 	"github.com/zeromicro/go-zero/zrpc"
 )
 
 type ServiceContext struct {
-	Config                  config.Config
-	RedisClient             *redis.Client
-	Snowflake               *tools.Snowflake
-	KqPusher                *kq.Pusher
+	Config      config.Config
+	RedisClient *redis.Client
+	Snowflake   *tools.Snowflake
+	// TransferProducer publishes transfer events to the FIFO delivery topic.
+	// Nil when RocketMQ is not configured.
+	TransferProducer        *rocketmq.Producer
 	LogicPermissionClient   logicpb.PermissionServiceClient
 	LogicConversationClient logicpb.ConversationServiceClient
 	LogicFriendshipClient   logicpb.FriendshipServiceClient
@@ -32,7 +32,28 @@ type ServiceContext struct {
 	AttachmentClient        attachmentpb.AttachmentServiceClient
 }
 
+// transferProducerGroup is the broker-visible producer group of core.
+const transferProducerGroup = "aim-core-transfer"
+
+// StartTransferProducer connects the transfer producer. The RPC server starts
+// regardless: a broker outage surfaces as transfer publish errors instead of a
+// crash loop.
+func (s *ServiceContext) StartTransferProducer() {
+	if s == nil || s.TransferProducer == nil {
+		return
+	}
+	if err := s.TransferProducer.Start(); err != nil {
+		logx.WithContext(context.Background()).Errorf("failed to start rocketmq transfer producer: %v", err)
+	}
+}
+
 func (s *ServiceContext) Close() {
+	if s.TransferProducer != nil {
+		if err := s.TransferProducer.GracefulStop(); err != nil {
+			logx.WithContext(context.Background()).Errorf("failed to stop rocketmq transfer producer: %v", err)
+		}
+	}
+
 	if s.RedisClient != nil {
 		if err := s.RedisClient.Close(); err != nil {
 			logx.WithContext(context.Background()).Errorf("failed to close Redis client: %v", err)
@@ -63,12 +84,17 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	sf, err := tools.NewSnowflake(c.SnowflakeMachineID)
 	logx.Must(err)
 
-	// Kafka pusher (nil if not configured)
-	var kqPusher *kq.Pusher
+	// Transfer producer (nil if not configured)
+	var transferProducer *rocketmq.Producer
 
-	if len(c.KqPusherConf.Brokers) > 0 && c.KqPusherConf.Topic != "" {
-		logx.WithContext(context.Background()).Infof("initializing Kafka pusher with brokers: %v, topic: %s (balancer: murmur2)", c.KqPusherConf.Brokers, c.KqPusherConf.Topic)
-		kqPusher = kq.NewPusher(c.KqPusherConf.Brokers, c.KqPusherConf.Topic, kq.WithBalancer(&kafka.Murmur2Balancer{}))
+	if c.TransferProducerConf.IsConfigured() {
+		producer, err := rocketmq.NewProducer(c.TransferProducerConf.EndpointConf, transferProducerGroup, c.TransferProducerConf.Topic)
+		if err != nil {
+			logx.WithContext(context.Background()).Errorf("failed to create transfer producer: %v", err)
+		} else {
+			transferProducer = producer
+			logx.WithContext(context.Background()).Infof("initializing rocketmq transfer producer: endpoint=%s topic=%s", c.TransferProducerConf.Endpoint, c.TransferProducerConf.Topic)
+		}
 	}
 
 	// Logic RPC client (if configured)
@@ -103,10 +129,8 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	// Presence store (nil if not configured)
 	var presenceStore cache.PresenceDirectory
 	if c.Presence.TTLSeconds > 0 {
-		rds, err := gzredis.NewRedis(gzredis.RedisConf{Host: c.CacheRedis.Addr, Type: gzredis.NodeType, Pass: c.CacheRedis.Password})
-		if err != nil {
-			logx.WithContext(context.Background()).Errorf("failed to create go-zero Redis presence client: %v", err)
-		} else if store, err := cache.NewCachedPresenceStore(rds, c.Presence.TTLSeconds); err != nil {
+		rds := redis.NewClient(&redis.Options{Addr: c.CacheRedis.Addr, Password: c.CacheRedis.Password})
+		if store, err := cache.NewCachedPresenceStore(rds, c.Presence.TTLSeconds); err != nil {
 			logx.WithContext(context.Background()).Errorf("failed to create cached presence store: %v", err)
 		} else {
 			presenceStore = store
@@ -139,7 +163,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		Config:                  c,
 		RedisClient:             redisClient,
 		Snowflake:               sf,
-		KqPusher:                kqPusher,
+		TransferProducer:        transferProducer,
 		LogicPermissionClient:   logicClient,
 		LogicConversationClient: logicConversationClient,
 		LogicFriendshipClient:   logicFriendshipClient,

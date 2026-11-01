@@ -154,5 +154,9 @@ func (c *failingAuthClient) Logout(context.Context, *authservice.LogoutReq, ...g
 	return nil, c.err
 }
 
-func (c *proxyAuthClient) CreateBotCredential(context.Context, *authservice.CreateBotCredentialReq, ...grpc.CallOption) (*authservice.CreateBotCredentialResp, error) { return nil, nil }
-func (c *failingAuthClient) CreateBotCredential(context.Context, *authservice.CreateBotCredentialReq, ...grpc.CallOption) (*authservice.CreateBotCredentialResp, error) { return nil, c.err }
+func (c *proxyAuthClient) CreateBotCredential(context.Context, *authservice.CreateBotCredentialReq, ...grpc.CallOption) (*authservice.CreateBotCredentialResp, error) {
+	return nil, nil
+}
+func (c *failingAuthClient) CreateBotCredential(context.Context, *authservice.CreateBotCredentialReq, ...grpc.CallOption) (*authservice.CreateBotCredentialResp, error) {
+	return nil, c.err
+}

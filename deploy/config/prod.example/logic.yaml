@@ -20,40 +20,31 @@ CacheRedis:
   Addr: redis:6379
   Password: ""
   DB: 0
-KqConsumerConf:
+ArchiveConsumerConf:
   Name: logic-archive-consumer
-  Brokers:
-    - kafka:9092
+  Endpoint: rocketmq-proxy:8081
   Group: aim-logic-archive
   Topic: aim-message-transfer
-  Offset: first
-  Consumers: 1
-  Processors: 1
+  Concurrency: 1
 UserCreatedConsumerConf:
   Name: logic-user-created-consumer
-  Brokers:
-    - kafka:9092
+  Endpoint: rocketmq-proxy:8081
   Group: aim-logic-user-created
-  Topic: aim.user.events
-  Offset: first
-  Consumers: 1
-  Processors: 1
+  Topic: aim-user-events
+  Concurrency: 1
 # Bot Webhook 投递消费者：与 ArchiveConsumer 共用 topic，但独立消费组，
 # 确保 webhook 投递失败不会拖慢消息归档 offset。
 BotWebhookConsumerConf:
   Name: logic-bot-webhook-consumer
-  Brokers:
-    - kafka:9092
+  Endpoint: rocketmq-proxy:8081
   Group: aim-logic-bot-webhook
   Topic: aim-message-transfer
-  Offset: last
-  Consumers: 1
-  Processors: 1
+  Concurrency: 1
 # 群管理系统消息生产者：群成员/群信息变更后发布系统消息事件，由 core 消费并推送到 Gateway。
 ConversationEventProducerConf:
-  Brokers:
-    - kafka:9092
-  Topic: aim.conversation.events
+  Endpoint: rocketmq-proxy:8081
+  Group: aim-logic-producer
+  Topic: aim-conversation-events
 Dev:
   # 临时会话（非好友）单会话最多可发送的消息数。
   # 默认 10。设为 0 或负数表示不限制（仅供本地开发 / 压测使用，切勿在生产开启）。

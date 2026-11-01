@@ -6,7 +6,7 @@ option go_package = "./pb";
 
 service PermissionService {
   // CheckMessagePermission checks whether a sender can publish into a conversation.
-  // aim-core calls this before accepting a message into Kafka.
+  // aim-core calls this before accepting a message into the broker.
   rpc CheckMessagePermission(CheckMessagePermissionReq) returns (CheckMessagePermissionResp);
 }
 

@@ -6,7 +6,7 @@ import (
 
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/config"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/handler"
-	handlersws "github.com/hellopoisonx/aim/app/gateway/api/internal/handler/ws"
+	wshandler "github.com/hellopoisonx/aim/app/gateway/api/internal/handler/ws"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/stretchr/testify/require"
 	"github.com/zeromicro/go-zero/rest"
@@ -22,7 +22,7 @@ func TestRegisterHandlersIncludesWebSocketRoute(t *testing.T) {
 
 	svcCtx := svc.NewServiceContextWithAuth(c, nil)
 	handler.RegisterHandlers(server, svcCtx)
-	wsHandler := handlersws.NewWsHandler(svcCtx, svcCtx.WsManager)
+	wsHandler := wshandler.NewWsHandler(svcCtx, svcCtx.WsManager)
 	server.AddRoute(rest.Route{Method: http.MethodGet, Path: "/ws", Handler: wsHandler.ServeWS})
 
 	assertHasRoute(t, server.Routes(), http.MethodGet, "/ws")

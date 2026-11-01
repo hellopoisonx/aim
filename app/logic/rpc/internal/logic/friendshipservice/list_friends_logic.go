@@ -3,9 +3,8 @@ package friendshipservicelogic
 import (
 	"context"
 
-	"github.com/hellopoisonx/aim/app/logic/rpc/internal/service"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
-	"github.com/hellopoisonx/aim/app/logic/rpc/model"
+	"github.com/hellopoisonx/aim/app/logic/rpc/model/orm"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 
@@ -33,53 +32,33 @@ func (l *ListFriendsLogic) ListFriends(in *pb.ListFriendsReq) (*pb.ListFriendsRe
 		return nil, errorx.NewCodeError(errorx.CodeBadInput, "user_id must be positive")
 	}
 
-	if l.svcCtx.DB == nil {
+	if l.svcCtx.FriendshipDAO == nil {
 		return nil, errorx.NewCodeError(errorx.CodeInternal, "database is not configured")
 	}
-	queries := model.New(l.svcCtx.DB)
-
-	var records []model.ListFriendsRow
+	var records []orm.Friendship
 	var err error
 
 	switch {
 	case in.GetTagId() > 0:
-		byTagRows, tagErr := queries.ListFriendsByTagID(l.ctx, model.ListFriendsByTagIDParams{
-			Column1: userID,
-			TagID:   in.GetTagId(),
-		})
-		if tagErr != nil {
-			return nil, FriendshipToGRPCError(tagErr)
-		}
-		for _, r := range byTagRows {
-			records = append(records, model.ListFriendsRow(r))
+		records, err = l.svcCtx.FriendshipDAO.ListFriendsByTagID(l.ctx, userID, in.GetTagId())
+		if err != nil {
+			return nil, errorx.ToGRPCError(err)
 		}
 	case in.GetTagName() != "":
-		byTagNameRows, tagNameErr := queries.ListFriendsByTagName(l.ctx, model.ListFriendsByTagNameParams{
-			Column1: userID,
-			Name:    in.GetTagName(),
-		})
-		if tagNameErr != nil {
-			return nil, FriendshipToGRPCError(tagNameErr)
-		}
-		for _, r := range byTagNameRows {
-			records = append(records, model.ListFriendsRow(r))
+		records, err = l.svcCtx.FriendshipDAO.ListFriendsByTagName(l.ctx, userID, in.GetTagName())
+		if err != nil {
+			return nil, errorx.ToGRPCError(err)
 		}
 	default:
-		records, err = queries.ListFriends(l.ctx, userID)
+		records, err = l.svcCtx.FriendshipDAO.ListFriends(l.ctx, userID)
 		if err != nil {
-			return nil, FriendshipToGRPCError(err)
+			return nil, errorx.ToGRPCError(err)
 		}
 	}
 
 	friends := make([]*pb.FriendshipResponse, 0, len(records))
 	for _, record := range records {
-		var friendID int64
-		switch v := record.FriendID.(type) {
-		case int64:
-			friendID = v
-		case float64:
-			friendID = int64(v)
-		}
+		friendID := record.FriendID
 
 		var pbTags []*pb.FriendTagResponse
 		if l.svcCtx.FriendTagService != nil {
@@ -94,8 +73,8 @@ func (l *ListFriendsLogic) ListFriends(in *pb.ListFriendsReq) (*pb.ListFriendsRe
 			UserId:    record.UserID,
 			FriendId:  friendID,
 			Status:    record.Status,
-			CreatedAt: service.UnixFromPGTimestamptz(record.CreatedAt),
-			UpdatedAt: service.UnixFromPGTimestamptz(record.UpdatedAt),
+			CreatedAt: record.CreatedAt.UnixMilli(),
+			UpdatedAt: record.UpdatedAt.UnixMilli(),
 			Tags:      pbTags,
 		})
 	}

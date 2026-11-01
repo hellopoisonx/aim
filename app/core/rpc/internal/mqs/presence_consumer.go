@@ -3,7 +3,6 @@ package mqs
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 
 	"github.com/hellopoisonx/aim/app/core/rpc/internal/svc"
 	logicpb "github.com/hellopoisonx/aim/app/logic/rpc/pb"
@@ -12,9 +11,7 @@ import (
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
-const userGatewayKeyPrefix = "aim:user_gateway:"
-
-// presenceEvent is the Kafka message for presence change (mirrors gateway svc.presenceEvent).
+// presenceEvent is the broker message for presence change (mirrors gateway svc.presenceEvent).
 type presenceEvent struct {
 	tracing.TraceContextFields
 
@@ -25,7 +22,7 @@ type presenceEvent struct {
 	GatewayNodeID string `json:"gateway_node_id"`
 }
 
-// PresenceConsumer consumes aim.presence.events and fans out to friends' gateway nodes.
+// PresenceConsumer consumes aim-presence-events and fans out to friends' gateway nodes.
 type PresenceConsumer struct {
 	ctx    context.Context
 	svcCtx *svc.ServiceContext
@@ -35,19 +32,23 @@ func NewPresenceConsumer(ctx context.Context, svcCtx *svc.ServiceContext) *Prese
 	return &PresenceConsumer{ctx: ctx, svcCtx: svcCtx}
 }
 
-// Consume implements the kq.ConsumeHandler interface.
+// Consume implements the rocketmq handler interface.
 func (c *PresenceConsumer) Consume(ctx context.Context, key string, value string) error {
 	logx.WithContext(ctx).Infof("consuming presence event, key=%s", key)
 
 	var event presenceEvent
 	if err := json.Unmarshal([]byte(value), &event); err != nil {
-		logx.WithContext(ctx).Errorf("failed to unmarshal presence event: %v", err)
-		return err
+		// A malformed payload never decodes on redelivery: dropping it keeps the
+		// partition moving instead of replaying the same poison message forever.
+		logx.WithContext(ctx).Errorf(
+			"dropping undecodable presence event key=%s: %v payload=%q", key, err, value,
+		)
+		return nil
 	}
 
 	ctx = tracing.ExtractTraceContext(ctx, event.TraceContextFields)
 
-	ctx, span := tracing.StartKafkaConsumerSpan(ctx, "core.kafka.presence.consume")
+	ctx, span := tracing.StartMQConsumerSpan(ctx, "core.rocketmq.presence.consume")
 	defer span.End()
 
 	logx.WithContext(ctx).Infof("presence event: user=%d status=%s node=%s",
@@ -74,11 +75,7 @@ func (c *PresenceConsumer) Consume(ctx context.Context, key string, value string
 			continue
 		}
 
-		nodeIDs, err := c.getGatewayNodes(ctx, friendID)
-		if err != nil {
-			logx.WithContext(ctx).Errorf("getGatewayNodes failed for friend %d: %v", friendID, err)
-			continue
-		}
+		nodeIDs := gatewayNodes(ctx, c.svcCtx, friendID)
 
 		for _, nodeID := range nodeIDs {
 			req := &gwpb.PushPresenceReq{
@@ -99,17 +96,4 @@ func (c *PresenceConsumer) Consume(ctx context.Context, key string, value string
 	}
 
 	return nil
-}
-
-// getGatewayNodes returns the set of gateway node IDs where a user is connected.
-func (c *PresenceConsumer) getGatewayNodes(ctx context.Context, userID int64) ([]string, error) {
-	if c.svcCtx.PresenceStore != nil {
-		return c.svcCtx.PresenceStore.GetUserGatewayNodes(ctx, userID)
-	}
-	if c.svcCtx.RedisClient == nil {
-		return nil, fmt.Errorf("redis client not available")
-	}
-
-	key := fmt.Sprintf("%s%d", userGatewayKeyPrefix, userID)
-	return c.svcCtx.RedisClient.SMembers(ctx, key).Result()
 }

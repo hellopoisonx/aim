@@ -38,12 +38,10 @@ func TestConfigUserCreatedConsumerConf(t *testing.T) {
 	require.NoError(t, conf.Load("../../etc/logic.yaml", &c))
 	require.True(t, c.IsUserCreatedConsumerConfigured())
 	require.Equal(t, "logic-user-created-consumer", c.UserCreatedConsumerConf.Name)
-	require.Equal(t, []string{"kafka:9092"}, c.UserCreatedConsumerConf.Brokers)
+	require.Equal(t, "rocketmq-proxy:8081", c.UserCreatedConsumerConf.Endpoint)
 	require.Equal(t, "aim-logic-user-created", c.UserCreatedConsumerConf.Group)
-	require.Equal(t, "aim.user.events", c.UserCreatedConsumerConf.Topic)
-	require.Equal(t, "first", c.UserCreatedConsumerConf.Offset)
-	require.Equal(t, 1, c.UserCreatedConsumerConf.Consumers)
-	require.Equal(t, 1, c.UserCreatedConsumerConf.Processors)
+	require.Equal(t, "aim-user-events", c.UserCreatedConsumerConf.Topic)
+	require.Equal(t, 1, c.UserCreatedConsumerConf.Concurrency)
 }
 
 func TestConfigUserCreatedConsumerConf_NotConfigured(t *testing.T) {

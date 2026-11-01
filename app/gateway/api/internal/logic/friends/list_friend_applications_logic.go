@@ -6,9 +6,10 @@ package friends
 import (
 	"context"
 
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/authctx"
+
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
-	"github.com/hellopoisonx/aim/app/gateway/api/internal/ws"
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/friendshipservice"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 
@@ -30,13 +31,9 @@ func NewListFriendApplicationsLogic(ctx context.Context, svcCtx *svc.ServiceCont
 }
 
 func (l *ListFriendApplicationsLogic) ListFriendApplications() (*types.ListFriendApplicationsResponse, error) {
-	identity, ok := ws.IdentityFromContext(l.ctx)
+	identity, ok := authctx.IdentityFromContext(l.ctx)
 	if !ok {
 		return nil, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
-	}
-
-	if l.svcCtx.LogicFriendshipClient == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "internal error")
 	}
 
 	rpcResp, err := l.svcCtx.LogicFriendshipClient.ListFriendApplications(l.ctx, &friendshipservice.ListFriendApplicationsReq{UserId: identity.UserID})

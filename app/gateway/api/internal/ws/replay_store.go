@@ -9,6 +9,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/authctx"
+
 	sharedcache "github.com/hellopoisonx/aim/app/shared/cache"
 	wspb "github.com/hellopoisonx/aim/shared/proto/ws/pb"
 	"github.com/zeromicro/go-zero/core/collection"
@@ -81,12 +83,12 @@ func NewReplayStoreWithOptions(capacity int, ttl time.Duration, l1Limit int) (*R
 	return &ReplayStore{l1: l1, capacity: capacity, ttl: ttl}, nil
 }
 
-func (s *ReplayStore) key(identity Identity) string {
+func (s *ReplayStore) key(identity authctx.Identity) string {
 	return sharedcache.WsReplayKey(identity.UserID, identity.DeviceID)
 }
 
 // loadLocked 读取当前 identity 的 pending 切片，调用方必须持有 s.mu。
-func (s *ReplayStore) loadLocked(identity Identity) []ReplayFrame {
+func (s *ReplayStore) loadLocked(identity authctx.Identity) []ReplayFrame {
 	val, ok := s.l1.Get(s.key(identity))
 	if !ok || val == nil {
 		return nil
@@ -101,7 +103,7 @@ func (s *ReplayStore) loadLocked(identity Identity) []ReplayFrame {
 }
 
 // storeLocked 把切片写回 L1；空切片直接删除条目。
-func (s *ReplayStore) storeLocked(identity Identity, frames []ReplayFrame) {
+func (s *ReplayStore) storeLocked(identity authctx.Identity, frames []ReplayFrame) {
 	if len(frames) == 0 {
 		s.l1.Del(s.key(identity))
 		return
@@ -139,7 +141,7 @@ func (s *ReplayStore) pruneLocked(frames []ReplayFrame, now time.Time) []ReplayF
 
 // Append 把一条已分配 seq 的可重放帧加入 pending 队列。frame 会被克隆，
 // 调用方在 Append 之后修改原 frame 不影响 store。
-func (s *ReplayStore) Append(identity Identity, frame *wspb.WsFrame) {
+func (s *ReplayStore) Append(identity authctx.Identity, frame *wspb.WsFrame) {
 	if s == nil || frame == nil {
 		return
 	}
@@ -164,7 +166,7 @@ func (s *ReplayStore) Append(identity Identity, frame *wspb.WsFrame) {
 }
 
 // Ack 删除所有 seq <= ackSeq 的 pending 帧，并执行 TTL/容量裁剪。
-func (s *ReplayStore) Ack(identity Identity, ackSeq int64) {
+func (s *ReplayStore) Ack(identity authctx.Identity, ackSeq int64) {
 	if s == nil || ackSeq <= 0 {
 		return
 	}
@@ -190,7 +192,7 @@ func (s *ReplayStore) Ack(identity Identity, ackSeq int64) {
 
 // PendingAfter 返回 seq > lastSeq 的可重放帧（按 seq 升序）。返回的帧是
 // 克隆，调用方可以安全发送/修改。同时执行一次 TTL/容量裁剪。
-func (s *ReplayStore) PendingAfter(identity Identity, lastSeq int64) []*wspb.WsFrame {
+func (s *ReplayStore) PendingAfter(identity authctx.Identity, lastSeq int64) []*wspb.WsFrame {
 	if s == nil {
 		return nil
 	}
@@ -217,7 +219,7 @@ func (s *ReplayStore) PendingAfter(identity Identity, lastSeq int64) []*wspb.WsF
 }
 
 // Delete 移除某连接的全部 pending 帧；连接断开/重新注册时调用。
-func (s *ReplayStore) Delete(identity Identity) {
+func (s *ReplayStore) Delete(identity authctx.Identity) {
 	if s == nil {
 		return
 	}
@@ -228,7 +230,7 @@ func (s *ReplayStore) Delete(identity Identity) {
 }
 
 // Len 返回当前 identity 的 pending 数量（不含裁剪）。仅用于测试。
-func (s *ReplayStore) Len(identity Identity) int {
+func (s *ReplayStore) Len(identity authctx.Identity) int {
 	if s == nil {
 		return 0
 	}

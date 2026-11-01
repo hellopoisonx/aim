@@ -54,7 +54,7 @@ shared/proto/
 
 ### 已读回执链路
 
-- 入站：客户端发送 `FRAME_TYPE_READ_RECEIPT`（带 `conversation_id / last_msg_id`），网关 handler 在 `app/gateway/api/internal/handler/ws/ws_handler.go::handleReadReceipt` 调用 `logic.ConversationService.UpdateReadReceipt` upsert 游标，并将 `readReceiptEvent` 推到 Kafka 主题 `aim.read_receipt.events`（key=`conversation_id`）。
+- 入站：客户端发送 `FRAME_TYPE_READ_RECEIPT`（带 `conversation_id / last_msg_id`），网关 handler 在 `app/gateway/api/internal/handler/ws/ws_handler.go::handleReadReceipt` 调用 `logic.ConversationService.UpdateReadReceipt` upsert 游标，并将 `readReceiptEvent` 推到 RocketMQ 主题 `aim-read-receipt-events`（key=`conversation_id`）。
 - 出站：core 的 `ReadReceiptConsumer` 消费该主题，按 `GetConversationMembers` 拿到会话成员后，向除发送者外的成员所在网关节点调用 `gateway.GatewayService.PushReadReceipt`；网关收到后通过 `FRAME_TYPE_PUSH_READ_RECEIPT` 推给目标用户的所有连接。
 - 历史接口：`ConversationService.GetConversationHistory` 在返回消息列表的同时附带 `repeated ReadStateItem read_states`，客户端可据此渲染“谁已读到哪条”。
 

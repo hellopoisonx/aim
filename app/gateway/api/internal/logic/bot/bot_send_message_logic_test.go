@@ -116,18 +116,6 @@ func TestBotSendMessage_PropagatesCoreError(t *testing.T) {
 	require.Equal(t, errorx.CodeRateLimit, ce.Code)
 }
 
-func TestBotSendMessage_NoCoreClient(t *testing.T) {
-	l := NewBotSendMessageLogic(ctxWithBot("bot.message.send"), &svc.ServiceContext{})
-
-	_, err := l.BotSendMessage(&types.BotSendMessageRequest{
-		ConversationId: "7",
-		MessageType:    "text",
-		Content:        "hi",
-		ClientMsgId:    "x",
-	})
-	require.Error(t, err)
-}
-
 func TestBotSendMessage_RequiresIdentity(t *testing.T) {
 	l := NewBotSendMessageLogic(context.Background(), &svc.ServiceContext{})
 

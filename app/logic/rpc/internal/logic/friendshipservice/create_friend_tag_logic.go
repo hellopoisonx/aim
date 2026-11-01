@@ -3,9 +3,8 @@ package friendshipservicelogic
 import (
 	"context"
 
-	"github.com/hellopoisonx/aim/app/logic/rpc/internal/service"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
-	"github.com/hellopoisonx/aim/app/logic/rpc/model"
+	"github.com/hellopoisonx/aim/app/logic/rpc/model/orm"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 
@@ -36,18 +35,18 @@ func (l *CreateFriendTagLogic) CreateFriendTag(in *pb.CreateFriendTagReq) (*pb.C
 
 	tag, err := l.svcCtx.FriendTagService.CreateTag(l.ctx, in.GetUserId(), in.GetName())
 	if err != nil {
-		return nil, service.TagErrToGRPCError(err)
+		return nil, errorx.ToGRPCError(err)
 	}
 
 	return &pb.CreateFriendTagResp{Tag: friendTagToProto(tag)}, nil
 }
 
-func friendTagToProto(tag model.FriendTag) *pb.FriendTagResponse {
+func friendTagToProto(tag orm.FriendTag) *pb.FriendTagResponse {
 	return &pb.FriendTagResponse{
 		Id:        tag.ID,
 		UserId:    tag.UserID,
 		Name:      tag.Name,
-		CreatedAt: service.UnixFromPGTimestamptz(tag.CreatedAt),
-		UpdatedAt: service.UnixFromPGTimestamptz(tag.UpdatedAt),
+		CreatedAt: tag.CreatedAt.UnixMilli(),
+		UpdatedAt: tag.UpdatedAt.UnixMilli(),
 	}
 }

@@ -99,7 +99,11 @@ func (c *Client) ListConversations(ctx context.Context) (*ListConversationsRespo
 	return doJSON[ListConversationsResponse](ctx, c, http.MethodGet, "/conversations", nil, nil)
 }
 
-func (c *Client) GetConversationHistory(ctx context.Context, req GetConversationHistoryRequest) (*GetConversationHistoryResponse, error) {
+// GetConversationHistory pages through a conversation's messages.
+//
+// Conversation-scoped methods take the conversation id as the first argument;
+// everything else travels in the request struct.
+func (c *Client) GetConversationHistory(ctx context.Context, conversationID string, req GetConversationHistoryRequest) (*GetConversationHistoryResponse, error) {
 	q := make(url.Values)
 	if req.CursorCreatedAt > 0 {
 		q.Set("cursor_created_at", strconv.FormatInt(req.CursorCreatedAt, 10))
@@ -110,7 +114,7 @@ func (c *Client) GetConversationHistory(ctx context.Context, req GetConversation
 	if req.Limit > 0 {
 		q.Set("limit", strconv.FormatInt(int64(req.Limit), 10))
 	}
-	return doJSON[GetConversationHistoryResponse](ctx, c, http.MethodGet, "/conversations/"+url.PathEscape(req.ConversationID)+"/history", q, nil)
+	return doJSON[GetConversationHistoryResponse](ctx, c, http.MethodGet, "/conversations/"+url.PathEscape(conversationID)+"/history", q, nil)
 }
 
 func (c *Client) GetConversationMembers(ctx context.Context, conversationID string) (*GetConversationMembersResponse, error) {
@@ -125,11 +129,13 @@ func (c *Client) DownloadAttachment(ctx context.Context, fileID string) (*Downlo
 	return doJSON[DownloadAttachmentResponse](ctx, c, http.MethodGet, "/attachments/"+url.PathEscape(fileID)+"/download", nil, nil)
 }
 
-func (c *Client) MarkRead(ctx context.Context, req MarkReadRequest) (*MarkReadResponse, error) {
+// MarkRead advances the bot's read cursor in a conversation.
+func (c *Client) MarkRead(ctx context.Context, conversationID string, req MarkReadRequest) (*MarkReadResponse, error) {
 	body := struct {
 		LastReadMessageID string `json:"last_read_message_id"`
 	}{LastReadMessageID: req.LastReadMessageID}
-	return doJSON[MarkReadResponse](ctx, c, http.MethodPost, "/conversations/"+url.PathEscape(req.ConversationID)+"/read-receipt", nil, body)
+
+	return doJSON[MarkReadResponse](ctx, c, http.MethodPost, "/conversations/"+url.PathEscape(conversationID)+"/read-receipt", nil, body)
 }
 
 func (c *Client) ListReadStates(ctx context.Context, conversationID string) (*ListReadStatesResponse, error) {

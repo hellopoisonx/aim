@@ -3,6 +3,8 @@ package bot
 import (
 	"context"
 
+	"github.com/hellopoisonx/aim/app/shared/errorx"
+
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/conversationservice"
@@ -36,10 +38,7 @@ func (l *BotListReadStatesLogic) BotListReadStates(req *types.BotListReadStatesR
 		return nil, err
 	}
 
-	client, err := requireLogicConversationClient(l.svcCtx)
-	if err != nil {
-		return nil, err
-	}
+	client := logicConversationClient(l.svcCtx)
 
 	if err := ensureBotConversationMember(l.ctx, client, identity, conversationID); err != nil {
 		return nil, err
@@ -49,7 +48,7 @@ func (l *BotListReadStatesLogic) BotListReadStates(req *types.BotListReadStatesR
 		ConversationId: conversationID,
 	})
 	if err != nil {
-		return nil, sanitizeBotLogicRPCError(err)
+		return nil, errorx.SanitizeGRPCErrorNoLog(err)
 	}
 
 	states := make([]types.BotReadStateItem, 0, len(rpcResp.GetReadStates()))

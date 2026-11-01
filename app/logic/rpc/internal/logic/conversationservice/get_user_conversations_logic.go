@@ -39,7 +39,7 @@ func (l *GetUserConversationsLogic) GetUserConversations(in *pb.GetUserConversat
 
 	conversations, err := convSvc.GetUserConversations(l.ctx, in.GetUserId())
 	if err != nil {
-		return nil, service.ConversationToGRPCError(err)
+		return nil, errorx.ToGRPCError(err)
 	}
 
 	pbConversations := make([]*pb.ConversationResponse, 0, len(conversations))
@@ -55,7 +55,7 @@ func (l *GetUserConversationsLogic) GetUserConversations(in *pb.GetUserConversat
 	for _, conv := range conversations {
 		members, err := convSvc.GetConversationMembers(l.ctx, conv.ID)
 		if err != nil {
-			return nil, service.ConversationToGRPCError(err)
+			return nil, errorx.ToGRPCError(err)
 		}
 
 		memberIDs := make([]int64, len(members))
@@ -77,9 +77,9 @@ func (l *GetUserConversationsLogic) GetUserConversations(in *pb.GetUserConversat
 
 		pbConversations = append(pbConversations, &pb.ConversationResponse{
 			Id:               conv.ID,
-			ConversationType: conv.ConversationType,
+			ConversationType: string(conv.ConversationType),
 			IsActive:         conv.IsActive,
-			CreatedAt:        service.UnixFromPGTimestamptz(conv.CreatedAt),
+			CreatedAt:        conv.CreatedAt.UnixMilli(),
 			MemberIds:        memberIDs,
 			Name:             name,
 			Avatar:           conv.Avatar,

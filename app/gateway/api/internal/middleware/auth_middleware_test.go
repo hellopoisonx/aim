@@ -7,8 +7,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/authctx"
+
 	gjwt "github.com/golang-jwt/jwt/v4"
-	"github.com/hellopoisonx/aim/app/gateway/api/internal/ws"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 	"github.com/hellopoisonx/aim/app/shared/jwt"
 	"github.com/stretchr/testify/assert"
@@ -197,7 +198,7 @@ func TestAuthMiddleware(t *testing.T) {
 			authHeader: "Bearer " + validToken,
 			nextHandler: func(t *testing.T) http.HandlerFunc {
 				return func(w http.ResponseWriter, r *http.Request) {
-					identity, ok := ws.IdentityFromContext(r.Context())
+					identity, ok := authctx.IdentityFromContext(r.Context())
 					is.True(ok, "identity should be present in context")
 					is.Equal(int64(42), identity.UserID)
 					is.Equal("device-abc", identity.DeviceID)
@@ -217,7 +218,7 @@ func TestAuthMiddleware(t *testing.T) {
 			authHeader: "Bearer " + validTokenDifferentUser,
 			nextHandler: func(t *testing.T) http.HandlerFunc {
 				return func(w http.ResponseWriter, r *http.Request) {
-					identity, ok := ws.IdentityFromContext(r.Context())
+					identity, ok := authctx.IdentityFromContext(r.Context())
 					is.True(ok, "identity should be present in context")
 					is.Equal(int64(99), identity.UserID)
 					is.Equal("device-xyz", identity.DeviceID)

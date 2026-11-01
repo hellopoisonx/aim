@@ -28,3 +28,5 @@ coverage*
 *.venv
 docker-images/
 .pi/approval.json
+.desloppify/
+scorecard.png

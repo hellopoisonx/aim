@@ -9,12 +9,11 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/hellopoisonx/aim/app/auth/rpc/model"
+	"github.com/hellopoisonx/aim/app/auth/rpc/model/dao"
+	"github.com/hellopoisonx/aim/app/auth/rpc/model/orm"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 	sharedjwt "github.com/hellopoisonx/aim/app/shared/jwt"
 	"github.com/hellopoisonx/aim/app/shared/tools"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/redis/go-redis/v9"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -53,43 +52,50 @@ type UserCredential struct {
 	Status       int16
 }
 
-type SQLUserStore struct {
-	queries *model.Queries
-	ids     *tools.Snowflake
+// userDAO is the DAO slice used by DAOUserStore.
+type userDAO interface {
+	CreateUser(ctx context.Context, id int64, email, passwordHash, name string) (orm.UserCredential, error)
+	CreateBotCredential(ctx context.Context, id int64, email, passwordHash, name string) (orm.UserCredential, error)
+	GetUserByEmail(ctx context.Context, email string) (orm.UserCredential, error)
 }
 
-func NewSQLUserStore(queries *model.Queries) *SQLUserStore {
-	return NewSQLUserStoreWithMachineID(queries, 1)
+type DAOUserStore struct {
+	store userDAO
+	ids   *tools.Snowflake
 }
 
-func NewSQLUserStoreWithMachineID(queries *model.Queries, machineID int64) *SQLUserStore {
+func NewDAOUserStore(store userDAO) *DAOUserStore {
+	return NewDAOUserStoreWithMachineID(store, 1)
+}
+
+func NewDAOUserStoreWithMachineID(store userDAO, machineID int64) *DAOUserStore {
 	ids, err := tools.NewSnowflake(machineID)
 	if err != nil {
 		panic(err)
 	}
 
-	return NewSQLUserStoreWithIDGenerator(queries, ids)
+	return NewDAOUserStoreWithIDGenerator(store, ids)
 }
 
-func NewSQLUserStoreWithIDGenerator(queries *model.Queries, ids *tools.Snowflake) *SQLUserStore {
-	return &SQLUserStore{queries: queries, ids: ids}
+func NewDAOUserStoreWithIDGenerator(store userDAO, ids *tools.Snowflake) *DAOUserStore {
+	return &DAOUserStore{store: store, ids: ids}
 }
 
-func (s *SQLUserStore) CreateUser(ctx context.Context, email, passwordHash, name string) (UserCredential, error) {
+func (s *DAOUserStore) CreateUser(ctx context.Context, email, passwordHash, name string) (UserCredential, error) {
 	id, err := s.ids.NextID()
 	if err != nil {
 		return UserCredential{}, err
 	}
 
-	user, err := s.queries.CreateUser(ctx, model.CreateUserParams{ID: id, Email: email, PasswordHash: passwordHash, Name: name})
+	user, err := s.store.CreateUser(ctx, id, email, passwordHash, name)
 	if err != nil {
 		return UserCredential{}, err
 	}
 
-	return fromCreateUserRow(user), nil
+	return userCredentialFromORM(user), nil
 }
 
-func (s *SQLUserStore) CreateBotCredential(ctx context.Context, email, passwordHash, name string) (UserCredential, error) {
+func (s *DAOUserStore) CreateBotCredential(ctx context.Context, email, passwordHash, name string) (UserCredential, error) {
 	id, err := s.ids.NextID()
 	if err != nil {
 		return UserCredential{}, err
@@ -100,32 +106,24 @@ func (s *SQLUserStore) CreateBotCredential(ctx context.Context, email, passwordH
 		email = DefaultBotEmail(id)
 	}
 
-	user, err := s.queries.CreateBotCredential(ctx, model.CreateBotCredentialParams{ID: id, Email: email, PasswordHash: passwordHash, Name: name})
+	user, err := s.store.CreateBotCredential(ctx, id, email, passwordHash, name)
 	if err != nil {
 		return UserCredential{}, err
 	}
 
-	return fromCreateBotCredentialRow(user), nil
+	return userCredentialFromORM(user), nil
 }
 
-func (s *SQLUserStore) GetUserByEmail(ctx context.Context, email string) (UserCredential, error) {
-	user, err := s.queries.GetUserByEmail(ctx, email)
+func (s *DAOUserStore) GetUserByEmail(ctx context.Context, email string) (UserCredential, error) {
+	user, err := s.store.GetUserByEmail(ctx, email)
 	if err != nil {
 		return UserCredential{}, err
 	}
 
-	return fromGetUserByEmailRow(user), nil
+	return userCredentialFromORM(user), nil
 }
 
-func fromCreateUserRow(user model.CreateUserRow) UserCredential {
-	return UserCredential{ID: user.ID, Email: user.Email, PasswordHash: user.PasswordHash, Name: user.Name, Status: user.Status}
-}
-
-func fromCreateBotCredentialRow(user model.CreateBotCredentialRow) UserCredential {
-	return UserCredential{ID: user.ID, Email: user.Email, PasswordHash: user.PasswordHash, Name: user.Name, Status: user.Status}
-}
-
-func fromGetUserByEmailRow(user model.GetUserByEmailRow) UserCredential {
+func userCredentialFromORM(user orm.UserCredential) UserCredential {
 	return UserCredential{ID: user.ID, Email: user.Email, PasswordHash: user.PasswordHash, Name: user.Name, Status: user.Status}
 }
 
@@ -240,12 +238,11 @@ func DefaultBotEmail(userID int64) string {
 }
 
 func IsDuplicateEmail(err error) bool {
-	var pgErr *pgconn.PgError
-	return errors.As(err, &pgErr) && pgErr.Code == "23505"
+	return errors.Is(err, dao.ErrDuplicateKey)
 }
 
 func IsNotFound(err error) bool {
-	return errors.Is(err, pgx.ErrNoRows)
+	return errors.Is(err, dao.ErrNotFound)
 }
 
 func refreshKey(token string) string {

@@ -173,7 +173,7 @@ func TestTransfer_IdempotentDuplicate(t *testing.T) {
 	require.NotNil(t, resp)
 	require.Equal(t, expectedMsgID, resp.MessageId)
 	require.Equal(t, "client-duplicate", resp.ClientMsgId)
-	// Kafka should NOT be called for duplicate
+	// The publisher should NOT be called for duplicate
 	require.Empty(t, fakePub.messages)
 }
 
@@ -199,7 +199,7 @@ func TestTransfer_PermissionDenied(t *testing.T) {
 	resp, err := logic.Transfer(req)
 	require.Error(t, err)
 	require.Nil(t, resp)
-	// Kafka should NOT be called when permission denied
+	// The publisher should NOT be called when permission denied
 	require.Empty(t, fakePub.messages)
 }
 
@@ -347,12 +347,12 @@ func TestTransfer_TooManyMentions(t *testing.T) {
 	require.Contains(t, err.Error(), "mentions")
 }
 
-func TestTransfer_KafkaPublishError(t *testing.T) {
+func TestTransfer_PublishError(t *testing.T) {
 	svcCtx := &svc.ServiceContext{
 		Snowflake: mustSnowflake(t, 1),
 	}
 	fakeIdem := &fakeIdempotencyStore{store: make(map[string]int64)}
-	fakePub := &fakeMessagePublisher{err: errors.New("kafka connection refused")}
+	fakePub := &fakeMessagePublisher{err: errors.New("rocketmq connection refused")}
 	logic := newTestTransferLogic(svcCtx, fakeIdem, fakePub)
 
 	req := &pb.TransferReq{
@@ -367,7 +367,7 @@ func TestTransfer_KafkaPublishError(t *testing.T) {
 	resp, err := logic.Transfer(req)
 	require.Error(t, err)
 	require.Nil(t, resp)
-	require.Contains(t, err.Error(), "kafka")
+	require.Contains(t, err.Error(), "rocketmq")
 }
 
 func TestTransfer_IdempotencyCheckError(t *testing.T) {
@@ -393,7 +393,7 @@ func TestTransfer_IdempotencyCheckError(t *testing.T) {
 	require.Contains(t, err.Error(), "idempotency")
 }
 
-func TestTransfer_IdempotencySetErrorAfterKafka(t *testing.T) {
+func TestTransfer_IdempotencySetErrorAfterPublish(t *testing.T) {
 	svcCtx := &svc.ServiceContext{
 		Snowflake: mustSnowflake(t, 1),
 	}
@@ -413,13 +413,13 @@ func TestTransfer_IdempotencySetErrorAfterKafka(t *testing.T) {
 		ClientMsgId:    "client-1",
 	}
 
-	// Kafka publish succeeds, but idempotency Set fails after
+	// The publish succeeds, but idempotency Set fails after
 	resp, err := logic.Transfer(req)
-	// Error should be nil since Kafka was already published successfully
+	// Error should be nil since the event was already published successfully
 	require.NoError(t, err)
 	require.NotNil(t, resp)
 	require.Positive(t, resp.MessageId)
-	// Kafka WAS called
+	// The publisher WAS called
 	require.Len(t, fakePub.messages, 1)
 }
 
@@ -470,7 +470,7 @@ func TestTransfer_PermissionDeniedWithBizCode(t *testing.T) {
 	resp, err := logic.Transfer(req)
 	require.Error(t, err)
 	require.Nil(t, resp)
-	// Kafka should NOT be called
+	// The publisher should NOT be called
 	require.Empty(t, fakePub.messages)
 }
 
@@ -526,7 +526,7 @@ func TestTransfer_ValidMentionsBoundary(t *testing.T) {
 	require.NotNil(t, resp)
 }
 
-func TestTransfer_KafkaEventContent(t *testing.T) {
+func TestTransfer_EventContent(t *testing.T) {
 	svcCtx := &svc.ServiceContext{
 		Snowflake: mustSnowflake(t, 1),
 	}
@@ -598,7 +598,7 @@ func TestTransfer_AppliesFilteredMentionsFromPermissionCheck(t *testing.T) {
 	require.Equal(t, []any{"200"}, event["mentions"])
 }
 
-func TestTransfer_KafkaEventIncludesTraceContext(t *testing.T) {
+func TestTransfer_EventIncludesTraceContext(t *testing.T) {
 	traceID, err := trace.TraceIDFromHex("4bf92f3577b34da6a3ce929d0e0e4736")
 	require.NoError(t, err)
 	spanID, err := trace.SpanIDFromHex("00f067aa0ba902b7")
@@ -656,7 +656,7 @@ func TestTransfer_IdempotencyKeyFormat(t *testing.T) {
 	require.True(t, exists, "idempotency key should be stored with correct format")
 }
 
-// --- Tests for real Redis and Kafka implementations ---
+// --- Tests for real Redis and broker implementations ---
 
 func TestRedisIdempotencyStore_CheckAndSet(t *testing.T) {
 	mr := miniredis.NewMiniRedis()
@@ -691,8 +691,8 @@ func TestRedisIdempotencyStore_CheckAndSet(t *testing.T) {
 	require.Equal(t, int64(12345), msgID)
 }
 
-func TestKqMessagePublisher_NilPusher(t *testing.T) {
-	pub := &kqMessagePublisher{pusher: nil}
+func TestRocketMQMessagePublisher_NotConfigured(t *testing.T) {
+	pub := &rocketMQMessagePublisher{}
 	err := pub.Publish(context.Background(), "key", []byte("value"))
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "not configured")

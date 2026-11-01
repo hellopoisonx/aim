@@ -8,15 +8,17 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/hellopoisonx/aim/app/shared/events"
+
 	"github.com/hellopoisonx/aim/app/core/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/core/rpc/pb"
 	logicpb "github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	sharedattachment "github.com/hellopoisonx/aim/app/shared/attachment"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
+	"github.com/hellopoisonx/aim/app/shared/rocketmq"
 	"github.com/hellopoisonx/aim/app/shared/tracing"
 
 	"github.com/redis/go-redis/v9"
-	"github.com/zeromicro/go-queue/kq"
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
@@ -36,14 +38,14 @@ func NewTransferLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Transfer
 		svcCtx:      svcCtx,
 		Logger:      logx.WithContext(ctx),
 		idempotency: &redisIdempotencyStore{client: svcCtx.RedisClient},
-		publisher:   &kqMessagePublisher{pusher: svcCtx.KqPusher},
+		publisher:   &rocketMQMessagePublisher{producer: svcCtx.TransferProducer, topic: svcCtx.Config.TransferProducerConf.Topic},
 		attachments: newGRPCAttachmentValidator(svcCtx.AttachmentClient),
 	}
 }
 
 // Transfer implements the full transfer flow.
 // It validates the request, checks idempotency, verifies permissions,
-// generates a Snowflake message ID, publishes to Kafka, and stores
+// generates a Snowflake message ID, publishes to RocketMQ, and stores
 // the idempotency key (best-effort).
 func (l *TransferLogic) Transfer(in *pb.TransferReq) (*pb.TransferResp, error) {
 	// 1. Validate request fields
@@ -84,19 +86,19 @@ func (l *TransferLogic) Transfer(in *pb.TransferReq) (*pb.TransferResp, error) {
 		return nil, errorx.NewCodeErrorf(errorx.CodeInternal, "snowflake id generation failed: %v", err)
 	}
 
-	// 5. Build and publish Kafka event (key = conversation_id for partition ordering)
+	// 5. Build and publish the transfer event (key = conversation_id for ordering)
 	event, err := l.buildTransferEvent(in, msgID)
 	if err != nil {
 		return nil, errorx.NewCodeErrorf(errorx.CodeInternal, "failed to build transfer event: %v", err)
 	}
 
-	kafkaKey := strconv.FormatInt(in.ConversationId, 10)
-	if err := l.publisher.Publish(l.ctx, kafkaKey, event); err != nil {
-		return nil, errorx.NewCodeErrorf(errorx.CodeInternal, "kafka publish failed: %v", err)
+	conversationKey := strconv.FormatInt(in.ConversationId, 10)
+	if err := l.publisher.Publish(l.ctx, conversationKey, event); err != nil {
+		return nil, errorx.NewCodeErrorf(errorx.CodeInternal, "rocketmq publish failed: %v", err)
 	}
 
 	// 6. Set idempotency key (best-effort: don't fail the request if Redis set fails,
-	// because Kafka publish already succeeded and the message will be delivered)
+	// because the publish already succeeded and the message will be delivered)
 	if err := l.idempotency.Set(l.ctx, idempKey, msgID, 24*time.Hour); err != nil {
 		l.Errorf("failed to set idempotency key %s: %v", idempKey, err)
 	}
@@ -230,21 +232,19 @@ func parseMentionIDs(raw []string) ([]int64, error) {
 	return ids, nil
 }
 
-// buildTransferEvent serializes the transfer event as JSON for Kafka.
+// buildTransferEvent serializes the transfer event as JSON for the broker.
 func (l *TransferLogic) buildTransferEvent(in *pb.TransferReq, msgID int64) ([]byte, error) {
-	traceFields := tracing.InjectTraceContext(l.ctx)
-	event := map[string]any{
-		"traceparent":     traceFields.TraceParent,
-		"tracestate":      traceFields.TraceState,
-		"message_id":      msgID,
-		"sender_id":       in.SenderId,
-		"device_id":       in.DeviceId,
-		"conversation_id": in.ConversationId,
-		"message_type":    in.MessageType,
-		"content":         in.Content,
-		"client_msg_id":   in.ClientMsgId,
-		"mentions":        in.Mentions,
-		"timestamp":       time.Now().UnixMilli(),
+	event := events.TransferEvent{
+		TraceContextFields: tracing.InjectTraceContext(l.ctx),
+		MessageID:          msgID,
+		SenderID:           in.SenderId,
+		DeviceID:           in.DeviceId,
+		ConversationID:     in.ConversationId,
+		MessageType:        in.MessageType,
+		Content:            in.Content,
+		ClientMsgID:        in.ClientMsgId,
+		Mentions:           in.Mentions,
+		Timestamp:          time.Now().UnixMilli(),
 	}
 
 	return json.Marshal(event)
@@ -273,16 +273,25 @@ func (s *redisIdempotencyStore) Set(ctx context.Context, key string, messageID i
 	return s.client.Set(ctx, key, messageID, ttl).Err()
 }
 
-// --- Real Kafka publisher ---
+// --- Real RocketMQ publisher ---
 
-type kqMessagePublisher struct {
-	pusher *kq.Pusher
+// rocketMQMessagePublisher publishes transfer events to the FIFO delivery topic.
+// The conversation id doubles as message group, which is what keeps per
+// conversation ordering.
+type rocketMQMessagePublisher struct {
+	producer *rocketmq.Producer
+	topic    string
 }
 
-func (p *kqMessagePublisher) Publish(ctx context.Context, key string, value []byte) error {
-	if p.pusher == nil {
-		return fmt.Errorf("kafka pusher is not configured")
+func (p *rocketMQMessagePublisher) Publish(ctx context.Context, key string, value []byte) error {
+	if p.producer == nil {
+		return fmt.Errorf("rocketmq producer is not configured")
 	}
 
-	return p.pusher.PushWithKey(ctx, key, string(value))
+	return p.producer.Publish(ctx, rocketmq.Message{
+		Topic:       p.topic,
+		Key:         key,
+		ShardingKey: key,
+		Body:        value,
+	})
 }

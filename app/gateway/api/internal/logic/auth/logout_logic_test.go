@@ -9,22 +9,16 @@ import (
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/authctx"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/config"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
-	"github.com/hellopoisonx/aim/app/shared/jwt"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 )
 
-func TestLogoutUsesBearerClaims(t *testing.T) {
-	manager := jwt.NewManager("test-secret")
-	token, _, err := manager.GenerateAccessToken(42, "desktop-1")
-	require.NoError(t, err)
-
+func TestLogoutUsesContextIdentity(t *testing.T) {
 	authClient := &recordingAuthClient{}
 
 	var c config.Config
 
-	c.Auth.AccessSecret = "test-secret"
-	ctx := authctx.WithAuthorization(context.Background(), "Bearer "+token)
+	ctx := authctx.WithIdentity(context.Background(), authctx.Identity{UserID: 42, DeviceID: "desktop-1"})
 
 	resp, err := NewLogoutLogic(ctx, svc.NewServiceContextWithAuth(c, authClient)).Logout()
 	require.NoError(t, err)
@@ -34,23 +28,16 @@ func TestLogoutUsesBearerClaims(t *testing.T) {
 }
 
 func TestLogoutSanitizesRPCError(t *testing.T) {
-	manager := jwt.NewManager("test-secret")
-	token, _, err := manager.GenerateAccessToken(42, "desktop-1")
-	require.NoError(t, err)
-
 	var c config.Config
 
-	c.Auth.AccessSecret = "test-secret"
-	ctx := authctx.WithAuthorization(context.Background(), "Bearer "+token)
+	ctx := authctx.WithIdentity(context.Background(), authctx.Identity{UserID: 42, DeviceID: "desktop-1"})
 
-	_, err = NewLogoutLogic(ctx, svc.NewServiceContextWithAuth(c, &recordingAuthClient{err: errors.New("redis password leaked")})).Logout()
+	_, err := NewLogoutLogic(ctx, svc.NewServiceContextWithAuth(c, &recordingAuthClient{err: errors.New("redis password leaked")})).Logout()
 	requireInternalError(t, err)
 }
 
-func TestLogoutRejectsMissingBearerToken(t *testing.T) {
+func TestLogoutRejectsMissingIdentity(t *testing.T) {
 	var c config.Config
-
-	c.Auth.AccessSecret = "test-secret"
 
 	_, err := NewLogoutLogic(context.Background(), svc.NewServiceContextWithAuth(c, &recordingAuthClient{})).Logout()
 	require.Error(t, err)
@@ -85,4 +72,6 @@ func (c *recordingAuthClient) Logout(_ context.Context, req *authservice.LogoutR
 	return &authservice.LogoutResp{Success: true}, nil
 }
 
-func (c *recordingAuthClient) CreateBotCredential(context.Context, *authservice.CreateBotCredentialReq, ...grpc.CallOption) (*authservice.CreateBotCredentialResp, error) { return nil, nil }
+func (c *recordingAuthClient) CreateBotCredential(context.Context, *authservice.CreateBotCredentialReq, ...grpc.CallOption) (*authservice.CreateBotCredentialResp, error) {
+	return nil, nil
+}

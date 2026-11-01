@@ -3,7 +3,6 @@ package conversationservicelogic
 import (
 	"context"
 
-	"github.com/hellopoisonx/aim/app/logic/rpc/internal/service"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
@@ -37,18 +36,18 @@ func (l *GetConversationMembersDetailLogic) GetConversationMembersDetail(in *pb.
 
 	details, err := convSvc.GetConversationMembersDetail(l.ctx, in.GetConversationId())
 	if err != nil {
-		return nil, service.ConversationToGRPCError(err)
+		return nil, errorx.ToGRPCError(err)
 	}
 
 	pbMembers := make([]*pb.MemberDetailItem, 0, len(details))
 	for _, d := range details {
 		pbMembers = append(pbMembers, &pb.MemberDetailItem{
-			UserId:      d.UserID,
-			Email:       d.Email,
-			Avatar:      d.Avatar,
-			Role:        d.Role,
-			JoinedAt:    d.JoinedAt,
-			Name:      d.Name,
+			UserId:   d.UserID,
+			Email:    d.Email,
+			Avatar:   d.Avatar,
+			Role:     d.Role,
+			JoinedAt: d.JoinedAt,
+			Name:     d.Name,
 		})
 	}
 

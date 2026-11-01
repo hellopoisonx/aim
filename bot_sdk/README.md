@@ -76,9 +76,8 @@ fmt.Println(resp.MessageID)
 ### 读取历史消息
 
 ```go
-history, err := client.GetConversationHistory(ctx, botsdk.GetConversationHistoryRequest{
-    ConversationID: "1",
-    Limit:          50,
+history, err := client.GetConversationHistory(ctx, "1", botsdk.GetConversationHistoryRequest{
+    Limit: 50,
 })
 if err != nil {
     log.Fatal(err)
@@ -91,8 +90,7 @@ for _, msg := range history.Messages {
 下一页使用响应游标：
 
 ```go
-next, err := client.GetConversationHistory(ctx, botsdk.GetConversationHistoryRequest{
-    ConversationID:   "1",
+next, err := client.GetConversationHistory(ctx, "1", botsdk.GetConversationHistoryRequest{
     CursorCreatedAt: history.NextCursorCreatedAt,
     CursorID:        history.NextCursorID,
     Limit:           50,
@@ -106,8 +104,7 @@ members, err := client.GetConversationMembers(ctx, "1")
 
 readStates, err := client.ListReadStates(ctx, "1")
 
-markRead, err := client.MarkRead(ctx, botsdk.MarkReadRequest{
-    ConversationID:     "1",
+markRead, err := client.MarkRead(ctx, "1", botsdk.MarkReadRequest{
     LastReadMessageID: "123456789",
 })
 ```

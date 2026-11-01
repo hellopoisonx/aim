@@ -2,40 +2,41 @@
 
 ## 概览
 
-本目录是 auth 的数据库契约层：SQL migration + sqlc query。`*.go` 由 sqlc 生成，业务代码不得手写 model scaffold。
+`app/auth/rpc/model/` 现在是 **migration SQL + GORM ORM 结构体 + GORM DAO** 三层：
+
+- `migrations/`：schema 唯一事实来源，由 `auth-migrate` 容器执行。
+- `orm/`：GORM 结构体，与迁移 SQL 逐列对齐；禁止 `AutoMigrate`。
+- `dao/`：唯一允许写查询/SQL 的位置，业务层只依赖 `*dao.Store`。
+
+sqlc 已移除：不要新增 `sqlc.yaml`、`queries/` 或 `*.sql.go`。
 
 ## 结构
 
 ```text
 model/
-├── sqlc.yaml
 ├── migrations/        # 按编号执行的 PostgreSQL schema migration
-├── queries/           # sqlc 查询，生成到同目录 *.sql.go
-├── db.go              # sqlc 生成
-├── models.go          # sqlc 生成
-├── querier.go         # sqlc 生成
-└── *.sql.go           # sqlc 生成
+├── orm/               # GORM 结构体（表映射，不生成 DDL）
+└── dao/               # GORM DAO（业务唯一数据访问入口）
 ```
-
-`model/sqlc.yaml` 固定：PostgreSQL、pgx/v5、`emit_json_tags`、`emit_empty_slices`、`emit_interface`、`emit_pointers_for_null_types`，输出目录为 `.`（即 `model/` 自身）。
 
 ## 迁移规则
 
 - 文件名使用 `NNN_description.sql`，只追加新编号，不改已发布迁移语义。
 - 表字段时间优先使用 `TIMESTAMPTZ NOT NULL DEFAULT NOW()`。
+- 改表后必须同步 `orm/` 与 `dao/`，并跑 `go test ./app/auth/...`。
 
-## 查询规则
+## DAO 规则
 
-- 查询名用动词前缀：`Create*`、`Get*`、`Update*`。
-- 修改 SQL 后必须重新生成 `model/`，不要手改生成文件。
+- DAO 方法按聚合命名：`CreateUser`、`GetUserByEmail` 等；`event_journal` 由 `app/shared/rocketmq` 在事务内写入，不再有 outbox DAO。
+- 业务层不得直接使用 `*gorm.DB` 或手写 SQL。
+- 事务统一用 `(*dao.Store).WithTx(ctx, func(tx *dao.Store) error { ... })`。
+- 唯一冲突/记录不存在通过 `dao.ErrDuplicateKey` / `dao.ErrNotFound` 暴露。
+- 复杂 SQL（聚合、`RETURNING`、`ON CONFLICT`）允许在 DAO 内使用 `gorm.Raw`/`Exec`，但不得泄漏到业务层。
 
-## 生成与验证
+## 验证
 
 ```bash
-cd app/auth/rpc/model
-sqlc generate
-cd ../../..
-go test ./app/auth/rpc/...
+go test ./app/auth/...
 ```
 
 Docker Compose 的 `auth-migrate` 调用 `deploy/scripts/migrate-postgres.sh`，按 `migrations/*.sql` 字典序执行；新增迁移只需使用正确的 `NNN_` 前缀，无需手工更新 Compose command。

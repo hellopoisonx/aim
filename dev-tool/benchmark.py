@@ -744,8 +744,8 @@ class FriendChainScenario:
             print("  x Not enough users registered")
             return self.metrics.snapshot()
 
-        # Wait for Kafka sync
-        print("  ... Waiting for Kafka user sync (5s)...")
+        # Wait for message-queue sync
+        print("  ... Waiting for message-queue user sync (5s)...")
         time.sleep(5)
 
         # Step 2: Add friends (user[i] -> user[i+1]) in pairs
@@ -872,7 +872,7 @@ class PresenceScenario:
             print("  x Not enough users registered")
             return self.metrics.snapshot()
 
-        print("  ... Waiting for Kafka user sync (5s)...")
+        print("  ... Waiting for message-queue user sync (5s)...")
         time.sleep(5)
 
         pair_count = len(user_creds) // 2
@@ -1016,8 +1016,8 @@ class WsMessageScenario:
             print("  x Not enough users registered")
             return self.metrics.snapshot()
 
-        # Wait for Kafka sync
-        print("  ... Waiting for Kafka user sync (5s)...")
+        # Wait for message-queue sync
+        print("  ... Waiting for message-queue user sync (5s)...")
         time.sleep(5)
 
         # Step 2: Create conversations (pair users)
@@ -1340,7 +1340,7 @@ class MixedScenario:
                             workers=min(self.users, 20), verbose=False)
         gen.run(setup_user, total_target=self.users)
 
-        time.sleep(5)  # Kafka sync
+        time.sleep(5)  # message-queue sync
 
         # Create conversations
         conv_lock = threading.Lock()

@@ -5,6 +5,7 @@ package config
 import (
 	"time"
 
+	"github.com/hellopoisonx/aim/app/shared/rocketmq"
 	"github.com/zeromicro/go-zero/zrpc"
 )
 
@@ -23,13 +24,13 @@ type Config struct {
 		RefreshTTL         time.Duration
 		SnowflakeMachineID int64
 	}
-	KqPusherConf struct {
-		Brokers []string `json:",optional"`
-		Topic   string   `json:",optional"`
-	} `json:",optional"`
+	// UserEventProducerConf configures the transactional producer for the
+	// aim-user-events topic.
+	UserEventProducerConf rocketmq.ProducerConf `json:",optional"`
 }
 
-// IsKqPusherConfigured returns true if Kafka pusher is properly configured.
-func (c *Config) IsKqPusherConfigured() bool {
-	return len(c.KqPusherConf.Brokers) > 0 && c.KqPusherConf.Topic != ""
+// IsUserEventProducerConfigured reports whether user.created events can be
+// published transactionally.
+func (c *Config) IsUserEventProducerConfigured() bool {
+	return c.UserEventProducerConf.IsConfigured()
 }

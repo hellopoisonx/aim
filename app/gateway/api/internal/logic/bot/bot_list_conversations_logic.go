@@ -32,18 +32,11 @@ func (l *BotListConversationsLogic) BotListConversations() (*types.BotListConver
 		return nil, err
 	}
 
-	if l.svcCtx.LogicBotClient == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "internal error")
-	}
-
 	rpcResp, err := l.svcCtx.LogicBotClient.ListBotConversations(l.ctx, &botservice.ListBotConversationsReq{
 		BotUserId: identity.BotUserID,
 	})
 	if err != nil {
-		if ce := errorx.FromGRPCError(err); ce != nil {
-			return nil, ce
-		}
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "internal error")
+		return nil, errorx.SanitizeGRPCError(l, "bot list conversations", err)
 	}
 
 	convs := rpcResp.GetConversations()

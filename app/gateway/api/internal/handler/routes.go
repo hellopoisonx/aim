@@ -59,11 +59,6 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 			},
 			{
 				Method:  http.MethodPost,
-				Path:    "/logout",
-				Handler: auth.LogoutHandler(serverCtx),
-			},
-			{
-				Method:  http.MethodPost,
 				Path:    "/refresh",
 				Handler: auth.RefreshHandler(serverCtx),
 			},
@@ -73,6 +68,20 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				Handler: auth.RegisterHandler(serverCtx),
 			},
 		},
+		rest.WithPrefix("/api/auth"),
+	)
+
+	server.AddRoutes(
+		rest.WithMiddlewares(
+			[]rest.Middleware{serverCtx.Auth, serverCtx.UserRateLimit},
+			[]rest.Route{
+				{
+					Method:  http.MethodPost,
+					Path:    "/logout",
+					Handler: auth.LogoutHandler(serverCtx),
+				},
+			}...,
+		),
 		rest.WithPrefix("/api/auth"),
 	)
 
@@ -190,17 +199,17 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				},
 				{
 					Method:  http.MethodDelete,
-					Path:    "/:id/members/:uid",
+					Path:    "/:id/members/:user_id",
 					Handler: conversations.RemoveGroupMemberHandler(serverCtx),
 				},
 				{
 					Method:  http.MethodPost,
-					Path:    "/:id/members/:uid/admin",
+					Path:    "/:id/members/:user_id/admin",
 					Handler: conversations.GrantGroupAdminHandler(serverCtx),
 				},
 				{
 					Method:  http.MethodDelete,
-					Path:    "/:id/members/:uid/admin",
+					Path:    "/:id/members/:user_id/admin",
 					Handler: conversations.RevokeGroupAdminHandler(serverCtx),
 				},
 				{

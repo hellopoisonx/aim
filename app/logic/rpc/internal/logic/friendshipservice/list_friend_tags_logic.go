@@ -3,7 +3,6 @@ package friendshipservicelogic
 import (
 	"context"
 
-	"github.com/hellopoisonx/aim/app/logic/rpc/internal/service"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
@@ -35,7 +34,7 @@ func (l *ListFriendTagsLogic) ListFriendTags(in *pb.ListFriendTagsReq) (*pb.List
 
 	tags, err := l.svcCtx.FriendTagService.ListTags(l.ctx, in.GetUserId())
 	if err != nil {
-		return nil, service.TagErrToGRPCError(err)
+		return nil, errorx.ToGRPCError(err)
 	}
 
 	pbTags := make([]*pb.FriendTagResponse, 0, len(tags))

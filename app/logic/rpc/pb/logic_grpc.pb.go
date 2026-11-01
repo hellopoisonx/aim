@@ -8,6 +8,7 @@ package pb
 
 import (
 	context "context"
+
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
@@ -27,7 +28,7 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type PermissionServiceClient interface {
 	// CheckMessagePermission checks whether a sender can publish into a conversation.
-	// aim-core calls this before accepting a message into Kafka.
+	// aim-core calls this before accepting a message into the broker.
 	CheckMessagePermission(ctx context.Context, in *CheckMessagePermissionReq, opts ...grpc.CallOption) (*CheckMessagePermissionResp, error)
 }
 
@@ -54,7 +55,7 @@ func (c *permissionServiceClient) CheckMessagePermission(ctx context.Context, in
 // for forward compatibility.
 type PermissionServiceServer interface {
 	// CheckMessagePermission checks whether a sender can publish into a conversation.
-	// aim-core calls this before accepting a message into Kafka.
+	// aim-core calls this before accepting a message into the broker.
 	CheckMessagePermission(context.Context, *CheckMessagePermissionReq) (*CheckMessagePermissionResp, error)
 	mustEmbedUnimplementedPermissionServiceServer()
 }

@@ -50,7 +50,7 @@ func (l *GetConversationHistoryLogic) GetConversationHistory(in *pb.GetConversat
 
 	messages, err := convSvc.GetConversationHistory(l.ctx, in.GetConversationId(), cursorCreatedAt, cursorID, limit)
 	if err != nil {
-		return nil, service.ConversationToGRPCError(err)
+		return nil, errorx.ToGRPCError(err)
 	}
 
 	senderInfoCache := make(map[int64]*pb.SenderInfo)
@@ -79,7 +79,7 @@ func (l *GetConversationHistoryLogic) GetConversationHistory(in *pb.GetConversat
 			MessageType:    msg.MessageType,
 			Content:        messageContentFromJSONB(msg.Content),
 			ClientMsgId:    clientMsgID,
-			CreatedAt:      service.UnixFromPGTimestamptz(msg.CreatedAt),
+			CreatedAt:      msg.CreatedAt.UnixMilli(),
 			Mentions:       service.ParseMentionsJSON(msg.Mentions),
 			IsSystem:       msg.SenderID == 0 && msg.MessageType == service.MessageTypeSystem,
 		})
@@ -91,13 +91,13 @@ func (l *GetConversationHistoryLogic) GetConversationHistory(in *pb.GetConversat
 
 	if hasMore && len(messages) > 0 {
 		lastMsg := messages[len(messages)-1]
-		nextCursorCreatedAt = service.UnixFromPGTimestamptz(lastMsg.CreatedAt)
+		nextCursorCreatedAt = lastMsg.CreatedAt.UnixMilli()
 		nextCursorID = lastMsg.ID
 	}
 
 	readStates, err := convSvc.ListConversationReadStates(l.ctx, in.GetConversationId())
 	if err != nil {
-		return nil, service.ConversationToGRPCError(err)
+		return nil, errorx.ToGRPCError(err)
 	}
 
 	pbReadStates := make([]*pb.ReadStateItem, len(readStates))
@@ -113,7 +113,7 @@ func (l *GetConversationHistoryLogic) GetConversationHistory(in *pb.GetConversat
 
 	members, err := convSvc.GetConversationMembersDetail(l.ctx, in.GetConversationId())
 	if err != nil {
-		return nil, service.ConversationToGRPCError(err)
+		return nil, errorx.ToGRPCError(err)
 	}
 
 	// Enrich read states and read details with member name snapshots.

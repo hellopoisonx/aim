@@ -1,40 +1,42 @@
+// Package service implements the attachment domain: presigned uploads, object
+// verification, download authorization and the transactional
+// attachment.uploaded event.
+//
+// The package is split by concern: service.go holds wiring, upload.go the write
+// path, download.go the read path and content.go the message-content helpers.
 package service
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
-	"errors"
 	"fmt"
-	"net/http"
-	"path/filepath"
-	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/hellopoisonx/aim/app/attachment/internal/config"
-	sharedattachment "github.com/hellopoisonx/aim/app/shared/attachment"
-	"github.com/hellopoisonx/aim/app/shared/events"
-	"github.com/hellopoisonx/aim/app/shared/outbox"
-	"github.com/hellopoisonx/aim/app/shared/tracing"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/segmentio/kafka-go"
-	"github.com/zeromicro/go-queue/kq"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/propagation"
-	"go.opentelemetry.io/otel/trace"
+	"github.com/hellopoisonx/aim/app/shared/attachmentstore/dao"
+	"github.com/hellopoisonx/aim/app/shared/errorx"
+	"github.com/hellopoisonx/aim/app/shared/gormdb"
+	"github.com/hellopoisonx/aim/app/shared/rocketmq"
+	"github.com/hellopoisonx/aim/app/shared/s3signer"
+	"github.com/zeromicro/go-zero/core/logx"
 )
 
-var ErrNotFound = errors.New("attachment not found")
+// Domain errors carry their biz code so the RPC server can return them through
+// errorx.ToGRPCError without inspecting error strings.
+var (
+	ErrNotFound        = errorx.NewCodeError(errorx.CodeNotFound, "attachment not found")
+	ErrNotUploaded     = errorx.NewCodeError(errorx.CodeBadInput, "file is not uploaded")
+	ErrReferenceDenied = errorx.NewCodeError(errorx.CodeForbidden, "attachment reference denied")
+)
 
 type Service struct {
-	cfg          config.Config
-	db           *pgxpool.Pool
-	signer       S3Signer
-	outboxPoller *outbox.Poller
+	cfg      config.Config
+	store    *dao.Store
+	signer   s3signer.S3Signer
+	producer *rocketmq.Producer
 }
+
+// attachmentProducerGroup is the broker-visible producer group of attachment.
+const attachmentProducerGroup = "aim-attachment-producer"
 
 type InitUploadRequest struct {
 	OwnerID        int64  `json:"owner_id"`
@@ -56,8 +58,9 @@ type InitUploadResponse struct {
 	ExpiresAt    int64             `json:"expires_at"`
 }
 
+// CompleteUploadRequest carries the client-reported checksum for the uploaded
+// object; the caller identity is passed separately as an int64 user id.
 type CompleteUploadRequest struct {
-	UserID string `json:"-"`
 	SHA256 string `json:"sha256,omitempty"`
 }
 
@@ -88,23 +91,19 @@ type DownloadResponse struct {
 }
 
 func New(ctx context.Context, cfg config.Config) (*Service, error) {
-	var pool *pgxpool.Pool
-	var err error
+	var store *dao.Store
 	if cfg.Postgres.DataSource != "" {
-		pool, err = pgxpool.New(ctx, cfg.Postgres.DataSource)
+		db, err := gormdb.Open(cfg.Postgres.DataSource)
 		if err != nil {
 			return nil, err
 		}
-		if err := pool.Ping(ctx); err != nil {
-			pool.Close()
-			return nil, err
-		}
+		store = dao.New(db)
 	}
 
 	svc := &Service{
-		cfg: cfg,
-		db:  pool,
-		signer: S3Signer{
+		cfg:   cfg,
+		store: store,
+		signer: s3signer.S3Signer{
 			Endpoint:       cfg.Seaweed.Endpoint,
 			PublicEndpoint: cfg.Seaweed.PublicEndpoint,
 			Region:         cfg.Seaweed.Region,
@@ -114,297 +113,41 @@ func New(ctx context.Context, cfg config.Config) (*Service, error) {
 		},
 	}
 
-	// Initialize outbox Poller if Kafka is configured
-	if pool != nil && len(cfg.Kafka.Brokers) > 0 && cfg.Kafka.Topic != "" {
-		store := newRawOutboxStore(pool)
-		publisher := newOutboxPublisher(cfg.Kafka.Brokers, cfg.Kafka.Topic)
-		svc.outboxPoller = outbox.NewPoller(store, publisher, outbox.Config{})
+	// Transactional attachment.uploaded publishing, when configured. A broker
+	// that refuses the first connection does not block startup: uploads then
+	// fail loudly instead of the whole service crash-looping.
+	if store != nil && cfg.UploadedProducer.IsConfigured() {
+		producer, err := rocketmq.NewProducer(cfg.UploadedProducer.EndpointConf, attachmentProducerGroup, cfg.UploadedProducer.Topic)
+		if err != nil {
+			return nil, err
+		}
+		producer.WithJournalChecker(store.DB())
+		if err := producer.Start(); err != nil {
+			logx.WithContext(ctx).Errorf("failed to start rocketmq attachment producer: %v", err)
+		}
+		svc.producer = producer
 	}
 
 	return svc, nil
 }
 
-func (s *Service) OutboxPoller() *outbox.Poller {
-	return s.outboxPoller
-}
-
-// newOutboxPublisher creates an outbox.PublisherFunc using kq.Pusher.
-func newOutboxPublisher(brokers []string, topic string) outbox.PublisherFunc {
-	pusher := kq.NewPusher(brokers, topic, kq.WithBalancer(&kafka.Murmur2Balancer{}))
-	return func(ctx context.Context, _, key string, payload []byte) error {
-		return pusher.PushWithKey(ctx, key, string(payload))
-	}
-}
-
 func (s *Service) Close() {
-	if s.db != nil {
-		s.db.Close()
-	}
-}
-
-func (s *Service) InitUpload(ctx context.Context, req InitUploadRequest) (*InitUploadResponse, error) {
-	if req.OwnerID <= 0 || req.ConversationID <= 0 {
-		return nil, fmt.Errorf("owner_id and conversation_id are required")
-	}
-	if !sharedattachment.ValidKind(req.Kind) {
-		return nil, fmt.Errorf("unsupported kind")
-	}
-	if req.Size <= 0 || req.Size > s.cfg.Seaweed.MaxSize() {
-		return nil, fmt.Errorf("size must be between 1 and %d bytes", s.cfg.Seaweed.MaxSize())
-	}
-	if !allowedMime(req.Kind, req.Mime) {
-		return nil, fmt.Errorf("mime %q is not allowed for %s", req.Mime, req.Kind)
-	}
-	fileID := uuid.New()
-	key := objectKey(req.ConversationID, fileID.String(), "original")
-	url, headers, err := s.signer.Presign(http.MethodPut, key, s.cfg.Seaweed.UploadTTL(), map[string]string{"content-type": req.Mime})
-	if err != nil {
-		return nil, err
-	}
-	if s.db != nil {
-		_, err = s.db.Exec(ctx, `INSERT INTO attachment_files(file_id, owner_id, conversation_id, kind, original_name, mime, size_bytes, sha256, status, parse_status)
-VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'pending','pending')`, fileID, req.OwnerID, req.ConversationID, req.Kind, req.OriginalName, req.Mime, req.Size, nilIfEmpty(req.SHA256))
-		if err != nil {
-			return nil, err
-		}
-		_, err = s.db.Exec(ctx, `INSERT INTO attachment_objects(file_id, object_role, bucket, object_key, mime, size_bytes, sha256)
-VALUES ($1,'original',$2,$3,$4,$5,$6)`, fileID, s.cfg.Seaweed.Bucket, key, req.Mime, req.Size, nilIfEmpty(req.SHA256))
-		if err != nil {
-			return nil, err
+	if s.producer != nil {
+		if err := s.producer.GracefulStop(); err != nil {
+			logx.WithContext(context.Background()).Errorf("failed to stop rocketmq attachment producer: %v", err)
 		}
 	}
-	return &InitUploadResponse{FileID: fileID.String(), Bucket: s.cfg.Seaweed.Bucket, ObjectKey: key, UploadURL: url, UploadMethod: http.MethodPut, Headers: headers, ExpiresAt: time.Now().Add(s.cfg.Seaweed.UploadTTL()).UnixMilli()}, nil
-}
-
-func (s *Service) CompleteUpload(ctx context.Context, userID int64, fileID string, req CompleteUploadRequest) (*FileInfo, error) {
-	id, err := uuid.Parse(fileID)
-	if err != nil {
-		return nil, err
+	if s.store == nil {
+		return
 	}
-	if s.db != nil {
-		pending, err := s.getPendingOriginal(ctx, userID, id)
-		if err != nil {
-			return nil, err
-		}
-		if err := s.verifyObject(ctx, pending.ObjectKey, pending.Size); err != nil {
-			return nil, err
-		}
-
-		// Use transaction: update status + insert outbox record atomically
-		tx, err := s.db.Begin(ctx)
-		if err != nil {
-			return nil, err
-		}
-		defer func() { _ = tx.Rollback(ctx) }()
-
-		cmd, err := tx.Exec(ctx, `UPDATE attachment_files
-			SET status='uploaded', uploaded_at=NOW(), updated_at=NOW(),
-				sha256=COALESCE(NULLIF($3,''), sha256),
-				parse_status=CASE WHEN kind=$4 THEN 'ready' ELSE parse_status END
-			WHERE file_id=$1 AND owner_id=$2 AND status='pending'`, id, userID, req.SHA256, sharedattachment.KindFile)
-		if err != nil {
-			return nil, err
-		}
-		if cmd.RowsAffected() == 0 {
-			return nil, ErrNotFound
-		}
-
-		// Insert outbox event atomically if enabled
-		if s.outboxPoller != nil {
-			if err := s.insertOutboxEvent(ctx, tx, pending); err != nil {
-				return nil, err
-			}
-		}
-
-		if err := tx.Commit(ctx); err != nil {
-			return nil, err
-		}
-
-		// Fast path: wake the poller immediately
-		if s.outboxPoller != nil {
-			s.outboxPoller.Wake()
+	if db := s.store.DB(); db != nil {
+		if sqlDB, err := db.DB(); err == nil {
+			_ = sqlDB.Close()
 		}
 	}
-	info, err := s.GetFile(ctx, userID, fileID)
-	if err != nil {
-		return nil, err
-	}
-	return info, nil
-}
-
-// insertOutboxEvent inserts an AttachmentUploadedEvent into the outbox table
-// using the given transaction.
-func (s *Service) insertOutboxEvent(ctx context.Context, tx pgx.Tx, info *FileInfo) error {
-	e := events.AttachmentUploadedEvent{
-		TraceContextFields: tracing.InjectTraceContext(ctx),
-		FileID:             info.FileID,
-		OwnerID:            info.OwnerID,
-		ConversationID:     info.ConversationID,
-		Kind:               info.Kind,
-		ObjectKey:          info.ObjectKey,
-		Bucket:             info.Bucket,
-		OriginalName:       info.OriginalName,
-		Mime:               info.Mime,
-		Size:               info.Size,
-		SHA256:             info.SHA256,
-		UploadedAt:         time.Now().UnixMilli(),
-	}
-	payload, err := json.Marshal(e)
-	if err != nil {
-		return fmt.Errorf("marshal outbox event: %w", err)
-	}
-
-	_, err = tx.Exec(
-		ctx,
-		`INSERT INTO outbox_records (topic, key, payload) VALUES ($1, $2, $3)`,
-		s.cfg.Kafka.Topic, info.FileID, payload,
-	)
-	return err
-}
-
-func (s *Service) getPendingOriginal(ctx context.Context, userID int64, fileID uuid.UUID) (*FileInfo, error) {
-	row := s.db.QueryRow(ctx, `SELECT f.file_id::text, f.owner_id, f.conversation_id, f.kind, f.original_name, f.mime, f.size_bytes, COALESCE(f.sha256,''), f.status, f.parse_status, o.bucket, o.object_key
-FROM attachment_files f
-JOIN attachment_objects o ON o.file_id=f.file_id AND o.object_role='original'
-WHERE f.file_id=$1 AND f.owner_id=$2 AND f.status='pending'`, fileID, userID)
-	info := FileInfo{}
-	if err := row.Scan(&info.FileID, &info.OwnerID, &info.ConversationID, &info.Kind, &info.OriginalName, &info.Mime, &info.Size, &info.SHA256, &info.Status, &info.ParseStatus, &info.Bucket, &info.ObjectKey); err != nil {
-		return nil, err
-	}
-	return &info, nil
-}
-
-func (s *Service) verifyObject(ctx context.Context, key string, expectedSize int64) error {
-	ctx, span := otel.Tracer("github.com/hellopoisonx/aim/app/attachment").Start(
-		ctx,
-		"attachment.seaweed.verify_object",
-		trace.WithSpanKind(trace.SpanKindClient),
-		trace.WithAttributes(attribute.String("seaweed.object_key", key)),
-	)
-	defer span.End()
-
-	url, headers, err := s.signer.PresignInternal(http.MethodHead, key, time.Minute, nil)
-	if err != nil {
-		tracing.RecordSpanError(span, err)
-		return err
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodHead, url, nil)
-	if err != nil {
-		tracing.RecordSpanError(span, err)
-		return err
-	}
-	for k, v := range headers {
-		req.Header.Set(k, v)
-	}
-	otel.GetTextMapPropagator().Inject(ctx, propagation.HeaderCarrier(req.Header))
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		tracing.RecordSpanError(span, err)
-		return err
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	span.SetAttributes(attribute.Int("http.response.status_code", resp.StatusCode))
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		err := fmt.Errorf("uploaded object not found: status %d", resp.StatusCode)
-		tracing.RecordSpanError(span, err)
-		return err
-	}
-	if resp.ContentLength > 0 && expectedSize > 0 && resp.ContentLength != expectedSize {
-		err := fmt.Errorf("uploaded object size mismatch")
-		tracing.RecordSpanError(span, err)
-		return err
-	}
-	return nil
-}
-
-func (s *Service) GetFile(ctx context.Context, userID int64, fileID string) (*FileInfo, error) {
-	id, err := uuid.Parse(fileID)
-	if err != nil {
-		return nil, err
-	}
-	if s.db == nil {
-		return nil, ErrNotFound
-	}
-	row := s.db.QueryRow(ctx, `SELECT f.file_id::text, f.owner_id, f.conversation_id, f.kind, f.original_name, f.mime, f.size_bytes, COALESCE(f.sha256,''), f.status, f.parse_status, o.bucket, o.object_key,
-COALESCE(t.object_key,''), COALESCE(r.duration_ms,0), COALESCE(r.width,0), COALESCE(r.height,0), COALESCE(r.metadata,'{}'::jsonb)
-FROM attachment_files f
-JOIN attachment_objects o ON o.file_id=f.file_id AND o.object_role='original'
-LEFT JOIN attachment_objects t ON t.file_id=f.file_id AND t.object_role='thumbnail'
-LEFT JOIN attachment_parse_results r ON r.file_id=f.file_id
-WHERE f.file_id=$1 AND (f.owner_id=$2 OR f.status='uploaded')`, id, userID)
-	var rawMeta []byte
-	info := FileInfo{}
-	if err := row.Scan(&info.FileID, &info.OwnerID, &info.ConversationID, &info.Kind, &info.OriginalName, &info.Mime, &info.Size, &info.SHA256, &info.Status, &info.ParseStatus, &info.Bucket, &info.ObjectKey, &info.ThumbnailObjectKey, &info.DurationMS, &info.Width, &info.Height, &rawMeta); err != nil {
-		return nil, err
-	}
-	_ = json.Unmarshal(rawMeta, &info.Metadata)
-	return &info, nil
-}
-
-func (s *Service) Download(ctx context.Context, userID int64, fileID string) (*DownloadResponse, error) {
-	info, err := s.GetFile(ctx, userID, fileID)
-	if err != nil {
-		return nil, err
-	}
-	if info.Status != "uploaded" {
-		return nil, fmt.Errorf("file is not uploaded")
-	}
-	url, headers, err := s.signer.Presign(http.MethodGet, info.ObjectKey, s.cfg.Seaweed.GetDownloadTTL(), nil)
-	if err != nil {
-		return nil, err
-	}
-	return &DownloadResponse{URL: url, Headers: headers, ExpiresAt: time.Now().Add(s.cfg.Seaweed.GetDownloadTTL()).UnixMilli()}, nil
-}
-
-func (s *Service) ValidateReference(ctx context.Context, userID, conversationID int64, fileID, kind string) (*FileInfo, error) {
-	info, err := s.GetFile(ctx, userID, fileID)
-	if err != nil {
-		return nil, err
-	}
-	if info.Status != "uploaded" || info.OwnerID != userID || info.ConversationID != conversationID || info.Kind != kind {
-		return nil, fmt.Errorf("attachment reference denied")
-	}
-	return info, nil
 }
 
 func objectKey(conversationID int64, fileID, role string) string {
 	now := time.Now().UTC()
 	return fmt.Sprintf("attachments/%04d/%02d/%d/%s/%s", now.Year(), now.Month(), conversationID, fileID, role)
-}
-
-func allowedMime(kind, mime string) bool {
-	mime = strings.TrimSpace(strings.ToLower(mime))
-	if mime == "" || !strings.Contains(mime, "/") {
-		return false
-	}
-	switch kind {
-	case sharedattachment.KindImage:
-		return strings.HasPrefix(mime, "image/")
-	case sharedattachment.KindVideo:
-		return strings.HasPrefix(mime, "video/")
-	case sharedattachment.KindAudio:
-		return strings.HasPrefix(mime, "audio/")
-	case sharedattachment.KindFile:
-		return !strings.HasPrefix(mime, "image/") && !strings.HasPrefix(mime, "video/") && !strings.HasPrefix(mime, "audio/")
-	default:
-		return false
-	}
-}
-
-func nilIfEmpty(v string) any {
-	if v == "" {
-		return nil
-	}
-	return v
-}
-
-func ContentFromFile(info *FileInfo) (string, error) {
-	name := info.OriginalName
-	if name == "" {
-		name = filepath.Base(info.ObjectKey)
-	}
-	meta, _ := json.Marshal(info.Metadata)
-	c := sharedattachment.Content{Schema: sharedattachment.ContentSchemaV1, FileID: info.FileID, Kind: info.Kind, Original: sharedattachment.OriginalObject{Name: name, Mime: info.Mime, Size: info.Size, SHA256: info.SHA256}, ThumbnailFileID: info.ThumbnailObjectKey, ParseStatus: info.ParseStatus, DurationMS: info.DurationMS, Width: info.Width, Height: info.Height, Metadata: bytes.TrimSpace(meta)}
-	return c.Marshal()
 }

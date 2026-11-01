@@ -14,7 +14,7 @@
 | `WebSocketConnectionClosedException` | 5 |
 
 **时间线还原**：
-- 0~2min：Step 1-4 注册/登录/Kafka 等待/建会话/连 WS
+- 0~2min：Step 1-4 注册/登录/RocketMQ 等待/建会话/连 WS
 - 2~5min：消息正常收发（1721 成功）
 - **~5min**：Token 过期 → 服务端批量踢连接 → 所有 WS 断开
 - 5~7.3min：全部后续发送失败 → `ws_disconnected`（2244 个）

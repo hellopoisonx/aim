@@ -13,10 +13,13 @@ import (
 	"net/http"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
+	"github.com/hellopoisonx/aim/app/shared/events"
+
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
-	"github.com/hellopoisonx/aim/app/logic/rpc/model"
+	"github.com/hellopoisonx/aim/app/logic/rpc/model/orm"
 	"github.com/hellopoisonx/aim/app/shared/tracing"
 
 	"github.com/zeromicro/go-zero/core/logx"
@@ -26,7 +29,7 @@ import (
 const botWebhookEventType = "message.created"
 
 // botWebhookHTTPTimeout is the per-attempt HTTP timeout. Combined with
-// botWebhookMaxRetries this caps the worst-case time spent on one Kafka
+// botWebhookMaxRetries this caps the worst-case time spent on one broker
 // message at roughly maxRetries * (timeout + backoff_max).
 const botWebhookHTTPTimeout = 5 * time.Second
 
@@ -48,34 +51,128 @@ const botWebhookMaxRetries = 5
 //     `sender_type` (human/bot/system) — bots can filter accordingly.
 //  4. Fans out HTTP POSTs in parallel with HMAC-SHA256 signatures and
 //     exponential backoff retries.
+type botWebhookStore interface {
+	ListActiveBotWebhooksForConversation(ctx context.Context, conversationID int64) ([]orm.BotWebhook, error)
+	GetUserType(ctx context.Context, id int64) (string, error)
+}
+
 type BotWebhookConsumer struct {
 	ctx        context.Context
-	svcCtx     *svc.ServiceContext
+	store      botWebhookStore
 	httpClient *http.Client
 	now        func() time.Time
+
+	jobs     chan webhookJob
+	stopCh   chan struct{}
+	workers  sync.WaitGroup
+	started  sync.Once
+	stopping sync.Once
+	stopped  atomic.Bool
 }
+
+// webhookJob is one bot delivery handed to the background worker pool.
+type webhookJob struct {
+	ctx        context.Context
+	hook       orm.BotWebhook
+	event      events.TransferEvent
+	senderType string
+}
+
+// botWebhookQueueSize and botWebhookWorkers bound the asynchronous fan-out.
+// Delivery no longer blocks the consumer loop: Consume enqueues and returns,
+// and the workers absorb per-bot retry backoff.
+const (
+	botWebhookQueueSize = 256
+	botWebhookWorkers   = 4
+)
 
 // NewBotWebhookConsumer wires the consumer to the given service context.
 func NewBotWebhookConsumer(ctx context.Context, svcCtx *svc.ServiceContext) *BotWebhookConsumer {
-	return &BotWebhookConsumer{
-		ctx:    ctx,
-		svcCtx: svcCtx,
+	var store botWebhookStore
+	if svcCtx.DAO != nil {
+		store = svcCtx.DAO
+	}
+	c := &BotWebhookConsumer{
+		ctx:   ctx,
+		store: store,
 		httpClient: &http.Client{
 			Timeout: botWebhookHTTPTimeout,
 		},
-		now: time.Now,
+		now:    time.Now,
+		jobs:   make(chan webhookJob, botWebhookQueueSize),
+		stopCh: make(chan struct{}),
+	}
+	c.Start()
+
+	return c
+}
+
+// Start launches the delivery workers. It is idempotent.
+func (c *BotWebhookConsumer) Start() {
+	if c == nil || c.jobs == nil {
+		return
+	}
+
+	c.started.Do(func() {
+		if c.ctx == nil {
+			c.ctx = context.Background()
+		}
+		for range botWebhookWorkers {
+			c.workers.Go(func() {
+				for {
+					select {
+					case job := <-c.jobs:
+						c.deliver(job.ctx, job.hook, job.event, job.senderType)
+					case <-c.stopCh:
+						c.drain()
+
+						return
+					}
+				}
+			})
+		}
+	})
+}
+
+// Stop drains the queue and waits for the in-flight deliveries. It is
+// idempotent and safe to call on a consumer that never started.
+func (c *BotWebhookConsumer) Stop() {
+	if c == nil || c.jobs == nil {
+		return
+	}
+
+	c.stopping.Do(func() {
+		c.stopped.Store(true)
+		close(c.stopCh)
+	})
+	c.workers.Wait()
+
+	// Anything enqueued after the workers exited is delivered here so shutdown
+	// does not drop accepted events.
+	c.drain()
+}
+
+// drain delivers the jobs still buffered in the queue.
+func (c *BotWebhookConsumer) drain() {
+	for {
+		select {
+		case job := <-c.jobs:
+			c.deliver(job.ctx, job.hook, job.event, job.senderType)
+		default:
+			return
+		}
 	}
 }
 
-// Consume implements the kq.ConsumeHandler interface.
+// Consume implements the rocketmq handler interface.
 func (c *BotWebhookConsumer) Consume(ctx context.Context, _ string, value string) error {
-	if c.svcCtx.DB == nil {
+	if c.store == nil {
 		// No DB means nothing to look up; skip cleanly so the consumer
 		// stays drainable in degraded environments.
 		return nil
 	}
 
-	var event transferEvent
+	var event events.TransferEvent
 	if err := json.Unmarshal([]byte(value), &event); err != nil {
 		logx.WithContext(ctx).Errorf("bot-webhook: bad event payload: %v", err)
 		// Bad payload is permanent — return nil to advance offset.
@@ -83,12 +180,10 @@ func (c *BotWebhookConsumer) Consume(ctx context.Context, _ string, value string
 	}
 
 	ctx = tracing.ExtractTraceContext(ctx, event.TraceContextFields)
-	ctx, span := tracing.StartKafkaConsumerSpan(ctx, "logic.kafka.bot_webhook.consume")
+	ctx, span := tracing.StartMQConsumerSpan(ctx, "logic.rocketmq.bot_webhook.consume")
 	defer span.End()
 
-	queries := model.New(c.svcCtx.DB)
-
-	hooks, err := queries.ListActiveBotWebhooksForConversation(ctx, event.ConversationID)
+	hooks, err := c.store.ListActiveBotWebhooksForConversation(ctx, event.ConversationID)
 	if err != nil {
 		logx.WithContext(ctx).Errorf("bot-webhook: list webhooks for conv %d: %v", event.ConversationID, err)
 		// Transient DB error — surface to the broker so it retries.
@@ -100,35 +195,53 @@ func (c *BotWebhookConsumer) Consume(ctx context.Context, _ string, value string
 	}
 
 	senderType := ""
-	if t, err := queries.GetUserType(ctx, event.SenderID); err == nil {
+	if t, err := c.store.GetUserType(ctx, event.SenderID); err == nil {
 		senderType = t
 	}
 
-	var wg sync.WaitGroup
+	// Deliveries run with the consumer context rather than the per-message one:
+	// the broker cancels the latter as soon as Consume returns, which would
+	// abort retries mid-flight.
+	jobCtx := tracing.ExtractTraceContext(context.WithoutCancel(c.ctx), event.TraceContextFields)
+
 	for _, hook := range hooks {
 		// Filter: never call back the bot for its own messages.
 		if hook.BotUserID == event.SenderID {
 			continue
 		}
 		// Filter: respect per-bot subscribed event list.
-		if !subscribesTo(hook.Events, botWebhookEventType) {
+		if !subscribesTo([]string(hook.Events), botWebhookEventType) {
 			continue
 		}
 
-		wg.Add(1)
-		go func(h model.BotWebhook) {
-			defer wg.Done()
-			c.deliver(ctx, h, event, senderType)
-		}(hook)
+		c.enqueue(webhookJob{ctx: jobCtx, hook: hook, event: event, senderType: senderType})
 	}
-	wg.Wait()
 
 	return nil
 }
 
+// enqueue hands the job to the worker pool, falling back to inline delivery
+// when the queue is saturated or the consumer is shutting down, so events are
+// never dropped silently.
+func (c *BotWebhookConsumer) enqueue(job webhookJob) {
+	c.Start()
+
+	if c.stopped.Load() {
+		c.deliver(job.ctx, job.hook, job.event, job.senderType)
+
+		return
+	}
+
+	select {
+	case c.jobs <- job:
+	default:
+		c.deliver(job.ctx, job.hook, job.event, job.senderType)
+	}
+}
+
 // deliver attempts the HTTP POST with retries. It never returns an error
 // because per-bot failures must not stall the consumer.
-func (c *BotWebhookConsumer) deliver(ctx context.Context, hook model.BotWebhook, event transferEvent, senderType string) {
+func (c *BotWebhookConsumer) deliver(ctx context.Context, hook orm.BotWebhook, event events.TransferEvent, senderType string) {
 	body, eventID, err := c.buildPayload(event, senderType)
 	if err != nil {
 		logx.WithContext(ctx).Errorf("bot-webhook: build payload bot=%d msg=%d: %v", hook.BotUserID, event.MessageID, err)
@@ -180,7 +293,7 @@ type botWebhookMessagePayload struct {
 	Timestamp   int64    `json:"timestamp"`
 }
 
-func (c *BotWebhookConsumer) buildPayload(event transferEvent, senderType string) ([]byte, string, error) {
+func (c *BotWebhookConsumer) buildPayload(event events.TransferEvent, senderType string) ([]byte, string, error) {
 	eventID, err := newEventID()
 	if err != nil {
 		return nil, "", err

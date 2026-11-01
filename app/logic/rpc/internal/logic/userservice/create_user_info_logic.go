@@ -3,9 +3,8 @@ package userservicelogic
 import (
 	"context"
 
-	"github.com/hellopoisonx/aim/app/logic/rpc/model"
-	"github.com/hellopoisonx/aim/app/logic/rpc/internal/service"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
+	"github.com/hellopoisonx/aim/app/logic/rpc/model/orm"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 
@@ -47,7 +46,7 @@ func (l *CreateUserInfoLogic) CreateUserInfo(in *pb.CreateUserInfoReq) (*pb.Crea
 
 	info, err := userSvc.CreateUserInfo(l.ctx, in.GetId(), in.GetEmail(), in.GetNickname(), in.GetAvatar())
 	if err != nil {
-		return nil, service.ToGRPCError(err)
+		return nil, errorx.ToGRPCError(err)
 	}
 
 	return &pb.CreateUserInfoResp{
@@ -55,14 +54,14 @@ func (l *CreateUserInfoLogic) CreateUserInfo(in *pb.CreateUserInfoReq) (*pb.Crea
 	}, nil
 }
 
-func userInfoToResponse(info model.UserInfo) *pb.UserInfoResponse {
+func userInfoToResponse(info orm.UserInfo) *pb.UserInfoResponse {
 	return &pb.UserInfoResponse{
 		Id:        info.ID,
 		Email:     info.Email,
 		Status:    int32(info.Status),
 		Nickname:  info.Nickname,
 		Avatar:    info.Avatar,
-		CreatedAt: info.CreatedAt.Time.Unix(),
-		UpdatedAt: info.UpdatedAt.Time.Unix(),
+		CreatedAt: info.CreatedAt.Unix(),
+		UpdatedAt: info.UpdatedAt.Unix(),
 	}
 }

@@ -16,11 +16,13 @@ description: aim 的逻辑域。对应 `logic` 模块。
 
 ## 最近变更
 
+- 2026-11-01: 迁移到 RocketMQ 事务消息。`ConversationEventProducerConf` 改为 `rocketmq.ProducerConf`；群管理 5 个方法改为「先算 `target_user_ids` 并发送 half message → 同一本地事务写业务行 + `event_journal`（`event_uid = conversation.event:<message_id>`）→ commit」，`WithOutbox` 换成 `WithTransactionalEvents`，`ConversationTxRunner` 增加可选的 `TransactionalConversationTxRunner.WithEventTx`。`aim-conversation-events` 为 TRANSACTION 类型（不再保序，聊天顺序由 `aim-message-transfer` FIFO 承担）；删除 `OutboxPoller` 与 `outbox_records`（migration `015_event_journal.sql`）。
+- 2026-10-29: 数据访问从 sqlc 迁移到 GORM DAO。`app/logic/rpc/model/dao` 按聚合提供用户、会话、消息、好友/标签、Bot、已读游标方法；服务与消费者只依赖 DAO/ORM 类型，事务统一走 `WithTx`（群管理事件走 `WithEventTx` 事务消息）。sqlc 生成代码、`queries/`、`sqlc.yaml` 已删除。
 - 2026-05-29: 修复统一搜索 gRPC 注册。`app/logic/rpc/logic.go` 现在注册 `SearchServiceServer`，避免 gateway `GET /api/search` 调用 `UnifiedSearch` 时收到 gRPC `Unimplemented`。新增注册回归测试覆盖 `logic.SearchService`。
 - 2026-05-29: 好友多标签管理。新增 `friend_tags` / `friend_tag_assignments` 表（迁移 `012_friend_tags_and_search.sql`）；`FriendshipService` 新增 `CreateFriendTag/RenameFriendTag/DeleteFriendTag/ListFriendTags/SetFriendTags/RemoveFriendTag` 六个 RPC；`ListFriends` 查询支持按 `tag_id/tag_name` 过滤，响应新增 `tags` 字段。详见 `references/api.md` §好友标签 RPC。
 - 2026-05-29: 统一搜索落地。新增 `SearchService` 及 `UnifiedSearch` RPC，支持按用户/好友/会话/消息多 scope 搜索，消息按游标分页、返回高亮 snippet；搜索通过 SQL `pg_trgm`/`tsvector` 与 `ILIKE` 兜底上实现中文短词匹配。消息搜索通过 JOIN `conversation_members` 做访问控制。详见 `references/api.md` §搜索服务。
 - 2026-05-28: logic 接入共享两级缓存：权限检查热路径缓存会话、成员、好友关系和 user_type；UserInfo/BotToken/ConversationService 接入缓存并在用户、好友、会话写操作后主动失效，`logic.yaml` 新增 `Cache` 配置块。
-- 2026-05-28: `app/logic/rpc/etc/logic.yaml` 已启用 `ConversationEventProducerConf`，logic 在群管理事务提交后会将系统消息事件发布到 `aim.conversation.events`，由 core 的 `ConversationEventConsumer` 推送到 Gateway。
+- 2026-05-28: `app/logic/rpc/etc/logic.yaml` 已启用 `ConversationEventProducerConf`，logic 在群管理事务提交后会将系统消息事件发布到 `aim-conversation-events`，由 core 的 `ConversationEventConsumer` 推送到 Gateway。
 - 2026-05-27: `DatabasePermissionChecker` 对 direct 会话新增 Bot 识别：当发送者或对端 `user_info.user_type='bot'` 时，非好友关系仍保留 block 拦截但跳过临时会话累计消息上限，避免 user ↔ echo-bot 对话达到 10 条后被误判为临时会话限额耗尽。
 - 2026-05-25: ArchiveConsumer 修正 `messages.content` JSONB 写入：附件消息等合法 JSON 内容按 JSON object 保存，普通文本消息仍按 JSON string 保存，避免附件 `aim.attachment.v1` 被二次编码。
 - 2026-05-25: 修复 direct 会话好友权限校验误用 `conversation_id` 作为好友 `friend_id` 的问题。`DatabasePermissionChecker` 现在先从 `conversation_members` 解析发送者与对端成员，再用对端用户 ID 查询 `GetFriendshipBidirectional`，避免已成为好友后仍被判定为临时会话；同时拒绝非成员或成员数异常的 direct 会话发送。
@@ -28,10 +30,10 @@ description: aim 的逻辑域。对应 `logic` 模块。
 - 2026-05-24: 修复历史消息内容从 `messages.content` JSONB 读取后透传 JSON 字符串字面量的问题。`GetConversationHistory` 现在会对 JSONB 字符串执行 `json.Unmarshal`，避免 Desktop/REST 历史消息展示多出首尾两个 `"`；非字符串 JSON（如系统消息对象）保持 JSON 文本。
 - 2026-05-24: 成员详情查询新增 `display_name` 字段。`GetConversationMembersDetail` SQL JOIN 新增 `ui.nickname AS display_name`，`MemberDetail` struct 新增 `DisplayName` 字段，`GetConversationMembersDetail` 映射行更新。`GetConversationHistory` 现在填充 `MessageItem.IsSystem`（`sender_id==0 && message_type=="system"`）、`ReadStateItem` 的 email/avatar/display_name（来自成员列表）、`MessageReadDetailItem.DisplayName`。`SenderInfo` 填充新增 `DisplayName`。
 - 2026-05-23: 已读回执服务落地。新增 migration `005_conversation_read_states.sql` 与 sqlc queries `read_state.sql`（`UpsertConversationReadState` 用 `GREATEST` 保证单调递增）；`ConversationService` 新增 `UpdateReadReceipt`（校验会话存在 + 成员身份 + 三字段合法）与 `ListConversationReadStates`；`GetConversationHistory` 同步返回会话成员的已读游标。
-- 2026-05-22: 新增群管理功能：`ConversationService` 新增 6 个 RPC（AddGroupMembers, RemoveGroupMembers, LeaveGroup, DismissGroup, UpdateGroupInfo, GetConversationMembersDetail）；数据库迁移 `004_group_management.sql` 为 conversations 表添加 name/avatar/creator_id 字段、conversation_members 表添加 role 字段；logic 通过 `aim.conversation.events` Kafka topic 生产群变更事件通知 core；`CreateConversation` 支持 name 参数且创建者 role 设为 owner。详见 `references/detail.md` §群管理 和 `references/api.md` §群管理 RPC。
+- 2026-05-22: 新增群管理功能：`ConversationService` 新增 6 个 RPC（AddGroupMembers, RemoveGroupMembers, LeaveGroup, DismissGroup, UpdateGroupInfo, GetConversationMembersDetail）；数据库迁移 `004_group_management.sql` 为 conversations 表添加 name/avatar/creator_id 字段、conversation_members 表添加 role 字段；logic 通过 `aim-conversation-events` 事务消息 topic 生产群变更事件通知 core；`CreateConversation` 支持 name 参数且创建者 role 设为 owner。详见 `references/detail.md` §群管理 和 `references/api.md` §群管理 RPC。
 - 2026-05-22: 新增 `config.DevConf` 及 yaml `Dev:` 块，提供 `TemporaryConversationMessageLimit`（默认 10，设 0/负数为不限制）；`DatabasePermissionChecker` 新增 `NewDatabasePermissionCheckerWithLimit` 构造函数。仅供本地开发 / 压测使用，生产保持默认。
 - 2026-05-19: logic RPC 本地 docker 监听/注册端口从 8080 调整为 8082，避免与 core RPC 端口冲突。
-- 2026-05-19: 为 logic Kafka consumers 补充 span.RecordError 观测，并修复 WS ACK 冲突映射；接入 RPC 统一 unary 错误拦截器。
+- 2026-05-19: 为 logic 消息消费者补充 span.RecordError 观测，并修复 WS ACK 冲突映射；接入 RPC 统一 unary 错误拦截器。
 - 2026-05-20: ConversationService RPC 暴露 GetConversationMembers，用于 core 投递链路查询 direct/group 会话成员。
 - 2026-05-21: direct 会话去重（Find-or-Create）：`CreateConversation` 在 direct 类型下先通过 `GetDirectConversationByMembers` 查找已有活跃会话，找到则直接返回，避免创建重复的直接会话。
 - 2026-05-21: ConversationService RPC 新增 `GetUserConversations`，返回指定用户参与的所有会话列表（通过 `GetConversationsByUserID` 查询）；该接口用于 gateway `GET /api/conversations` 端点。

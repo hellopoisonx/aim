@@ -35,10 +35,6 @@ func (l *GetUserByNameLogic) GetUserByName(req *types.GetUserByNameRequest) (res
 		return nil, errorx.NewCodeError(errorx.CodeBadInput, "name is required")
 	}
 
-	if l.svcCtx.LogicUserClient == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "internal error")
-	}
-
 	rpcResp, err := l.svcCtx.LogicUserClient.SearchUserInfoByNickname(l.ctx, &userservice.SearchUserInfoByNicknameReq{
 		Nickname: req.Name,
 	})

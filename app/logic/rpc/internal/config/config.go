@@ -4,26 +4,21 @@ package config
 
 import (
 	sharedcache "github.com/hellopoisonx/aim/app/shared/cache"
-	"github.com/zeromicro/go-queue/kq"
+	"github.com/hellopoisonx/aim/app/shared/rocketmq"
 	"github.com/zeromicro/go-zero/zrpc"
 )
 
 type Config struct {
 	zrpc.RpcServerConf
-	Postgres                      PostgresConf       `json:",optional"`
-	KqConsumerConf                kq.KqConf          `json:",optional"`
-	UserCreatedConsumerConf       kq.KqConf          `json:",optional"`
-	BotWebhookConsumerConf        kq.KqConf          `json:",optional"`
-	ConversationEventProducerConf KqPusherConf       `json:",optional"`
-	CacheRedis                    RedisConf          `json:",optional"`
-	Cache                         sharedcache.Config `json:",optional"`
-	Dev                           DevConf            `json:",optional"`
-	MachineID                     int64              `json:",default=1"`
-}
-
-type KqPusherConf struct {
-	Brokers []string `json:",optional"`
-	Topic   string   `json:",optional"`
+	Postgres                      PostgresConf          `json:",optional"`
+	ArchiveConsumerConf           rocketmq.ConsumerConf `json:",optional"`
+	UserCreatedConsumerConf       rocketmq.ConsumerConf `json:",optional"`
+	BotWebhookConsumerConf        rocketmq.ConsumerConf `json:",optional"`
+	ConversationEventProducerConf rocketmq.ProducerConf `json:",optional"`
+	CacheRedis                    RedisConf             `json:",optional"`
+	Cache                         sharedcache.Config    `json:",optional"`
+	Dev                           DevConf               `json:",optional"`
+	MachineID                     int64                 `json:",default=1"`
 }
 
 type PostgresConf struct {
@@ -45,10 +40,10 @@ type DevConf struct {
 
 // IsUserCreatedConsumerConfigured returns true if the user-created consumer is properly configured.
 func (c *Config) IsUserCreatedConsumerConfigured() bool {
-	return c.UserCreatedConsumerConf.Topic != "" && len(c.UserCreatedConsumerConf.Brokers) > 0
+	return c.UserCreatedConsumerConf.IsConfigured()
 }
 
 // IsBotWebhookConsumerConfigured returns true if the bot-webhook consumer is properly configured.
 func (c *Config) IsBotWebhookConsumerConfigured() bool {
-	return c.BotWebhookConsumerConf.Topic != "" && len(c.BotWebhookConsumerConf.Brokers) > 0
+	return c.BotWebhookConsumerConf.IsConfigured()
 }

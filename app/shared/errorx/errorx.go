@@ -151,6 +151,44 @@ func FromGRPCError(err error) *CodeError {
 	return NewCodeError(code, msg)
 }
 
+// HasBizCode reports whether err carries AIM biz-code metadata, i.e. it was
+// produced by a *CodeError on the other side of an RPC boundary rather than by
+// an infrastructure failure.
+func HasBizCode(err error) bool {
+	if err == nil {
+		return false
+	}
+	if _, ok := unwrapCodeError(err); ok {
+		return true
+	}
+	st, ok := status.FromError(err)
+	if !ok {
+		return false
+	}
+	_, ok = exactBizCodeFromStatus(st)
+	return ok
+}
+
+// IsInfraError reports whether err is a gRPC status whose code describes an
+// infrastructure condition (Internal, Unavailable, DeadlineExceeded, ...)
+// rather than an application-level failure.
+func IsInfraError(err error) bool {
+	if err == nil {
+		return false
+	}
+	st, ok := status.FromError(err)
+	return ok && isInfraGRPCCode(st.Code())
+}
+
+// unwrapCodeError returns the *CodeError carried by err, following wrapped
+// errors, so callers can distinguish deliberate biz failures from raw errors.
+func unwrapCodeError(err error) (*CodeError, bool) {
+	if codeErr, ok := errors.AsType[*CodeError](err); ok {
+		return codeErr, true
+	}
+	return nil, false
+}
+
 func exactBizCodeFromStatus(st *status.Status) (int, bool) {
 	for _, detail := range st.Details() {
 		info, ok := detail.(*errdetails.ErrorInfo)
@@ -182,7 +220,6 @@ func isInfraGRPCCode(c codes.Code) bool {
 }
 
 // grpcCodeFromBizCode maps a biz code to the closest gRPC status code.
-// Sentinel codes (1xxx) always map to Unauthenticated since they are auth-related.
 func grpcCodeFromBizCode(code int) codes.Code {
 	category := code / 100
 
@@ -201,8 +238,20 @@ func grpcCodeFromBizCode(code int) codes.Code {
 		return codes.ResourceExhausted
 	case category >= 500:
 		return codes.Internal
+	}
+
+	// Sentinel codes (1xxx) predate the category scheme; map each one onto the
+	// gRPC code that matches its HTTP semantics (see httpStatusFromCode).
+	switch code {
+	case CodeUserNotFound:
+		return codes.NotFound
+	case CodeUserExists:
+		return codes.AlreadyExists
+	case CodeUserBanned:
+		return codes.PermissionDenied
+	case CodeInvalidCredentials, CodeTokenInvalid, CodeTokenExpired:
+		return codes.Unauthenticated
 	default:
-		// Sentinel codes (1001-1006) and unknown codes.
 		return codes.Unauthenticated
 	}
 }

@@ -36,7 +36,7 @@ type GatewayServiceClient interface {
 	// PushMessage — 将聊天消息投递到目标用户连接的网关节点
 	//
 	// 使用场景：
-	//   - aim-core Delivery Consumer 从 Kafka 消费消息后，查询到目标用户在某个网关节点
+	//   - aim-core Delivery Consumer 从消息队列消费消息后，查询到目标用户在某个网关节点
 	//   - 通过 PushMessage gRPC 将消息投递到该网关节点，由网关通过 WebSocket 推送给客户端
 	PushMessage(ctx context.Context, in *PushMessageReq, opts ...grpc.CallOption) (*PushMessageResp, error)
 	// PushPresence — 推送用户在线状态变更
@@ -174,7 +174,7 @@ type GatewayServiceServer interface {
 	// PushMessage — 将聊天消息投递到目标用户连接的网关节点
 	//
 	// 使用场景：
-	//   - aim-core Delivery Consumer 从 Kafka 消费消息后，查询到目标用户在某个网关节点
+	//   - aim-core Delivery Consumer 从消息队列消费消息后，查询到目标用户在某个网关节点
 	//   - 通过 PushMessage gRPC 将消息投递到该网关节点，由网关通过 WebSocket 推送给客户端
 	PushMessage(context.Context, *PushMessageReq) (*PushMessageResp, error)
 	// PushPresence — 推送用户在线状态变更

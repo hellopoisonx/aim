@@ -226,6 +226,9 @@ func (p *AsyncProcessor) worker(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-p.shutdown:
+			// Events already accepted with 202 must still be delivered: drain
+			// the queue before the worker exits.
+			p.drain(ctx)
 			return
 		case item := <-p.queue:
 			p.process(ctx, item.event)
@@ -233,14 +236,40 @@ func (p *AsyncProcessor) worker(ctx context.Context) {
 	}
 }
 
+// drain delivers every event that made it into the queue before shutdown.
+func (p *AsyncProcessor) drain(ctx context.Context) {
+	for {
+		select {
+		case item := <-p.queue:
+			p.processDraining(ctx, item.event)
+		default:
+			return
+		}
+	}
+}
+
 func (p *AsyncProcessor) process(ctx context.Context, event WebhookEvent) {
+	p.run(ctx, event, false)
+}
+
+// processDraining is process() for the shutdown drain: retries keep going until
+// the caller's context expires instead of stopping at the shutdown signal.
+func (p *AsyncProcessor) processDraining(ctx context.Context, event WebhookEvent) {
+	p.run(ctx, event, true)
+}
+
+func (p *AsyncProcessor) run(ctx context.Context, event WebhookEvent, draining bool) {
 	var lastErr error
 	for attempt := 0; attempt <= p.maxRetries; attempt++ {
 		if attempt > 0 {
+			shutdown := p.shutdown
+			if draining {
+				shutdown = nil // closed channel would abort the drain immediately
+			}
 			select {
 			case <-ctx.Done():
 				return
-			case <-p.shutdown:
+			case <-shutdown:
 				return
 			case <-time.After(p.backoff(attempt)):
 			}

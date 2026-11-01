@@ -143,7 +143,7 @@ curl -X POST \
 }
 ```
 
-服务端会按 `conversation_id` 路由到 Kafka，群内其他成员通过 WebSocket
+服务端会按 `conversation_id` 路由到 RocketMQ，群内其他成员通过 WebSocket
 立即收到 `PUSH_MESSAGE` 帧。
 
 ### 3.4 GET `/api/bot/v1/conversations/:id/history`

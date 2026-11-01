@@ -14,6 +14,7 @@ type nodeAwarePusher interface {
 	PushPresenceToNode(ctx context.Context, nodeID string, req *gwpb.PushPresenceReq) (*gwpb.PushPresenceResp, error)
 	PushTypingToNode(ctx context.Context, nodeID string, req *gwpb.PushTypingReq) (*gwpb.PushTypingResp, error)
 	PushReadReceiptToNode(ctx context.Context, nodeID string, req *gwpb.PushReadReceiptReq) (*gwpb.PushReadReceiptResp, error)
+	PushFriendApplicationToNode(ctx context.Context, nodeID string, req *gwpb.PushFriendApplicationReq) (*gwpb.PushFriendApplicationResp, error)
 }
 
 func pushMessageToNode(ctx context.Context, client rpc.GatewayPusher, nodeID string, req *gwpb.PushMessageReq) (*gwpb.PushMessageResp, error) {
@@ -42,4 +43,14 @@ func pushReadReceiptToNode(ctx context.Context, client rpc.GatewayPusher, nodeID
 		return router.PushReadReceiptToNode(ctx, nodeID, req)
 	}
 	return client.PushReadReceipt(ctx, req)
+}
+
+func pushFriendApplicationToNode(ctx context.Context, client rpc.GatewayPusher, nodeID string, req *gwpb.PushFriendApplicationReq) (*gwpb.PushFriendApplicationResp, error) {
+	if router, ok := client.(nodeAwarePusher); ok {
+		return router.PushFriendApplicationToNode(ctx, nodeID, req)
+	}
+
+	// A plain client represents a single node, so the default call is the
+	// node-targeted one.
+	return client.PushFriendApplication(ctx, req)
 }

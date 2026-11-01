@@ -31,7 +31,7 @@ linters:
       - linters:
           - staticcheck
         text: "SA5008: (invalid appearance of unknown `.*` tag option|malformed `json` tag:)"
-        path: "app/.*/internal/config/config.go"
+        path: "((app/.*/internal/config)|(app/shared/rocketmq))/config.go"
 
 issues:
   # 不限制每类问题的数量

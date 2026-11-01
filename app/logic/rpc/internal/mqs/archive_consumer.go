@@ -4,53 +4,54 @@ import (
 	"context"
 	"encoding/json"
 
+	"github.com/hellopoisonx/aim/app/shared/events"
+
+	"github.com/hellopoisonx/aim/app/shared/pgtypes"
+
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
-	"github.com/hellopoisonx/aim/app/logic/rpc/model"
+	"github.com/hellopoisonx/aim/app/logic/rpc/model/orm"
 	"github.com/hellopoisonx/aim/app/shared/tracing"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
-// transferEvent is the JSON event published by core TransferLogic.
-type transferEvent struct {
-	tracing.TraceContextFields
-
-	MessageID      int64    `json:"message_id"`
-	SenderID       int64    `json:"sender_id"`
-	DeviceID       string   `json:"device_id"`
-	ConversationID int64    `json:"conversation_id"`
-	MessageType    string   `json:"message_type"`
-	Content        string   `json:"content"`
-	ClientMsgID    string   `json:"client_msg_id"`
-	Mentions       []string `json:"mentions"`
-	Timestamp      int64    `json:"timestamp"`
+type archiveStore interface {
+	InsertMessage(ctx context.Context, message orm.Message) error
 }
 
 type ArchiveConsumer struct {
-	ctx    context.Context
-	svcCtx *svc.ServiceContext
+	ctx   context.Context
+	store archiveStore
 }
 
 func NewArchiveConsumer(ctx context.Context, svcCtx *svc.ServiceContext) *ArchiveConsumer {
-	return &ArchiveConsumer{ctx: ctx, svcCtx: svcCtx}
+	var store archiveStore
+	if svcCtx.DAO != nil {
+		store = svcCtx.DAO
+	}
+	return &ArchiveConsumer{ctx: ctx, store: store}
 }
 
-// Consume implements the kq.ConsumeHandler interface.
+// Consume implements the rocketmq handler interface.
 func (c *ArchiveConsumer) Consume(ctx context.Context, key string, value string) error {
-	if c.svcCtx.DB == nil {
+	if c.store == nil {
 		logx.WithContext(ctx).Debugf("no database configured, skipping archive (topic=archive)")
 		return nil
 	}
 
-	var event transferEvent
+	var event events.TransferEvent
 	if err := json.Unmarshal([]byte(value), &event); err != nil {
-		logx.WithContext(ctx).Errorf("failed to unmarshal archive event: %v", err)
-		return err
+		// A malformed payload never decodes on redelivery: dropping it keeps the
+		// partition moving instead of replaying the same poison message forever.
+		logx.WithContext(ctx).Errorf(
+			"dropping undecodable archive event key=%s: %v payload=%q", key, err, value,
+		)
+		return nil
 	}
 
 	ctx = tracing.ExtractTraceContext(ctx, event.TraceContextFields)
 
-	ctx, span := tracing.StartKafkaConsumerSpan(ctx, "logic.kafka.archive.consume")
+	ctx, span := tracing.StartMQConsumerSpan(ctx, "logic.rocketmq.archive.consume")
 	defer span.End()
 
 	contentJSON := json.RawMessage(event.Content)
@@ -74,16 +75,14 @@ func (c *ArchiveConsumer) Consume(ctx context.Context, key string, value string)
 		clientMsgID = &event.ClientMsgID
 	}
 
-	queries := model.New(c.svcCtx.DB)
-
-	err = queries.InsertMessage(ctx, model.InsertMessageParams{
+	err = c.store.InsertMessage(ctx, orm.Message{
 		ID:             event.MessageID,
 		ConversationID: event.ConversationID,
 		SenderID:       event.SenderID,
 		MessageType:    event.MessageType,
-		Content:        contentJSON,
+		Content:        pgtypes.JSON(contentJSON),
 		ClientMsgID:    clientMsgID,
-		Mentions:       mentionsJSON,
+		Mentions:       pgtypes.JSON(mentionsJSON),
 	})
 	if err != nil {
 		span.RecordError(err)

@@ -1,21 +1,21 @@
 ---
 name: aim-docker-datastore
-description: AIM 本地 Docker 数据存储运维 Skill。Use when the user asks to inspect, connect to, query, debug, or verify Docker Compose Kafka, Redis, or PostgreSQL in this project; proactively call aim_docker_status, aim_kafka, aim_redis, and aim_pg extension tools instead of asking the user to run docker commands.
+description: AIM 本地 Docker 数据存储运维 Skill。Use when the user asks to inspect, connect to, query, debug, or verify Docker Compose RocketMQ, Redis, or PostgreSQL in this project; proactively call aim_docker_status, aim_rocketmq, aim_redis, and aim_pg extension tools instead of asking the user to run docker commands.
 ---
 # aim-docker-datastore
 
-本 Skill 让 LLM 在 AIM 项目中主动使用项目级 extension 工具连接 Docker 中的数据存储：Kafka、Redis、PostgreSQL。
+本 Skill 让 LLM 在 AIM 项目中主动使用项目级 extension 工具连接 Docker 中的数据存储：RocketMQ、Redis、PostgreSQL。
 
 ## 触发场景
 
 当用户提到以下任意内容时，优先使用本 Skill，并主动调用 extension 工具：
 
-- “连接 docker 中的 kafka/redis/pg/postgres/postgresql”
-- “查看 Kafka topic / consumer group / 消费消息”
+- “连接 docker 中的 rocketmq/redis/pg/postgres/postgresql”
+- “查看 RocketMQ topic / consumer group / 消费消息”
 - “查看 Redis key / value / TTL / dbsize / info”
 - “查看 PostgreSQL 数据库 / 表 / 查询数据”
 - “检查本地 Docker 数据存储是否正常”
-- “排查注册、好友、会话、消息投递、在线状态、读回执、typing 等链路的数据落库或 Kafka 事件”
+- “排查注册、好友、会话、消息投递、在线状态、读回执、typing 等链路的数据落库或消息事件”
 
 不要只给用户 shell 命令；如果相关 extension 工具可用，应直接调用工具。
 
@@ -26,10 +26,10 @@ description: AIM 本地 Docker 数据存储运维 Skill。Use when the user asks
 可用工具：
 
 - `aim_docker_status`
-  - 检查 Kafka、Redis、PostgreSQL 的容器运行与连接状态。
-- `aim_kafka`
-  - 连接 `aim-kafka`。
-  - 支持：`list_topics`、`describe_topic`、`consume`、`list_groups`、`describe_group`。
+  - 检查 RocketMQ、Redis、PostgreSQL 的容器运行与连接状态。
+- `aim_rocketmq`
+  - 连接 `aim-rocketmq-broker`（mqadmin 经 `rocketmq-namesrv:9876` 操作）。
+  - 支持：`list_topics`、`describe_topic`、`consume`、`list_groups`、`describe_group`、`query_by_key`。
 - `aim_redis`
   - 连接 `aim-redis`。
   - 支持：`ping`、`info`、`dbsize`、`scan`、`type`、`ttl`、`get`、`set`、`del`。
@@ -51,56 +51,56 @@ aim_docker_status({})
 如果服务未运行，简要提示：
 
 ```bash
-docker compose up -d postgres redis kafka
+docker compose up -d postgres redis rocketmq-namesrv rocketmq-broker rocketmq-proxy
 ```
 
-如需 Kafka 初始化 topic：
+如需创建 topic 与消费组（含 message type）：
 
 ```bash
-docker compose up kafka-init
+docker compose up rocketmq-init
 ```
 
 如果工具不可用或刚新增扩展后未加载，提示用户执行 `/reload` 或重启 pi。
 
-### 2. Kafka 排查
+### 2. RocketMQ 排查
 
 常用顺序：
 
 1. 列出 topic：
 
 ```text
-aim_kafka({ action: "list_topics" })
+aim_rocketmq({ action: "list_topics" })
 ```
 
 2. 描述指定 topic：
 
 ```text
-aim_kafka({ action: "describe_topic", topic: "aim-message-transfer" })
+aim_rocketmq({ action: "describe_topic", topic: "aim-message-transfer" })
 ```
 
 3. 消费少量消息，默认不要读取过多：
 
 ```text
-aim_kafka({ action: "consume", topic: "aim-message-transfer", fromBeginning: true, maxMessages: 10 })
+aim_rocketmq({ action: "consume", topic: "aim-message-transfer", maxMessages: 10 })
 ```
 
 4. 查看 consumer group：
 
 ```text
-aim_kafka({ action: "list_groups" })
-aim_kafka({ action: "describe_group", group: "<group>" })
+aim_rocketmq({ action: "list_groups" })
+aim_rocketmq({ action: "describe_group", group: "<group>" })
+aim_rocketmq({ action: "query_by_key", topic: "aim-user-events", key: "user.created:<id>" })
 ```
 
 AIM 常见 topic：
 
-- `aim.user.events`
-- `aim-message-transfer`
-- `aim.conversation.events`
-- `aim.presence.events`
-- `aim.typing.events`
-- `aim.read_receipt.events`
+- `aim-user-events`（TRANSACTION）
+- `aim-message-transfer`（FIFO）
+- `aim-conversation-events`（TRANSACTION）
+- `aim-attachment-uploaded`（TRANSACTION）
+- `aim-presence-events` / `aim-typing-events` / `aim-read-receipt-events` / `aim-friend-application-events` / `aim-attachment-parsed`
 
-注意：Kafka 消息量可能很大，`consume` 默认使用小 `maxMessages`，除非用户明确要求扩大。
+注意：消息量可能很大，`consume` 默认使用小 `maxMessages`，除非用户明确要求扩大。topic 的 message type 不匹配时发送会被 broker 拒绝，详见 `aim-repo-mapping/references/mq-ops.md`。
 
 ### 3. Redis 排查
 
@@ -188,14 +188,14 @@ aim_pg({ action: "query", database: "aim_logic", query: "...", readonly: false }
 
 优先检查：
 
-1. Kafka `aim.user.events` 是否有用户创建事件。
+1. `aim-user-events`（TRANSACTION）是否有用户创建事件（可用 `query_by_key` 按 `user.created:<id>` 查）。
 2. logic 是否消费成功。
 3. `aim_logic` 中用户相关表是否已写入。
 
 推荐工具顺序：
 
 ```text
-aim_kafka({ action: "consume", topic: "aim.user.events", fromBeginning: true, maxMessages: 10 })
+aim_rocketmq({ action: "consume", topic: "aim-user-events", maxMessages: 10 })
 aim_pg({ action: "list_tables", database: "aim_logic" })
 aim_pg({ action: "query", database: "aim_logic", query: "select * from users order by created_at desc limit 10" })
 ```
@@ -211,25 +211,25 @@ aim_pg({ action: "query", database: "aim_logic", query: "select * from users ord
 推荐工具顺序：
 
 ```text
-aim_kafka({ action: "describe_topic", topic: "aim-message-transfer" })
-aim_kafka({ action: "consume", topic: "aim-message-transfer", fromBeginning: true, maxMessages: 10 })
-aim_kafka({ action: "list_groups" })
+aim_rocketmq({ action: "describe_topic", topic: "aim-message-transfer" })
+aim_rocketmq({ action: "consume", topic: "aim-message-transfer", maxMessages: 10 })
+aim_rocketmq({ action: "list_groups" })
 ```
 
 ### 在线状态、typing、读回执异常
 
 相关 topic：
 
-- `aim.presence.events`
-- `aim.typing.events`
-- `aim.read_receipt.events`
+- `aim-presence-events`
+- `aim-typing-events`
+- `aim-read-receipt-events`
 
 推荐工具顺序：
 
 ```text
-aim_kafka({ action: "consume", topic: "aim.presence.events", fromBeginning: true, maxMessages: 10 })
-aim_kafka({ action: "consume", topic: "aim.typing.events", fromBeginning: true, maxMessages: 10 })
-aim_kafka({ action: "consume", topic: "aim.read_receipt.events", fromBeginning: true, maxMessages: 10 })
+aim_rocketmq({ action: "consume", topic: "aim-presence-events", maxMessages: 10 })
+aim_rocketmq({ action: "consume", topic: "aim-typing-events", maxMessages: 10 })
+aim_rocketmq({ action: "consume", topic: "aim-read-receipt-events", maxMessages: 10 })
 aim_redis({ action: "scan", pattern: "*presence*" })
 ```
 
@@ -237,16 +237,16 @@ aim_redis({ action: "scan", pattern: "*presence*" })
 
 相关 topic 与 consumer group：
 
-- topic：`aim.conversation.events`
+- topic：`aim-conversation-events`
 - producer：logic `ConversationEventProducerConf`
 - consumer group：`aim-core-conversation-events`
 
 推荐工具顺序：
 
 ```text
-aim_kafka({ action: "describe_topic", topic: "aim.conversation.events" })
-aim_kafka({ action: "consume", topic: "aim.conversation.events", fromBeginning: true, maxMessages: 10 })
-aim_kafka({ action: "describe_group", group: "aim-core-conversation-events" })
+aim_rocketmq({ action: "describe_topic", topic: "aim-conversation-events" })
+aim_rocketmq({ action: "consume", topic: "aim-conversation-events", maxMessages: 10 })
+aim_rocketmq({ action: "describe_group", group: "aim-core-conversation-events" })
 ```
 
 ## 输出原则

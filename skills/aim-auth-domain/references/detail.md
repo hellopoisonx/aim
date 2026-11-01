@@ -29,7 +29,7 @@
 - 接口规格：`app/auth/rpc/auth.proto`，通过 `goctl rpc protoc ... --style go_zero` 生成。
 - 业务逻辑：`app/auth/rpc/internal/logic`。
 - 领域服务：`app/auth/rpc/internal/service/auth_service.go`。
-- 数据访问：`app/auth/rpc/model`，由 `sqlc` 根据 `model/migrations/` 和 `model/queries/` 生成。
+- 数据访问：`app/auth/rpc/model/dao`（GORM DAO），结构体位于 `app/auth/rpc/model/orm`。
 - 网关调用客户端：`app/auth/rpc/authservice`。
 - 服务注册：`app/auth/rpc/auth.go` 启动时 `zrpc.MustNewServer(c.RpcServerConf, ...)` 自动调用 `internal.NewRpcPubServer` 把 `Etcd.Key: auth.rpc` + `ListenOn: 0.0.0.0:8989` 注册到 etcd（由 `figureOutListenOn` 自动把 `0.0.0.0` 解析为容器 IP / `POD_IP`）；`app/auth/rpc/etc/auth.yaml` 的 `Etcd` 块维护 `Hosts` / `Key` 两个字段。
 - Docker Compose 配置：分层 Compose 通过 `${AIM_CONFIG_DIR:-../config/local}/auth.yaml` 挂载到 `/app/etc/auth.yaml`，本地默认配置副本位于 `deploy/config/local/auth.yaml`；`app/auth/rpc/etc/auth.yaml` 保留给本地 `go run` / 单服务调试。Compose 内 `ListenOn` 为 `0.0.0.0:8989`，`Etcd.Hosts` 为 `[etcd:2379]`，`Etcd.Key` 为 `auth.rpc`，PostgreSQL 使用 `postgres:5432`，Redis 使用 `redis:6379`。
@@ -37,7 +37,7 @@
 
 ### 行为
 
-- `Register`：规范化 email，校验 `username/name` 必填并去除首尾空白，使用 bcrypt 哈希密码，将 `name` 写入 `user_credentials`（数据库 `NOT NULL`），返回 `user_id`；成功后发布 `UserCreatedEvent` 到 Kafka（KqPusherConf），使用 `user_id` 作为 Kafka key，事件字段包括 `traceparent`/`tracestate`（W3C trace context）、`user_id`、`email`、`nickname`（来自 `username`）、`avatar`、`created_at`（Unix毫秒）；若发布失败则返回 `CodeInternal` 错误，确保 auth 与 logic 数据一致。由于 `go-queue/kq` 的消费接口不向业务层暴露 Kafka header，Kafka trace context 通过事件 JSON payload 传递。
+- `Register`：规范化 email，校验 `username/name` 必填并去除首尾空白，使用 bcrypt 哈希密码，将 `name` 写入 `user_credentials`（数据库 `NOT NULL`），返回 `user_id`；成功后以 RocketMQ 事务消息发布 `UserCreatedEvent`（`UserEventProducerConf`，topic `aim-user-events`，producer group `aim-auth-producer`）：先发 half message，再在本地事务里写 `user_credentials` 与 `event_journal`（`event_uid = user.created:<id>`），事务提交后才 commit 消息；half message 发送失败则整个注册失败，不写业务行。事件字段包括 `traceparent`/`tracestate`（W3C trace context）、`user_id`、`email`、`nickname`（来自 `username`）、`avatar`、`created_at`（Unix毫秒）。trace context 通过事件 JSON payload 传递（消息属性不透出给业务层）。
 - `Login`：校验 bcrypt 密码和用户状态，签发 5 分钟 JWT AccessToken，创建 UUID RefreshToken。
 - `RefreshToken`：校验 Redis 中的 refresh token，删除旧 token，写入新 token，同时签发新 AccessToken。
 - `Logout`：按 `user_id` + `device_id` 删除 `auth:device:{user_id}:{device_id}` 与对应 `auth:rt:{token}`。

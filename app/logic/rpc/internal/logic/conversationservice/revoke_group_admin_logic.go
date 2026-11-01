@@ -3,7 +3,6 @@ package conversationservicelogic
 import (
 	"context"
 
-	"github.com/hellopoisonx/aim/app/logic/rpc/internal/service"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
@@ -41,7 +40,7 @@ func (l *RevokeGroupAdminLogic) RevokeGroupAdmin(in *pb.RevokeGroupAdminReq) (*p
 		return nil, errorx.NewCodeError(errorx.CodeInternal, "conversation service is not configured")
 	}
 	if err := convSvc.RevokeGroupAdmin(l.ctx, in.GetConversationId(), in.GetOperatorId(), in.GetTargetUserId()); err != nil {
-		return nil, service.ConversationToGRPCError(err)
+		return nil, errorx.ToGRPCError(err)
 	}
 	return &pb.RevokeGroupAdminResp{}, nil
 }

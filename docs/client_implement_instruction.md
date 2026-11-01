@@ -39,13 +39,13 @@
 │  │ Gateway API  │◄──│ 客户端 / 第三方 Bot   │ │
 │  │ (唯一入口)    │   │  REST + WebSocket     │ │
 │  └──────┬───────┘   └──────────────────────┘ │
-│         │ gRPC/Kafka                          │
+│         │ gRPC/RocketMQ                          │
 │  ┌──────┼──────┬──────┬───────────────┐       │
 │  │  Auth  │ Core │ Logic │ Attachment  │      │
 │  └───────┴──────┴──────┴───────────────┘      │
 │         │       │                            │
 │  ┌──────┴───────┴──────────────┐             │
-│  │ Kafka / Redis / PostgreSQL │             │
+│  │ RocketMQ / Redis / PostgreSQL │             │
 │  └────────────────────────────┘             │
 └──────────────────────────────────────────────┘
 ```
@@ -613,7 +613,7 @@ message WsFrame {
   │                                │   权限检查 (Logic)            │
   │                                │   配额检查 (Redis 滑动窗口)   │
   │                                │   Snowflake 生成 message_id   │
-  │                                │   发布 Kafka                  │
+  │                                │   发布 RocketMQ                  │
   │                                │   ◄──── TransferResp ────────│
   │                                │                              │
   │  WsFrame{                      │                              │
@@ -1062,7 +1062,7 @@ gateway 已启用基于 `LastAckedSeq` / `HeartbeatPayload.last_seq` 的当前�
 │    type = READ_RECEIPT
 │    payload = ReadReceiptPayload{
 │      conversation_id = <会话ID>,
-│      last_msg_id = <当前已读到的最大 message_id>
+│      last_read_message_id = <当前已读到的最大 message_id>
 │    }
 └─ 等待 SERVER_ACK
      code=0 → 成功（当前 ACK status 可能为 UNSPECIFIED）
@@ -1071,9 +1071,9 @@ gateway 已启用基于 `LastAckedSeq` / `HeartbeatPayload.last_seq` 的当前�
 
 **发送时机建议**：
 
-- 用户进入会话时：发最后一次读取位置的 `last_msg_id`
+- 用户进入会话时：发最后一次读取位置的 `last_read_message_id`
 - 用户滚动到新消息时：节流发送，建议每 1s 最多 1 次
-- 不要在本地已经读过的消息上重复发送（`last_msg_id` 没有变化）
+- 不要在本地已经读过的消息上重复发送（`last_read_message_id` 没有变化）
 
 ### 9.2 接收已读回执推送
 
@@ -1405,7 +1405,7 @@ if response.code != 0 {
 TTL: 24 小时
 
 检查时机：消息到达 Transfer 的第一个步骤
-命中 → 返回已有 message_id，不重新发布 Kafka
+命中 → 返回已有 message_id，不重新发布 RocketMQ
 
 注意：
   - 幂等键以 (sender_id, device_id, client_msg_id) 三元组为范围

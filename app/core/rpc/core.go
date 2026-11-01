@@ -30,6 +30,8 @@ func main() {
 	ctx := svc.NewServiceContext(c)
 	defer ctx.Close()
 
+	ctx.StartTransferProducer()
+
 	s := zrpc.MustNewServer(c.RpcServerConf, func(grpcServer *grpc.Server) {
 		pb.RegisterTransferServiceServer(grpcServer, server.NewTransferServiceServer(ctx))
 
@@ -40,7 +42,7 @@ func main() {
 	s.AddUnaryInterceptors(rpcutil.UnaryErrorInterceptor())
 	defer s.Stop()
 
-	// Run Kafka consumer alongside the RPC server via ServiceGroup
+	// Run the RocketMQ consumers alongside the RPC server via ServiceGroup
 	group := service.NewServiceGroup()
 	group.Add(s)
 

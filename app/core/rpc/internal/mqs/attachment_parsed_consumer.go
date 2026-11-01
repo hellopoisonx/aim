@@ -15,7 +15,7 @@ import (
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
-// AttachmentParsedConsumer 消费 aim.attachment.parsed 事件，
+// AttachmentParsedConsumer 消费 aim-attachment-parsed 事件，
 // 将附件解析结果（缩略图、尺寸、时长等）以系统消息形式推送至会话所有成员。
 type AttachmentParsedConsumer struct {
 	ctx    context.Context
@@ -26,7 +26,7 @@ func NewAttachmentParsedConsumer(ctx context.Context, svcCtx *svc.ServiceContext
 	return &AttachmentParsedConsumer{ctx: ctx, svcCtx: svcCtx}
 }
 
-// Consume 实现 kq.ConsumeHandler 接口。
+// Consume 实现 rocketmq 消息处理接口。
 func (c *AttachmentParsedConsumer) Consume(ctx context.Context, key string, value string) error {
 	var event struct {
 		tracing.TraceContextFields
@@ -44,13 +44,17 @@ func (c *AttachmentParsedConsumer) Consume(ctx context.Context, key string, valu
 	}
 
 	if err := json.Unmarshal([]byte(value), &event); err != nil {
-		logx.WithContext(ctx).Errorf("failed to unmarshal attachment parsed event: %v", err)
-		return err
+		// A malformed payload never decodes on redelivery: dropping it keeps the
+		// partition moving instead of replaying the same poison message forever.
+		logx.WithContext(ctx).Errorf(
+			"dropping undecodable attachment parsed event key=%s: %v payload=%q", key, err, value,
+		)
+		return nil
 	}
 
 	ctx = tracing.ExtractTraceContext(ctx, event.TraceContextFields)
 
-	ctx, span := tracing.StartKafkaConsumerSpan(ctx, "core.kafka.attachment_parsed.consume")
+	ctx, span := tracing.StartMQConsumerSpan(ctx, "core.rocketmq.attachment_parsed.consume")
 	defer span.End()
 
 	// 仅处理解析成功的事件；失败事件暂不推送，客户端可通过轮询 GetFile 感知。
@@ -122,7 +126,7 @@ func (c *AttachmentParsedConsumer) Consume(ctx context.Context, key string, valu
 
 	// 推送到每个会话成员所在网关节点。
 	for _, targetUserID := range targetUserIDs {
-		nodeIDs := userGatewayNodesForConsumer(ctx, c.svcCtx, targetUserID)
+		nodeIDs := gatewayNodes(ctx, c.svcCtx, targetUserID)
 		if len(nodeIDs) == 0 {
 			logx.WithContext(ctx).Debugf("no gateway nodes for user %d, skipping attachment parsed push", targetUserID)
 			continue
@@ -154,27 +158,6 @@ func (c *AttachmentParsedConsumer) Consume(ctx context.Context, key string, valu
 	}
 
 	return nil
-}
-
-// userGatewayNodesForConsumer 查询用户当前连接的网关节点 ID 列表。
-// 优先使用 PresenceStore（L1 Cached + Redis Set），回退到 Redis SMembers，再回退空节点（单 gateway 模式）。
-func userGatewayNodesForConsumer(ctx context.Context, svcCtx *svc.ServiceContext, userID int64) []string {
-	if svcCtx.PresenceStore != nil {
-		nodes, err := svcCtx.PresenceStore.GetUserGatewayNodes(ctx, userID)
-		if err == nil && len(nodes) > 0 {
-			return nodes
-		}
-	}
-
-	if svcCtx.RedisClient != nil {
-		key := fmt.Sprintf("%s%d", userGatewayKeyPrefix, userID)
-		nodes, err := svcCtx.RedisClient.SMembers(ctx, key).Result()
-		if err == nil && len(nodes) > 0 {
-			return nodes
-		}
-	}
-
-	return []string{""}
 }
 
 // resolveConversationMembers 查询会话成员列表及会话类型。

@@ -7,14 +7,16 @@ description: AIM 数据库迁移规范与 Docker Compose 集成。当修改 migr
 
 ## 背景
 
-AIM 使用 PostgreSQL + sqlc 栈，迁移文件在 `app/{auth,logic}/rpc/model/migrations/` 以及 `app/attachment/model/migrations/` 下，由 Docker Compose 的 `*-migrate` init 容器调用 `deploy/scripts/migrate-postgres.sh` 执行。脚本会显式创建数据库，并按 `NNN_*.sql` 字典序执行目录内所有 SQL，避免在 Compose command 中硬编码迁移文件列表。
+AIM 使用 PostgreSQL + GORM DAO 栈，迁移文件在 `app/{auth,logic}/rpc/model/migrations/` 以及 `app/attachment/model/migrations/` 下，由 Docker Compose 的 `*-migrate` init 容器调用 `deploy/scripts/migrate-postgres.sh` 执行。脚本会显式创建数据库，并按 `NNN_*.sql` 字典序执行目录内所有 SQL，避免在 Compose command 中硬编码迁移文件列表。
+
+GORM 结构体定义位于 `app/auth/rpc/model/orm`、`app/logic/rpc/model/orm`、`app/shared/attachmentstore/orm`，与迁移 SQL 逐列对齐；GORM DAO 位于对应的 `model/dao`（attachment DAO 在 `app/shared/attachmentstore/dao`，同时被 attachment 服务与 data_parsing worker 复用）。**schema 唯一事实来源仍是迁移 SQL**：改动表结构只改 `model/migrations/*.sql` 并同步 `model/orm` 与 `model/dao`，永不使用 `AutoMigrate`（GORM 结构体只提供映射，不生成 DDL）。
 
 ## 域特定参考
 
-涉及数据库契约层（migration/sqlc）时，按域选择对应参考：
+涉及数据库契约层（migration/ORM/DAO）时，按域选择对应参考：
 
-- 涉及 auth 数据库契约层（migration/sqlc） -> `references/auth-model.md`
-- 涉及 logic 数据库契约层（migration/sqlc） -> `references/logic-model.md`
+- 涉及 auth 数据库契约层（migration/ORM/DAO） -> `references/auth-model.md`
+- 涉及 logic 数据库契约层（migration/ORM/DAO） -> `references/logic-model.md`
 
 ## 迁移文件规范
 
@@ -67,7 +69,7 @@ NNN_description.sql
 
 1. ✅ 创建 `NNN_xxx.sql` 文件（幂等 DDL）
 2. ✅ 确认文件名使用 `NNN_` 前缀；Compose 通过 `deploy/scripts/migrate-postgres.sh` 自动按序执行，无需手工追加 command
-3. ✅ 运行 `sqlc generate` 重新生成 model 代码
+3. ✅ 同步 `model/orm` 结构体与 `model/dao` 查询方法
 4. ✅ 运行 `go test ./app/{module}/rpc/...` 验证
 
 ## Docker Compose migrate 服务规范
@@ -106,7 +108,7 @@ attachment-migrate → deploy/scripts/migrate-postgres.sh → app/attachment/mod
 - [ ] 新增迁移文件名使用 `NNN_` 前缀，确保 glob 排序正确
 - [ ] `deploy/scripts/migrate-postgres.sh` 仍使用显式数据库创建逻辑，未退回 Compose 内联 shell
 - [ ] 数据库创建显式化，不依赖 POSTGRES_DB
-- [ ] `sqlc generate` 已重新执行
+- [ ] `model/orm` 与 `model/dao` 已同步，未新增 sqlc 生成物
 - [ ] `go test` 通过
 
 ## 参考资料

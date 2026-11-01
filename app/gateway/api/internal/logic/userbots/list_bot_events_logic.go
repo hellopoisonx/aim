@@ -3,9 +3,10 @@ package userbots
 import (
 	"context"
 
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/authctx"
+
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
-	"github.com/hellopoisonx/aim/app/gateway/api/internal/ws"
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/botservice"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 
@@ -23,15 +24,12 @@ func NewListBotEventsLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Lis
 }
 
 func (l *ListBotEventsLogic) ListBotEvents() (resp *types.ListBotEventsResponse, err error) {
-	if _, ok := ws.IdentityFromContext(l.ctx); !ok {
+	if _, ok := authctx.IdentityFromContext(l.ctx); !ok {
 		return nil, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
-	}
-	if l.svcCtx.LogicBotClient == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "bot service not configured")
 	}
 	rpcResp, err := l.svcCtx.LogicBotClient.ListBotEvents(l.ctx, &botservice.ListBotEventsReq{})
 	if err != nil {
-		return nil, sanitizeError(l, "list bot events", err)
+		return nil, errorx.SanitizeGRPCError(l, "list bot events", err)
 	}
 	events := make([]types.BotEventItem, 0, len(rpcResp.GetEvents()))
 	for _, e := range rpcResp.GetEvents() {

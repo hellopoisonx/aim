@@ -2,21 +2,33 @@ package svc
 
 import (
 	"context"
+	"fmt"
 	"time"
+
+	"github.com/redis/go-redis/v9"
 
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/config"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/service"
-	"github.com/hellopoisonx/aim/app/logic/rpc/model"
+	"github.com/hellopoisonx/aim/app/logic/rpc/model/dao"
+	"github.com/hellopoisonx/aim/app/logic/rpc/model/orm"
 	sharedcache "github.com/hellopoisonx/aim/app/shared/cache"
-	"github.com/hellopoisonx/aim/app/shared/outbox"
+	"github.com/hellopoisonx/aim/app/shared/gormdb"
+	"github.com/hellopoisonx/aim/app/shared/rocketmq"
 	"github.com/hellopoisonx/aim/app/shared/tools"
 
-	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/segmentio/kafka-go"
-	"github.com/zeromicro/go-queue/kq"
 	"github.com/zeromicro/go-zero/core/logx"
-	gzredis "github.com/zeromicro/go-zero/core/stores/redis"
+	"gorm.io/gorm"
 )
+
+type FriendshipDAO interface {
+	GetFriendshipBidirectional(ctx context.Context, userID, friendID int64) ([]orm.Friendship, error)
+	GetFriendshipByPair(ctx context.Context, userID, friendID int64) (orm.Friendship, error)
+	UpsertFriendship(ctx context.Context, userID, friendID int64, status string) (orm.Friendship, error)
+	ListPendingFriendApplications(ctx context.Context, friendID int64) ([]orm.Friendship, error)
+	ListFriends(ctx context.Context, userID int64) ([]orm.Friendship, error)
+	ListFriendsByTagID(ctx context.Context, userID, tagID int64) ([]orm.Friendship, error)
+	ListFriendsByTagName(ctx context.Context, userID int64, name string) ([]orm.Friendship, error)
+}
 
 type ServiceContext struct {
 	Config              config.Config
@@ -26,18 +38,19 @@ type ServiceContext struct {
 	BotService          *service.BotService
 	FriendTagService    *service.FriendshipTagService
 	SearchService       *service.SearchService
-	DB                  model.DBTX
-	Pool                *pgxpool.Pool
+	DAO                 *dao.Store
+	FriendshipDAO       FriendshipDAO
 	IDGen               *tools.Snowflake
 	CacheManager        *sharedcache.CacheManager
-	ConvCache           *sharedcache.TypedCache[model.GetConversationRow]
-	ConvMembersCache    *sharedcache.TypedCache[[]model.GetConversationMembersRow]
-	UserCache           *sharedcache.TypedCache[model.UserInfo]
+	ConvCache           *sharedcache.TypedCache[orm.Conversation]
+	ConvMembersCache    *sharedcache.TypedCache[[]orm.ConversationMember]
+	UserCache           *sharedcache.TypedCache[orm.UserInfo]
 	UserTypeCache       *sharedcache.TypedCache[string]
-	FriendshipCache     *sharedcache.TypedCache[[]model.GetFriendshipBidirectionalRow]
-	BotTokenCache       *sharedcache.TypedCache[model.GetBotTokenByHashRow]
-	OutboxPoller        *outbox.Poller
-	queries             *model.Queries
+	FriendshipCache     *sharedcache.TypedCache[[]orm.Friendship]
+	BotTokenCache       *sharedcache.TypedCache[dao.BotTokenWithUser]
+	// EventProducer publishes conversation events as transactional messages.
+	// Nil when RocketMQ is not configured.
+	EventProducer *rocketmq.Producer
 }
 
 func NewServiceContext(c config.Config) *ServiceContext {
@@ -56,54 +69,62 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	initSharedCaches(svcCtx, c)
 
 	if c.Postgres.DataSource != "" {
-		pool, err := pgxpool.New(context.Background(), c.Postgres.DataSource)
+		db, err := gormdb.Open(c.Postgres.DataSource)
 		if err != nil {
-			logx.WithContext(context.Background()).Errorf("failed to create Postgres pool: %v, falling back to DenyAll", err)
+			// Fail fast: a half-booted logic service answers every permission
+			// check with DenyAll and cannot serve conversations, so the
+			// container should restart until Postgres is reachable.
+			logx.Must(fmt.Errorf("logic service requires Postgres: %w", err))
 		} else {
-			if err := pool.Ping(context.Background()); err != nil {
-				logx.WithContext(context.Background()).Errorf("failed to ping Postgres: %v, falling back to DenyAll", err)
-				pool.Close()
-
-				return svcCtx
-			}
-
-			svcCtx.DB = pool
-			svcCtx.Pool = pool
-			queries := model.New(pool)
+			store := dao.New(db)
+			svcCtx.DAO = store
+			svcCtx.FriendshipDAO = store
 			limit := c.Dev.TemporaryConversationMessageLimit
 			if limit == 0 {
 				limit = service.DefaultTemporaryConversationMessageLimit
 			}
-			svcCtx.PermissionChecker = service.NewDatabasePermissionCheckerWithLimitAndCaches(queries, limit, service.DatabasePermissionCheckerCaches{
+			svcCtx.PermissionChecker = service.NewDatabasePermissionCheckerWithLimitAndCaches(store, limit, service.DatabasePermissionCheckerCaches{
 				Conversation: svcCtx.ConvCache,
 				Members:      svcCtx.ConvMembersCache,
 				Friendship:   svcCtx.FriendshipCache,
 				UserType:     svcCtx.UserTypeCache,
 			})
-			svcCtx.UserInfoService = service.NewUserInfoService(queries, service.WithUserInfoCache(svcCtx.UserCache), service.WithUserTypeCache(svcCtx.UserTypeCache))
-			svcCtx.BotService = service.NewBotService(queries, service.WithBotTokenCache(svcCtx.BotTokenCache), service.WithBotManagementPool(pool), service.WithBotIDGenerator(snowflake))
-			svcCtx.queries = queries
-			svcCtx.FriendTagService = service.NewFriendshipTagService(queries, snowflake)
-			svcCtx.SearchService = service.NewSearchService(queries)
+			svcCtx.UserInfoService = service.NewUserInfoService(store, service.WithUserInfoCache(svcCtx.UserCache), service.WithUserTypeCache(svcCtx.UserTypeCache))
+			svcCtx.BotService = service.NewBotService(store, store,
+				service.WithBotTokenCache(svcCtx.BotTokenCache),
+				service.WithBotTxRunner(botTxRunner{store: store}),
+				service.WithBotIDGenerator(snowflake),
+			)
+			svcCtx.FriendTagService = service.NewFriendshipTagService(store, snowflake)
+			svcCtx.SearchService = service.NewSearchService(store)
 
-			// Build ConversationService with optional outbox support
+			// Build ConversationService with optional transactional event publishing.
 			var convOpts []service.ConversationServiceOption
 
-			hasProducer := len(c.ConversationEventProducerConf.Brokers) > 0 && c.ConversationEventProducerConf.Topic != ""
-			if hasProducer {
-				store := NewOutboxStore(queries)
-				publisher := newConversationEventPublisher(c.ConversationEventProducerConf.Brokers, c.ConversationEventProducerConf.Topic)
-				svcCtx.OutboxPoller = outbox.NewPoller(store, publisher, outbox.Config{})
-				convOpts = append(convOpts, service.WithOutbox(
+			if c.ConversationEventProducerConf.IsConfigured() {
+				producer, err := rocketmq.NewProducer(
+					c.ConversationEventProducerConf.EndpointConf,
+					logicProducerGroup,
 					c.ConversationEventProducerConf.Topic,
-					store,
-					func() { svcCtx.OutboxPoller.Wake() },
-				))
-				logx.WithContext(context.Background()).Infof("conversation event outbox initialized: topic=%s", c.ConversationEventProducerConf.Topic)
+				)
+				if err != nil {
+					logx.Must(fmt.Errorf("logic service: conversation event producer: %w", err))
+				}
+				producer.WithJournalChecker(store.DB())
+				svcCtx.EventProducer = producer
+				convOpts = append(convOpts, service.WithTransactionalEvents(c.ConversationEventProducerConf.Topic))
+				logx.WithContext(context.Background()).Infof(
+					"conversation events: transactional topic=%s endpoint=%s",
+					c.ConversationEventProducerConf.Topic, c.ConversationEventProducerConf.Endpoint,
+				)
 			}
 
 			convOpts = append(convOpts, service.WithConversationCaches(svcCtx.ConvCache, svcCtx.ConvMembersCache))
-			svcCtx.ConversationService = service.NewConversationService(queries, snowflake, pool, convOpts...)
+			svcCtx.ConversationService = service.NewConversationService(
+				store, snowflake,
+				conversationTxRunner{store: store, producer: svcCtx.EventProducer},
+				convOpts...,
+			)
 
 			if limit != service.DefaultTemporaryConversationMessageLimit {
 				logx.WithContext(context.Background()).Infof("Postgres connected, using DatabasePermissionChecker (temporary conversation message limit=%d), UserInfoService and ConversationService", limit)
@@ -115,11 +136,60 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	return svcCtx
 }
 
-// newConversationEventPublisher creates an outbox.PublisherFunc using kq.Pusher.
-func newConversationEventPublisher(brokers []string, topic string) outbox.PublisherFunc {
-	pusher := kq.NewPusher(brokers, topic, kq.WithBalancer(&kafka.Murmur2Balancer{}))
-	return func(ctx context.Context, _, key string, payload []byte) error {
-		return pusher.PushWithKey(ctx, key, string(payload))
+// conversationTxRunner adapts *dao.Store.WithTx to the service-level
+// ConversationStore callback contract. With a producer installed it also
+// publishes the conversation event as a RocketMQ transactional message.
+type conversationTxRunner struct {
+	store    *dao.Store
+	producer *rocketmq.Producer
+}
+
+func (r conversationTxRunner) WithTx(ctx context.Context, fn func(tx service.ConversationStore) error) error {
+	return r.store.WithTx(ctx, func(tx *dao.Store) error {
+		return fn(tx)
+	})
+}
+
+// WithEventTx commits the business rows and the event journal in one database
+// transaction and resolves the half message accordingly.
+func (r conversationTxRunner) WithEventTx(ctx context.Context, message rocketmq.TransactionalMessage, fn func(tx service.ConversationStore) error) error {
+	return r.producer.SendTransactional(ctx, r.store.DB(), message, func(ctx context.Context, tx *gorm.DB) error {
+		return fn(dao.New(tx))
+	})
+}
+
+// botTxRunner adapts *dao.Store.WithTx to the service-level
+// BotManagementQuerier callback contract.
+type botTxRunner struct {
+	store *dao.Store
+}
+
+func (r botTxRunner) WithTx(ctx context.Context, fn func(tx service.BotManagementQuerier) error) error {
+	return r.store.WithTx(ctx, func(tx *dao.Store) error {
+		return fn(tx)
+	})
+}
+
+// logicProducerGroup is the broker-visible producer group of logic.
+const logicProducerGroup = "aim-logic-producer"
+
+// StartEventProducer connects the conversation event producer.
+func (s *ServiceContext) StartEventProducer() {
+	if s == nil || s.EventProducer == nil {
+		return
+	}
+	if err := s.EventProducer.Start(); err != nil {
+		logx.WithContext(context.Background()).Errorf("failed to start rocketmq event producer: %v", err)
+	}
+}
+
+// StopEventProducer flushes and disconnects the conversation event producer.
+func (s *ServiceContext) StopEventProducer() {
+	if s == nil || s.EventProducer == nil {
+		return
+	}
+	if err := s.EventProducer.GracefulStop(); err != nil {
+		logx.WithContext(context.Background()).Errorf("failed to stop rocketmq event producer: %v", err)
 	}
 }
 
@@ -145,27 +215,19 @@ func initSharedCaches(svcCtx *ServiceContext, c config.Config) {
 	}
 
 	conf := c.Cache.WithDefaults()
-	rds, err := gzredis.NewRedis(gzredis.RedisConf{
-		Host: c.CacheRedis.Addr,
-		Type: gzredis.NodeType,
-		Pass: c.CacheRedis.Password,
-	})
-	if err != nil {
-		logx.WithContext(context.Background()).Errorf("failed to create go-zero Redis cache client: %v", err)
-		return
-	}
+	rds := redis.NewClient(&redis.Options{Addr: c.CacheRedis.Addr, Password: c.CacheRedis.Password})
 
 	manager := sharedcache.NewCacheManager(rds, conf.InvalidateStream)
 	svcCtx.CacheManager = manager
 
 	l1TTL := time.Duration(conf.L1TTLSeconds) * time.Second
 	l2TTL := time.Duration(conf.L2TTLSeconds) * time.Second
-	svcCtx.ConvCache = sharedcache.MustTyped[model.GetConversationRow](manager, sharedcache.NameConversation, l1TTL, l2TTL, conf.L1Capacity)
-	svcCtx.ConvMembersCache = sharedcache.MustTyped[[]model.GetConversationMembersRow](manager, sharedcache.NameConversationMembers, l1TTL, l2TTL, conf.L1Capacity)
-	svcCtx.UserCache = sharedcache.MustTyped[model.UserInfo](manager, sharedcache.NameUser, l1TTL, 10*time.Minute, max(conf.L1Capacity, 2000))
+	svcCtx.ConvCache = sharedcache.MustTyped[orm.Conversation](manager, sharedcache.NameConversation, l1TTL, l2TTL, conf.L1Capacity)
+	svcCtx.ConvMembersCache = sharedcache.MustTyped[[]orm.ConversationMember](manager, sharedcache.NameConversationMembers, l1TTL, l2TTL, conf.L1Capacity)
+	svcCtx.UserCache = sharedcache.MustTyped[orm.UserInfo](manager, sharedcache.NameUser, l1TTL, 10*time.Minute, max(conf.L1Capacity, 2000))
 	svcCtx.UserTypeCache = sharedcache.MustTyped[string](manager, sharedcache.NameUserType, l1TTL, l2TTL, conf.L1Capacity)
-	svcCtx.FriendshipCache = sharedcache.MustTyped[[]model.GetFriendshipBidirectionalRow](manager, sharedcache.NameFriendship, l1TTL, l2TTL, conf.L1Capacity)
-	svcCtx.BotTokenCache = sharedcache.MustTyped[model.GetBotTokenByHashRow](manager, sharedcache.NameBotToken, 15*time.Second, 3*time.Minute, min(conf.L1Capacity, 500))
+	svcCtx.FriendshipCache = sharedcache.MustTyped[[]orm.Friendship](manager, sharedcache.NameFriendship, l1TTL, l2TTL, conf.L1Capacity)
+	svcCtx.BotTokenCache = sharedcache.MustTyped[dao.BotTokenWithUser](manager, sharedcache.NameBotToken, 15*time.Second, 3*time.Minute, min(conf.L1Capacity, 500))
 }
 
 func NewServiceContextWithChecker(c config.Config, checker service.PermissionChecker, userSvc service.UserInfoQuerier) *ServiceContext {

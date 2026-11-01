@@ -2,10 +2,10 @@
 
 只负责一件事：把消息送到对的人。
 
-- Transfer Service（消息路由）：消息流向判断（单聊/群聊）、查询接收方所在网关节点、投递至 Kafka
-- Delivery Consumer（投递消费者）：从 Kafka 消费消息，查找目标用户所在网关并投递
-- Presence Consumer：消费 `aim.presence.events`，查好友列表 → 查 `aim:user_gateway:{friend_id}` → 调 `gateway.PushPresence`
-- Typing Consumer：消费 `aim.typing.events`，查会话成员 → 查 `aim:user_gateway:{member_id}` → 调 `gateway.PushTyping`
+- Transfer Service（消息路由）：消息流向判断（单聊/群聊）、查询接收方所在网关节点、发布到 RocketMQ FIFO topic
+- Delivery Consumer（投递消费者）：从 RocketMQ 消费消息，查找目标用户所在网关并投递
+- Presence Consumer：消费 `aim-presence-events`，查好友列表 → 查 `aim:user_gateway:{friend_id}` → 调 `gateway.PushPresence`
+- Typing Consumer：消费 `aim-typing-events`，查会话成员 → 查 `aim:user_gateway:{member_id}` → 调 `gateway.PushTyping`
 - GatewayRouter：按 `node_id` 路由 gRPC 请求到目标网关实例。Gateway 节点注册走 etcd（`Etcd.Key: gateway.rpc`），但 client 端不依赖 etcd 发现 —— 走 `GatewayRpcConf.Target` / `GatewayRpcConf.Nodes` 静态配置，部署期在 YAML 写死 `node_id` → `target` 映射。
 
 ## 关键修复：PresenceConsumer 推送寻址
@@ -54,8 +54,8 @@ message TransferResp {
 3. **内容审核**：同步调用 in-process 内容审核库（硬审核同步拒绝，软审核异步记录）
 4. **消息去重**：基于 `(sender_id, device_id, client_msg_id)` 做幂等，重复请求返回已有 message_id
 5. **生成 message_id**：全局唯一 ID 生成器（snowflake 或 uuid）
-6. **Kafka 发布**：发布消息到 Kafka，key = `conversation_id`（保证同会话消息有序），事件 payload 必须携带 `traceparent`/`tracestate`，供 `DeliveryConsumer` 和 logic `ArchiveConsumer` 恢复 Kafka 链路追踪。
-7. **等待 Kafka 确认**：TransferResp 只在 Kafka 接受消息后返回
+6. **RocketMQ 发布**：发布到 `aim-message-transfer`（FIFO），`Key` 与 MessageGroup 都取 `conversation_id`（保证同会话有序），事件 payload 必须携带 `traceparent`/`tracestate`，供 `DeliveryConsumer` 和 logic `ArchiveConsumer` 恢复链路追踪。
+7. **等待 broker 确认**：`Producer.Publish` 同步等待 SendReceipt，TransferResp 只在 broker 接受消息后返回
 
 ### gRPC 错误 → biz code 映射
 
@@ -78,16 +78,16 @@ message TransferResp {
 ### 部署配置
 
 - 服务注册：`app/core/rpc/core.go` 启动时 `zrpc.MustNewServer(c.RpcServerConf, ...)` 自动调用 `internal.NewRpcPubServer` 把 `Etcd.Key: core.rpc` + `ListenOn: 0.0.0.0:8080` 注册到 etcd（由 `figureOutListenOn` 自动把 `0.0.0.0` 解析为容器 IP / `POD_IP`）；`app/core/rpc/etc/core.yaml` 的 `Etcd` 块维护 `Hosts` / `Key` 两个字段。
-- Docker Compose 配置：分层 Compose 通过 `${AIM_CONFIG_DIR:-../config/local}/core.yaml` 挂载到 `/app/etc/core.yaml`，本地默认配置副本位于 `deploy/config/local/core.yaml`；`app/core/rpc/etc/core.yaml` 保留给本地 `go run` / 单服务调试。Compose 内 `ListenOn` 为 `0.0.0.0:8080`，`Etcd.Hosts` 为 `[etcd:2379]`，`Etcd.Key` 为 `core.rpc`，业务缓存 Redis 使用 `CacheRedis.Addr: redis:6379`（不要命名为 `Redis`，该字段名会与 `zrpc.RpcServerConf.Redis` 冲突），Kafka 使用 `kafka:9092`，`GatewayRpc.Target` 为 `aim-gateway:9091`，`LogicRpc` 通过 etcd 服务发现（`etcd://etcd:2379/logic.rpc`）。本地 dev overlay 映射主机端口 `8081:8080`。
+- Docker Compose 配置：分层 Compose 通过 `${AIM_CONFIG_DIR:-../config/local}/core.yaml` 挂载到 `/app/etc/core.yaml`，本地默认配置副本位于 `deploy/config/local/core.yaml`；`app/core/rpc/etc/core.yaml` 保留给本地 `go run` / 单服务调试。Compose 内 `ListenOn` 为 `0.0.0.0:8080`，`Etcd.Hosts` 为 `[etcd:2379]`，`Etcd.Key` 为 `core.rpc`，业务缓存 Redis 使用 `CacheRedis.Addr: redis:6379`（不要命名为 `Redis`，该字段名会与 `zrpc.RpcServerConf.Redis` 冲突），RocketMQ 使用 `TransferProducerConf.Endpoint: rocketmq-proxy:8081`（group `aim-core-transfer`），`GatewayRpc.Target` 为 `aim-gateway:9091`，`LogicRpc` 通过 etcd 服务发现（`etcd://etcd:2379/logic.rpc`）。本地 dev overlay 映射主机端口 `8085:8080`（宿主机 8081 留给 RocketMQ gRPC proxy）。
 - go-zero OTel/Tempo：`app/core/rpc/etc/core.yaml` 的 `Telemetry` 块使用 `Name: core.rpc`、`Batcher: otlphttp`、`Endpoint: tempo:4318`、`OtlpHttpPath: /v1/traces`，由 `zrpc.RpcServerConf` 自动接入 RPC tracing。
-- 配置加载测试：`app/core/rpc/internal/config/config_test.go` 覆盖 `Telemetry`、`CacheRedis`、Kafka producer 和 Etcd client / `LogicRpc.Etcd.Key` / `AttachmentRpc.Etcd.Key` 配置。
-- Kafka tracing：`TransferLogic` 发布到 `aim-message-transfer` 的 JSON payload 包含 `traceparent`/`tracestate`；`DeliveryConsumer` 恢复 trace context 并创建 `core.kafka.delivery.consume` consumer span，然后用恢复后的 context 调用 GatewayService。
+- 配置加载测试：`app/core/rpc/internal/config/config_test.go` 覆盖 `Telemetry`、`CacheRedis`、RocketMQ producer/consumer 和 Etcd client / `LogicRpc.Etcd.Key` / `AttachmentRpc.Etcd.Key` 配置。
+- MQ tracing：`TransferLogic` 发布到 `aim-message-transfer` 的 JSON payload 包含 `traceparent`/`tracestate`；`DeliveryConsumer` 恢复 trace context 并创建 `core.rocketmq.delivery.consume` consumer span，然后用恢复后的 context 调用 GatewayService。
 
 ## ConversationEventConsumer
 
 ### 概述
 
-`ConversationEventConsumer` 消费 `aim.conversation.events` topic，将 logic 生产的群变更系统消息推送给 Gateway，再由 Gateway 通过 WebSocket 推送给客户端。
+`ConversationEventConsumer` 消费 `aim-conversation-events` topic，将 logic 生产的群变更系统消息推送给 Gateway，再由 Gateway 通过 WebSocket 推送给客户端。
 
 实现位置：`app/core/rpc/internal/mqs/conversation_event_consumer.go`。
 
@@ -109,9 +109,9 @@ message TransferResp {
 
 ### 处理流程
 
-1. 反序列化 Kafka value 为 `conversationEvent`
+1. 反序列化消息体为 `conversationEvent`
 2. 恢复 W3C trace context（`traceparent`/`tracestate`）
-3. 创建 `core.kafka.conversation_event.consume` consumer span
+3. 创建 `core.rocketmq.conversation_event.consume` consumer span
 4. 遍历 `target_user_ids`，对每个用户调用 `GatewayClient.PushMessage`（`is_system=true`）
 5. 任一推送失败记录 `span.RecordError` 并返回错误
 
@@ -122,24 +122,21 @@ message TransferResp {
 ```go
 type Config struct {
     // ... 现有字段 ...
-    ConversationEventConsumerConf kq.KqConf `json:",optional"`
+    ConversationEventConsumerConf rocketmq.ConsumerConf `json:",optional"`
 }
 ```
 
-`app/core/rpc/internal/mqs/consumers.go` 条件注册：仅当 `ConversationEventConsumerConf` 配置了 Brokers 和 Topic 时才启动 consumer。
+`app/core/rpc/internal/mqs/consumers.go` 条件注册：`rocketmq.NewConsumerService` 在 `Endpoint`/`Topic` 缺失时返回 nil，未配置的 consumer 自动跳过。
 
-`app/core/rpc/etc/core.yaml` 需添加对应 Kafka consumer 配置块；当前 docker compose 配置已启用：
+`app/core/rpc/etc/core.yaml` 需添加对应 consumer 配置块；当前 docker compose 配置已启用：
 
 ```yaml
 ConversationEventConsumerConf:
   Name: core-conversation-event-consumer
-  Brokers:
-    - kafka:9092
+  Endpoint: rocketmq-proxy:8081
   Group: aim-core-conversation-events
-  Topic: aim.conversation.events
-  Offset: first
-  Consumers: 1
-  Processors: 1
+  Topic: aim-conversation-events
+  Concurrency: 1
 ```
 
 ### 关键设计决策
@@ -152,7 +149,7 @@ ConversationEventConsumerConf:
 
 ### 概述
 
-`AttachmentParsedConsumer` 消费 `aim.attachment.parsed` topic，将 data_parsing 解析完成的附件更新（缩略图、尺寸、时长等）以系统消息形式推送给会话所有成员。
+`AttachmentParsedConsumer` 消费 `aim-attachment-parsed` topic，将 data_parsing 解析完成的附件更新（缩略图、尺寸、时长等）以系统消息形式推送给会话所有成员。
 
 实现位置：`app/core/rpc/internal/mqs/attachment_parsed_consumer.go`。
 
@@ -178,14 +175,14 @@ ConversationEventConsumerConf:
 
 ### 处理流程
 
-1. 反序列化 Kafka value，恢复 W3C trace context
+1. 反序列化消息体，恢复 W3C trace context
 2. 仅处理 `parse_status=ready` 的事件（失败事件暂不推送）
 3. 调用 `AttachmentClient.GetFile` 获取完整文件信息（含 `conversation_id`、原始名称、mime 等）
 4. 构建更新后的 `Content` JSON（schema=aim.attachment.v1，含缩略图、尺寸等）
 5. 通过 `LogicConversationClient.GetConversationMembers` 查询会话所有成员
 6. 生成 Snowflake 系统消息 ID
 7. 遍历成员 → 查网关节点 → 通过 `GatewayClient.PushMessage` 推送（`is_system=true`）
-8. 推送失败记录 span error 并返回错误（依赖 Kafka 重试）
+8. 推送失败记录 span error 并返回错误（不 Ack，等待 broker 重投）
 
 ### 配置
 
@@ -194,7 +191,7 @@ ConversationEventConsumerConf:
 ```go
 type Config struct {
     // ... 现有字段 ...
-    AttachmentParsedConsumerConf kq.KqConf `json:",optional"`
+    AttachmentParsedConsumerConf rocketmq.ConsumerConf `json:",optional"`
 }
 ```
 
@@ -203,13 +200,10 @@ type Config struct {
 ```yaml
 AttachmentParsedConsumerConf:
   Name: core-attachment-parsed-consumer
-  Brokers:
-    - kafka:9092
+  Endpoint: rocketmq-proxy:8081
   Group: aim-core-attachment-parsed
-  Topic: aim.attachment.parsed
-  Offset: first
-  Consumers: 1
-  Processors: 1
+  Topic: aim-attachment-parsed
+  Concurrency: 1
 ```
 
 ### 关键设计决策

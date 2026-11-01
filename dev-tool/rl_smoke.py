@@ -119,24 +119,26 @@ def _register_pair(prefix: str = "rl"):
     alice_pwd = "Password123"
     bob_pwd = "Password123"
 
-    # 注册 + 等待 Kafka 消费
+    # 注册 + 等待消息队列消费（bob 使用独立 profile 的 token 文件）
     alice = RESTClient()
-    bob = RESTClient()
+    bob = RESTClient(profile="bob")
     alice_resp = alice.register(alice_email, alice_pwd, username=f"{prefix}_a_{suffix}")
-    alice_user_id = int(alice_resp["body"]["user_id"])
+    alice_user_id = int(alice_resp["user_id"])
     time.sleep(3)  # 等 UserCreated 事件传完
     bob_resp = bob.register(bob_email, bob_pwd, username=f"{prefix}_b_{suffix}")
-    bob_user_id = int(bob_resp["body"]["user_id"])
+    bob_user_id = int(bob_resp["user_id"])
     time.sleep(3)
 
     # login
     alice.login(alice_email, alice_pwd)
     bob.login(bob_email, bob_pwd)
 
-    tm_alice = TokenManager.load()
+    # login() 只填充内存态，必须把客户端持有的 TokenManager 落盘，
+    # 否则重新 load() 会读到旧文件（bob 的 token 永远为空）。
+    tm_alice = alice.token
     tm_alice.user_id = alice_user_id
     tm_alice.save()
-    tm_bob = TokenManager.load("bob")
+    tm_bob = bob.token
     tm_bob.user_id = bob_user_id
     tm_bob.save()
 
@@ -468,7 +470,7 @@ def test_opcodes_unthrottled(quota_window: int, no_reset: bool) -> bool:
 
     # READ_RECEIPT
     for i in range(OPCODE_REQUESTS):
-        ws.send_read_receipt(conv_id, last_msg_id=i + 1)
+        ws.send_read_receipt(conv_id, last_read_message_id=i + 1)
     deadline = time.time() + 5
     while len(captured) < OPCODE_REQUESTS and time.time() < deadline:
         time.sleep(0.2)

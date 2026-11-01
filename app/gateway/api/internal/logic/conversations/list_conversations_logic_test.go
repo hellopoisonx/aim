@@ -5,9 +5,10 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/authctx"
+
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
-	"github.com/hellopoisonx/aim/app/gateway/api/internal/ws"
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/conversationservice"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
@@ -209,7 +210,7 @@ func TestListConversations(t *testing.T) {
 			if tt.wantErr != nil && tt.wantErr.Code == errorx.CodeAuth {
 				ctx = context.Background()
 			} else {
-				ctx = ws.WithIdentity(context.Background(), ws.Identity{UserID: 42, DeviceID: "test-device"})
+				ctx = authctx.WithIdentity(context.Background(), authctx.Identity{UserID: 42, DeviceID: "test-device"})
 			}
 			logic := NewListConversationsLogic(ctx, svcCtx)
 

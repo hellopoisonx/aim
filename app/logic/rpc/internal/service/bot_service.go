@@ -7,7 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hellopoisonx/aim/app/logic/rpc/model"
+	"github.com/hellopoisonx/aim/app/logic/rpc/model/dao"
+	"github.com/hellopoisonx/aim/app/logic/rpc/model/orm"
 	"github.com/hellopoisonx/aim/app/shared/botperm"
 	"github.com/hellopoisonx/aim/app/shared/bottoken"
 	sharedcache "github.com/hellopoisonx/aim/app/shared/cache"
@@ -15,11 +16,6 @@ import (
 	"github.com/hellopoisonx/aim/app/shared/tools"
 
 	"github.com/zeromicro/go-zero/core/logx"
-
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgtype"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // UserTypeBot is the value stored in user_info.user_type for Bot identities.
@@ -95,61 +91,67 @@ type BotEventInfo struct {
 	Description string
 }
 
-// BotQuerier is the slice of model.Querier the BotService needs.
+// BotQuerier is the DAO slice the BotService needs.
 // Defined as an interface so logic-level tests can mock it.
 type BotQuerier interface {
-	GetBotTokenByHash(ctx context.Context, tokenHash string) (model.GetBotTokenByHashRow, error)
+	GetBotTokenByHash(ctx context.Context, tokenHash string) (dao.BotTokenWithUser, error)
 	ListEnabledActionsByToken(ctx context.Context, tokenID int64) ([]string, error)
 	GetEnabledActionByWebhookEvent(ctx context.Context, event string) (string, error)
-	GetUserInfoByID(ctx context.Context, id int64) (model.UserInfo, error)
-	GetConversationsByUserID(ctx context.Context, userID int64) ([]model.GetConversationsByUserIDRow, error)
-	GetBotWebhook(ctx context.Context, botUserID int64) (model.BotWebhook, error)
-	UpsertBotWebhook(ctx context.Context, arg model.UpsertBotWebhookParams) (model.BotWebhook, error)
+	GetUserInfoByID(ctx context.Context, id int64) (orm.UserInfo, error)
+	GetConversationsByUserID(ctx context.Context, userID int64) ([]orm.Conversation, error)
+	GetBotWebhook(ctx context.Context, botUserID int64) (orm.BotWebhook, error)
+	UpsertBotWebhook(ctx context.Context, botUserID int64, url, secretHash string, events []string, enabled bool) (orm.BotWebhook, error)
 	DeleteBotWebhook(ctx context.Context, botUserID int64) (int64, error)
 }
 
-// BotManagementQuerier is the sqlc slice needed by user-side Bot management.
+// BotManagementQuerier is the DAO slice needed by user-side Bot management.
 type BotManagementQuerier interface {
-	CreateUserBotProfile(ctx context.Context, arg model.CreateUserBotProfileParams) (model.UserInfo, error)
-	CreateUserBotOwnership(ctx context.Context, arg model.CreateUserBotOwnershipParams) (model.UserBot, error)
-	GetManagedUserBot(ctx context.Context, arg model.GetManagedUserBotParams) (model.GetManagedUserBotRow, error)
-	ListManagedUserBots(ctx context.Context, ownerUserID int64) ([]model.ListManagedUserBotsRow, error)
-	UpdateManagedUserBotProfile(ctx context.Context, arg model.UpdateManagedUserBotProfileParams) (model.UserInfo, error)
-	UpdateManagedUserBotStatus(ctx context.Context, arg model.UpdateManagedUserBotStatusParams) (model.UserInfo, error)
-	SoftDeleteManagedUserBot(ctx context.Context, arg model.SoftDeleteManagedUserBotParams) (int64, error)
+	CreateUserBotProfile(ctx context.Context, id int64, email, nickname, avatar string) (orm.UserInfo, error)
+	CreateUserBotOwnership(ctx context.Context, botUserID, ownerUserID int64) (orm.UserBot, error)
+	GetManagedUserBot(ctx context.Context, ownerUserID, botUserID int64) (dao.ManagedUserBot, error)
+	ListManagedUserBots(ctx context.Context, ownerUserID int64) ([]dao.ManagedUserBot, error)
+	UpdateManagedUserBotProfile(ctx context.Context, ownerUserID, botUserID int64, nickname, avatar string) (orm.UserInfo, error)
+	UpdateManagedUserBotStatus(ctx context.Context, ownerUserID, botUserID int64, status int16) (orm.UserInfo, error)
+	SoftDeleteManagedUserBot(ctx context.Context, ownerUserID, botUserID int64) (int64, error)
 	RevokeAllBotTokensByBot(ctx context.Context, botUserID int64) (int64, error)
-	CreateBotToken(ctx context.Context, arg model.CreateBotTokenParams) (model.BotToken, error)
-	ListBotTokensByBot(ctx context.Context, botUserID int64) ([]model.BotToken, error)
-	GetManagedBotToken(ctx context.Context, arg model.GetManagedBotTokenParams) (model.BotToken, error)
-	UpdateManagedBotToken(ctx context.Context, arg model.UpdateManagedBotTokenParams) (model.BotToken, error)
-	RevokeManagedBotToken(ctx context.Context, arg model.RevokeManagedBotTokenParams) (int64, error)
+	CreateBotToken(ctx context.Context, id, botUserID int64, tokenHash, name string, scopes []string, expiresAt *time.Time) (orm.BotToken, error)
+	ListBotTokensByBot(ctx context.Context, botUserID int64) ([]orm.BotToken, error)
+	GetManagedBotToken(ctx context.Context, ownerUserID, botUserID, tokenID int64) (orm.BotToken, error)
+	UpdateManagedBotToken(ctx context.Context, ownerUserID, botUserID, tokenID int64, name string, expiresAt *time.Time) (orm.BotToken, error)
+	RevokeManagedBotToken(ctx context.Context, ownerUserID, botUserID, tokenID int64) (int64, error)
 	ClearBotTokenActions(ctx context.Context, tokenID int64) (int64, error)
-	GrantBotTokenAction(ctx context.Context, arg model.GrantBotTokenActionParams) error
+	GrantBotTokenAction(ctx context.Context, tokenID, actionID int64) error
 	ListEnabledActionsByToken(ctx context.Context, tokenID int64) ([]string, error)
-	ListEnabledBotActions(ctx context.Context) ([]model.BotAction, error)
-	ListEnabledBotActionsByNames(ctx context.Context, names []string) ([]model.BotAction, error)
-	ListEnabledBotEvents(ctx context.Context) ([]model.ListEnabledBotEventsRow, error)
+	ListEnabledBotActions(ctx context.Context) ([]orm.BotAction, error)
+	ListEnabledBotActionsByNames(ctx context.Context, names []string) ([]orm.BotAction, error)
+	ListEnabledBotEvents(ctx context.Context) ([]dao.BotEvent, error)
+}
+
+// BotTxRunner starts a transaction whose callback receives a management store.
+type BotTxRunner interface {
+	WithTx(ctx context.Context, fn func(tx BotManagementQuerier) error) error
 }
 
 // BotService implements BotService RPC business logic.
 type BotService struct {
 	queries       BotQuerier
-	pool          *pgxpool.Pool
+	management    BotManagementQuerier
+	txRunner      BotTxRunner
 	idGen         *tools.Snowflake
-	botTokenCache *sharedcache.TypedCache[model.GetBotTokenByHashRow]
+	botTokenCache *sharedcache.TypedCache[dao.BotTokenWithUser]
 }
 
 type BotServiceOption func(*BotService)
 
-func WithBotTokenCache(cache *sharedcache.TypedCache[model.GetBotTokenByHashRow]) BotServiceOption {
+func WithBotTokenCache(cache *sharedcache.TypedCache[dao.BotTokenWithUser]) BotServiceOption {
 	return func(s *BotService) {
 		s.botTokenCache = cache
 	}
 }
 
-func WithBotManagementPool(pool *pgxpool.Pool) BotServiceOption {
+func WithBotTxRunner(runner BotTxRunner) BotServiceOption {
 	return func(s *BotService) {
-		s.pool = pool
+		s.txRunner = runner
 	}
 }
 
@@ -159,9 +161,14 @@ func WithBotIDGenerator(idGen *tools.Snowflake) BotServiceOption {
 	}
 }
 
-// NewBotService constructs a BotService backed by sqlc Querier.
-func NewBotService(queries BotQuerier, opts ...BotServiceOption) *BotService {
-	svc := &BotService{queries: queries}
+// NewBotService constructs a BotService backed by the GORM DAO.
+//
+// Both dependency sets are declared in the constructor so a caller can see the
+// full contract statically; pass a nil management store for token-only usage
+// (WebSocket/HTTP auth), which then reports "not configured" for management
+// calls instead of failing an unchecked type assertion at runtime.
+func NewBotService(queries BotQuerier, management BotManagementQuerier, opts ...BotServiceOption) *BotService {
+	svc := &BotService{queries: queries, management: management}
 	for _, opt := range opts {
 		if opt != nil {
 			opt(svc)
@@ -187,18 +194,18 @@ func (s *BotService) ValidateBotToken(ctx context.Context, plaintext string) (Bo
 
 	row, err := s.getBotTokenByHash(ctx, bottoken.Hash(parsed))
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
+		if errors.Is(err, dao.ErrNotFound) {
 			return BotIdentity{}, errorx.NewCodeError(errorx.CodeBotTokenInvalid, "invalid bot token")
 		}
 
 		return BotIdentity{}, err
 	}
 
-	if row.RevokedAt.Valid {
+	if row.RevokedAt != nil {
 		return BotIdentity{}, errorx.NewCodeError(errorx.CodeBotTokenRevoked, "bot token revoked")
 	}
 
-	if row.ExpiresAt.Valid && row.ExpiresAt.Time.Before(time.Now()) {
+	if row.ExpiresAt != nil && row.ExpiresAt.Before(time.Now()) {
 		return BotIdentity{}, errorx.NewCodeError(errorx.CodeBotTokenRevoked, "bot token expired")
 	}
 
@@ -236,12 +243,12 @@ func (s *BotService) ValidateBotToken(ctx context.Context, plaintext string) (Bo
 	}, nil
 }
 
-func (s *BotService) getBotTokenByHash(ctx context.Context, tokenHash string) (model.GetBotTokenByHashRow, error) {
+func (s *BotService) getBotTokenByHash(ctx context.Context, tokenHash string) (dao.BotTokenWithUser, error) {
 	if s.botTokenCache == nil {
 		return s.queries.GetBotTokenByHash(ctx, tokenHash)
 	}
 
-	return s.botTokenCache.Take(ctx, sharedcache.BotTokenKey(tokenHash), func() (model.GetBotTokenByHashRow, error) {
+	return s.botTokenCache.Take(ctx, sharedcache.BotTokenKey(tokenHash), func() (dao.BotTokenWithUser, error) {
 		return s.queries.GetBotTokenByHash(ctx, tokenHash)
 	})
 }
@@ -249,18 +256,18 @@ func (s *BotService) getBotTokenByHash(ctx context.Context, tokenHash string) (m
 // GetBotProfile loads the bot's user_info row and rejects when the row is
 // not actually a bot (defence in depth — the BotAuth middleware should
 // have caught this already).
-func (s *BotService) GetBotProfile(ctx context.Context, botUserID int64) (model.UserInfo, error) {
+func (s *BotService) GetBotProfile(ctx context.Context, botUserID int64) (orm.UserInfo, error) {
 	info, err := s.queries.GetUserInfoByID(ctx, botUserID)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return model.UserInfo{}, ErrUserNotFound
+		if errors.Is(err, dao.ErrNotFound) {
+			return orm.UserInfo{}, ErrUserNotFound
 		}
 
-		return model.UserInfo{}, err
+		return orm.UserInfo{}, err
 	}
 
 	if info.UserType != UserTypeBot {
-		return model.UserInfo{}, errorx.NewCodeError(errorx.CodeBotDisabled, "user is not a bot")
+		return orm.UserInfo{}, errorx.NewCodeError(errorx.CodeBotDisabled, "user is not a bot")
 	}
 
 	return info, nil
@@ -277,10 +284,10 @@ func (s *BotService) ListBotConversations(ctx context.Context, botUserID int64) 
 	for _, r := range rows {
 		out = append(out, BotConversationItem{
 			ConversationID:   r.ID,
-			ConversationType: r.ConversationType,
+			ConversationType: string(r.ConversationType),
 			Name:             r.Name,
 			Avatar:           r.Avatar,
-			CreatedAt:        r.CreatedAt.Time,
+			CreatedAt:        r.CreatedAt,
 		})
 	}
 
@@ -292,7 +299,7 @@ func (s *BotService) ListBotConversations(ctx context.Context, botUserID int64) 
 func (s *BotService) GetBotWebhook(ctx context.Context, botUserID int64) (BotWebhookConfig, bool, error) {
 	row, err := s.queries.GetBotWebhook(ctx, botUserID)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
+		if errors.Is(err, dao.ErrNotFound) {
 			return BotWebhookConfig{}, false, nil
 		}
 
@@ -304,7 +311,7 @@ func (s *BotService) GetBotWebhook(ctx context.Context, botUserID int64) (BotWeb
 		URL:       row.Url,
 		Events:    append([]string{}, row.Events...),
 		Enabled:   row.Enabled,
-		UpdatedAt: row.UpdatedAt.Time,
+		UpdatedAt: row.UpdatedAt,
 	}, true, nil
 }
 
@@ -324,7 +331,7 @@ func (s *BotService) ResolveWebhookEventActions(ctx context.Context, events []st
 
 		action, err := s.queries.GetEnabledActionByWebhookEvent(ctx, event)
 		if err != nil {
-			if errors.Is(err, pgx.ErrNoRows) {
+			if errors.Is(err, dao.ErrNotFound) {
 				return nil, errorx.NewCodeError(errorx.CodeBotWebhookInvalid, "unsupported webhook event: "+event)
 			}
 
@@ -365,7 +372,7 @@ func (s *BotService) SetBotWebhook(ctx context.Context, botUserID int64, url str
 	} else {
 		existing, err := s.queries.GetBotWebhook(ctx, botUserID)
 		if err != nil {
-			if errors.Is(err, pgx.ErrNoRows) {
+			if errors.Is(err, dao.ErrNotFound) {
 				return BotWebhookConfig{}, errorx.NewCodeError(errorx.CodeBotWebhookInvalid, "secret is required when creating webhook")
 			}
 
@@ -374,13 +381,7 @@ func (s *BotService) SetBotWebhook(ctx context.Context, botUserID int64, url str
 		secretHash = existing.SecretHash
 	}
 
-	row, err := s.queries.UpsertBotWebhook(ctx, model.UpsertBotWebhookParams{
-		BotUserID:  botUserID,
-		Url:        url,
-		SecretHash: secretHash,
-		Events:     events,
-		Enabled:    enabled,
-	})
+	row, err := s.queries.UpsertBotWebhook(ctx, botUserID, url, secretHash, events, enabled)
 	if err != nil {
 		return BotWebhookConfig{}, err
 	}
@@ -390,7 +391,7 @@ func (s *BotService) SetBotWebhook(ctx context.Context, botUserID int64, url str
 		URL:       row.Url,
 		Events:    append([]string{}, row.Events...),
 		Enabled:   row.Enabled,
-		UpdatedAt: row.UpdatedAt.Time,
+		UpdatedAt: row.UpdatedAt,
 	}, nil
 }
 
@@ -407,16 +408,15 @@ func (s *BotService) DeleteBotWebhook(ctx context.Context, botUserID int64) (boo
 // --- User-side Bot management ---
 
 func (s *BotService) managementQueries() (BotManagementQuerier, error) {
-	queries, ok := s.queries.(BotManagementQuerier)
-	if !ok {
+	if s.management == nil {
 		return nil, errorx.NewCodeError(errorx.CodeInternal, "bot management service not configured")
 	}
 
-	return queries, nil
+	return s.management, nil
 }
 
 func (s *BotService) inBotManagementTx(ctx context.Context, fn func(BotManagementQuerier) error) error {
-	if s.pool == nil {
+	if s.txRunner == nil {
 		queries, err := s.managementQueries()
 		if err != nil {
 			return err
@@ -425,17 +425,7 @@ func (s *BotService) inBotManagementTx(ctx context.Context, fn func(BotManagemen
 		return fn(queries)
 	}
 
-	tx, err := s.pool.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-
-	if err := fn(model.New(tx)); err != nil {
-		return err
-	}
-
-	return tx.Commit(ctx)
+	return s.txRunner.WithTx(ctx, fn)
 }
 
 func (s *BotService) CreateUserBot(ctx context.Context, ownerUserID, botUserID int64, email, nickname, avatar string) (UserBotInfo, error) {
@@ -462,11 +452,11 @@ func (s *BotService) CreateUserBot(ctx context.Context, ownerUserID, botUserID i
 	}
 
 	err := s.inBotManagementTx(ctx, func(q BotManagementQuerier) error {
-		if _, err := q.CreateUserBotProfile(ctx, model.CreateUserBotProfileParams{ID: botUserID, Email: email, Nickname: nickname, Avatar: avatar}); err != nil {
+		if _, err := q.CreateUserBotProfile(ctx, botUserID, email, nickname, avatar); err != nil {
 			return err
 		}
 
-		_, err := q.CreateUserBotOwnership(ctx, model.CreateUserBotOwnershipParams{BotUserID: botUserID, OwnerUserID: ownerUserID})
+		_, err := q.CreateUserBotOwnership(ctx, botUserID, ownerUserID)
 		return err
 	})
 	if err != nil {
@@ -497,7 +487,7 @@ func (s *BotService) ListUserBots(ctx context.Context, ownerUserID int64) ([]Use
 
 	bots := make([]UserBotInfo, 0, len(rows))
 	for _, row := range rows {
-		bots = append(bots, listManagedUserBotRowToInfo(row))
+		bots = append(bots, managedUserBotRowToInfo(row))
 	}
 
 	return bots, nil
@@ -509,9 +499,9 @@ func (s *BotService) GetUserBot(ctx context.Context, ownerUserID, botUserID int6
 		return UserBotInfo{}, err
 	}
 
-	row, err := queries.GetManagedUserBot(ctx, model.GetManagedUserBotParams{OwnerUserID: ownerUserID, BotUserID: botUserID})
+	row, err := queries.GetManagedUserBot(ctx, ownerUserID, botUserID)
 	if err != nil {
-		return UserBotInfo{}, botManagementError(err, "bot not found")
+		return UserBotInfo{}, botManagementErr(err, "bot not found")
 	}
 
 	return managedUserBotRowToInfo(row), nil
@@ -533,9 +523,9 @@ func (s *BotService) UpdateUserBotProfile(ctx context.Context, ownerUserID, botU
 		return UserBotInfo{}, err
 	}
 
-	info, err := queries.UpdateManagedUserBotProfile(ctx, model.UpdateManagedUserBotProfileParams{OwnerUserID: ownerUserID, BotUserID: botUserID, Nickname: nickname, Avatar: avatar})
+	info, err := queries.UpdateManagedUserBotProfile(ctx, ownerUserID, botUserID, nickname, avatar)
 	if err != nil {
-		return UserBotInfo{}, botManagementError(err, "bot not found")
+		return UserBotInfo{}, botManagementErr(err, "bot not found")
 	}
 
 	return userInfoToBotInfo(ownerUserID, info), nil
@@ -552,9 +542,9 @@ func (s *BotService) SetUserBotStatus(ctx context.Context, ownerUserID, botUserI
 		status = 1
 	}
 
-	info, err := queries.UpdateManagedUserBotStatus(ctx, model.UpdateManagedUserBotStatusParams{OwnerUserID: ownerUserID, BotUserID: botUserID, Status: status})
+	info, err := queries.UpdateManagedUserBotStatus(ctx, ownerUserID, botUserID, status)
 	if err != nil {
-		return UserBotInfo{}, botManagementError(err, "bot not found")
+		return UserBotInfo{}, botManagementErr(err, "bot not found")
 	}
 
 	if !enabled {
@@ -573,18 +563,18 @@ func (s *BotService) DeleteUserBot(ctx context.Context, ownerUserID, botUserID i
 		return false, err
 	}
 
-	if _, err := queries.GetManagedUserBot(ctx, model.GetManagedUserBotParams{OwnerUserID: ownerUserID, BotUserID: botUserID}); err != nil {
-		return false, botManagementError(err, "bot not found")
+	if _, err := queries.GetManagedUserBot(ctx, ownerUserID, botUserID); err != nil {
+		return false, botManagementErr(err, "bot not found")
 	}
 
 	tokens, _ := queries.ListBotTokensByBot(ctx, botUserID)
 	var deleted bool
 	err = s.inBotManagementTx(ctx, func(q BotManagementQuerier) error {
-		if _, err := q.UpdateManagedUserBotStatus(ctx, model.UpdateManagedUserBotStatusParams{OwnerUserID: ownerUserID, BotUserID: botUserID, Status: 0}); err != nil {
+		if _, err := q.UpdateManagedUserBotStatus(ctx, ownerUserID, botUserID, 0); err != nil {
 			return err
 		}
 
-		rows, err := q.SoftDeleteManagedUserBot(ctx, model.SoftDeleteManagedUserBotParams{OwnerUserID: ownerUserID, BotUserID: botUserID})
+		rows, err := q.SoftDeleteManagedUserBot(ctx, ownerUserID, botUserID)
 		if err != nil {
 			return err
 		}
@@ -628,16 +618,9 @@ func (s *BotService) CreateUserBotToken(ctx context.Context, ownerUserID, botUse
 	}
 
 	name = strings.TrimSpace(name)
-	var token model.BotToken
+	var token orm.BotToken
 	err = s.inBotManagementTx(ctx, func(q BotManagementQuerier) error {
-		created, err := q.CreateBotToken(ctx, model.CreateBotTokenParams{
-			ID:        tokenID,
-			BotUserID: botUserID,
-			TokenHash: bottoken.Hash(plaintext),
-			Name:      name,
-			Scopes:    validatedActions,
-			ExpiresAt: pgTimestampFromMillis(expiresAtMs),
-		})
+		created, err := q.CreateBotToken(ctx, tokenID, botUserID, bottoken.Hash(plaintext), name, validatedActions, timestampFromMillis(expiresAtMs))
 		if err != nil {
 			return err
 		}
@@ -694,18 +677,18 @@ func (s *BotService) UpdateUserBotToken(ctx context.Context, ownerUserID, botUse
 		return UserBotTokenInfo{}, err
 	}
 
-	oldToken, err := queries.GetManagedBotToken(ctx, model.GetManagedBotTokenParams{OwnerUserID: ownerUserID, BotUserID: botUserID, ID: tokenID})
+	oldToken, err := queries.GetManagedBotToken(ctx, ownerUserID, botUserID, tokenID)
 	if err != nil {
-		return UserBotTokenInfo{}, botManagementError(err, "token not found")
+		return UserBotTokenInfo{}, botManagementErr(err, "token not found")
 	}
-	if oldToken.RevokedAt.Valid {
+	if oldToken.RevokedAt != nil {
 		return UserBotTokenInfo{}, errorx.NewCodeError(errorx.CodeBadInput, "token is revoked")
 	}
 
 	name = strings.TrimSpace(name)
-	var updated model.BotToken
+	var updated orm.BotToken
 	err = s.inBotManagementTx(ctx, func(q BotManagementQuerier) error {
-		token, err := q.UpdateManagedBotToken(ctx, model.UpdateManagedBotTokenParams{OwnerUserID: ownerUserID, BotUserID: botUserID, ID: tokenID, Name: name, ExpiresAt: pgTimestampFromMillis(expiresAtMs)})
+		token, err := q.UpdateManagedBotToken(ctx, ownerUserID, botUserID, tokenID, name, timestampFromMillis(expiresAtMs))
 		if err != nil {
 			return err
 		}
@@ -721,7 +704,7 @@ func (s *BotService) UpdateUserBotToken(ctx context.Context, ownerUserID, botUse
 		return nil
 	})
 	if err != nil {
-		return UserBotTokenInfo{}, botManagementError(err, "token not found")
+		return UserBotTokenInfo{}, botManagementErr(err, "token not found")
 	}
 
 	s.invalidateBotTokenHash(ctx, oldToken.TokenHash)
@@ -734,11 +717,11 @@ func (s *BotService) RotateUserBotToken(ctx context.Context, ownerUserID, botUse
 		return UserBotTokenInfo{}, "", err
 	}
 
-	oldToken, err := queries.GetManagedBotToken(ctx, model.GetManagedBotTokenParams{OwnerUserID: ownerUserID, BotUserID: botUserID, ID: tokenID})
+	oldToken, err := queries.GetManagedBotToken(ctx, ownerUserID, botUserID, tokenID)
 	if err != nil {
-		return UserBotTokenInfo{}, "", botManagementError(err, "token not found")
+		return UserBotTokenInfo{}, "", botManagementErr(err, "token not found")
 	}
-	if oldToken.RevokedAt.Valid {
+	if oldToken.RevokedAt != nil {
 		return UserBotTokenInfo{}, "", errorx.NewCodeError(errorx.CodeBadInput, "token is revoked")
 	}
 
@@ -752,7 +735,7 @@ func (s *BotService) RotateUserBotToken(ctx context.Context, ownerUserID, botUse
 		return UserBotTokenInfo{}, "", err
 	}
 
-	if _, err := queries.RevokeManagedBotToken(ctx, model.RevokeManagedBotTokenParams{OwnerUserID: ownerUserID, BotUserID: botUserID, ID: tokenID}); err != nil {
+	if _, err := queries.RevokeManagedBotToken(ctx, ownerUserID, botUserID, tokenID); err != nil {
 		return UserBotTokenInfo{}, "", err
 	}
 	s.invalidateBotTokenHash(ctx, oldToken.TokenHash)
@@ -766,12 +749,12 @@ func (s *BotService) RevokeUserBotToken(ctx context.Context, ownerUserID, botUse
 		return false, err
 	}
 
-	token, err := queries.GetManagedBotToken(ctx, model.GetManagedBotTokenParams{OwnerUserID: ownerUserID, BotUserID: botUserID, ID: tokenID})
+	token, err := queries.GetManagedBotToken(ctx, ownerUserID, botUserID, tokenID)
 	if err != nil {
-		return false, botManagementError(err, "token not found")
+		return false, botManagementErr(err, "token not found")
 	}
 
-	rows, err := queries.RevokeManagedBotToken(ctx, model.RevokeManagedBotTokenParams{OwnerUserID: ownerUserID, BotUserID: botUserID, ID: tokenID})
+	rows, err := queries.RevokeManagedBotToken(ctx, ownerUserID, botUserID, tokenID)
 	if err != nil {
 		return false, err
 	}
@@ -818,7 +801,7 @@ func (s *BotService) ListBotEvents(ctx context.Context) ([]BotEventInfo, error) 
 	return out, nil
 }
 
-func (s *BotService) validateTokenActions(ctx context.Context, actions []string) ([]string, []model.BotAction, error) {
+func (s *BotService) validateTokenActions(ctx context.Context, actions []string) ([]string, []orm.BotAction, error) {
 	if len(actions) == 0 {
 		return nil, nil, errorx.NewCodeError(errorx.CodeBadInput, "actions are required")
 	}
@@ -863,9 +846,9 @@ func (s *BotService) validateTokenActions(ctx context.Context, actions []string)
 	return normalized, rows, nil
 }
 
-func grantTokenActions(ctx context.Context, q BotManagementQuerier, tokenID int64, actions []model.BotAction) error {
+func grantTokenActions(ctx context.Context, q BotManagementQuerier, tokenID int64, actions []orm.BotAction) error {
 	for _, action := range actions {
-		if err := q.GrantBotTokenAction(ctx, model.GrantBotTokenActionParams{TokenID: tokenID, ActionID: action.ID}); err != nil {
+		if err := q.GrantBotTokenAction(ctx, tokenID, action.ID); err != nil {
 			return err
 		}
 	}
@@ -881,7 +864,7 @@ func (s *BotService) invalidateBotTokenHash(ctx context.Context, tokenHash strin
 	_ = s.botTokenCache.Del(ctx, sharedcache.BotTokenKey(tokenHash))
 }
 
-func managedUserBotRowToInfo(row model.GetManagedUserBotRow) UserBotInfo {
+func managedUserBotRowToInfo(row dao.ManagedUserBot) UserBotInfo {
 	return UserBotInfo{
 		BotUserID:   row.ID,
 		OwnerUserID: row.OwnerUserID,
@@ -889,25 +872,12 @@ func managedUserBotRowToInfo(row model.GetManagedUserBotRow) UserBotInfo {
 		Nickname:    row.Nickname,
 		Avatar:      row.Avatar,
 		Status:      row.Status,
-		CreatedAt:   row.CreatedAt.Time,
-		UpdatedAt:   row.UpdatedAt.Time,
+		CreatedAt:   row.CreatedAt,
+		UpdatedAt:   row.UpdatedAt,
 	}
 }
 
-func listManagedUserBotRowToInfo(row model.ListManagedUserBotsRow) UserBotInfo {
-	return UserBotInfo{
-		BotUserID:   row.ID,
-		OwnerUserID: row.OwnerUserID,
-		Email:       row.Email,
-		Nickname:    row.Nickname,
-		Avatar:      row.Avatar,
-		Status:      row.Status,
-		CreatedAt:   row.CreatedAt.Time,
-		UpdatedAt:   row.UpdatedAt.Time,
-	}
-}
-
-func userInfoToBotInfo(ownerUserID int64, info model.UserInfo) UserBotInfo {
+func userInfoToBotInfo(ownerUserID int64, info orm.UserInfo) UserBotInfo {
 	return UserBotInfo{
 		BotUserID:   info.ID,
 		OwnerUserID: ownerUserID,
@@ -915,41 +885,53 @@ func userInfoToBotInfo(ownerUserID int64, info model.UserInfo) UserBotInfo {
 		Nickname:    info.Nickname,
 		Avatar:      info.Avatar,
 		Status:      info.Status,
-		CreatedAt:   info.CreatedAt.Time,
-		UpdatedAt:   info.UpdatedAt.Time,
+		CreatedAt:   info.CreatedAt,
+		UpdatedAt:   info.UpdatedAt,
 	}
 }
 
-func botTokenToInfo(token model.BotToken, actions []string) UserBotTokenInfo {
+func botTokenToInfo(token orm.BotToken, actions []string) UserBotTokenInfo {
+	var expiresAt time.Time
+	if token.ExpiresAt != nil {
+		expiresAt = *token.ExpiresAt
+	}
+	var revokedAt time.Time
+	if token.RevokedAt != nil {
+		revokedAt = *token.RevokedAt
+	}
 	return UserBotTokenInfo{
 		TokenID:   token.ID,
 		BotUserID: token.BotUserID,
 		Name:      token.Name,
 		Actions:   append([]string{}, actions...),
-		ExpiresAt: token.ExpiresAt.Time,
-		RevokedAt: token.RevokedAt.Time,
-		CreatedAt: token.CreatedAt.Time,
+		ExpiresAt: expiresAt,
+		RevokedAt: revokedAt,
+		CreatedAt: token.CreatedAt,
 	}
 }
 
-func pgTimestampFromMillis(ms int64) pgtype.Timestamptz {
+func timestampFromMillis(ms int64) *time.Time {
 	if ms <= 0 {
-		return pgtype.Timestamptz{}
+		return nil
 	}
 
-	return pgtype.Timestamptz{Time: time.UnixMilli(ms), Valid: true}
+	ts := time.UnixMilli(ms)
+	return &ts
 }
 
-func timeToMillis(ts pgtype.Timestamptz) int64 {
-	if !ts.Valid {
+func timeToMillis(ts *time.Time) int64 {
+	if ts == nil {
 		return 0
 	}
 
-	return ts.Time.UnixMilli()
+	return ts.UnixMilli()
 }
 
-func botManagementError(err error, notFoundMsg string) error {
-	if errors.Is(err, pgx.ErrNoRows) {
+// botManagementErr maps a DAO miss onto the resource-specific not-found message
+// and leaves every other error untouched; callers pass it to
+// errorx.ToGRPCError, which preserves typed biz errors.
+func botManagementErr(err error, notFoundMsg string) error {
+	if errors.Is(err, dao.ErrNotFound) {
 		return errorx.NewCodeError(errorx.CodeNotFound, notFoundMsg)
 	}
 
@@ -957,6 +939,5 @@ func botManagementError(err error, notFoundMsg string) error {
 }
 
 func isUniqueViolation(err error) bool {
-	var pgErr *pgconn.PgError
-	return errors.As(err, &pgErr) && pgErr.Code == "23505"
+	return errors.Is(err, dao.ErrDuplicateKey)
 }

@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/hellopoisonx/aim/app/shared/events"
+
 	"github.com/hellopoisonx/aim/app/core/rpc/internal/svc"
 	logicpb "github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/tracing"
@@ -12,21 +14,6 @@ import (
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
-
-// transferEvent represents the Kafka message format published by TransferLogic.
-type transferEvent struct {
-	tracing.TraceContextFields
-
-	MessageID      int64    `json:"message_id"`
-	SenderID       int64    `json:"sender_id"`
-	DeviceID       string   `json:"device_id"`
-	ConversationID int64    `json:"conversation_id"`
-	MessageType    string   `json:"message_type"`
-	Content        string   `json:"content"`
-	ClientMsgID    string   `json:"client_msg_id"`
-	Mentions       []string `json:"mentions"`
-	Timestamp      int64    `json:"timestamp"`
-}
 
 type DeliveryConsumer struct {
 	ctx    context.Context
@@ -37,19 +24,23 @@ func NewDeliveryConsumer(ctx context.Context, svcCtx *svc.ServiceContext) *Deliv
 	return &DeliveryConsumer{ctx: ctx, svcCtx: svcCtx}
 }
 
-// Consume implements the kq.ConsumeHandler interface.
+// Consume implements the rocketmq handler interface.
 func (c *DeliveryConsumer) Consume(ctx context.Context, key string, value string) error {
 	logx.WithContext(ctx).Infof("consuming delivery event, key=%s", key)
 
-	var event transferEvent
+	var event events.TransferEvent
 	if err := json.Unmarshal([]byte(value), &event); err != nil {
-		logx.WithContext(ctx).Errorf("failed to unmarshal delivery event: %v", err)
-		return err
+		// A malformed payload never decodes on redelivery: dropping it keeps the
+		// partition moving instead of replaying the same poison message forever.
+		logx.WithContext(ctx).Errorf(
+			"dropping undecodable delivery event key=%s: %v payload=%q", key, err, value,
+		)
+		return nil
 	}
 
 	ctx = tracing.ExtractTraceContext(ctx, event.TraceContextFields)
 
-	ctx, span := tracing.StartKafkaConsumerSpan(ctx, "core.kafka.delivery.consume")
+	ctx, span := tracing.StartMQConsumerSpan(ctx, "core.rocketmq.delivery.consume")
 	defer span.End()
 
 	logx.WithContext(ctx).Infof("delivery event: msg_id=%d sender=%d conv=%d type=%s",
@@ -70,7 +61,7 @@ func (c *DeliveryConsumer) Consume(ctx context.Context, key string, value string
 	for _, targetUserID := range targetUserIDs {
 		nodeIDs := c.userGatewayNodes(ctx, targetUserID)
 		if len(nodeIDs) == 0 {
-			// User offline on every gateway: skip — Kafka offset advances and downstream
+			// User offline on every gateway: skip — the message is acknowledged and downstream
 			// catch-up should rely on history fetch.
 			logx.WithContext(ctx).Debugf("no gateway nodes for user %d, skipping message push", targetUserID)
 			continue
@@ -133,7 +124,7 @@ func (c *DeliveryConsumer) userGatewayNodes(ctx context.Context, userID int64) [
 // the message for multi-device sync; gateway skips only the original source device.
 // Falls back to delivering only to the sender when logic is unreachable so that
 // single-instance dev setups still echo messages back to the originator.
-func (c *DeliveryConsumer) resolveConversation(ctx context.Context, event transferEvent) ([]int64, string, error) {
+func (c *DeliveryConsumer) resolveConversation(ctx context.Context, event events.TransferEvent) ([]int64, string, error) {
 	if c.svcCtx.LogicConversationClient == nil {
 		return []int64{event.SenderID}, "", nil
 	}

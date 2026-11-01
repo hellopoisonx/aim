@@ -7,16 +7,16 @@ import (
 	"testing"
 
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/config"
-	"github.com/hellopoisonx/aim/app/logic/rpc/model"
 	logicsvc "github.com/hellopoisonx/aim/app/logic/rpc/internal/service"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
+	"github.com/hellopoisonx/aim/app/logic/rpc/model/orm"
 	"github.com/hellopoisonx/aim/app/shared/events"
+	"github.com/hellopoisonx/aim/app/shared/rocketmq"
 	"github.com/hellopoisonx/aim/app/shared/tracing"
+	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel"
 	tracesdk "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
-	"github.com/stretchr/testify/require"
-	"github.com/zeromicro/go-queue/kq"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -35,44 +35,44 @@ type createdUser struct {
 	traceID  trace.TraceID
 }
 
-func (f *fakeUserInfoService) CreateUserInfo(ctx context.Context, id int64, email, nickname, avatar string) (model.UserInfo, error) {
+func (f *fakeUserInfoService) CreateUserInfo(ctx context.Context, id int64, email, nickname, avatar string) (orm.UserInfo, error) {
 	if f.err != nil {
-		return model.UserInfo{}, f.err
+		return orm.UserInfo{}, f.err
 	}
 
 	f.calls = append(f.calls, createdUser{id: id, email: email, nickname: nickname, avatar: avatar, traceID: trace.SpanContextFromContext(ctx).TraceID()})
 
-	return model.UserInfo{}, nil
+	return orm.UserInfo{}, nil
 }
 
-func (f *fakeUserInfoService) GetUserInfo(_ context.Context, id int64) (model.UserInfo, error) {
-	return model.UserInfo{}, nil
+func (f *fakeUserInfoService) GetUserInfo(_ context.Context, id int64) (orm.UserInfo, error) {
+	return orm.UserInfo{}, nil
 }
 
-func (f *fakeUserInfoService) GetUserInfoByEmail(_ context.Context, email string) (model.UserInfo, error) {
-	return model.UserInfo{}, nil
+func (f *fakeUserInfoService) GetUserInfoByEmail(_ context.Context, email string) (orm.UserInfo, error) {
+	return orm.UserInfo{}, nil
 }
 
-func (f *fakeUserInfoService) GetUserInfoByNickname(_ context.Context, nickname string) (model.UserInfo, error) {
-	return model.UserInfo{}, nil
+func (f *fakeUserInfoService) GetUserInfoByNickname(_ context.Context, nickname string) (orm.UserInfo, error) {
+	return orm.UserInfo{}, nil
 }
 
-func (f *fakeUserInfoService) UpdateUserInfoProfile(_ context.Context, id int64, nickname, avatar string) (model.UserInfo, error) {
-	return model.UserInfo{}, nil
+func (f *fakeUserInfoService) UpdateUserInfoProfile(_ context.Context, id int64, nickname, avatar string) (orm.UserInfo, error) {
+	return orm.UserInfo{}, nil
 }
 
-func (f *fakeUserInfoService) UpdateUserInfoStatus(_ context.Context, id int64, status int16) (model.UserInfo, error) {
-	return model.UserInfo{}, nil
+func (f *fakeUserInfoService) UpdateUserInfoStatus(_ context.Context, id int64, status int16) (orm.UserInfo, error) {
+	return orm.UserInfo{}, nil
 }
 
-func (f *fakeUserInfoService) SearchUserInfoByNickname(_ context.Context, nickname string, limit int32) ([]model.UserInfo, error) {
+func (f *fakeUserInfoService) SearchUserInfoByNickname(_ context.Context, nickname string, limit int32) ([]orm.UserInfo, error) {
 	return nil, nil
 }
 
 func newTestSvcCtxWithUserSvc(userSvc *fakeUserInfoService) *svc.ServiceContext {
 	return &svc.ServiceContext{
 		Config: config.Config{
-			UserCreatedConsumerConf: kq.KqConf{},
+			UserCreatedConsumerConf: rocketmq.ConsumerConf{EndpointConf: rocketmq.EndpointConf{Endpoint: "127.0.0.1:8081"}, Concurrency: 1},
 		},
 		UserInfoService: userSvc,
 	}
@@ -205,7 +205,7 @@ func TestUserCreatedConsumer_Consume_DuplicateIdempotentSuccess(t *testing.T) {
 func TestUserCreatedConsumer_Consume_NilServiceSkips(t *testing.T) {
 	svcCtx := &svc.ServiceContext{
 		Config: config.Config{
-			UserCreatedConsumerConf: kq.KqConf{},
+			UserCreatedConsumerConf: rocketmq.ConsumerConf{EndpointConf: rocketmq.EndpointConf{Endpoint: "127.0.0.1:8081"}, Concurrency: 1},
 		},
 		UserInfoService: nil,
 	}
