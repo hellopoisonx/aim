@@ -66,7 +66,7 @@ func (s *Store) UpdateUserInfoProfile(ctx context.Context, id int64, nickname, a
 	result := s.db.WithContext(ctx).
 		Model(&orm.UserInfo{}).
 		Where("id = ?", id).
-		Updates(map[string]any{"nickname": nickname, "avatar": avatar, "updated_at": time.Now()})
+		Updates(map[string]any{"nickname": nickname, "avatar": avatar, columnUpdatedAt: time.Now()})
 	if result.Error != nil {
 		return orm.UserInfo{}, result.Error
 	}
@@ -82,7 +82,7 @@ func (s *Store) UpdateUserInfoStatus(ctx context.Context, id int64, status int16
 	result := s.db.WithContext(ctx).
 		Model(&orm.UserInfo{}).
 		Where("id = ?", id).
-		Updates(map[string]any{"status": status, "updated_at": time.Now()})
+		Updates(map[string]any{"status": status, columnUpdatedAt: time.Now()})
 	if result.Error != nil {
 		return orm.UserInfo{}, result.Error
 	}

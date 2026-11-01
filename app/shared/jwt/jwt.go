@@ -83,10 +83,10 @@ func (m *Manager) ValidateAccessToken(tokenString string) (*Claims, error) {
 	if err != nil {
 		var validationErr *jwt.ValidationError
 		if errors.As(err, &validationErr) && validationErr.Is(jwt.ErrTokenExpired) {
-			return nil, fmt.Errorf("%w: %v", ErrTokenExpired, err)
+			return nil, fmt.Errorf("%w: %w", ErrTokenExpired, err)
 		}
 
-		return nil, fmt.Errorf("%w: %v", ErrTokenInvalid, err)
+		return nil, fmt.Errorf("%w: %w", ErrTokenInvalid, err)
 	}
 
 	claims, ok := token.Claims.(*Claims)

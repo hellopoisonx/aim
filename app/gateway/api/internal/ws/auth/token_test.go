@@ -54,7 +54,7 @@ func TestValidateToken(t *testing.T) {
 
 	// Validate it
 	claims, codeErr := wsauth.ValidateToken(validToken, secretKey)
-	require.Nil(t, codeErr)
+	require.NoError(t, codeErr)
 	require.NotNil(t, claims)
 	assert.Equal(t, int64(123), claims.UserID)
 	assert.Equal(t, "device-abc", claims.DeviceID)
@@ -64,7 +64,7 @@ func TestValidateTokenInvalid(t *testing.T) {
 	t.Parallel()
 
 	_, codeErr := wsauth.ValidateToken("invalid-token", "secret")
-	require.NotNil(t, codeErr)
+	require.Error(t, codeErr)
 }
 
 func TestValidateTokenEmpty(t *testing.T) {

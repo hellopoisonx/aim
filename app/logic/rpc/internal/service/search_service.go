@@ -52,13 +52,6 @@ func normalizeLimit(limit int32) int32 {
 	return limit
 }
 
-func bytesToString(b []byte) string {
-	if b == nil {
-		return ""
-	}
-	return string(b)
-}
-
 func timeToUnixMs(ts time.Time) int64 {
 	if ts.IsZero() {
 		return 0

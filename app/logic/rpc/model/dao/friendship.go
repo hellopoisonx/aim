@@ -48,7 +48,7 @@ func (s *Store) UpsertFriendship(ctx context.Context, userID, friendID int64, st
 	row := orm.Friendship{UserID: userID, FriendID: friendID, Status: status}
 	err := s.db.WithContext(ctx).Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "user_id"}, {Name: "friend_id"}},
-		DoUpdates: clause.Assignments(map[string]any{"status": status, "updated_at": time.Now()}),
+		DoUpdates: clause.Assignments(map[string]any{"status": status, columnUpdatedAt: time.Now()}),
 	}).Create(&row).Error
 	if err != nil {
 		return orm.Friendship{}, err
@@ -279,7 +279,7 @@ func (s *Store) RenameFriendTag(ctx context.Context, userID, tagID int64, name s
 	result := s.db.WithContext(ctx).
 		Model(&orm.FriendTag{}).
 		Where("user_id = ? AND id = ?", userID, tagID).
-		Updates(map[string]any{"name": name, "updated_at": time.Now()})
+		Updates(map[string]any{"name": name, columnUpdatedAt: time.Now()})
 	if result.Error != nil {
 		return orm.FriendTag{}, result.Error
 	}

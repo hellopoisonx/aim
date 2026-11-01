@@ -93,15 +93,19 @@ func (h *WsHandler) ServeWS(w http.ResponseWriter, r *http.Request) {
 
 	// 5. Ensure unregister on disconnect (armed before any early return below)
 	defer func() {
-		unregResult, err := h.manager.Unregister(ctx, identity)
+		// The connection context is already cancelled when the socket closes, so
+		// cleanup gets a detached context; otherwise the Redis presence write and
+		// the offline event would both fail with "context canceled".
+		cleanupCtx := context.WithoutCancel(ctx)
+		unregResult, err := h.manager.Unregister(cleanupCtx, identity)
 		if err != nil {
-			logx.WithContext(ctx).Errorf("ws unregister failed: %v", err)
+			logx.WithContext(cleanupCtx).Errorf("ws unregister failed: %v", err)
 		}
 
 		// Publish presence event if user just went offline.
 		if unregResult != nil && unregResult.Switched && h.srv.PresencePub != nil {
-			if err := h.srv.PresencePub.PublishPresence(ctx, identity.UserID, unregResult.Status); err != nil {
-				logx.WithContext(ctx).Errorf("failed to publish presence event on unregister: %v", err)
+			if err := h.srv.PresencePub.PublishPresence(cleanupCtx, identity.UserID, unregResult.Status); err != nil {
+				logx.WithContext(cleanupCtx).Errorf("failed to publish presence event on unregister: %v", err)
 			}
 		}
 	}()

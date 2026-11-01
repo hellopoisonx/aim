@@ -159,7 +159,9 @@ func applyMigrations(t *testing.T, db *gorm.DB) {
 	sort.Strings(names)
 
 	for _, name := range names {
-		sqlBytes, readErr := os.ReadFile(filepath.Join(dir, name))
+		// Path is built from a directory listing of the repo's own migrations
+		// folder, so there is no attacker-controlled input here.
+		sqlBytes, readErr := os.ReadFile(filepath.Join(dir, name)) //nolint:gosec // path comes from os.ReadDir of the repo's migrations dir.
 		require.NoError(t, readErr)
 		require.NoError(t, db.Exec(string(sqlBytes)).Error, "migration %s", name)
 	}

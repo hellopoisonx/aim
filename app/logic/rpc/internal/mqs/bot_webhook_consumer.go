@@ -118,9 +118,7 @@ func (c *BotWebhookConsumer) Start() {
 			c.ctx = context.Background()
 		}
 		for range botWebhookWorkers {
-			c.workers.Add(1)
-			go func() {
-				defer c.workers.Done()
+			c.workers.Go(func() {
 				for {
 					select {
 					case job := <-c.jobs:
@@ -131,7 +129,7 @@ func (c *BotWebhookConsumer) Start() {
 						return
 					}
 				}
-			}()
+			})
 		}
 	})
 }

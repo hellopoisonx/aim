@@ -20,7 +20,7 @@ func (s *Store) UpsertConversationReadState(ctx context.Context, conversationID,
 		Columns: []clause.Column{{Name: "conversation_id"}, {Name: "user_id"}},
 		DoUpdates: clause.Assignments(map[string]any{
 			"last_read_message_id": gorm.Expr("GREATEST(conversation_read_states.last_read_message_id, EXCLUDED.last_read_message_id)"),
-			"updated_at":           gorm.Expr("CASE WHEN EXCLUDED.last_read_message_id > conversation_read_states.last_read_message_id THEN NOW() ELSE conversation_read_states.updated_at END"),
+			columnUpdatedAt:        gorm.Expr("CASE WHEN EXCLUDED.last_read_message_id > conversation_read_states.last_read_message_id THEN NOW() ELSE conversation_read_states.updated_at END"),
 		}),
 	}).Create(&state).Error
 	if err != nil {

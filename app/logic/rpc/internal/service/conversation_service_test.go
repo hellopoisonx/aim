@@ -792,10 +792,10 @@ func TestConversationDomainErrorsCarryBizCodes(t *testing.T) {
 // its own code instead of being flattened into 50000.
 func TestConversationDomainErrorSurvivesRPCConversion(t *testing.T) {
 	validation := errorx.NewCodeError(errorx.CodeBadInput, "id must be positive")
-	got, ok := errorx.ToGRPCError(validation).(*errorx.CodeError)
-	require.True(t, ok)
-	assert.Equal(t, errorx.CodeBadInput, got.Code)
-	assert.Equal(t, "id must be positive", got.Message)
+	var codeErr *errorx.CodeError
+	require.ErrorAs(t, errorx.ToGRPCError(validation), &codeErr)
+	assert.Equal(t, errorx.CodeBadInput, codeErr.Code)
+	assert.Equal(t, "id must be positive", codeErr.Message)
 }
 
 // ---------------------------------------------------------------------------

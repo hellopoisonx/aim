@@ -25,7 +25,7 @@ func TestOpenAppliesConnectionPool(t *testing.T) {
 
 	db, err := Open(dsn)
 	require.NoError(t, err)
-	require.True(t, db.Config.TranslateError, "driver errors must map onto GORM sentinels")
+	require.True(t, db.TranslateError, "driver errors must map onto GORM sentinels")
 
 	sqlDB, err := db.DB()
 	require.NoError(t, err)

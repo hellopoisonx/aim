@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"strings"
 	"time"
@@ -135,10 +136,10 @@ func (w *Worker) Consume(ctx context.Context, key string, value string) (err err
 			return w.fail(ctx, event, parseErr)
 		}
 		size := int64(len(res.Thumbnail))
-		thumbWidth := int32(res.ThumbWidth)
-		thumbHeight := int32(res.ThumbHeight)
-		width := int32(res.Width)
-		height := int32(res.Height)
+		thumbWidth := clampInt32(res.ThumbWidth)
+		thumbHeight := clampInt32(res.ThumbHeight)
+		width := clampInt32(res.Width)
+		height := clampInt32(res.Height)
 		if err = w.store.UpsertAttachmentObject(ctx, orm.AttachmentObject{
 			FileID:     fileID,
 			ObjectRole: "thumbnail",
@@ -167,6 +168,20 @@ func (w *Worker) Consume(ctx context.Context, key string, value string) (err err
 	}
 
 	return w.publish(ctx, events.AttachmentParsedEvent{TraceContextFields: tracing.InjectTraceContext(ctx), FileID: event.FileID, Kind: event.Kind, ParseStatus: attachment.ParseStatusReady, ThumbnailObjectKey: thumbKey, DurationMS: res.DurationMS, Width: res.Width, Height: res.Height, Metadata: &res.Metadata, ParsedAt: time.Now().UnixMilli()})
+}
+
+// clampInt32 narrows a parser-reported dimension to the int32 column range.
+// Media dimensions are far below the limit in practice; clamping keeps a
+// corrupt header from wrapping into a negative size.
+func clampInt32(v int) int32 {
+	switch {
+	case v > math.MaxInt32:
+		return math.MaxInt32
+	case v < math.MinInt32:
+		return math.MinInt32
+	default:
+		return int32(v)
+	}
 }
 
 func (w *Worker) fail(ctx context.Context, event events.AttachmentUploadedEvent, cause error) error {

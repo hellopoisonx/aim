@@ -18,6 +18,10 @@ var (
 	ErrDuplicateKey = gorm.ErrDuplicatedKey
 )
 
+// columnUpdatedAt is the audit column every upsert below has to bump by hand;
+// GORM only fills it on plain Create/Update, not on ON CONFLICT assignments.
+const columnUpdatedAt = "updated_at"
+
 // Store is the GORM-backed data access object for aim_logic.
 type Store struct {
 	db *gorm.DB

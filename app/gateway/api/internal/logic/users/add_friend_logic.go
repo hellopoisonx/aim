@@ -81,14 +81,18 @@ func (l *AddFriendLogic) AddFriend(req *types.AddFriendRequest) (resp *types.Add
 
 	if item.Status == friendshipStatusPending {
 		// Notify the recipient on every gateway node holding their connections.
-		l.svcCtx.FriendAppPub.PublishFriendApplication(l.ctx, events.FriendApplicationEvent{
+		// Best-effort: the application row is already persisted, so a broker
+		// hiccup must not fail the REST call.
+		if err := l.svcCtx.FriendAppPub.PublishFriendApplication(l.ctx, events.FriendApplicationEvent{
 			TargetUserID: item.FriendId,
 			UserID:       item.UserId,
 			FriendID:     item.FriendId,
 			Status:       item.Status,
 			CreatedAt:    item.CreatedAt,
 			UpdatedAt:    item.UpdatedAt,
-		})
+		}); err != nil {
+			l.Errorf("publish friend application failed: %v", err)
+		}
 	}
 
 	return &types.AddFriendResponse{Friendship: item}, nil

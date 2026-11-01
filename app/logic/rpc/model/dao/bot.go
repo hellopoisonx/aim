@@ -127,7 +127,7 @@ func (s *Store) UpsertBotWebhook(ctx context.Context, botUserID int64, url, secr
 			"secret_hash": secretHash,
 			"events":      pq.StringArray(events),
 			"enabled":     enabled,
-			"updated_at":  time.Now(),
+			columnUpdatedAt: time.Now(),
 		}),
 	}).Create(&hook).Error
 	if err != nil {
@@ -297,7 +297,7 @@ func (s *Store) SoftDeleteManagedUserBot(ctx context.Context, ownerUserID, botUs
 		Where("owner_user_id = ? AND bot_user_id = ? AND deleted_at IS NULL", ownerUserID, botUserID).
 		Updates(map[string]any{
 			"deleted_at": gorm.Expr("COALESCE(deleted_at, NOW())"),
-			"updated_at": gorm.Expr("NOW()"),
+			columnUpdatedAt: gorm.Expr("NOW()"),
 		})
 	if result.Error != nil {
 		return 0, result.Error

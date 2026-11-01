@@ -55,9 +55,6 @@ func ToGRPCError(err error) error {
 		return nil
 	}
 
-	if codeErr, ok := err.(*CodeError); ok {
-		return codeErr
-	}
 	if codeErr, ok := unwrapCodeError(err); ok {
 		return codeErr
 	}

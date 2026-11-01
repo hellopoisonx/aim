@@ -85,7 +85,6 @@ func (f *fakeBotQuerier) DeleteBotWebhook(_ context.Context, _ int64) (int64, er
 	return f.deleteRows, nil
 }
 
-func ptrTime(t time.Time) *time.Time { return &t }
 
 func TestBotService_ValidateBotToken_Success(t *testing.T) {
 	tok, err := bottoken.Generate()
@@ -145,7 +144,7 @@ func TestBotService_ValidateBotToken_Revoked(t *testing.T) {
 				ID:        42,
 				BotUserID: 1001,
 				TokenHash: bottoken.Hash(tok),
-				RevokedAt: ptrTime(time.Now().Add(-time.Hour)),
+				RevokedAt: new(time.Now().Add(-time.Hour)),
 			},
 			UserType:   UserTypeBot,
 			UserStatus: 1,
@@ -169,7 +168,7 @@ func TestBotService_ValidateBotToken_Expired(t *testing.T) {
 				ID:        42,
 				BotUserID: 1001,
 				TokenHash: bottoken.Hash(tok),
-				ExpiresAt: ptrTime(time.Now().Add(-time.Minute)),
+				ExpiresAt: new(time.Now().Add(-time.Minute)),
 			},
 			UserType:   UserTypeBot,
 			UserStatus: 1,

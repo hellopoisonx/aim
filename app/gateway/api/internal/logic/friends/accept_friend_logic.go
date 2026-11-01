@@ -51,14 +51,18 @@ func (l *AcceptFriendLogic) AcceptFriend(req *types.AcceptFriendRequest) (resp *
 	}
 
 	// Notify the requester on every gateway node holding their connections.
-	l.svcCtx.FriendAppPub.PublishFriendApplication(l.ctx, events.FriendApplicationEvent{
+	// The push is best-effort: the REST response below is already committed, so a
+	// broker hiccup must not turn a successful accept into an error.
+	if err := l.svcCtx.FriendAppPub.PublishFriendApplication(l.ctx, events.FriendApplicationEvent{
 		TargetUserID: req.Id,
 		UserID:       identity.UserID,
 		FriendID:     req.Id,
 		Status:       friendship.GetStatus(),
 		CreatedAt:    friendship.GetCreatedAt(),
 		UpdatedAt:    friendship.GetUpdatedAt(),
-	})
+	}); err != nil {
+		l.Errorf("publish friend application after accept failed: %v", err)
+	}
 
 	item := types.FriendshipItem{
 		UserId:    friendship.GetUserId(),

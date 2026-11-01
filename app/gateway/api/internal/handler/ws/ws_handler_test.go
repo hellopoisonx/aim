@@ -1311,8 +1311,13 @@ func TestServeWSDisconnectWritesOfflinePresence(t *testing.T) {
 		return len(members) == 0
 	}, 5*time.Second, 10*time.Millisecond, "presence Set should be empty after disconnect")
 
+	// The Redis Set is cleared inside Unregister, before the handler publishes
+	// the offline event, so the publish is awaited separately.
+	require.Eventually(t, func() bool {
+		return len(presencePub.getCalls()) == 1
+	}, 5*time.Second, 10*time.Millisecond, "offline presence event should be published exactly once")
+
 	calls := presencePub.getCalls()
-	require.Len(t, calls, 1)
 	require.Equal(t, userID, calls[0].UserID)
 	require.Equal(t, "offline", calls[0].Status)
 }
