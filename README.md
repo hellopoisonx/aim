@@ -341,3 +341,9 @@ git config core.hooksPath .githooks
 | [aim-desktop](https://github.com/hellopoisonx/aim-desktop) | 桌面客户端          |
 | [echo](https://github.com/hellopoisonx/echo)               | 官方 RAG 知识库 Bot |
 | [bot_sdk](bot_sdk/README.md)                               | Bot SDK 文档        |
+
+---
+
+## 开源协议
+
+本项目基于 [MIT](LICENSE) 协议开源。
