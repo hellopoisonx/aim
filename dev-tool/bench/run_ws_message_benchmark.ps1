@@ -1,5 +1,5 @@
 param(
-    [string]$Gateway = "http://127.0.0.1:18888",
+    [string]$Gateway = "http://127.0.0.1:8888",
     [int]$Users = 50,
     [int]$MessagesPerUser = 100,
     [double]$Rps = 0,
@@ -36,18 +36,18 @@ Write-Host "PYTHONIOENCODING: $env:PYTHONIOENCODING"
 
 if (-not $NoFixtures) {
     Write-Host "`n==> Generating fixtures ($FixturesCount)"
-    python .\generate_fixtures.py --count $FixturesCount
+    python (Join-Path $PSScriptRoot "..\fixtures\generate_fixtures.py") --count $FixturesCount
 }
 
 if (-not $SkipSmoke) {
     Write-Host "`n==> Smoke: aim_test.py run-all"
-    python .\aim_test.py run-all
+    python (Join-Path $PSScriptRoot "..\e2e\aim_test.py") run-all
 }
 
 if (-not $SkipBenchmark) {
     Write-Host "`n==> Benchmark: ws-message users=$Users messages/user=$MessagesPerUser rps=$Rps"
     $benchArgs = @(
-        ".\benchmark.py",
+        (Join-Path $PSScriptRoot "benchmark.py"),
         "ws-message",
         "--gateway", $gatewayHttp,
         "--users", "$Users",

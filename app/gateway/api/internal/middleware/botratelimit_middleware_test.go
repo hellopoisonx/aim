@@ -23,7 +23,7 @@ func TestBotRateLimitMiddleware_RejectsOverBudget(t *testing.T) {
 
 	mkReq := func(tokenID int64) *http.Request {
 		req := httptest.NewRequest(http.MethodPost, "/api/bot/v1/messages", nil)
-		return req.WithContext(botctx.WithBotIdentity(req.Context(), botctx.BotIdentity{
+		return req.WithContext(botctx.WithIdentity(req.Context(), botctx.Identity{
 			BotUserID: 5,
 			TokenID:   tokenID,
 		}))
@@ -48,7 +48,7 @@ func TestBotRateLimitMiddleware_TokenIsolation(t *testing.T) {
 
 	fire2 := func(tokenID int64) int {
 		req := httptest.NewRequest(http.MethodPost, "/api/bot/v1/messages", nil)
-		req = req.WithContext(botctx.WithBotIdentity(req.Context(), botctx.BotIdentity{
+		req = req.WithContext(botctx.WithIdentity(req.Context(), botctx.Identity{
 			BotUserID: 1,
 			TokenID:   tokenID,
 		}))
@@ -65,7 +65,7 @@ func TestBotRateLimitMiddleware_TokenIsolation(t *testing.T) {
 func TestBotRateLimitMiddleware_NilStorePassesThrough(t *testing.T) {
 	fire, calls := recorderAndHandler(t, nil, NewBotRateLimitMiddleware(nil).Handle)
 	req := httptest.NewRequest(http.MethodPost, "/x", nil)
-	req = req.WithContext(botctx.WithBotIdentity(req.Context(), botctx.BotIdentity{TokenID: 1}))
+	req = req.WithContext(botctx.WithIdentity(req.Context(), botctx.Identity{TokenID: 1}))
 	for range 5 {
 		code, _ := fire(req)
 		require.Equal(t, http.StatusOK, code)

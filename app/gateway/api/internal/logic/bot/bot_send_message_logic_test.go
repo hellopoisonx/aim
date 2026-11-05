@@ -38,7 +38,7 @@ func (f *fakeMessageClient) IngestMessage(_ context.Context, in *logicpb.IngestM
 }
 
 func ctxWithBot(scopes ...string) context.Context {
-	return botctx.WithBotIdentity(context.Background(), botctx.BotIdentity{
+	return botctx.WithIdentity(context.Background(), botctx.Identity{
 		BotUserID: 1001,
 		TokenID:   1,
 		Scopes:    scopes,

@@ -7,7 +7,9 @@ import (
 	"context"
 
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/authctx"
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/pbconv"
 
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/peerprofile"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/friendshipservice"
@@ -66,14 +68,8 @@ func (l *RejectFriendLogic) RejectFriend(req *types.RejectFriendRequest) (resp *
 		}
 	}
 
-	item := types.FriendshipItem{
-		UserId:    friendship.GetUserId(),
-		FriendId:  friendship.GetFriendId(),
-		Status:    friendship.GetStatus(),
-		CreatedAt: friendship.GetCreatedAt(),
-		UpdatedAt: friendship.GetUpdatedAt(),
-	}
-	enrichPeerInfo(l.ctx, l.svcCtx, req.Id, &item)
+	item := pbconv.Friendship(friendship)
+	peerprofile.Enrich(l.ctx, l.svcCtx, req.Id, &item)
 
 	return &types.RejectFriendResponse{
 		Friendship: item,

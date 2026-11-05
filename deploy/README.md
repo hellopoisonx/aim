@@ -12,11 +12,12 @@ deploy/
 │   ├── dev.yaml           # 本地开发端口映射，全部绑定 127.0.0.1
 │   ├── prod.yaml          # 生产覆盖钩子（默认空，宿主或集群侧反代负责 80/443）
 │   ├── observability.yaml # Prometheus / Loki / Promtail / Grafana
+│   ├── bench.yaml         # 压测覆盖层：只替换 auth/logic 两个配置文件
 │   └── tools.yaml         # RocketMQ Dashboard 等调试工具
 ├── config/
 │   ├── local/             # 本地 Docker Compose 配置
 │   ├── prod.example/      # 生产配置模板，真实生产文件不要提交
-│   └── bench/             # 压测环境配置副本
+│   └── bench/             # 压测调参（仅 auth/logic，其余沿用 local/）
 ├── env/
 │   ├── local.env
 │   └── prod.example.env
@@ -48,6 +49,19 @@ docker compose --env-file deploy/env/local.env \
   -f deploy/compose/observability.yaml \
   up -d
 ```
+
+压测环境与本地开发是同一套服务定义，只多挂 `deploy/config/bench/{auth,logic}.yaml`
+（token TTL 30m、临时会话消息不限制），因此不能与本地开发栈同时启动：
+
+```bash
+docker compose --env-file deploy/env/local.env \
+  -f deploy/compose/base.yaml \
+  -f deploy/compose/dev.yaml \
+  -f deploy/compose/bench.yaml \
+  up -d --build
+```
+
+压测脚本在 `dev-tool/bench/`（`benchmark.py`），端到端用例在 `dev-tool/e2e/`。
 
 启动 RocketMQ Dashboard 等调试工具：
 

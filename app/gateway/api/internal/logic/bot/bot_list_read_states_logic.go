@@ -5,6 +5,7 @@ import (
 
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/pbconv"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/conversationservice"
@@ -42,7 +43,7 @@ func (l *BotListReadStatesLogic) BotListReadStates(req *types.BotListReadStatesR
 
 	states := make([]types.BotReadStateItem, 0, len(rpcResp.GetReadStates()))
 	for _, st := range rpcResp.GetReadStates() {
-		states = append(states, convertBotReadState(st))
+		states = append(states, pbconv.BotReadState(st))
 	}
 
 	return &types.BotListReadStatesResponse{ReadStates: states}, nil

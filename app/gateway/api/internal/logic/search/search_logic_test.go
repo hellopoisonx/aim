@@ -82,7 +82,7 @@ func TestSearchForwardsScopeAndMapsResponse(t *testing.T) {
 	require.Equal(t, int32(20), client.got.GetLimit())
 
 	require.Equal(t, []types.SearchConversationResultItem{{
-		Conversation: types.ConversationItem{ConversationId: 7, Name: "team"},
+		Conversation: types.ConversationItem{ConversationId: 7, Name: "team", MemberIds: []int64{}},
 		Snippet:      "team",
 	}}, resp.Conversations)
 	require.Equal(t, []types.SearchMessageResultItem{{
@@ -164,7 +164,7 @@ func TestMapSearchConversations(t *testing.T) {
 		{
 			name:  "result without a conversation yields zero values",
 			items: []*logicpb.SearchConversationResult{{Snippet: "orphan"}},
-			want:  []types.SearchConversationResultItem{{Snippet: "orphan"}},
+			want:  []types.SearchConversationResultItem{{Conversation: types.ConversationItem{MemberIds: []int64{}}, Snippet: "orphan"}},
 		},
 		{
 			name: "all fields are mapped and the snippet passes through",

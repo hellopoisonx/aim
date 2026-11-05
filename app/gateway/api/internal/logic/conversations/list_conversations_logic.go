@@ -5,6 +5,7 @@ import (
 
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/authctx"
 
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/pbconv"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/conversationservice"
@@ -43,7 +44,7 @@ func (l *ListConversationsLogic) ListConversations() (resp *types.ListConversati
 	convos := rpcResp.GetConversations()
 	items := make([]types.ConversationItem, 0, len(convos))
 	for _, conv := range convos {
-		items = append(items, conversationItemFromPB(conv))
+		items = append(items, pbconv.Conversation(conv))
 	}
 
 	return &types.ListConversationsResponse{

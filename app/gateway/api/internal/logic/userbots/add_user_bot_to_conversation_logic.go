@@ -5,6 +5,7 @@ import (
 
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/authctx"
 
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/pbconv"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/botservice"
@@ -39,6 +40,6 @@ func (l *AddUserBotToConversationLogic) AddUserBotToConversation(req *types.AddU
 	if conv == nil {
 		return nil, errorx.NewCodeError(errorx.CodeInternal, "internal error")
 	}
-	item := types.AddUserBotToConversationResponse(conversationResponseToType(conv))
+	item := types.AddUserBotToConversationResponse(pbconv.Conversation(conv))
 	return &item, nil
 }

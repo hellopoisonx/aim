@@ -8,10 +8,11 @@ import (
 
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/authctx"
 
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/pbconv"
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/peerprofile"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/friendshipservice"
-	"github.com/hellopoisonx/aim/app/logic/rpc/client/userservice"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 	"github.com/hellopoisonx/aim/app/shared/events"
 
@@ -58,26 +59,14 @@ func (l *AddFriendLogic) AddFriend(req *types.AddFriendRequest) (resp *types.Add
 		return nil, errorx.NewCodeError(errorx.CodeInternal, "internal error")
 	}
 
-	item := types.FriendshipItem{
-		UserId:    friendship.GetUserId(),
-		FriendId:  friendship.GetFriendId(),
-		Status:    friendship.GetStatus(),
-		CreatedAt: friendship.GetCreatedAt(),
-		UpdatedAt: friendship.GetUpdatedAt(),
-	}
+	item := pbconv.Friendship(friendship)
 
 	// Enrich peer name snapshot via user service.
 	peerID := item.FriendId
 	if peerID <= 0 {
 		peerID = item.UserId
 	}
-	if l.svcCtx.LogicUserClient != nil && peerID > 0 {
-		if u, err := l.svcCtx.LogicUserClient.GetUserInfo(l.ctx, &userservice.GetUserInfoReq{Id: peerID}); err == nil {
-			item.Name = u.GetUser().GetNickname()
-			item.Email = u.GetUser().GetEmail()
-			item.Avatar = u.GetUser().GetAvatar()
-		}
-	}
+	peerprofile.Enrich(l.ctx, l.svcCtx, peerID, &item)
 
 	if item.Status == friendshipStatusPending {
 		// Notify the recipient on every gateway node holding their connections.

@@ -25,16 +25,16 @@ type PostgresConf struct {
 }
 
 type SeaweedConf struct {
-	Endpoint       string `json:",default=http://seaweed-s3:8333"`
-	PublicEndpoint string `json:",default=http://localhost:8333"`
-	Region         string `json:",default=us-east-1"`
-	Bucket         string `json:",default=aim-attachments"`
-	AccessKey      string `json:",optional"`
-	SecretKey      string `json:",optional"`
-	PresignTTL     int    `json:",default=900"`
-	DownloadTTL    int    `json:",default=300"`
-	MaxSizeBytes   int64  `json:",default=5368709120"`
-	ForcePathStyle bool   `json:",default=true"`
+	Endpoint           string `json:",default=http://seaweed-s3:8333"`
+	PublicEndpoint     string `json:",default=http://localhost:8333"`
+	Region             string `json:",default=us-east-1"`
+	Bucket             string `json:",default=aim-attachments"`
+	AccessKey          string `json:",optional"`
+	SecretKey          string `json:",optional"`
+	PresignTTL         int    `json:",default=900"`
+	DownloadTTLSeconds int    `json:"DownloadTTL,default=300"`
+	MaxSizeBytes       int64  `json:",default=5368709120"`
+	ForcePathStyle     bool   `json:",default=true"`
 }
 
 func (c SeaweedConf) UploadTTL() time.Duration {
@@ -44,11 +44,11 @@ func (c SeaweedConf) UploadTTL() time.Duration {
 	return time.Duration(c.PresignTTL) * time.Second
 }
 
-func (c SeaweedConf) GetDownloadTTL() time.Duration {
-	if c.DownloadTTL <= 0 {
+func (c SeaweedConf) DownloadTTL() time.Duration {
+	if c.DownloadTTLSeconds <= 0 {
 		return 5 * time.Minute
 	}
-	return time.Duration(c.DownloadTTL) * time.Second
+	return time.Duration(c.DownloadTTLSeconds) * time.Second
 }
 
 func (c SeaweedConf) MaxSize() int64 {

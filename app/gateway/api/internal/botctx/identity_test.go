@@ -8,17 +8,17 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestBotIdentityHasAction(t *testing.T) {
-	b := BotIdentity{Scopes: []string{botperm.ActionMessageSend}}
+func TestIdentityHasAction(t *testing.T) {
+	b := Identity{Scopes: []string{botperm.ActionMessageSend}}
 	require.True(t, b.HasAction(botperm.ActionMessageSend))
 	require.False(t, b.HasAction(botperm.ActionWebhookRead))
 
-	wildcard := BotIdentity{Scopes: []string{botperm.ActionWebhookSubscribeAll}}
+	wildcard := Identity{Scopes: []string{botperm.ActionWebhookSubscribeAll}}
 	require.True(t, wildcard.HasAction(botperm.ActionWebhookSubscribeMessageCreated))
 }
 
-func TestBotIdentityRequireAction(t *testing.T) {
-	b := BotIdentity{Scopes: []string{botperm.ActionWebhookRead}}
+func TestIdentityRequireAction(t *testing.T) {
+	b := Identity{Scopes: []string{botperm.ActionWebhookRead}}
 	require.NoError(t, b.RequireAction(botperm.ActionWebhookRead))
 
 	err := b.RequireAction(botperm.ActionMessageSend)

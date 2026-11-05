@@ -60,7 +60,7 @@ func (f *fakePublisher) Publish(_ context.Context, key string, value []byte) err
 	return nil
 }
 
-func newMessageFixture(t *testing.T) (*IngestionService, *fakeChecker, *fakeIdempotency, *fakePublisher) {
+func newMessageFixture(t *testing.T) (*MessageService, *fakeChecker, *fakeIdempotency, *fakePublisher) {
 	t.Helper()
 
 	idGen, err := snowflake.NewSnowflake(1)

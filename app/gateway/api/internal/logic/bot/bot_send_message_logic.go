@@ -37,7 +37,7 @@ func NewBotSendMessageLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Bo
 }
 
 func (l *BotSendMessageLogic) BotSendMessage(req *types.BotSendMessageRequest) (*types.BotSendMessageResponse, error) {
-	identity, ok := botctx.FromContext(l.ctx)
+	identity, ok := botctx.IdentityFromContext(l.ctx)
 	if !ok {
 		return nil, errorx.NewCodeError(errorx.CodeBotTokenInvalid, "missing bot identity")
 	}

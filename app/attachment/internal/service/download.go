@@ -65,11 +65,11 @@ func (s *Service) Download(ctx context.Context, userID int64, fileID string) (*D
 	if info.Status != sharedattachment.UploadStatusUploaded {
 		return nil, ErrNotUploaded
 	}
-	url, headers, err := s.signer.Presign(http.MethodGet, info.ObjectKey, s.cfg.Seaweed.GetDownloadTTL(), nil)
+	url, headers, err := s.signer.Presign(http.MethodGet, info.ObjectKey, s.cfg.Seaweed.DownloadTTL(), nil)
 	if err != nil {
 		return nil, err
 	}
-	return &DownloadResponse{URL: url, Headers: headers, ExpiresAt: time.Now().Add(s.cfg.Seaweed.GetDownloadTTL()).UnixMilli()}, nil
+	return &DownloadResponse{URL: url, Headers: headers, ExpiresAt: time.Now().Add(s.cfg.Seaweed.DownloadTTL()).UnixMilli()}, nil
 }
 
 func (s *Service) ValidateReference(ctx context.Context, userID, conversationID int64, fileID, kind string) (*FileInfo, error) {

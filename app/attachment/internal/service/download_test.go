@@ -143,7 +143,7 @@ func TestDownload(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, "http://localhost:8333/aim-attachments"+objectKey, resp.URL)
 			require.NotContains(t, resp.Headers, "host")
-			ttl := svc.cfg.Seaweed.GetDownloadTTL()
+			ttl := svc.cfg.Seaweed.DownloadTTL()
 			require.GreaterOrEqual(t, resp.ExpiresAt, before.Add(ttl).UnixMilli())
 			require.LessOrEqual(t, resp.ExpiresAt, time.Now().Add(ttl).UnixMilli())
 		})

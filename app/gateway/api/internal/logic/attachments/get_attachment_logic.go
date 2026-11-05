@@ -7,6 +7,7 @@ import (
 
 	attachmentpb "github.com/hellopoisonx/aim/app/attachment/rpc/pb"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/membership"
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/pbconv"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
 
@@ -45,5 +46,5 @@ func (l *GetAttachmentLogic) GetAttachment(req *types.GetAttachmentRequest) (res
 		return nil, err
 	}
 
-	return fileInfoFromPB(info), nil
+	return pbconv.AttachmentFileInfo(info), nil
 }

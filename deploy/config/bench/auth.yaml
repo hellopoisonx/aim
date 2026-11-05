@@ -1,23 +1,24 @@
+# 压测覆盖：与 ../local/auth.yaml 只差 AccessTTL（5m -> 30m），压测单轮时长超过 token TTL。
 Name: auth.rpc
 ListenOn: 0.0.0.0:8989
 Prometheus:
   Host: 0.0.0.0
-  Port: 19192
+  Port: 9192
   Path: /metrics
 Telemetry:
   Name: auth.rpc
-  Endpoint: bench-tempo:4318
+  Endpoint: tempo:4318
   Sampler: 1.0
   Batcher: otlphttp
   OtlpHttpPath: /v1/traces
 Etcd:
   Hosts:
-    - bench-etcd:2379
+    - etcd:2379
   Key: auth.rpc
 Postgres:
-  DataSource: postgres://benchuser:benchpassword@bench-postgres:5432/aim_auth?sslmode=disable
+  DataSource: postgres://user:password@postgres:5432/aim_auth?sslmode=disable
 SessionRedis:
-  Host: bench-redis:6379
+  Host: redis:6379
   Pass: ""
 Token:
   AccessSecret: aim-dev-access-secret

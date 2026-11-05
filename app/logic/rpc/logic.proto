@@ -23,7 +23,7 @@ service UserService {
   rpc UpdateUserInfoProfile(UpdateUserInfoProfileReq) returns (UpdateUserInfoProfileResp);
   // UpdateUserInfoStatus updates user status.
   rpc UpdateUserInfoStatus(UpdateUserInfoStatusReq) returns (UpdateUserInfoStatusResp);
-  // SearchUserInfoByNickname searches user profiles by nickname prefix.
+  // SearchUserInfoByNickname searches user profiles by nickname substring.
   rpc SearchUserInfoByNickname(SearchUserInfoByNicknameReq) returns (SearchUserInfoByNicknameResp);
 }
 

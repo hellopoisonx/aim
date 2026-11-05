@@ -1,23 +1,24 @@
+# 压测覆盖：与 ../local/logic.yaml 只差 TemporaryConversationMessageLimit（10 -> -1 不限制）。
 Name: logic.rpc
 ListenOn: 0.0.0.0:8082
 Prometheus:
   Host: 0.0.0.0
-  Port: 19194
+  Port: 9194
   Path: /metrics
 Telemetry:
   Name: logic.rpc
-  Endpoint: bench-tempo:4318
+  Endpoint: tempo:4318
   Sampler: 1.0
   Batcher: otlphttp
   OtlpHttpPath: /v1/traces
 Etcd:
   Hosts:
-    - bench-etcd:2379
+    - etcd:2379
   Key: logic.rpc
 Postgres:
-  DataSource: postgres://benchuser:benchpassword@bench-postgres:5432/aim_logic?sslmode=disable
+  DataSource: postgres://user:password@postgres:5432/aim_logic?sslmode=disable
 CacheRedis:
-  Addr: bench-redis:6379
+  Addr: redis:6379
   Password: ""
   DB: 0
 ArchiveConsumerConf:
@@ -32,12 +33,21 @@ UserCreatedConsumerConf:
   Group: aim-logic-user-created
   Topic: aim-user-events
   Concurrency: 1
+# Bot Webhook 投递消费者：与 ArchiveConsumer 共用 topic，但独立消费组，
+# 确保 webhook 投递失败不会拖慢消息归档 offset。
+BotWebhookConsumerConf:
+  Name: logic-bot-webhook-consumer
+  Endpoint: rocketmq-proxy:8081
+  Group: aim-logic-bot-webhook
+  Topic: aim-message-transfer
+  Concurrency: 1
 # 群管理系统消息生产者：群成员/群信息变更后发布系统消息事件，由 core 消费并推送到 Gateway。
 ConversationEventProducerConf:
   Endpoint: rocketmq-proxy:8081
   Group: aim-logic-producer
   Topic: aim-conversation-events
-# 消息写入生产者：Gateway 把 WS / Bot OpenAPI 的发消息请求直接投递到 logic。
+# 消息写入生产者：Gateway 把 WS / Bot OpenAPI 的发消息请求直接投递到 logic，
+# logic 完成校验/授权/幂等/ID 分配后发布到投递 topic，由 core 消费。
 TransferProducerConf:
   Endpoint: rocketmq-proxy:8081
   Group: aim-logic-transfer
@@ -50,5 +60,7 @@ AttachmentRpc:
     Key: attachment.rpc
 Dev:
   # 临时会话（非好友）单会话最多可发送的消息数。
-  # 默认 10。当前 ServiceContext 会把 0 归一化为默认值；压测环境使用 -1 表示不限制。
+  # 默认 10。设为 0 或负数表示不限制（仅供本地开发 / 压测使用，切勿在生产开启）。
   TemporaryConversationMessageLimit: -1
+# Snowflake 机器 ID，范围 0-1023。同一 logic 实例集群中每台机器必须唯一。
+MachineID: 1

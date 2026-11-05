@@ -198,7 +198,7 @@ ws = WSClient(token=token_mgr, rest_client=rest)
 
 ## 压测配置
 
-`dev-tool/etc/auth.yaml`：
+`deploy/config/bench/auth.yaml`：
 
 ```yaml
 Token:
@@ -228,8 +228,8 @@ Token:
 | `auth/rpc/internal/service/auth_service.go` | JWTIssuer，封装 Manager |
 | `auth/rpc/internal/svc/service_context.go` | 组装 JWTIssuer，读取配置 TTL |
 | `auth/rpc/etc/auth.yaml` | 配置 AccessTTL/RefreshTTL |
-| `dev-tool/etc/auth.yaml` | 压测环境配置 |
+| `deploy/config/bench/auth.yaml` | 压测环境配置（由 `deploy/compose/bench.yaml` 挂载） |
 | `gateway/api/internal/handler/ws/ws_handler.go` | Token 过期定时器、sendTokenExpired |
 | `gateway/api/internal/ws/auth/token.go` | WS 握手时 JWT 验签 |
-| `dev-tool/aim_test.py` | WSClient、RESTClient、TokenManager |
-| `dev-tool/benchmark.py` | WsMessageScenario、MixedScenario |
+| `dev-tool/e2e/aim_test.py` | WSClient、RESTClient、TokenManager |
+| `dev-tool/bench/benchmark.py` | WsMessageScenario、MixedScenario |

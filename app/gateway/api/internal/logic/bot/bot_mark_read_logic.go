@@ -5,6 +5,7 @@ import (
 
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/pbconv"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/conversationservice"
@@ -57,5 +58,5 @@ func (l *BotMarkReadLogic) BotMarkRead(req *types.BotMarkReadRequest) (*types.Bo
 	readState := rpcResp.GetReadState()
 	publishBotReadReceipt(l.ctx, l.svcCtx, identity, conversationID, readState)
 
-	return &types.BotMarkReadResponse{ReadState: convertBotReadState(readState)}, nil
+	return &types.BotMarkReadResponse{ReadState: pbconv.BotReadState(readState)}, nil
 }

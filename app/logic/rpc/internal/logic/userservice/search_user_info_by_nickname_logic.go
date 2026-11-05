@@ -25,7 +25,7 @@ func NewSearchUserInfoByNicknameLogic(ctx context.Context, svcCtx *svc.ServiceCo
 	}
 }
 
-// SearchUserInfoByNickname searches user profiles by nickname prefix.
+// SearchUserInfoByNickname searches user profiles by nickname substring.
 func (l *SearchUserInfoByNicknameLogic) SearchUserInfoByNickname(in *pb.SearchUserInfoByNicknameReq) (*pb.SearchUserInfoByNicknameResp, error) {
 	if in.GetNickname() == "" {
 		return nil, errorx.NewCodeError(errorx.CodeBadInput, "nickname is required")

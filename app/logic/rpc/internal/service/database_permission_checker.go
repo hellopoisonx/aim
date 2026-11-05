@@ -40,29 +40,36 @@ type DatabasePermissionCheckerCaches struct {
 	UserType     *sharedcache.TypedCache[string]
 }
 
-func NewDatabasePermissionChecker(queries PermissionQuerier) *DatabasePermissionChecker {
-	return NewDatabasePermissionCheckerWithLimit(queries, DefaultTemporaryConversationMessageLimit)
+type DatabasePermissionCheckerOption func(*DatabasePermissionChecker)
+
+// WithPermissionMessageLimit overrides the temporary conversation message
+// limit; a non-positive limit disables the cap.
+func WithPermissionMessageLimit(limit int64) DatabasePermissionCheckerOption {
+	return func(c *DatabasePermissionChecker) { c.temporaryConversationMessageLimit = limit }
 }
 
-// NewDatabasePermissionCheckerWithLimit 允许调用方自定义临时会话消息上限。
-// limit <= 0 表示不限制（仅供开发/压测使用）。
-func NewDatabasePermissionCheckerWithLimit(queries PermissionQuerier, limit int64) *DatabasePermissionChecker {
-	return NewDatabasePermissionCheckerWithLimitAndCaches(queries, limit, DatabasePermissionCheckerCaches{})
-}
-
-func NewDatabasePermissionCheckerWithLimitAndCaches(queries PermissionQuerier, limit int64, caches DatabasePermissionCheckerCaches) *DatabasePermissionChecker {
-	return &DatabasePermissionChecker{
-		queries:                           queries,
-		temporaryConversationMessageLimit: limit,
-		convCache:                         caches.Conversation,
-		membersCache:                      caches.Members,
-		friendshipCache:                   caches.Friendship,
-		userTypeCache:                     caches.UserType,
+func WithPermissionCaches(caches DatabasePermissionCheckerCaches) DatabasePermissionCheckerOption {
+	return func(c *DatabasePermissionChecker) {
+		c.convCache = caches.Conversation
+		c.membersCache = caches.Members
+		c.friendshipCache = caches.Friendship
+		c.userTypeCache = caches.UserType
 	}
 }
 
-func (c *DatabasePermissionChecker) WithAuthorizer(authz rbac.Authorizer) *DatabasePermissionChecker {
-	c.authz = authz
+func WithPermissionAuthorizer(authz rbac.Authorizer) DatabasePermissionCheckerOption {
+	return func(c *DatabasePermissionChecker) { c.authz = authz }
+}
+
+func NewDatabasePermissionChecker(queries PermissionQuerier, opts ...DatabasePermissionCheckerOption) *DatabasePermissionChecker {
+	c := &DatabasePermissionChecker{
+		queries:                           queries,
+		temporaryConversationMessageLimit: DefaultTemporaryConversationMessageLimit,
+	}
+	for _, opt := range opts {
+		opt(c)
+	}
+
 	return c
 }
 

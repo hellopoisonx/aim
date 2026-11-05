@@ -5,6 +5,7 @@ import (
 
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/authctx"
 
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/pbconv"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/botservice"
@@ -33,7 +34,7 @@ func (l *ListBotActionsLogic) ListBotActions() (resp *types.ListBotActionsRespon
 	}
 	actions := make([]types.BotActionItem, 0, len(rpcResp.GetActions()))
 	for _, a := range rpcResp.GetActions() {
-		actions = append(actions, botActionToType(a))
+		actions = append(actions, pbconv.BotAction(a))
 	}
 	return &types.ListBotActionsResponse{Actions: actions}, nil
 }

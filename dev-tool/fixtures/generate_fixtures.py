@@ -8,8 +8,8 @@ AIM Benchmark Fixture Generator
   msg.txt:   1000 条随机消息字符串（每行一条）
 
 Usage:
-  python generate_fixtures.py                # 默认 1000 条
-  python generate_fixtures.py --count 5000   # 自定义数量
+  python dev-tool/fixtures/generate_fixtures.py               # 默认 1000 条
+  python dev-tool/fixtures/generate_fixtures.py --count 5000  # 自定义数量
 """
 
 import json

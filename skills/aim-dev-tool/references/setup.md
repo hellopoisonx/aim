@@ -75,35 +75,32 @@ protoc --python_out=../../../dev-tool gateway.proto
 
 > dev tool 只直接访问 gateway 的 `8888` 端口，所有后端通信由 gateway 代理。
 
-### 压测环境（`dev-tool/docker-compose.yaml`）
+### 压测环境
 
-| 服务 | 端口 | 协议 |
-|------|------|------|
-| bench-gateway | `18888` | HTTP REST |
-| bench-gateway | `19091` | gRPC（内部） |
-| bench-auth | `18989` | gRPC |
-| bench-core | `18081` | gRPC |
-| bench-logic | — | gRPC（内部） |
-| bench-postgres | `15432` | PostgreSQL |
-| bench-redis | `16379` | Redis |
-| bench-rocketmq-proxy | `18082` | RocketMQ gRPC proxy |
-| bench-etcd | `12379` | etcd HTTP API（注册中心） |
-
-| bench-tempo | `13200` | Tempo HTTP API（Grafana 数据源） |
-
-
-> `bench-tempo` 镜像固定为 `grafana/tempo:2.8.1`，与仓库共用 `deploy/tempo/tempo.yaml` 兼容；不要使用 `latest`。
-
-压测环境配置文件：`dev-tool/etc/{auth,core,gateway-api,logic}.yaml`
-
-启动/停止：
+压测与本地开发用同一套 Compose 服务定义（`deploy/compose/base.yaml` + `dev.yaml`），
+端口与容器名完全一致，只额外叠加 `deploy/compose/bench.yaml`：
 
 ```bash
-cd dev-tool
-docker compose up -d
+docker compose --env-file deploy/env/local.env \
+  -f deploy/compose/base.yaml \
+  -f deploy/compose/dev.yaml \
+  -f deploy/compose/bench.yaml \
+  up -d --build
 # ... 压测 ...
-docker compose down -v  # 停止并清理数据
+docker compose --env-file deploy/env/local.env \
+  -f deploy/compose/base.yaml -f deploy/compose/dev.yaml -f deploy/compose/bench.yaml \
+  down -v  # 停止并清理数据
 ```
+
+因为容器名相同，压测栈不能与本地开发栈同时运行。
+
+`deploy/compose/bench.yaml` 只替换两个配置文件，其余（`core`/`gateway-api` 等）沿用
+`deploy/config/local/`：
+
+| 文件 | 与 local 的差异 |
+|------|----------------|
+| `deploy/config/bench/auth.yaml` | `Token.AccessTTL: 30m`（压测单轮超过 5m） |
+| `deploy/config/bench/logic.yaml` | `Dev.TemporaryConversationMessageLimit: -1`（不限制临时会话） |
 
 ## Windows 注意事项
 
@@ -111,8 +108,8 @@ Windows 终端默认使用 GBK 编码，`run-all` 输出的 Unicode 字符（`�
 运行所有 dev-tool 命令时需设置 `PYTHONIOENCODING=utf-8`：
 
 ```bash
-PYTHONIOENCODING=utf-8 python aim_test.py run-all
-PYTHONIOENCODING=utf-8 python aim_test.py interactive
+PYTHONIOENCODING=utf-8 python dev-tool/e2e/aim_test.py run-all
+PYTHONIOENCODING=utf-8 python dev-tool/e2e/aim_test.py interactive
 ```
 
 或在 PowerShell 中持久设置：

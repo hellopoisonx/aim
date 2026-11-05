@@ -38,11 +38,12 @@ import os
 import sys
 import time
 
-# 让 rl_smoke.py 与 aim_test.py 共享 dev-tool 目录下的模块
+# 与 aim_test.py 同目录；dev-tool 根目录下的 pb/ 存放生成的 protobuf stub
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import requests
-import ws_pb2
+from pb import ws_pb2
 
 from aim_test import (
     TokenManager,

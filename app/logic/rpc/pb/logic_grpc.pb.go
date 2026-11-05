@@ -150,7 +150,7 @@ type UserServiceClient interface {
 	UpdateUserInfoProfile(ctx context.Context, in *UpdateUserInfoProfileReq, opts ...grpc.CallOption) (*UpdateUserInfoProfileResp, error)
 	// UpdateUserInfoStatus updates user status.
 	UpdateUserInfoStatus(ctx context.Context, in *UpdateUserInfoStatusReq, opts ...grpc.CallOption) (*UpdateUserInfoStatusResp, error)
-	// SearchUserInfoByNickname searches user profiles by nickname prefix.
+	// SearchUserInfoByNickname searches user profiles by nickname substring.
 	SearchUserInfoByNickname(ctx context.Context, in *SearchUserInfoByNicknameReq, opts ...grpc.CallOption) (*SearchUserInfoByNicknameResp, error)
 }
 
@@ -248,7 +248,7 @@ type UserServiceServer interface {
 	UpdateUserInfoProfile(context.Context, *UpdateUserInfoProfileReq) (*UpdateUserInfoProfileResp, error)
 	// UpdateUserInfoStatus updates user status.
 	UpdateUserInfoStatus(context.Context, *UpdateUserInfoStatusReq) (*UpdateUserInfoStatusResp, error)
-	// SearchUserInfoByNickname searches user profiles by nickname prefix.
+	// SearchUserInfoByNickname searches user profiles by nickname substring.
 	SearchUserInfoByNickname(context.Context, *SearchUserInfoByNicknameReq) (*SearchUserInfoByNicknameResp, error)
 	mustEmbedUnimplementedUserServiceServer()
 }
@@ -1126,8 +1126,9 @@ const (
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type FriendshipServiceClient interface {
-	// AddFriend sends a friend request or accepts an existing pending one.
-	// Idempotent: if already friends (accepted or pending), returns the existing record.
+	// AddFriend sends a friend request.
+	// Idempotent: a pending or accepted record in the same direction is returned
+	// unchanged; a request waiting in the reverse direction is left to AcceptFriend.
 	AddFriend(ctx context.Context, in *AddFriendReq, opts ...grpc.CallOption) (*AddFriendResp, error)
 	// ListFriendApplications lists pending friend applications received by the user.
 	ListFriendApplications(ctx context.Context, in *ListFriendApplicationsReq, opts ...grpc.CallOption) (*ListFriendApplicationsResp, error)
@@ -1270,8 +1271,9 @@ func (c *friendshipServiceClient) RemoveFriendTag(ctx context.Context, in *Remov
 // All implementations must embed UnimplementedFriendshipServiceServer
 // for forward compatibility.
 type FriendshipServiceServer interface {
-	// AddFriend sends a friend request or accepts an existing pending one.
-	// Idempotent: if already friends (accepted or pending), returns the existing record.
+	// AddFriend sends a friend request.
+	// Idempotent: a pending or accepted record in the same direction is returned
+	// unchanged; a request waiting in the reverse direction is left to AcceptFriend.
 	AddFriend(context.Context, *AddFriendReq) (*AddFriendResp, error)
 	// ListFriendApplications lists pending friend applications received by the user.
 	ListFriendApplications(context.Context, *ListFriendApplicationsReq) (*ListFriendApplicationsResp, error)

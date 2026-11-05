@@ -157,7 +157,7 @@ func TestBotAuthMiddleware_Success(t *testing.T) {
 	called := false
 	handler := mw.Handle(func(_ http.ResponseWriter, r *http.Request) {
 		called = true
-		identity, ok := botctx.FromContext(r.Context())
+		identity, ok := botctx.IdentityFromContext(r.Context())
 		assert.True(t, ok)
 		assert.Equal(t, int64(1001), identity.BotUserID)
 		assert.True(t, identity.HasAction("bot.message.send"))

@@ -2,51 +2,21 @@ package friendshipservicelogic
 
 import (
 	"context"
-	"errors"
 
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/service"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
-	"github.com/hellopoisonx/aim/app/logic/rpc/model/dao"
 	"github.com/hellopoisonx/aim/app/logic/rpc/model/orm"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 )
 
-// requireFriendPair rejects invalid or self-referential friendship pairs.
-func requireFriendPair(userID, friendID int64) error {
-	if userID <= 0 || friendID <= 0 {
-		return errorx.NewCodeError(errorx.CodeBadInput, "user_id and friend_id must be positive")
-	}
-
-	if userID == friendID {
-		return errorx.ToGRPCError(service.ErrSelfAdd)
-	}
-
-	return nil
-}
-
-// requireFriendshipStore returns the friendship store or the nil-store error.
-func requireFriendshipStore(c *svc.ServiceContext) (svc.FriendshipDAO, error) {
-	if c.FriendshipDAO == nil {
+// requireFriendshipService returns the friendship service or the nil-service error.
+func requireFriendshipService(c *svc.ServiceContext) (*service.FriendshipService, error) {
+	if c.FriendshipService == nil {
 		return nil, errorx.NewCodeError(errorx.CodeInternal, "database is not configured")
 	}
 
-	return c.FriendshipDAO, nil
-}
-
-// pendingFriendship loads the relationship requester→target and maps a missing
-// record to ErrFriendNotFound.
-func pendingFriendship(ctx context.Context, store svc.FriendshipDAO, requesterID, targetID int64) (orm.Friendship, error) {
-	record, err := store.GetFriendshipByPair(ctx, requesterID, targetID)
-	if err != nil {
-		if errors.Is(err, dao.ErrNotFound) {
-			return orm.Friendship{}, errorx.ToGRPCError(service.ErrFriendNotFound)
-		}
-
-		return orm.Friendship{}, errorx.ToGRPCError(err)
-	}
-
-	return record, nil
+	return c.FriendshipService, nil
 }
 
 // requireTagService validates the caller and returns the tag service.
@@ -87,4 +57,26 @@ func friendshipToProto(f orm.Friendship) *pb.FriendshipResponse {
 		CreatedAt: f.CreatedAt.UnixMilli(),
 		UpdatedAt: f.UpdatedAt.UnixMilli(),
 	}
+}
+
+// acceptedFriendshipWithTags builds the response shared by the tag-mutating
+// endpoints: the friendship is accepted by definition and the tags are the
+// post-mutation set.
+func acceptedFriendshipWithTags(ctx context.Context, tagSvc *service.FriendshipTagService, userID, friendID int64) (*pb.FriendshipResponse, error) {
+	tags, err := tagSvc.GetFriendTags(ctx, userID, friendID)
+	if err != nil {
+		return nil, err
+	}
+
+	pbTags := make([]*pb.FriendTagResponse, 0, len(tags))
+	for _, tag := range tags {
+		pbTags = append(pbTags, friendTagToProto(tag))
+	}
+
+	return &pb.FriendshipResponse{
+		UserId:   userID,
+		FriendId: friendID,
+		Status:   service.FriendshipStatusAccepted,
+		Tags:     pbTags,
+	}, nil
 }

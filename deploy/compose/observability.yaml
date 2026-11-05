@@ -63,6 +63,8 @@ services:
       DATA_SOURCE_NAME: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/postgres?sslmode=disable"
     expose:
       - "9187"
+    ports:
+      - "127.0.0.1:9187:9187"
     depends_on:
       postgres:
         condition: service_healthy
@@ -76,6 +78,8 @@ services:
       REDIS_ADDR: "redis://redis:6379"
     expose:
       - "9121"
+    ports:
+      - "127.0.0.1:9121:9121"
     depends_on:
       redis:
         condition: service_healthy

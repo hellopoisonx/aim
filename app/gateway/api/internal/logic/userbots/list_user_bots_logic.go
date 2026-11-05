@@ -5,6 +5,7 @@ import (
 
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/authctx"
 
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/pbconv"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/botservice"
@@ -34,7 +35,7 @@ func (l *ListUserBotsLogic) ListUserBots() (resp *types.ListUserBotsResponse, er
 	}
 	bots := make([]types.UserBotInfo, 0, len(rpcResp.GetBots()))
 	for _, b := range rpcResp.GetBots() {
-		bots = append(bots, userBotToType(b))
+		bots = append(bots, pbconv.UserBot(b))
 	}
 	return &types.ListUserBotsResponse{Bots: bots}, nil
 }

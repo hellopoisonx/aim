@@ -8,10 +8,10 @@ import (
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/authctx"
 
 	"github.com/coder/websocket"
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/fanout"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/ws"
 	logicpb "github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
-	gwpb "github.com/hellopoisonx/aim/shared/proto/gateway/pb"
 	pb "github.com/hellopoisonx/aim/shared/proto/ws/pb"
 	"github.com/zeromicro/go-zero/core/logx"
 	"go.opentelemetry.io/otel"
@@ -59,7 +59,7 @@ func (h *WsHandler) handleTyping(ctx context.Context, _ *websocket.Conn, frame *
 	// Also fan out to local gateway connections immediately. The broker/core fan-out remains
 	// the cross-node path, while this local best-effort push avoids transient UI
 	// stalls when the consumer group is starting or a topic is not ready yet.
-	go h.fanOutTypingLocal(context.WithoutCancel(ctx), identity.UserID, typingPayload.GetConversationId())
+	fanout.Typing(ctx, h.srv, identity.UserID, typingPayload.GetConversationId())
 
 	return nil
 }
@@ -132,7 +132,7 @@ func (h *WsHandler) handleReadReceipt(ctx context.Context, conn *websocket.Conn,
 	// broker/core fan-out loop catches up. Cross-node delivery still goes through
 	// the published event above. Run it independently so read-receipt ACK latency only
 	// depends on the durable cursor update.
-	go h.fanOutReadReceiptLocal(context.WithoutCancel(ctx), identity.UserID, receiptPayload.GetConversationId(), resp.GetReadState().GetLastReadMessageId(), resp.GetReadState().GetUpdatedAt())
+	fanout.ReadReceipt(ctx, h.srv, identity.UserID, receiptPayload.GetConversationId(), resp.GetReadState().GetLastReadMessageId(), resp.GetReadState().GetUpdatedAt())
 
 	ackFrame, err := ws.NewServerAck(frame.GetSeq(), "", 0)
 	if err != nil {
@@ -140,62 +140,4 @@ func (h *WsHandler) handleReadReceipt(ctx context.Context, conn *websocket.Conn,
 	}
 
 	return h.writeFrame(ctx, conn, ackFrame)
-}
-
-func (h *WsHandler) fanOutTypingLocal(ctx context.Context, fromUserID, conversationID int64) {
-	h.forEachLocalMember(ctx, "typing", conversationID, fromUserID, func(ctx context.Context, gateway *ws.GatewayServer, memberID int64) {
-		_, _ = gateway.PushTyping(ctx, &gwpb.PushTypingReq{
-			TargetUserId:   memberID,
-			FromUserId:     fromUserID,
-			ConversationId: conversationID,
-			Timestamp:      time.Now().UnixMilli(),
-		})
-	})
-}
-
-func (h *WsHandler) fanOutReadReceiptLocal(ctx context.Context, fromUserID, conversationID, lastReadMessageID, updatedAt int64) {
-	h.forEachLocalMember(ctx, "read receipt", conversationID, fromUserID, func(ctx context.Context, gateway *ws.GatewayServer, memberID int64) {
-		_, _ = gateway.PushReadReceipt(ctx, &gwpb.PushReadReceiptReq{
-			TargetUserId:      memberID,
-			ConversationId:    conversationID,
-			FromUserId:        fromUserID,
-			LastReadMessageId: lastReadMessageID,
-			UpdatedAt:         updatedAt,
-		})
-	})
-}
-
-// forEachLocalMember pushes to every conversation member holding a connection on
-// this node, skipping the sender.
-func (h *WsHandler) forEachLocalMember(ctx context.Context, label string, conversationID, fromUserID int64, push func(context.Context, *ws.GatewayServer, int64)) {
-	if h == nil || h.srv == nil || h.srv.LogicConversationClient == nil || h.manager == nil {
-		return
-	}
-
-	members, err := h.localConversationMembers(ctx, conversationID)
-	if err != nil {
-		logx.WithContext(ctx).Debugf("local %s fan-out skipped for conv %d: %v", label, conversationID, err)
-		return
-	}
-
-	gateway := h.srv.Gateway()
-	for _, memberID := range members {
-		if memberID <= 0 || memberID == fromUserID || len(h.manager.GetByUserID(memberID)) == 0 {
-			continue
-		}
-
-		push(ctx, gateway, memberID)
-	}
-}
-
-func (h *WsHandler) localConversationMembers(ctx context.Context, conversationID int64) ([]int64, error) {
-	memberCtx, cancel := context.WithTimeout(ctx, time.Second)
-	defer cancel()
-
-	resp, err := h.srv.LogicConversationClient.GetConversationMembers(memberCtx, &logicpb.GetConversationMembersReq{ConversationId: conversationID})
-	if err != nil {
-		return nil, err
-	}
-
-	return resp.GetMemberIds(), nil
 }

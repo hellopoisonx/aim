@@ -15,7 +15,7 @@ import (
 )
 
 // BotRateLimitMiddleware enforces a per-TokenID sliding-window rate limit on
-// Bot OpenAPI endpoints. It reads botctx.BotIdentity from the request context
+// Bot OpenAPI endpoints. It reads botctx.Identity from the request context
 // and uses the bot's TokenID as the single key dimension so each token gets
 // its own bucket. The store is configured with a distinct KeyPrefix
 // (aim:gateway:quota:bot) so the bucket is disjoint from human traffic.
@@ -38,7 +38,7 @@ func (m *BotRateLimitMiddleware) Handle(next http.HandlerFunc) http.HandlerFunc 
 			next(w, r)
 			return
 		}
-		identity, ok := botctx.FromContext(r.Context())
+		identity, ok := botctx.IdentityFromContext(r.Context())
 		if !ok {
 			// BotAuth middleware was not run before us — let the downstream
 			// handler surface the missing identity error.

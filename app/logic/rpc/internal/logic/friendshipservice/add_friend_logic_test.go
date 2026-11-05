@@ -199,7 +199,6 @@ func TestAddFriend_TargetUserNotFound(t *testing.T) {
 
 	svcCtx := &svc.ServiceContext{
 		UserInfoService: mockUserSvc,
-		FriendshipDAO:   nil,
 	}
 
 	l := NewAddFriendLogic(ctx, svcCtx)
@@ -222,7 +221,6 @@ func TestAddFriend_DatabaseNotConfigured(t *testing.T) {
 
 	svcCtx := &svc.ServiceContext{
 		UserInfoService: mockUserSvc,
-		FriendshipDAO:   nil,
 	}
 
 	l := NewAddFriendLogic(ctx, svcCtx)
@@ -243,10 +241,8 @@ func TestAddFriend_ReturnsExistingAcceptedFriendship(t *testing.T) {
 	mockUserSvc.On("GetUserInfo", ctx, int64(2)).Return(orm.UserInfo{ID: 2, Nickname: "user2"}, nil)
 
 	svcCtx := &svc.ServiceContext{
-		UserInfoService: mockUserSvc,
-		FriendshipDAO: &fakeFriendDAO{
-			direct: newFriendship(1, 2, "accepted"),
-		},
+		UserInfoService:   mockUserSvc,
+		FriendshipService: service.NewFriendshipService(&fakeFriendDAO{direct: newFriendship(1, 2, "accepted")}),
 	}
 
 	resp, err := NewAddFriendLogic(ctx, svcCtx).AddFriend(&pb.AddFriendReq{UserId: 1, FriendId: 2})
@@ -264,10 +260,10 @@ func TestAddFriend_CreatesPendingFriendship(t *testing.T) {
 
 	svcCtx := &svc.ServiceContext{
 		UserInfoService: mockUserSvc,
-		FriendshipDAO: &fakeFriendDAO{
+		FriendshipService: service.NewFriendshipService(&fakeFriendDAO{
 			directErr: dao.ErrNotFound,
 			upserted:  newFriendship(1, 2, service.FriendshipStatusPending),
-		},
+		}),
 	}
 
 	resp, err := NewAddFriendLogic(ctx, svcCtx).AddFriend(&pb.AddFriendReq{UserId: 1, FriendId: 2})
@@ -284,9 +280,9 @@ func TestAddFriend_BlockedRelationship(t *testing.T) {
 
 	svcCtx := &svc.ServiceContext{
 		UserInfoService: mockUserSvc,
-		FriendshipDAO: &fakeFriendDAO{
+		FriendshipService: service.NewFriendshipService(&fakeFriendDAO{
 			bidirectional: []orm.Friendship{{UserID: 2, FriendID: 1, Status: "blocked"}},
-		},
+		}),
 	}
 
 	_, err := NewAddFriendLogic(ctx, svcCtx).AddFriend(&pb.AddFriendReq{UserId: 1, FriendId: 2})

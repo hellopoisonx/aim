@@ -2,7 +2,7 @@
 """
 AIM Benchmark Tool -- Load & Stress Testing
 ===========================================
-基于 dev-tool/aim_test.py 的 REST/WS 客户端，提供并发压测能力。
+基于 dev-tool/e2e/aim_test.py 的 REST/WS 客户端，提供并发压测能力。
 
 Usage:
   python benchmark.py register --users 100
@@ -33,8 +33,8 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Optional, Callable, List, Dict, Any
 
-# Add dev-tool to path so we can import from aim_test
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# aim_test 与压测脚本共用同一个客户端实现
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "e2e"))
 
 # Force UTF-8 output to avoid Windows GBK encoding errors with box-drawing chars.
 # This is equivalent to PYTHONIOENCODING=utf-8 but applied programmatically.
@@ -526,7 +526,7 @@ def _random_email(prefix: str = "bench") -> str:
 def _load_user_fixtures(path: str = "") -> List[dict]:
     """从 user.json 加载预生成的用户数据。"""
     if not path:
-        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "user.json")
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "fixtures", "user.json")
     if not os.path.exists(path):
         return []
     with open(path, "r", encoding="utf-8") as f:
@@ -536,7 +536,7 @@ def _load_user_fixtures(path: str = "") -> List[dict]:
 def _load_msg_fixtures(path: str = "") -> List[str]:
     """从 msg.txt 加载预生成的消息内容（每行一条）。"""
     if not path:
-        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "msg.txt")
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "fixtures", "msg.txt")
     if not os.path.exists(path):
         return []
     with open(path, "r", encoding="utf-8") as f:
@@ -1491,7 +1491,7 @@ def _add_common_args(parser: argparse.ArgumentParser):
     parser.add_argument("--no-fixtures", action="store_true",
                         help="Disable fixture files (user.json/msg.txt), use random data")
     parser.add_argument("--gateway", type=str, default="",
-                        help="Gateway HTTP URL (default: auto-detect, benchmark env: http://127.0.0.1:18888)")
+                        help="Gateway HTTP URL (default: auto-detect, default: http://127.0.0.1:8888)")
 
 
 def _save_report(snap: MetricsSnapshot, path: str, title: str = "benchmark"):
@@ -1616,7 +1616,7 @@ def main():
 Examples:
   python benchmark.py register --users 100
   python benchmark.py register --users 500 --rps 50 --ramp-up 10
-  python benchmark.py register --users 1000 --gateway http://127.0.0.1:18888
+  python benchmark.py register --users 1000 --gateway http://127.0.0.1:8888
   python benchmark.py login --users 100
   python benchmark.py friend-chain --users 50
   python benchmark.py presence --users 50

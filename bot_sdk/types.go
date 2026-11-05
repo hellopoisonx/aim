@@ -1,8 +1,6 @@
 // Package botsdk provides a Go client and webhook helpers for AIM Bot OpenAPI.
 package botsdk
 
-import "time"
-
 const (
 	EventMessageCreated = "message.created"
 )
@@ -158,28 +156,4 @@ type SetWebhookResponse struct {
 
 type DeleteWebhookResponse struct {
 	Deleted bool `json:"deleted"`
-}
-
-type WebhookEvent struct {
-	EventID          string         `json:"event_id"`
-	Type             string         `json:"type"`
-	CreatedAt        int64          `json:"created_at"`
-	ConversationID   string         `json:"conversation_id"`
-	ConversationType string         `json:"conversation_type,omitempty"`
-	Message          WebhookMessage `json:"message"`
-}
-
-type WebhookMessage struct {
-	MessageID   string   `json:"message_id"`
-	SenderID    string   `json:"sender_id"`
-	SenderType  string   `json:"sender_type,omitempty"`
-	MessageType string   `json:"message_type"`
-	Content     string   `json:"content"`
-	ClientMsgID string   `json:"client_msg_id,omitempty"`
-	Mentions    []string `json:"mentions,omitempty"`
-	Timestamp   int64    `json:"timestamp"`
-}
-
-func (e WebhookEvent) CreatedTime() time.Time {
-	return time.UnixMilli(e.CreatedAt)
 }

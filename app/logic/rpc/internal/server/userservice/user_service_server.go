@@ -59,7 +59,7 @@ func (s *UserServiceServer) UpdateUserInfoStatus(ctx context.Context, in *pb.Upd
 	return l.UpdateUserInfoStatus(in)
 }
 
-// SearchUserInfoByNickname searches user profiles by nickname prefix.
+// SearchUserInfoByNickname searches user profiles by nickname substring.
 func (s *UserServiceServer) SearchUserInfoByNickname(ctx context.Context, in *pb.SearchUserInfoByNicknameReq) (*pb.SearchUserInfoByNicknameResp, error) {
 	l := userservicelogic.NewSearchUserInfoByNicknameLogic(ctx, s.svcCtx)
 	return l.SearchUserInfoByNickname(in)

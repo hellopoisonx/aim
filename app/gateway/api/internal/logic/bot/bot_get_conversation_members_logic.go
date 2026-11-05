@@ -5,6 +5,7 @@ import (
 
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/pbconv"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/conversationservice"
@@ -43,14 +44,7 @@ func (l *BotGetConversationMembersLogic) BotGetConversationMembers(req *types.Bo
 	members := rpcResp.GetMembers()
 	items := make([]types.BotMemberDetailItem, 0, len(members))
 	for _, m := range members {
-		items = append(items, types.BotMemberDetailItem{
-			UserId:   formatID(m.GetUserId()),
-			Email:    m.GetEmail(),
-			Avatar:   m.GetAvatar(),
-			Role:     m.GetRole(),
-			JoinedAt: m.GetJoinedAt(),
-			Name:     m.GetName(),
-		})
+		items = append(items, pbconv.BotMember(m))
 	}
 
 	return &types.BotGetConversationMembersResponse{Members: items}, nil

@@ -134,11 +134,14 @@ func (s *QuotaStore) Allow(ctx context.Context, identifier string) (bool, int64,
 }
 
 // AllowPair is a convenience wrapper for limiters keyed by a pair of
-// identifiers (e.g. (sender_id, device_id) or (user_id, conversation_id)).
+// identifiers (e.g. (device_id, user_id) or (user_id, conversation_id)).
 // The values are joined with ":" to form the identifier passed to Allow.
 // An empty part is rendered as "unknown" so that callers do not produce
-// colliding keys for missing device IDs.
+// colliding keys for a missing device ID.
 func (s *QuotaStore) AllowPair(ctx context.Context, a, b string) (bool, int64, error) {
+	if a == "" {
+		a = "unknown"
+	}
 	if b == "" {
 		b = "unknown"
 	}

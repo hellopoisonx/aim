@@ -6,6 +6,7 @@ package users
 import (
 	"context"
 
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/pbconv"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/userservice"
@@ -41,6 +42,6 @@ func (l *GetUserByIdLogic) GetUserById(req *types.GetUserByIdRequest) (resp *typ
 	}
 
 	return &types.GetUserByIdResponse{
-		User: userInfoFromRPC(rpcResp.GetUser()),
+		User: pbconv.UserInfo(rpcResp.GetUser()),
 	}, nil
 }

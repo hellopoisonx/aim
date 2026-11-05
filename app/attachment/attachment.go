@@ -58,8 +58,8 @@ func applyDefaults(c *config.Config) {
 	if c.Seaweed.PresignTTL == 0 {
 		c.Seaweed.PresignTTL = 900
 	}
-	if c.Seaweed.DownloadTTL == 0 {
-		c.Seaweed.DownloadTTL = 300
+	if c.Seaweed.DownloadTTLSeconds == 0 {
+		c.Seaweed.DownloadTTLSeconds = 300
 	}
 	if c.UploadedProducer.Topic == "" {
 		c.UploadedProducer.Topic = "aim-attachment-uploaded"

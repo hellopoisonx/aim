@@ -25,16 +25,6 @@ import (
 	"gorm.io/gorm"
 )
 
-type FriendshipDAO interface {
-	GetFriendshipBidirectional(ctx context.Context, userID, friendID int64) ([]orm.Friendship, error)
-	GetFriendshipByPair(ctx context.Context, userID, friendID int64) (orm.Friendship, error)
-	UpsertFriendship(ctx context.Context, userID, friendID int64, status string) (orm.Friendship, error)
-	ListPendingFriendApplications(ctx context.Context, friendID int64) ([]orm.Friendship, error)
-	ListFriends(ctx context.Context, userID int64) ([]orm.Friendship, error)
-	ListFriendsByTagID(ctx context.Context, userID, tagID int64) ([]orm.Friendship, error)
-	ListFriendsByTagName(ctx context.Context, userID int64, name string) ([]orm.Friendship, error)
-}
-
 type ServiceContext struct {
 	Config              config.Config
 	PermissionChecker   service.PermissionChecker
@@ -42,9 +32,9 @@ type ServiceContext struct {
 	ConversationService service.ConversationQuerier
 	BotService          *service.BotService
 	FriendTagService    *service.FriendshipTagService
+	FriendshipService   *service.FriendshipService
 	SearchService       *service.SearchService
 	DAO                 *dao.Store
-	FriendshipDAO       FriendshipDAO
 	IDGen               *snowflake.Snowflake
 	// Authorizer decides conversation permissions; nil without Postgres.
 	Authorizer       rbac.Authorizer
@@ -66,7 +56,7 @@ type ServiceContext struct {
 	RedisClient *redis.Client
 	// MessageService is the chat message write entry; nil without Postgres,
 	// Redis or RocketMQ.
-	MessageService service.MessageService
+	MessageService service.MessageIngestor
 }
 
 func NewServiceContext(c config.Config) *ServiceContext {
@@ -104,7 +94,6 @@ func NewServiceContext(c config.Config) *ServiceContext {
 
 	store := dao.New(db)
 	svcCtx.DAO = store
-	svcCtx.FriendshipDAO = store
 	limit := c.Dev.TemporaryConversationMessageLimit
 	if limit == 0 {
 		limit = service.DefaultTemporaryConversationMessageLimit
@@ -114,12 +103,16 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		logx.Must(fmt.Errorf("logic service: casbin authorizer: %w", err))
 	}
 	svcCtx.Authorizer = authz
-	svcCtx.PermissionChecker = service.NewDatabasePermissionCheckerWithLimitAndCaches(store, limit, service.DatabasePermissionCheckerCaches{
-		Conversation: svcCtx.ConvCache,
-		Members:      svcCtx.ConvMembersCache,
-		Friendship:   svcCtx.FriendshipCache,
-		UserType:     svcCtx.UserTypeCache,
-	}).WithAuthorizer(authz)
+	svcCtx.PermissionChecker = service.NewDatabasePermissionChecker(store,
+		service.WithPermissionMessageLimit(limit),
+		service.WithPermissionCaches(service.DatabasePermissionCheckerCaches{
+			Conversation: svcCtx.ConvCache,
+			Members:      svcCtx.ConvMembersCache,
+			Friendship:   svcCtx.FriendshipCache,
+			UserType:     svcCtx.UserTypeCache,
+		}),
+		service.WithPermissionAuthorizer(authz),
+	)
 	svcCtx.UserInfoService = service.NewUserInfoService(store, service.WithUserInfoCache(svcCtx.UserCache), service.WithUserTypeCache(svcCtx.UserTypeCache))
 	svcCtx.BotService = service.NewBotService(store, store,
 		service.WithBotTokenCache(svcCtx.BotTokenCache),
@@ -127,6 +120,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		service.WithBotIDGenerator(idGen),
 	)
 	svcCtx.FriendTagService = service.NewFriendshipTagService(store, idGen)
+	svcCtx.FriendshipService = service.NewFriendshipService(store)
 	svcCtx.SearchService = service.NewSearchService(store)
 
 	// Build ConversationService with optional transactional event publishing.

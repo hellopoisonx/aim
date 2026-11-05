@@ -29,7 +29,7 @@ aim/
 ├── app/data_parsing/    # 数据解析
 ├── app/shared/          # 共享库
 ├── bot_sdk/             # Bot Go SDK
-├── dev-tool/            # 调试压测工具
+├── dev-tool/            # 调试压测工具（e2e/ bench/ fixtures/ pb/）
 ├── deploy/              # 部署编排
 ├── docs/                # 文档与协议规范
 ├── shared/proto/        # Protobuf 协议

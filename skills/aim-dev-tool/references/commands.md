@@ -5,7 +5,7 @@
 ```bash
 cd dev-tool
 # Windows: 必须加 PYTHONIOENCODING=utf-8 避免 Unicode 编码错误
-PYTHONIOENCODING=utf-8 python aim_test.py <command> [--args]
+PYTHONIOENCODING=utf-8 python dev-tool/e2e/aim_test.py <command> [--args]
 ```
 
 ### 认证
@@ -101,12 +101,12 @@ PYTHONIOENCODING=utf-8 python aim_test.py <command> [--args]
 
 ```bash
 # Alice
-python aim_test.py login --email alice@t.com --password 12345678 --profile alice
-python aim_test.py ws-connect --profile alice
+python dev-tool/e2e/aim_test.py login --email alice@t.com --password 12345678 --profile alice
+python dev-tool/e2e/aim_test.py ws-connect --profile alice
 
 # Bob（另一个终端）
-python aim_test.py login --email bob@t.com --password 12345678 --profile bob
-python aim_test.py ws-connect --profile bob
+python dev-tool/e2e/aim_test.py login --email bob@t.com --password 12345678 --profile bob
+python dev-tool/e2e/aim_test.py ws-connect --profile bob
 ```
 
 ---
@@ -114,7 +114,7 @@ python aim_test.py ws-connect --profile bob
 ## 交互模式
 
 ```bash
-python aim_test.py interactive
+python dev-tool/e2e/aim_test.py interactive
 ```
 
 交互提示符格式：`aim [<profile>] [#<user_id>] <ws_state>>`
@@ -322,7 +322,7 @@ aim [bob] [#2] ·> login bob@t.com 12345678
 
 ```bash
 cd dev-tool
-python benchmark.py <scenario> [--args]
+python dev-tool/bench/benchmark.py <scenario> [--args]
 ```
 
 ### 压测场景
@@ -359,22 +359,22 @@ python benchmark.py <scenario> [--args]
 
 ```bash
 # 快速容量验证
-python benchmark.py register --users 10
+python dev-tool/bench/benchmark.py register --users 10
 
 # 渐进加压：500 用户、50 RPS、10s ramp-up
-python benchmark.py register --users 500 --rps 50 --ramp-up 10
+python dev-tool/bench/benchmark.py register --users 500 --rps 50 --ramp-up 10
 
 # 好友在线状态查询压测
-python benchmark.py presence --users 50 --rps 100
+python dev-tool/bench/benchmark.py presence --users 50 --rps 100
 
 # WS 消息压测 + 静默
-python benchmark.py ws-message --users 50 --messages-per-user 500 --quiet
+python dev-tool/bench/benchmark.py ws-message --users 50 --messages-per-user 500 --quiet
 
 # 混合持续负载 + JSON 报告
-python benchmark.py mixed --users 100 --duration 60 --rps 200 --output report.json
+python dev-tool/bench/benchmark.py mixed --users 100 --duration 60 --rps 200 --output report.json
 
 # 全力压测（不限速）
-python benchmark.py ws-message --users 100 --messages-per-user 1000 --quiet
+python dev-tool/bench/benchmark.py ws-message --users 100 --messages-per-user 1000 --quiet
 ```
 
 ### 输出示例

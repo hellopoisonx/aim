@@ -3,9 +3,7 @@ package mqs
 import (
 	"bytes"
 	"context"
-	"crypto/hmac"
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -20,8 +18,8 @@ import (
 
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/logic/rpc/model/orm"
+	"github.com/hellopoisonx/aim/app/shared/botwebhook"
 	"github.com/hellopoisonx/aim/app/shared/tracing"
-	botsdk "github.com/hellopoisonx/aim/bot_sdk"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -249,7 +247,7 @@ func (c *BotWebhookConsumer) deliver(ctx context.Context, hook orm.BotWebhook, e
 		return
 	}
 
-	signature := signHMAC(body, hook.SecretHash)
+	signature := botwebhook.Sign(hook.SecretHash, body)
 
 	for attempt := range botWebhookMaxRetries {
 		if attempt > 0 {
@@ -280,12 +278,12 @@ func (c *BotWebhookConsumer) buildPayload(event events.TransferEvent, senderType
 		return nil, "", err
 	}
 
-	payload := botsdk.WebhookEvent{
+	payload := botwebhook.WebhookEvent{
 		EventID:        eventID,
 		Type:           botWebhookEventType,
 		CreatedAt:      c.now().UnixMilli(),
 		ConversationID: strconv.FormatInt(event.ConversationID, 10),
-		Message: botsdk.WebhookMessage{
+		Message: botwebhook.WebhookMessage{
 			MessageID:   strconv.FormatInt(event.MessageID, 10),
 			SenderID:    strconv.FormatInt(event.SenderID, 10),
 			SenderType:  senderType,
@@ -314,7 +312,7 @@ func (c *BotWebhookConsumer) postOnce(ctx context.Context, url, eventID, signatu
 	req.Header.Set("User-Agent", "AIM-Bot-Webhook/1.0")
 	req.Header.Set("X-AIM-Event-Id", eventID)
 	req.Header.Set("X-AIM-Event-Type", botWebhookEventType)
-	req.Header.Set("X-AIM-Signature", "sha256="+signature)
+	req.Header.Set("X-AIM-Signature", botwebhook.SignaturePrefix+signature)
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -331,21 +329,6 @@ func (c *BotWebhookConsumer) postOnce(ctx context.Context, url, eventID, signatu
 	}
 
 	return nil
-}
-
-// signHMAC returns the lowercase hex HMAC-SHA256 of body keyed by the
-// stored secret_hash. Operators who want to verify the signature use the
-// same secret_hash value (they hold the plaintext secret only by virtue
-// of receiving it once at SetWebhook time — the gateway never persists
-// the plaintext).
-//
-// NOTE: For V0 we sign with secret_hash directly. Future versions can
-// migrate to a per-row HMAC key without breaking the wire format because
-// X-AIM-Signature already carries an algorithm prefix.
-func signHMAC(body []byte, key string) string {
-	mac := hmac.New(sha256.New, []byte(key))
-	mac.Write(body)
-	return hex.EncodeToString(mac.Sum(nil))
 }
 
 // subscribesTo returns true when the events list contains target or "*".

@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/authctx"
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/pbconv"
 
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
@@ -63,19 +64,7 @@ func (l *CreateGroupLogic) CreateGroup(req *types.CreateGroupRequest) (resp *typ
 		return nil, errorx.NewCodeError(errorx.CodeInternal, "internal error")
 	}
 
-	memberIDs := conv.GetMemberIds()
-	if memberIDs == nil {
-		memberIDs = []int64{}
-	}
+	item := types.CreateConversationResponse(pbconv.Conversation(conv))
 
-	return &types.CreateConversationResponse{
-		ConversationId:   conv.GetId(),
-		ConversationType: conv.GetConversationType(),
-		IsActive:         conv.GetIsActive(),
-		CreatedAt:        conv.GetCreatedAt(),
-		MemberIds:        memberIDs,
-		Name:             conv.GetName(),
-		Avatar:           conv.GetAvatar(),
-		CreatorId:        conv.GetCreatorId(),
-	}, nil
+	return &item, nil
 }

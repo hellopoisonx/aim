@@ -5,6 +5,7 @@ import (
 
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/authctx"
 
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/pbconv"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/conversationservice"
@@ -48,7 +49,7 @@ func (l *AddGroupMembersLogic) AddGroupMembers(req *types.AddGroupMembersRequest
 		return nil, errorx.NewCodeError(errorx.CodeInternal, "internal error")
 	}
 
-	item := types.AddGroupMembersResponse(conversationItemFromPB(conv))
+	item := types.AddGroupMembersResponse(pbconv.Conversation(conv))
 
 	return &item, nil
 }

@@ -40,8 +40,8 @@ from dataclasses import dataclass, field
 from typing import Optional, Callable
 from datetime import datetime
 
-# Add dev-tool to path so we can import compiled protos
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# dev-tool 根目录下的 pb/ 存放生成的 protobuf stub
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import requests
 import websocket
@@ -55,8 +55,7 @@ except ImportError:  # pragma: no cover - optional interactive dependency
     patch_stdout = None
 
 # Import compiled proto modules
-import ws_pb2
-import gateway_pb2
+from pb import ws_pb2
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
@@ -849,10 +848,7 @@ class WSClient:
     def send_read_receipt(self, conversation_id: int, last_read_message_id: int):
         payload = ws_pb2.ReadReceiptPayload()
         payload.conversation_id = conversation_id
-        # The checked-in dev-tool descriptor predates the field rename
-        # (last_msg_id -> last_read_message_id); the wire field number is 2 in
-        # both versions, so this stays compatible with the gateway.
-        payload.last_msg_id = last_read_message_id
+        payload.last_read_message_id = last_read_message_id
         self._send_frame(ws_pb2.FRAME_TYPE_READ_RECEIPT, payload)
 
     def send_ack(self, ack_seq: int):

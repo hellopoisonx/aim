@@ -35,7 +35,7 @@ type IngestMessageResult struct {
 	AcceptedAt  int64
 }
 
-type MessageService interface {
+type MessageIngestor interface {
 	IngestMessage(ctx context.Context, in IngestMessageInput) (IngestMessageResult, error)
 }
 
@@ -55,7 +55,7 @@ type AttachmentReferenceValidator interface {
 	ValidateReference(ctx context.Context, senderID, conversationID int64, kind, content string) error
 }
 
-type IngestionService struct {
+type MessageService struct {
 	checker     PermissionChecker
 	idempotency IdempotencyStore
 	publisher   MessagePublisher
@@ -69,8 +69,8 @@ func NewMessageService(
 	publisher MessagePublisher,
 	attachments AttachmentReferenceValidator,
 	idGen *snowflake.Snowflake,
-) *IngestionService {
-	return &IngestionService{
+) *MessageService {
+	return &MessageService{
 		checker:     checker,
 		idempotency: idempotency,
 		publisher:   publisher,
@@ -79,7 +79,7 @@ func NewMessageService(
 	}
 }
 
-func (s *IngestionService) IngestMessage(ctx context.Context, in IngestMessageInput) (IngestMessageResult, error) {
+func (s *MessageService) IngestMessage(ctx context.Context, in IngestMessageInput) (IngestMessageResult, error) {
 	if err := validateIngest(in); err != nil {
 		return IngestMessageResult{}, err
 	}
@@ -132,7 +132,7 @@ func (s *IngestionService) IngestMessage(ctx context.Context, in IngestMessageIn
 	}, nil
 }
 
-func (s *IngestionService) checkIdempotency(ctx context.Context, key string) (int64, bool, error) {
+func (s *MessageService) checkIdempotency(ctx context.Context, key string) (int64, bool, error) {
 	exists, messageID, err := s.idempotency.Check(ctx, key)
 	if err != nil {
 		return 0, false, errorx.NewCodeErrorf(errorx.CodeInternal, "idempotency check failed: %v", err)
@@ -141,7 +141,7 @@ func (s *IngestionService) checkIdempotency(ctx context.Context, key string) (in
 	return messageID, exists, nil
 }
 
-func (s *IngestionService) authorize(ctx context.Context, in IngestMessageInput) (IngestMessageInput, error) {
+func (s *MessageService) authorize(ctx context.Context, in IngestMessageInput) (IngestMessageInput, error) {
 	if s.checker == nil {
 		return IngestMessageInput{}, errorx.NewCodeError(errorx.CodeInternal, "permission checker is not configured")
 	}
@@ -188,7 +188,7 @@ func (s *IngestionService) authorize(ctx context.Context, in IngestMessageInput)
 	return in, nil
 }
 
-func (s *IngestionService) checkAttachmentReference(ctx context.Context, in IngestMessageInput) error {
+func (s *MessageService) checkAttachmentReference(ctx context.Context, in IngestMessageInput) error {
 	if !sharedattachment.IsAttachmentMessageType(in.MessageType) {
 		return nil
 	}

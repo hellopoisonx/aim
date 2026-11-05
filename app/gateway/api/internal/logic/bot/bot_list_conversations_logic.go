@@ -3,6 +3,7 @@ package bot
 import (
 	"context"
 
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/pbconv"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/botservice"
@@ -42,13 +43,7 @@ func (l *BotListConversationsLogic) BotListConversations() (*types.BotListConver
 	convs := rpcResp.GetConversations()
 	out := make([]types.BotConversationItem, 0, len(convs))
 	for _, c := range convs {
-		out = append(out, types.BotConversationItem{
-			ConversationId:   formatID(c.GetConversationId()),
-			ConversationType: c.GetConversationType(),
-			Name:             c.GetName(),
-			Avatar:           c.GetAvatar(),
-			CreatedAt:        c.GetCreatedAt(),
-		})
+		out = append(out, pbconv.BotConversation(c))
 	}
 
 	return &types.BotListConversationsResponse{Conversations: out}, nil

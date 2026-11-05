@@ -40,7 +40,7 @@ type (
 		UpdateUserInfoProfile(ctx context.Context, in *UpdateUserInfoProfileReq, opts ...grpc.CallOption) (*UpdateUserInfoProfileResp, error)
 		// UpdateUserInfoStatus updates user status.
 		UpdateUserInfoStatus(ctx context.Context, in *UpdateUserInfoStatusReq, opts ...grpc.CallOption) (*UpdateUserInfoStatusResp, error)
-		// SearchUserInfoByNickname searches user profiles by nickname prefix.
+		// SearchUserInfoByNickname searches user profiles by nickname substring.
 		SearchUserInfoByNickname(ctx context.Context, in *SearchUserInfoByNicknameReq, opts ...grpc.CallOption) (*SearchUserInfoByNicknameResp, error)
 	}
 
@@ -91,7 +91,7 @@ func (m *defaultUserService) UpdateUserInfoStatus(ctx context.Context, in *Updat
 	return client.UpdateUserInfoStatus(ctx, in, opts...)
 }
 
-// SearchUserInfoByNickname searches user profiles by nickname prefix.
+// SearchUserInfoByNickname searches user profiles by nickname substring.
 func (m *defaultUserService) SearchUserInfoByNickname(ctx context.Context, in *SearchUserInfoByNicknameReq, opts ...grpc.CallOption) (*SearchUserInfoByNicknameResp, error) {
 	client := pb.NewUserServiceClient(m.cli.Conn())
 	return client.SearchUserInfoByNickname(ctx, in, opts...)

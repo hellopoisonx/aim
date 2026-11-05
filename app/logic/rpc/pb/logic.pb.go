@@ -7474,10 +7474,9 @@ func (x *IngestMessageReq) GetMentions() []string {
 }
 
 type IngestMessageResp struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	// message_id is the server-assigned Snowflake id.
-	MessageId   int64  `protobuf:"varint,1,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
-	ClientMsgId string `protobuf:"bytes,2,opt,name=client_msg_id,json=clientMsgId,proto3" json:"client_msg_id,omitempty"`
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	MessageId   int64                  `protobuf:"varint,1,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
+	ClientMsgId string                 `protobuf:"bytes,2,opt,name=client_msg_id,json=clientMsgId,proto3" json:"client_msg_id,omitempty"`
 	// accepted_at is the server acceptance time in unix milliseconds.
 	AcceptedAt    int64 `protobuf:"varint,3,opt,name=accepted_at,json=acceptedAt,proto3" json:"accepted_at,omitempty"`
 	unknownFields protoimpl.UnknownFields

@@ -26,17 +26,12 @@ func NewListFriendApplicationsLogic(ctx context.Context, svcCtx *svc.ServiceCont
 
 // ListFriendApplications lists pending friend applications received by the user.
 func (l *ListFriendApplicationsLogic) ListFriendApplications(in *pb.ListFriendApplicationsReq) (*pb.ListFriendApplicationsResp, error) {
-	userID := in.GetUserId()
-	if userID <= 0 {
-		return nil, errorx.NewCodeError(errorx.CodeBadInput, "user_id must be positive")
-	}
-
-	store, err := requireFriendshipStore(l.svcCtx)
+	friendshipSvc, err := requireFriendshipService(l.svcCtx)
 	if err != nil {
 		return nil, err
 	}
 
-	records, err := store.ListPendingFriendApplications(l.ctx, userID)
+	records, err := friendshipSvc.ListPendingApplications(l.ctx, in.GetUserId())
 	if err != nil {
 		return nil, errorx.ToGRPCError(err)
 	}

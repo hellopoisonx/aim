@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hellopoisonx/aim/app/shared/botwebhook"
 	"github.com/stretchr/testify/require"
 )
 
@@ -493,7 +494,7 @@ func (e *botSDKIntegrationEnv) deliverWebhook(t *testing.T, targetURL string, se
 	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, targetURL, bytes.NewReader(body))
 	require.NoError(t, err)
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-AIM-Signature", signaturePrefixSHA256+signWithSecretHash(HashWebhookSecret(secret), body))
+	req.Header.Set("X-AIM-Signature", botwebhook.SignaturePrefix+botwebhook.Sign(botwebhook.HashWebhookSecret(secret), body))
 
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)

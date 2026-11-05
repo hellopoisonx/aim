@@ -5,6 +5,7 @@ import (
 
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/authctx"
 
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/pbconv"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/botservice"
@@ -34,5 +35,5 @@ func (l *UpdateUserBotProfileLogic) UpdateUserBotProfile(req *types.UpdateUserBo
 	if err != nil {
 		return nil, errorx.SanitizeGRPCError(l, "update user bot profile", err)
 	}
-	return &types.UpdateUserBotProfileResponse{Bot: userBotToType(rpcResp.GetBot())}, nil
+	return &types.UpdateUserBotProfileResponse{Bot: pbconv.UserBot(rpcResp.GetBot())}, nil
 }

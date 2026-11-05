@@ -3,6 +3,7 @@ package userbots
 import (
 	"context"
 
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/pbconv"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
 
@@ -25,5 +26,5 @@ func (l *EnableUserBotLogic) EnableUserBot(req *types.EnableUserBotRequest) (res
 		return nil, err
 	}
 
-	return &types.EnableUserBotResponse{Bot: userBotToType(bot)}, nil
+	return &types.EnableUserBotResponse{Bot: pbconv.UserBot(bot)}, nil
 }

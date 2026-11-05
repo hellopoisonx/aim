@@ -322,7 +322,7 @@ func TestDatabasePermissionChecker_DirectTemporaryConversationCustomLimit(t *tes
 	}
 
 	// limit=100 时汇总 50 条仍在限额内，应放行
-	checker := NewDatabasePermissionCheckerWithLimit(fq, 100)
+	checker := NewDatabasePermissionChecker(fq, WithPermissionMessageLimit(100))
 	decision, err := checker.CheckMessagePermission(context.Background(), PermissionCheck{
 		SenderID: 100, ConversationID: 200,
 	})
@@ -331,7 +331,7 @@ func TestDatabasePermissionChecker_DirectTemporaryConversationCustomLimit(t *tes
 	assert.Equal(t, CodeOK, decision.Code)
 
 	// limit=0 表示不限制（压测场景）
-	checkerUnlimited := NewDatabasePermissionCheckerWithLimit(fq, 0)
+	checkerUnlimited := NewDatabasePermissionChecker(fq, WithPermissionMessageLimit(0))
 	decision, err = checkerUnlimited.CheckMessagePermission(context.Background(), PermissionCheck{
 		SenderID: 100, ConversationID: 200,
 	})
@@ -339,7 +339,7 @@ func TestDatabasePermissionChecker_DirectTemporaryConversationCustomLimit(t *tes
 	assert.True(t, decision.Allowed)
 
 	// limit=5 且计数 50，应拒绝
-	checkerStrict := NewDatabasePermissionCheckerWithLimit(fq, 5)
+	checkerStrict := NewDatabasePermissionChecker(fq, WithPermissionMessageLimit(5))
 	decision, err = checkerStrict.CheckMessagePermission(context.Background(), PermissionCheck{
 		SenderID: 100, ConversationID: 200,
 	})

@@ -5,6 +5,7 @@ import (
 
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/authctx"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/membership"
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/pbconv"
 
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
@@ -49,14 +50,7 @@ func (l *GetConversationMembersLogic) GetConversationMembers(req *types.GetConve
 	members := rpcResp.GetMembers()
 	items := make([]types.MemberDetailItem, 0, len(members))
 	for _, m := range members {
-		items = append(items, types.MemberDetailItem{
-			UserId:   m.GetUserId(),
-			Email:    m.GetEmail(),
-			Avatar:   m.GetAvatar(),
-			Role:     m.GetRole(),
-			JoinedAt: m.GetJoinedAt(),
-			Name:     m.GetName(),
-		})
+		items = append(items, pbconv.MemberDetail(m))
 	}
 
 	return &types.GetConversationMembersResponse{

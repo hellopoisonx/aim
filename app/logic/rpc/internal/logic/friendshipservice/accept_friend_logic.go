@@ -3,7 +3,6 @@ package friendshipservicelogic
 import (
 	"context"
 
-	"github.com/hellopoisonx/aim/app/logic/rpc/internal/service"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
@@ -32,40 +31,16 @@ func (l *AcceptFriendLogic) AcceptFriend(in *pb.AcceptFriendReq) (*pb.AcceptFrie
 	userID := in.GetUserId()
 	friendID := in.GetFriendId()
 
-	if err := requireFriendPair(userID, friendID); err != nil {
-		return nil, err
-	}
-
-	store, err := requireFriendshipStore(l.svcCtx)
+	friendshipSvc, err := requireFriendshipService(l.svcCtx)
 	if err != nil {
 		return nil, err
 	}
 
-	// Verify that a pending request exists (friend_id→user_id, status="pending").
-	// friend_id is the requester, user_id is the accepter.
-	pendingRecord, err := pendingFriendship(l.ctx, store, friendID, userID)
-	if err != nil {
-		return nil, err
-	}
-
-	if pendingRecord.Status != service.FriendshipStatusPending {
-		return nil, errorx.ToGRPCError(service.ErrNotPending)
-	}
-
-	// Update the existing pending record to "accepted".
-	acceptedRecord, err := store.UpsertFriendship(l.ctx, friendID, userID, service.FriendshipStatusAccepted)
-	if err != nil {
-		return nil, errorx.ToGRPCError(err)
-	}
-
-	// Create the reverse record (user_id→friend_id, "accepted").
-	_, err = store.UpsertFriendship(l.ctx, userID, friendID, service.FriendshipStatusAccepted)
+	record, err := friendshipSvc.AcceptFriend(l.ctx, friendID, userID)
 	if err != nil {
 		return nil, errorx.ToGRPCError(err)
 	}
 	l.svcCtx.InvalidateFriendship(l.ctx, userID, friendID)
 
-	return &pb.AcceptFriendResp{
-		Friendship: friendshipToProto(acceptedRecord),
-	}, nil
+	return &pb.AcceptFriendResp{Friendship: friendshipToProto(record)}, nil
 }

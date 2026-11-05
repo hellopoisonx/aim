@@ -144,12 +144,10 @@ func (w *Worker) Consume(ctx context.Context, key string, value string) (err err
 	if err != nil {
 		return w.fail(ctx, event, err)
 	}
-	thumbKey := ""
-	if len(res.Thumbnail) > 0 {
-		thumbKey = fmt.Sprintf("attachments/derived/%s/thumbnail.png", event.FileID)
-		if err := w.putObject(ctx, thumbKey, res.ThumbMIME, res.Thumbnail); err != nil {
-			return w.fail(ctx, event, err)
-		}
+	// The parser always yields a thumbnail, so upload, DB row and event key agree.
+	thumbKey := fmt.Sprintf("attachments/derived/%s/thumbnail.png", event.FileID)
+	if err := w.putObject(ctx, thumbKey, res.ThumbMIME, res.Thumbnail); err != nil {
+		return w.fail(ctx, event, err)
 	}
 	meta, _ := json.Marshal(res.Metadata)
 	parsed := events.AttachmentParsedEvent{
@@ -213,23 +211,21 @@ func (w *Worker) Consume(ctx context.Context, key string, value string) (err err
 // persistParseResult writes the parse output on store, which is either a
 // transaction supplied by SendTransactional or the worker's own handle.
 func (w *Worker) persistParseResult(ctx context.Context, store attachmentStore, fileID uuid.UUID, bucket, thumbKey string, res *parser.Result, meta []byte) error {
-	if thumbKey != "" {
-		size := int64(len(res.Thumbnail))
-		thumbWidth := clampInt32(res.ThumbWidth)
-		thumbHeight := clampInt32(res.ThumbHeight)
-		if err := store.UpsertAttachmentObject(ctx, orm.AttachmentObject{
-			FileID:     fileID,
-			ObjectRole: "thumbnail",
-			Bucket:     bucket,
-			ObjectKey:  thumbKey,
-			Mime:       res.ThumbMIME,
-			SizeBytes:  &size,
-			Width:      &thumbWidth,
-			Height:     &thumbHeight,
-			DurationMs: &res.DurationMS,
-		}); err != nil {
-			return err
-		}
+	size := int64(len(res.Thumbnail))
+	thumbWidth := clampInt32(res.ThumbWidth)
+	thumbHeight := clampInt32(res.ThumbHeight)
+	if err := store.UpsertAttachmentObject(ctx, orm.AttachmentObject{
+		FileID:     fileID,
+		ObjectRole: "thumbnail",
+		Bucket:     bucket,
+		ObjectKey:  thumbKey,
+		Mime:       res.ThumbMIME,
+		SizeBytes:  &size,
+		Width:      &thumbWidth,
+		Height:     &thumbHeight,
+		DurationMs: &res.DurationMS,
+	}); err != nil {
+		return err
 	}
 
 	width := clampInt32(res.Width)
