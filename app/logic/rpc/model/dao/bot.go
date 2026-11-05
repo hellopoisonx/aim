@@ -170,19 +170,7 @@ WHERE cm.conversation_id = ?
 
 // CreateUserBotProfile inserts a user_info row with user_type='bot'.
 func (s *Store) CreateUserBotProfile(ctx context.Context, id int64, email, nickname, avatar string) (orm.UserInfo, error) {
-	info := orm.UserInfo{
-		ID:       id,
-		Email:    email,
-		Status:   1,
-		Nickname: nickname,
-		Avatar:   avatar,
-		UserType: "bot",
-	}
-	if err := s.db.WithContext(ctx).Create(&info).Error; err != nil {
-		return orm.UserInfo{}, err
-	}
-
-	return info, nil
+	return s.createUserInfo(ctx, id, email, nickname, avatar, "bot")
 }
 
 // CreateUserBotOwnership records which user may manage the bot.

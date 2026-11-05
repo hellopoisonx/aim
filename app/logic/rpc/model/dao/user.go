@@ -16,13 +16,17 @@ type UserSearchRow struct {
 
 // CreateUserInfo inserts a human profile (status enabled, user_type human).
 func (s *Store) CreateUserInfo(ctx context.Context, id int64, email, nickname, avatar string) (orm.UserInfo, error) {
+	return s.createUserInfo(ctx, id, email, nickname, avatar, "human")
+}
+
+func (s *Store) createUserInfo(ctx context.Context, id int64, email, nickname, avatar, userType string) (orm.UserInfo, error) {
 	info := orm.UserInfo{
 		ID:       id,
 		Email:    email,
 		Status:   1,
 		Nickname: nickname,
 		Avatar:   avatar,
-		UserType: "human",
+		UserType: userType,
 	}
 	if err := s.db.WithContext(ctx).Create(&info).Error; err != nil {
 		return orm.UserInfo{}, err
