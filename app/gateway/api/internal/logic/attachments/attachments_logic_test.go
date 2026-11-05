@@ -87,6 +87,11 @@ func userContext(userID int64) context.Context {
 	return authctx.WithIdentity(context.Background(), authctx.Identity{UserID: userID})
 }
 
+// membersOf builds a membership client reporting exactly these conversation members.
+func membersOf(memberIDs ...int64) *fakeMembershipClient {
+	return &fakeMembershipClient{resp: &conversationservice.GetConversationMembersResp{MemberIds: memberIDs}}
+}
+
 func requireCodeError(t *testing.T, err error, wantCode int, wantMsg string) {
 	t.Helper()
 
@@ -119,7 +124,10 @@ func TestInitAttachmentUploadForwardsRequestAndMapsResponse(t *testing.T) {
 		Headers:      map[string]string{"x-signature": "sig"},
 		ExpiresAt:    1700000000000,
 	}}
-	logic := NewInitAttachmentUploadLogic(userContext(42), &svc.ServiceContext{AttachmentClient: client})
+	logic := NewInitAttachmentUploadLogic(userContext(42), &svc.ServiceContext{
+		AttachmentClient:        client,
+		LogicConversationClient: membersOf(42),
+	})
 
 	resp, err := logic.InitAttachmentUpload(&types.InitAttachmentUploadRequest{
 		ConversationId: 7,
@@ -150,14 +158,31 @@ func TestInitAttachmentUploadForwardsRequestAndMapsResponse(t *testing.T) {
 	}, resp)
 }
 
+func TestInitAttachmentUploadRequiresMembership(t *testing.T) {
+	t.Parallel()
+
+	client := &fakeAttachmentClient{}
+	members := membersOf(1, 2)
+	_, err := NewInitAttachmentUploadLogic(userContext(42), &svc.ServiceContext{
+		AttachmentClient:        client,
+		LogicConversationClient: members,
+	}).InitAttachmentUpload(&types.InitAttachmentUploadRequest{ConversationId: 7, Kind: "file"})
+
+	requireCodeError(t, err, errorx.CodeForbidden, "user is not a member of this conversation")
+	require.Equal(t, int64(7), members.got.GetConversationId())
+	require.Nil(t, client.initReq, "non-members must not start an upload in the conversation")
+}
+
 func TestInitAttachmentUploadPropagatesUpstreamError(t *testing.T) {
 	t.Parallel()
 
 	upstream := status.Error(codes.ResourceExhausted, "quota exceeded")
 	client := &fakeAttachmentClient{initErr: upstream}
 
-	_, err := NewInitAttachmentUploadLogic(userContext(42), &svc.ServiceContext{AttachmentClient: client}).
-		InitAttachmentUpload(&types.InitAttachmentUploadRequest{ConversationId: 7, Kind: "file"})
+	_, err := NewInitAttachmentUploadLogic(userContext(42), &svc.ServiceContext{
+		AttachmentClient:        client,
+		LogicConversationClient: membersOf(42),
+	}).InitAttachmentUpload(&types.InitAttachmentUploadRequest{ConversationId: 7, Kind: "file"})
 
 	require.Equal(t, upstream, err, "InitUpload errors reach the caller untouched")
 }
@@ -271,8 +296,10 @@ func TestGetAttachmentMapsFileInfo(t *testing.T) {
 
 	client := &fakeAttachmentClient{getFileResp: &attachmentpb.FileInfo{FileId: "file-1", OwnerId: 42, ConversationId: 7}}
 
-	resp, err := NewGetAttachmentLogic(userContext(42), &svc.ServiceContext{AttachmentClient: client}).
-		GetAttachment(&types.GetAttachmentRequest{Id: "file-1"})
+	resp, err := NewGetAttachmentLogic(userContext(42), &svc.ServiceContext{
+		AttachmentClient:        client,
+		LogicConversationClient: membersOf(7, 42),
+	}).GetAttachment(&types.GetAttachmentRequest{Id: "file-1"})
 	require.NoError(t, err)
 	require.Equal(t, int64(42), client.getFileReq.GetUserId())
 	require.Equal(t, "file-1", client.getFileReq.GetFileId())
@@ -399,4 +426,18 @@ func TestDownloadAttachmentPropagatesAuthorizeDownloadError(t *testing.T) {
 	_, err := logic.DownloadAttachment(&types.DownloadAttachmentRequest{Id: "file-1"})
 
 	require.Equal(t, upstream, err, "AuthorizeDownload errors reach the caller untouched")
+}
+
+func TestGetAttachmentRequiresMembership(t *testing.T) {
+	t.Parallel()
+
+	client := &fakeAttachmentClient{getFileResp: &attachmentpb.FileInfo{FileId: "file-1", OwnerId: 99, ConversationId: 7}}
+	members := membersOf(1, 2)
+	_, err := NewGetAttachmentLogic(userContext(42), &svc.ServiceContext{
+		AttachmentClient:        client,
+		LogicConversationClient: members,
+	}).GetAttachment(&types.GetAttachmentRequest{Id: "file-1"})
+
+	requireCodeError(t, err, errorx.CodeForbidden, "user is not a member of this conversation")
+	require.Equal(t, int64(7), members.got.GetConversationId())
 }

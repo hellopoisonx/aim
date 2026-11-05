@@ -52,8 +52,10 @@ type ProducerConf struct {
 }
 
 // IsConfigured reports whether the producer has enough configuration to start.
+// It matches [NewProducer]'s validation, so a configured producer is
+// constructible.
 func (c ProducerConf) IsConfigured() bool {
-	return c.Endpoint != "" && c.Topic != ""
+	return c.Endpoint != "" && c.Group != "" && c.Topic != ""
 }
 
 // ConsumerConf configures one consumer service.

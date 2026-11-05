@@ -24,13 +24,13 @@ func NewAddUserBotToConversationLogic(ctx context.Context, svcCtx *svc.ServiceCo
 }
 
 func (l *AddUserBotToConversationLogic) AddUserBotToConversation(req *types.AddUserBotToConversationRequest) (resp *types.AddUserBotToConversationResponse, err error) {
-	identity, ok := authctx.IdentityFromContext(l.ctx)
-	if !ok {
-		return nil, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
+	userID, err := authctx.RequireUserID(l.ctx)
+	if err != nil {
+		return nil, err
 	}
 	rpcResp, err := l.svcCtx.LogicBotClient.AddUserBotToConversation(l.ctx, &botservice.AddUserBotToConversationReq{
-		OwnerUserId: identity.UserID, BotUserId: req.Id,
-		ConversationId: req.ConversationId, OperatorId: identity.UserID, OperatorName: "",
+		OwnerUserId: userID, BotUserId: req.Id,
+		ConversationId: req.ConversationId, OperatorId: userID, OperatorName: "",
 	})
 	if err != nil {
 		return nil, errorx.SanitizeGRPCError(l, "add user bot to conversation", err)

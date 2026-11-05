@@ -28,13 +28,13 @@ func NewRenameFriendTagLogic(ctx context.Context, svcCtx *svc.ServiceContext) *R
 }
 
 func (l *RenameFriendTagLogic) RenameFriendTag(req *types.RenameFriendTagRequest) (resp *types.RenameFriendTagResponse, err error) {
-	identity, ok := authctx.IdentityFromContext(l.ctx)
-	if !ok {
-		return nil, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
+	userID, err := authctx.RequireUserID(l.ctx)
+	if err != nil {
+		return nil, err
 	}
 
 	rpcResp, err := l.svcCtx.LogicFriendshipClient.RenameFriendTag(l.ctx, &friendshipservice.RenameFriendTagReq{
-		UserId: identity.UserID,
+		UserId: userID,
 		TagId:  req.Id,
 		Name:   req.Name,
 	})

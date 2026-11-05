@@ -43,19 +43,11 @@ func (l *GetConversationHistoryLogic) GetConversationHistory(req *types.GetConve
 		return nil, err
 	}
 
-	limit := req.Limit
-	if limit <= 0 {
-		limit = 50
-	}
-	if limit > 100 {
-		limit = 100
-	}
-
 	rpcResp, err := l.svcCtx.LogicConversationClient.GetConversationHistory(l.ctx, &conversationservice.GetConversationHistoryReq{
 		ConversationId:  req.Id,
 		CursorCreatedAt: req.CursorCreatedAt,
 		CursorId:        req.CursorId,
-		Limit:           limit,
+		Limit:           req.Limit,
 	})
 	if err != nil {
 		return nil, errorx.SanitizeGRPCError(l, "get conversation history", err)

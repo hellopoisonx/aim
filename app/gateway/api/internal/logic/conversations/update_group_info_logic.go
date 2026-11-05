@@ -29,9 +29,9 @@ func NewUpdateGroupInfoLogic(ctx context.Context, svcCtx *svc.ServiceContext) *U
 }
 
 func (l *UpdateGroupInfoLogic) UpdateGroupInfo(req *types.UpdateGroupInfoRequest) (resp *types.UpdateGroupInfoResponse, err error) {
-	identity, ok := authctx.IdentityFromContext(l.ctx)
-	if !ok {
-		return nil, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
+	userID, err := authctx.RequireUserID(l.ctx)
+	if err != nil {
+		return nil, err
 	}
 
 	var name, avatar *string
@@ -50,7 +50,7 @@ func (l *UpdateGroupInfoLogic) UpdateGroupInfo(req *types.UpdateGroupInfoRequest
 
 	rpcResp, err := l.svcCtx.LogicConversationClient.UpdateGroupInfo(l.ctx, &conversationservice.UpdateGroupInfoReq{
 		ConversationId: req.Id,
-		OperatorId:     identity.UserID,
+		OperatorId:     userID,
 		OperatorName:   "",
 		Name:           name,
 		Avatar:         avatar,

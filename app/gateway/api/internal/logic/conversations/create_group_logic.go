@@ -33,9 +33,9 @@ func NewCreateGroupLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Creat
 }
 
 func (l *CreateGroupLogic) CreateGroup(req *types.CreateGroupRequest) (resp *types.CreateConversationResponse, err error) {
-	identity, ok := authctx.IdentityFromContext(l.ctx)
-	if !ok {
-		return nil, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
+	userID, err := authctx.RequireUserID(l.ctx)
+	if err != nil {
+		return nil, err
 	}
 
 	if len(req.MemberIds) == 0 {
@@ -49,7 +49,7 @@ func (l *CreateGroupLogic) CreateGroup(req *types.CreateGroupRequest) (resp *typ
 
 	rpcResp, err := l.svcCtx.LogicConversationClient.CreateConversation(l.ctx, &conversationservice.CreateConversationReq{
 		ConversationType: string(sharedconversation.TypeGroup),
-		CreatorId:        identity.UserID,
+		CreatorId:        userID,
 		MemberIds:        req.MemberIds,
 		Name:             name,
 		Avatar:           req.Avatar,

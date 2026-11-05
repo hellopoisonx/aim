@@ -31,13 +31,13 @@ func NewGrantGroupAdminLogic(ctx context.Context, svcCtx *svc.ServiceContext) *G
 }
 
 func (l *GrantGroupAdminLogic) GrantGroupAdmin(req *types.GrantGroupAdminRequest) error {
-	identity, ok := authctx.IdentityFromContext(l.ctx)
-	if !ok {
-		return errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
+	userID, err := authctx.RequireUserID(l.ctx)
+	if err != nil {
+		return err
 	}
-	_, err := l.svcCtx.LogicConversationClient.GrantGroupAdmin(l.ctx, &conversationservice.GrantGroupAdminReq{
+	_, err = l.svcCtx.LogicConversationClient.GrantGroupAdmin(l.ctx, &conversationservice.GrantGroupAdminReq{
 		ConversationId: req.Id,
-		OperatorId:     identity.UserID,
+		OperatorId:     userID,
 		TargetUserId:   req.UserId,
 	})
 	if err != nil {

@@ -13,7 +13,7 @@ import (
 	"github.com/hellopoisonx/aim/app/shared/bottoken"
 	sharedcache "github.com/hellopoisonx/aim/app/shared/cache"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
-	"github.com/hellopoisonx/aim/app/shared/tools"
+	"github.com/hellopoisonx/aim/app/shared/snowflake"
 	shareduser "github.com/hellopoisonx/aim/app/shared/user"
 
 	"github.com/zeromicro/go-zero/core/logx"
@@ -135,7 +135,7 @@ type BotService struct {
 	queries       BotQuerier
 	management    BotManagementQuerier
 	txRunner      BotTxRunner
-	idGen         *tools.Snowflake
+	idGen         *snowflake.Snowflake
 	botTokenCache *sharedcache.TypedCache[dao.BotTokenWithUser]
 }
 
@@ -153,7 +153,7 @@ func WithBotTxRunner(runner BotTxRunner) BotServiceOption {
 	}
 }
 
-func WithBotIDGenerator(idGen *tools.Snowflake) BotServiceOption {
+func WithBotIDGenerator(idGen *snowflake.Snowflake) BotServiceOption {
 	return func(s *BotService) {
 		s.idGen = idGen
 	}

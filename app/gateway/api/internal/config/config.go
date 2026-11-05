@@ -58,6 +58,9 @@ type Config struct {
 		// application pushes out to every gateway node.
 		FriendApplicationTopic string `json:",default=aim-friend-application-events"` //nolint:staticcheck // go-zero conf uses json tag options for defaults.
 		PushTopic              string `json:",default=aim-gateway-push"`
+		// ProducerGroup is the broker-visible producer group of the gateway
+		// event producer.
+		ProducerGroup string `json:",default=aim-gateway-producer"`
 	}
 	PushConsumer  rocketmq.ConsumerConf `json:",optional"`
 	AttachmentRpc zrpc.RpcClientConf

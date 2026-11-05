@@ -231,3 +231,40 @@ func TestResolveWithoutKeysIsUnknown(t *testing.T) {
 
 	assert.Equal(t, rmq.UNKNOWN, producer.resolve("aim-user-events", nil))
 }
+
+func TestNewProducerValidation(t *testing.T) {
+	endpoint := EndpointConf{Endpoint: "rocketmq-proxy:8081"}
+	cases := []struct {
+		name    string
+		conf    ProducerConf
+		extra   []string
+		wantErr string
+	}{
+		{name: "endpoint", wantErr: "endpoint is required"},
+		{name: "group", conf: ProducerConf{EndpointConf: endpoint, Topic: "aim-user-events"}, wantErr: "producer group is required"},
+		{name: "topic", conf: ProducerConf{EndpointConf: endpoint, Group: "aim-auth-producer"}, wantErr: "producer topic is required"},
+		{name: "empty extra topic", conf: ProducerConf{EndpointConf: endpoint, Group: "aim-auth-producer", Topic: "aim-user-events"}, extra: []string{""}, wantErr: "producer topic is required"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := NewProducer(tc.conf, tc.extra...)
+
+			require.ErrorContains(t, err, tc.wantErr)
+		})
+	}
+}
+
+// A config that passes IsConfigured must be constructible: the readiness gate
+// and NewProducer agree on which fields are required.
+func TestProducerConfIsConfiguredMatchesConstructorRequirement(t *testing.T) {
+	conf := ProducerConf{
+		EndpointConf: EndpointConf{Endpoint: "rocketmq-proxy:8081"},
+		Group:        "aim-auth-producer",
+		Topic:        "aim-user-events",
+	}
+	assert.True(t, conf.IsConfigured())
+
+	conf.Topic = ""
+	assert.False(t, conf.IsConfigured())
+}

@@ -28,13 +28,13 @@ func NewListFriendTagsLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Li
 }
 
 func (l *ListFriendTagsLogic) ListFriendTags() (resp *types.ListFriendTagsResponse, err error) {
-	identity, ok := authctx.IdentityFromContext(l.ctx)
-	if !ok {
-		return nil, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
+	userID, err := authctx.RequireUserID(l.ctx)
+	if err != nil {
+		return nil, err
 	}
 
 	rpcResp, err := l.svcCtx.LogicFriendshipClient.ListFriendTags(l.ctx, &friendshipservice.ListFriendTagsReq{
-		UserId: identity.UserID,
+		UserId: userID,
 	})
 	if err != nil {
 		return nil, errorx.SanitizeGRPCError(l, "list friend tags", err)

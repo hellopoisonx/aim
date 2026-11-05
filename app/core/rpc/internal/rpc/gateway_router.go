@@ -2,7 +2,7 @@ package rpc
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"sync"
 
 	gwpb "github.com/hellopoisonx/aim/shared/proto/gateway/pb"
@@ -16,8 +16,7 @@ type GatewayRouter struct {
 	clients map[string]GatewayPusher // keyed by node_id
 }
 
-// NewGatewayRouter creates a router backed by the given default client.
-// The default client handles traffic for the empty/unknown node IDs.
+// NewGatewayRouter creates an empty router.
 func NewGatewayRouter() *GatewayRouter {
 	return &GatewayRouter{
 		clients: make(map[string]GatewayPusher),
@@ -48,53 +47,42 @@ func (r *GatewayRouter) clientFor(nodeID string) GatewayPusher {
 	return nil
 }
 
-// PushMessage routes to the target user's gateway node (or default).
-func (r *GatewayRouter) PushMessage(ctx context.Context, req *gwpb.PushMessageReq) (*gwpb.PushMessageResp, error) {
-	client := r.clientFor("")
+var errNoGatewayClient = errors.New("no gateway client available")
+
+// PushMessageToNode routes a chat message push to a specific node.
+func (r *GatewayRouter) PushMessageToNode(ctx context.Context, nodeID string, req *gwpb.PushMessageReq) (*gwpb.PushMessageResp, error) {
+	client := r.clientFor(nodeID)
 	if client == nil {
-		return nil, fmt.Errorf("no gateway client available")
+		return nil, errNoGatewayClient
 	}
-	return client.PushMessage(ctx, req)
+	return client.PushMessageToNode(ctx, nodeID, req)
 }
 
-// PushPresence routes to the target friend's gateway node (or default).
-func (r *GatewayRouter) PushPresence(ctx context.Context, req *gwpb.PushPresenceReq) (*gwpb.PushPresenceResp, error) {
-	client := r.clientFor("")
+// PushPresenceToNode routes a presence push to a specific node.
+func (r *GatewayRouter) PushPresenceToNode(ctx context.Context, nodeID string, req *gwpb.PushPresenceReq) (*gwpb.PushPresenceResp, error) {
+	client := r.clientFor(nodeID)
 	if client == nil {
-		return nil, fmt.Errorf("no gateway client available")
+		return nil, errNoGatewayClient
 	}
-	return client.PushPresence(ctx, req)
+	return client.PushPresenceToNode(ctx, nodeID, req)
 }
 
-// PushTyping routes to the target member's gateway node (or default).
-func (r *GatewayRouter) PushTyping(ctx context.Context, req *gwpb.PushTypingReq) (*gwpb.PushTypingResp, error) {
-	client := r.clientFor("")
+// PushTypingToNode routes a typing push to a specific node.
+func (r *GatewayRouter) PushTypingToNode(ctx context.Context, nodeID string, req *gwpb.PushTypingReq) (*gwpb.PushTypingResp, error) {
+	client := r.clientFor(nodeID)
 	if client == nil {
-		return nil, fmt.Errorf("no gateway client available")
+		return nil, errNoGatewayClient
 	}
-	return client.PushTyping(ctx, req)
+	return client.PushTypingToNode(ctx, nodeID, req)
 }
 
-// PushReadReceipt routes to the target member's gateway node (or default).
-func (r *GatewayRouter) PushReadReceipt(ctx context.Context, req *gwpb.PushReadReceiptReq) (*gwpb.PushReadReceiptResp, error) {
-	client := r.clientFor("")
+// PushReadReceiptToNode routes a read-receipt push to a specific node.
+func (r *GatewayRouter) PushReadReceiptToNode(ctx context.Context, nodeID string, req *gwpb.PushReadReceiptReq) (*gwpb.PushReadReceiptResp, error) {
+	client := r.clientFor(nodeID)
 	if client == nil {
-		return nil, fmt.Errorf("no gateway client available")
+		return nil, errNoGatewayClient
 	}
-
-	return client.PushReadReceipt(ctx, req)
-}
-
-// PushFriendApplication delivers through the default gateway client.
-//
-// The consumer fans out per node by calling this on each node's client.
-func (r *GatewayRouter) PushFriendApplication(ctx context.Context, req *gwpb.PushFriendApplicationReq) (*gwpb.PushFriendApplicationResp, error) {
-	client := r.clientFor("")
-	if client == nil {
-		return nil, fmt.Errorf("no gateway client available")
-	}
-
-	return client.PushFriendApplication(ctx, req)
+	return client.PushReadReceiptToNode(ctx, nodeID, req)
 }
 
 // PushFriendApplicationToNode delivers a friend application through the client
@@ -102,63 +90,9 @@ func (r *GatewayRouter) PushFriendApplication(ctx context.Context, req *gwpb.Pus
 func (r *GatewayRouter) PushFriendApplicationToNode(ctx context.Context, nodeID string, req *gwpb.PushFriendApplicationReq) (*gwpb.PushFriendApplicationResp, error) {
 	client := r.clientFor(nodeID)
 	if client == nil {
-		return nil, fmt.Errorf("no gateway client available for node %s", nodeID)
+		return nil, errNoGatewayClient
 	}
-
-	return client.PushFriendApplication(ctx, req)
+	return client.PushFriendApplicationToNode(ctx, nodeID, req)
 }
 
-// PushNotification routes a system notification to the default gateway client.
-// For broadcast scenarios callers should fan out per-node themselves.
-func (r *GatewayRouter) PushNotification(ctx context.Context, req *gwpb.PushNotificationReq) (*gwpb.PushNotificationResp, error) {
-	client := r.clientFor("")
-	if client == nil {
-		return nil, fmt.Errorf("no gateway client available")
-	}
-	return client.PushNotification(ctx, req)
-}
-
-// PushNotificationToNode routes a system notification to a specific gateway node.
-func (r *GatewayRouter) PushNotificationToNode(ctx context.Context, nodeID string, req *gwpb.PushNotificationReq) (*gwpb.PushNotificationResp, error) {
-	client := r.clientFor(nodeID)
-	if client == nil {
-		return nil, fmt.Errorf("no gateway client available for node %s", nodeID)
-	}
-	return client.PushNotification(ctx, req)
-}
-
-// PushPresenceToNode routes a presence push to a specific node.
-func (r *GatewayRouter) PushPresenceToNode(ctx context.Context, nodeID string, req *gwpb.PushPresenceReq) (*gwpb.PushPresenceResp, error) {
-	client := r.clientFor(nodeID)
-	if client == nil {
-		return nil, fmt.Errorf("no gateway client available for node %s", nodeID)
-	}
-	return client.PushPresence(ctx, req)
-}
-
-// PushTypingToNode routes a typing push to a specific node.
-func (r *GatewayRouter) PushTypingToNode(ctx context.Context, nodeID string, req *gwpb.PushTypingReq) (*gwpb.PushTypingResp, error) {
-	client := r.clientFor(nodeID)
-	if client == nil {
-		return nil, fmt.Errorf("no gateway client available for node %s", nodeID)
-	}
-	return client.PushTyping(ctx, req)
-}
-
-// PushMessageToNode routes a chat message push to a specific node.
-func (r *GatewayRouter) PushMessageToNode(ctx context.Context, nodeID string, req *gwpb.PushMessageReq) (*gwpb.PushMessageResp, error) {
-	client := r.clientFor(nodeID)
-	if client == nil {
-		return nil, fmt.Errorf("no gateway client available for node %s", nodeID)
-	}
-	return client.PushMessage(ctx, req)
-}
-
-// PushReadReceiptToNode routes a read-receipt push to a specific node.
-func (r *GatewayRouter) PushReadReceiptToNode(ctx context.Context, nodeID string, req *gwpb.PushReadReceiptReq) (*gwpb.PushReadReceiptResp, error) {
-	client := r.clientFor(nodeID)
-	if client == nil {
-		return nil, fmt.Errorf("no gateway client available for node %s", nodeID)
-	}
-	return client.PushReadReceipt(ctx, req)
-}
+var _ GatewayPusher = (*GatewayRouter)(nil)

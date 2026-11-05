@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hellopoisonx/aim/app/shared/tools"
+	"github.com/hellopoisonx/aim/app/shared/snowflake"
 
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/servicefakes"
 
@@ -17,8 +17,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var testSnowflake = func() *tools.Snowflake {
-	gen, err := tools.NewSnowflake(1)
+var testSnowflake = func() *snowflake.Snowflake {
+	gen, err := snowflake.NewSnowflake(1)
 	if err != nil {
 		panic(err)
 	}

@@ -30,10 +30,6 @@ import (
 	"go.opentelemetry.io/otel/propagation"
 )
 
-// parsedProducerGroup is the broker-visible producer group of the parsing
-// worker.
-const parsedProducerGroup = "aim-data-parsing-producer"
-
 const dataParsingTracerName = "github.com/hellopoisonx/aim/app/data_parsing"
 
 type Worker struct {
@@ -54,12 +50,14 @@ func New(ctx context.Context, cfg config.Config) (*Worker, error) {
 	}
 	var producer *rocketmq.Producer
 	if cfg.ParsedProducer.IsConfigured() {
-		created, err := rocketmq.NewProducer(cfg.ParsedProducer.EndpointConf, parsedProducerGroup, cfg.ParsedProducer.Topic)
+		created, err := rocketmq.NewProducer(cfg.ParsedProducer)
 		if err != nil {
 			return nil, err
 		}
+		// An unreachable broker must not crash-loop the consumer: parsing keeps
+		// running and publishes fail loudly instead.
 		if err := created.Start(); err != nil {
-			return nil, err
+			logx.WithContext(ctx).Errorf("failed to start rocketmq parsed producer: %v", err)
 		}
 		producer = created
 	}
@@ -230,27 +228,61 @@ func (w *Worker) objectURL(key string) string {
 	return endpoint + "/" + bucket + "/" + strings.TrimLeft(key, "/")
 }
 
+// seaweedHTTPTimeout bounds one object transfer; http.DefaultClient has none, so
+// a stalled endpoint would wedge the consumer goroutine.
+const seaweedHTTPTimeout = 30 * time.Second
+
+var seaweedHTTPClient = &http.Client{Timeout: seaweedHTTPTimeout}
+
+// doObject signs, sends and status-checks one object request. On success the
+// caller owns the response body and must close it.
+func (w *Worker) doObject(ctx context.Context, method, key, mime string, body []byte) (*http.Response, error) {
+	url := w.objectURL(key)
+	var signedHeaders map[string]string
+	if w.cfg.Seaweed.AccessKey != "" && w.cfg.Seaweed.SecretKey != "" {
+		var signHeaders map[string]string
+		if mime != "" {
+			signHeaders = map[string]string{"content-type": mime}
+		}
+		signer := s3signer.S3Signer{Endpoint: w.cfg.Seaweed.Endpoint, Region: "us-east-1", AccessKey: w.cfg.Seaweed.AccessKey, SecretKey: w.cfg.Seaweed.SecretKey, Bucket: w.cfg.Seaweed.Bucket}
+		signed, headers, err := signer.PresignInternal(method, key, time.Minute, signHeaders)
+		if err != nil {
+			return nil, err
+		}
+		url = signed
+		signedHeaders = headers
+	}
+	var payload io.Reader
+	if body != nil {
+		payload = bytes.NewReader(body)
+	}
+	req, err := http.NewRequestWithContext(ctx, method, url, payload)
+	if err != nil {
+		return nil, err
+	}
+	for k, v := range signedHeaders {
+		req.Header.Set(k, v)
+	}
+	if mime != "" {
+		req.Header.Set("Content-Type", mime)
+	}
+	otel.GetTextMapPropagator().Inject(ctx, propagation.HeaderCarrier(req.Header))
+	resp, err := seaweedHTTPClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		_ = resp.Body.Close()
+		return nil, fmt.Errorf("%s object status %d", strings.ToLower(method), resp.StatusCode)
+	}
+	return resp, nil
+}
+
 func (w *Worker) getObject(ctx context.Context, key string) ([]byte, error) {
 	ctx, span := tracing.StartClientSpan(ctx, dataParsingTracerName, "data_parsing.seaweed.get_object", attribute.String("seaweed.object_key", key))
 	defer span.End()
 
-	url := w.objectURL(key)
-	if w.cfg.Seaweed.AccessKey != "" && w.cfg.Seaweed.SecretKey != "" {
-		signer := s3signer.S3Signer{Endpoint: w.cfg.Seaweed.Endpoint, Region: "us-east-1", AccessKey: w.cfg.Seaweed.AccessKey, SecretKey: w.cfg.Seaweed.SecretKey, Bucket: w.cfg.Seaweed.Bucket}
-		signed, _, err := signer.PresignInternal(http.MethodGet, key, time.Minute, nil)
-		if err != nil {
-			tracing.RecordSpanError(span, err)
-			return nil, err
-		}
-		url = signed
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		tracing.RecordSpanError(span, err)
-		return nil, err
-	}
-	otel.GetTextMapPropagator().Inject(ctx, propagation.HeaderCarrier(req.Header))
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := w.doObject(ctx, http.MethodGet, key, "", nil)
 	if err != nil {
 		tracing.RecordSpanError(span, err)
 		return nil, err
@@ -258,11 +290,6 @@ func (w *Worker) getObject(ctx context.Context, key string) ([]byte, error) {
 	defer func() { _ = resp.Body.Close() }()
 
 	span.SetAttributes(attribute.Int("http.response.status_code", resp.StatusCode))
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		err := fmt.Errorf("get object status %d", resp.StatusCode)
-		tracing.RecordSpanError(span, err)
-		return nil, err
-	}
 	return io.ReadAll(resp.Body)
 }
 
@@ -270,29 +297,7 @@ func (w *Worker) putObject(ctx context.Context, key, mime string, data []byte) e
 	ctx, span := tracing.StartClientSpan(ctx, dataParsingTracerName, "data_parsing.seaweed.put_object", attribute.String("seaweed.object_key", key))
 	defer span.End()
 
-	url := w.objectURL(key)
-	var headers map[string]string
-	if w.cfg.Seaweed.AccessKey != "" && w.cfg.Seaweed.SecretKey != "" {
-		signer := s3signer.S3Signer{Endpoint: w.cfg.Seaweed.Endpoint, Region: "us-east-1", AccessKey: w.cfg.Seaweed.AccessKey, SecretKey: w.cfg.Seaweed.SecretKey, Bucket: w.cfg.Seaweed.Bucket}
-		signed, signedHeaders, err := signer.PresignInternal(http.MethodPut, key, time.Minute, map[string]string{"content-type": mime})
-		if err != nil {
-			tracing.RecordSpanError(span, err)
-			return err
-		}
-		url = signed
-		headers = signedHeaders
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, bytes.NewReader(data))
-	if err != nil {
-		tracing.RecordSpanError(span, err)
-		return err
-	}
-	for k, v := range headers {
-		req.Header.Set(k, v)
-	}
-	req.Header.Set("Content-Type", mime)
-	otel.GetTextMapPropagator().Inject(ctx, propagation.HeaderCarrier(req.Header))
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := w.doObject(ctx, http.MethodPut, key, mime, data)
 	if err != nil {
 		tracing.RecordSpanError(span, err)
 		return err
@@ -300,10 +305,5 @@ func (w *Worker) putObject(ctx context.Context, key, mime string, data []byte) e
 	defer func() { _ = resp.Body.Close() }()
 
 	span.SetAttributes(attribute.Int("http.response.status_code", resp.StatusCode))
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		err := fmt.Errorf("put object status %d", resp.StatusCode)
-		tracing.RecordSpanError(span, err)
-		return err
-	}
 	return nil
 }

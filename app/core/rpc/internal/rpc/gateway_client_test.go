@@ -38,11 +38,11 @@ func TestGatewayClient_ReusesConnectionAcrossPushes(t *testing.T) {
 	t.Cleanup(func() { require.NoError(t, client.Close()) })
 
 	firstConn := client.conn
-	resp, err := client.PushMessage(context.Background(), &gwpb.PushMessageReq{MessageId: 1, TargetUserId: 1})
+	resp, err := client.PushMessageToNode(context.Background(), "", &gwpb.PushMessageReq{MessageId: 1, TargetUserId: 1})
 	require.NoError(t, err)
 	require.True(t, resp.GetSuccess())
 
-	resp, err = client.PushMessage(context.Background(), &gwpb.PushMessageReq{MessageId: 2, TargetUserId: 1})
+	resp, err = client.PushMessageToNode(context.Background(), "", &gwpb.PushMessageReq{MessageId: 2, TargetUserId: 1})
 	require.NoError(t, err)
 	require.True(t, resp.GetSuccess())
 	require.Same(t, firstConn, client.conn)

@@ -6,6 +6,7 @@ import (
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/authctx"
 
 	attachmentpb "github.com/hellopoisonx/aim/app/attachment/rpc/pb"
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/membership"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
 
@@ -37,6 +38,10 @@ func (l *GetAttachmentLogic) GetAttachment(req *types.GetAttachmentRequest) (res
 		FileId: req.Id,
 	})
 	if err != nil {
+		return nil, err
+	}
+
+	if err := membership.RequireMember(l.ctx, l, l.svcCtx.LogicConversationClient, info.GetConversationId(), userID, membership.ActorUser); err != nil {
 		return nil, err
 	}
 

@@ -24,12 +24,12 @@ func NewGetUserBotLogic(ctx context.Context, svcCtx *svc.ServiceContext) *GetUse
 }
 
 func (l *GetUserBotLogic) GetUserBot(req *types.GetUserBotRequest) (resp *types.GetUserBotResponse, err error) {
-	identity, ok := authctx.IdentityFromContext(l.ctx)
-	if !ok {
-		return nil, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
+	userID, err := authctx.RequireUserID(l.ctx)
+	if err != nil {
+		return nil, err
 	}
 	rpcResp, err := l.svcCtx.LogicBotClient.GetUserBot(l.ctx, &botservice.GetUserBotReq{
-		OwnerUserId: identity.UserID, BotUserId: req.Id,
+		OwnerUserId: userID, BotUserId: req.Id,
 	})
 	if err != nil {
 		return nil, errorx.SanitizeGRPCError(l, "get user bot", err)

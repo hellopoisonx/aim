@@ -64,29 +64,36 @@ type Producer struct {
 	journalTx journalTx
 }
 
-// NewProducer builds a producer for the given topics.
+// NewProducer builds a producer for conf.Topic plus any extraTopics; one
+// producer may span several topics (the gateway's event producer does).
 //
 // Journal-backed transaction check-back is enabled separately by
 // [Producer.WithJournalChecker]; the checker closure is installed up front so
 // enabling it after construction works.
-func NewProducer(cfg EndpointConf, group string, topics ...string) (*Producer, error) {
-	if cfg.Endpoint == "" {
+func NewProducer(conf ProducerConf, extraTopics ...string) (*Producer, error) {
+	if conf.Endpoint == "" {
 		return nil, errors.New("rocketmq: endpoint is required")
 	}
-	if group == "" {
+	if conf.Group == "" {
 		return nil, errors.New("rocketmq: producer group is required")
+	}
+	topics := append([]string{conf.Topic}, extraTopics...)
+	for _, topic := range topics {
+		if topic == "" {
+			return nil, errors.New("rocketmq: producer topic is required")
+		}
 	}
 	configureLogger()
 
-	p := &Producer{group: group, journalTx: gormJournalTx}
+	p := &Producer{group: conf.Group, journalTx: gormJournalTx}
 	checker := &rmq.TransactionChecker{Check: p.checkTransaction}
 	producer, err := rmq.NewProducer(&rmq.Config{
-		Endpoint:      cfg.Endpoint,
-		ConsumerGroup: group,
-		Credentials:   cfg.sessionCredentials(),
+		Endpoint:      conf.Endpoint,
+		ConsumerGroup: conf.Group,
+		Credentials:   conf.sessionCredentials(),
 	}, rmq.WithTopics(topics...), rmq.WithTransactionChecker(checker))
 	if err != nil {
-		return nil, fmt.Errorf("rocketmq: create producer %s: %w", group, err)
+		return nil, fmt.Errorf("rocketmq: create producer %s: %w", conf.Group, err)
 	}
 	p.producer = producer
 	return p, nil

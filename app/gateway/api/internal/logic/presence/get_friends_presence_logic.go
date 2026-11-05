@@ -35,14 +35,14 @@ func NewGetFriendsPresenceLogic(ctx context.Context, svcCtx *svc.ServiceContext)
 
 func (l *GetFriendsPresenceLogic) GetFriendsPresence() (resp *types.GetFriendsPresenceResponse, err error) {
 	// Extract current user ID from the auth context.
-	identity, ok := authctx.IdentityFromContext(l.ctx)
-	if !ok || identity.UserID == 0 {
-		return nil, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
+	userID, err := authctx.RequireUserID(l.ctx)
+	if err != nil {
+		return nil, err
 	}
 
 	// Get friend list from logic service.
 	friendsResp, err := l.svcCtx.LogicFriendshipClient.ListFriends(l.ctx, &friendshippb.ListFriendsReq{
-		UserId: identity.UserID,
+		UserId: userID,
 	})
 	if err != nil {
 		return nil, errorx.SanitizeGRPCError(l, "list friends", err)

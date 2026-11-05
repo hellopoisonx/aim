@@ -30,9 +30,9 @@ func NewSearchLogic(ctx context.Context, svcCtx *svc.ServiceContext) *SearchLogi
 }
 
 func (l *SearchLogic) Search(req *types.SearchRequest) (resp *types.SearchResponse, err error) {
-	identity, ok := authctx.IdentityFromContext(l.ctx)
-	if !ok {
-		return nil, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
+	userID, err := authctx.RequireUserID(l.ctx)
+	if err != nil {
+		return nil, err
 	}
 
 	var scopes []string
@@ -44,7 +44,7 @@ func (l *SearchLogic) Search(req *types.SearchRequest) (resp *types.SearchRespon
 	}
 
 	rpcResp, err := l.svcCtx.LogicSearchClient.UnifiedSearch(l.ctx, &searchservice.UnifiedSearchReq{
-		UserId:          identity.UserID,
+		UserId:          userID,
 		Query:           req.Query,
 		Scopes:          scopes,
 		ConversationId:  req.ConversationId,

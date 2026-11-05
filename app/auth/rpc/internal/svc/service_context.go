@@ -2,6 +2,7 @@ package svc
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/hellopoisonx/aim/app/auth/rpc/internal/config"
@@ -9,7 +10,7 @@ import (
 	"github.com/hellopoisonx/aim/app/auth/rpc/model/dao"
 	"github.com/hellopoisonx/aim/app/shared/gormdb"
 	"github.com/hellopoisonx/aim/app/shared/rocketmq"
-	"github.com/hellopoisonx/aim/app/shared/tools"
+	"github.com/hellopoisonx/aim/app/shared/snowflake"
 
 	"github.com/redis/go-redis/v9"
 	"github.com/zeromicro/go-zero/core/logx"
@@ -21,7 +22,7 @@ type ServiceContext struct {
 	Users       service.UserStore
 	Sessions    service.SessionStore
 	TokenIssuer service.TokenIssuer
-	IDGen       *tools.Snowflake
+	IDGen       *snowflake.Snowflake
 	// EventProducer publishes user.created as a transactional message. Nil when
 	// RocketMQ is not configured.
 	EventProducer *rocketmq.Producer
@@ -29,9 +30,6 @@ type ServiceContext struct {
 	// nil when transactional publishing is not configured.
 	Registrar service.UserRegistrarStore
 }
-
-// authProducerGroup is the broker-visible producer group of auth.
-const authProducerGroup = "aim-auth-producer"
 
 // StartEventProducer connects the transactional user event producer.
 func (s *ServiceContext) StartEventProducer() {
@@ -62,7 +60,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	}
 	store := dao.New(db)
 
-	idGen, err := tools.NewSnowflake(c.Token.SnowflakeMachineID)
+	idGen, err := snowflake.NewSnowflake(c.Token.SnowflakeMachineID)
 	if err != nil {
 		panic(err)
 	}
@@ -80,11 +78,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 
 	// Transactional user.created publishing, when configured.
 	if c.IsUserEventProducerConfigured() {
-		producer, err := rocketmq.NewProducer(
-			c.UserEventProducerConf.EndpointConf,
-			authProducerGroup,
-			c.UserEventProducerConf.Topic,
-		)
+		producer, err := rocketmq.NewProducer(c.UserEventProducerConf)
 		if err != nil {
 			panic(err)
 		}
@@ -107,7 +101,7 @@ func applyDefaults(c *config.Config) {
 	}
 
 	if c.Token.AccessSecret == "" {
-		c.Token.AccessSecret = "aim-dev-access-secret"
+		logx.Must(errors.New("token access secret is required: set Config.Token.AccessSecret"))
 	}
 
 	if c.Token.AccessTTL == 0 {

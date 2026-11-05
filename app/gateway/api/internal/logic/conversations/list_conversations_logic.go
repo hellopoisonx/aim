@@ -28,13 +28,13 @@ func NewListConversationsLogic(ctx context.Context, svcCtx *svc.ServiceContext) 
 }
 
 func (l *ListConversationsLogic) ListConversations() (resp *types.ListConversationsResponse, err error) {
-	identity, ok := authctx.IdentityFromContext(l.ctx)
-	if !ok {
-		return nil, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
+	userID, err := authctx.RequireUserID(l.ctx)
+	if err != nil {
+		return nil, err
 	}
 
 	rpcResp, err := l.svcCtx.LogicConversationClient.GetUserConversations(l.ctx, &conversationservice.GetUserConversationsReq{
-		UserId: identity.UserID,
+		UserId: userID,
 	})
 	if err != nil {
 		return nil, errorx.SanitizeGRPCError(l, "get user conversations", err)

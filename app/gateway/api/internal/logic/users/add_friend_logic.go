@@ -36,9 +36,9 @@ func NewAddFriendLogic(ctx context.Context, svcCtx *svc.ServiceContext) *AddFrie
 }
 
 func (l *AddFriendLogic) AddFriend(req *types.AddFriendRequest) (resp *types.AddFriendResponse, err error) {
-	identity, ok := authctx.IdentityFromContext(l.ctx)
-	if !ok {
-		return nil, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
+	userID, err := authctx.RequireUserID(l.ctx)
+	if err != nil {
+		return nil, err
 	}
 
 	if req.Id <= 0 {
@@ -46,7 +46,7 @@ func (l *AddFriendLogic) AddFriend(req *types.AddFriendRequest) (resp *types.Add
 	}
 
 	rpcResp, err := l.svcCtx.LogicFriendshipClient.AddFriend(l.ctx, &friendshipservice.AddFriendReq{
-		UserId:   identity.UserID,
+		UserId:   userID,
 		FriendId: req.Id,
 	})
 	if err != nil {
@@ -83,15 +83,17 @@ func (l *AddFriendLogic) AddFriend(req *types.AddFriendRequest) (resp *types.Add
 		// Notify the recipient on every gateway node holding their connections.
 		// Best-effort: the application row is already persisted, so a broker
 		// hiccup must not fail the REST call.
-		if err := l.svcCtx.FriendAppPub.PublishFriendApplication(l.ctx, events.FriendApplicationEvent{
-			TargetUserID: item.FriendId,
-			UserID:       item.UserId,
-			FriendID:     item.FriendId,
-			Status:       item.Status,
-			CreatedAt:    item.CreatedAt,
-			UpdatedAt:    item.UpdatedAt,
-		}); err != nil {
-			l.Errorf("publish friend application failed: %v", err)
+		if l.svcCtx.FriendAppPub != nil {
+			if err := l.svcCtx.FriendAppPub.PublishFriendApplication(l.ctx, events.FriendApplicationEvent{
+				TargetUserID: item.FriendId,
+				UserID:       item.UserId,
+				FriendID:     item.FriendId,
+				Status:       item.Status,
+				CreatedAt:    item.CreatedAt,
+				UpdatedAt:    item.UpdatedAt,
+			}); err != nil {
+				l.Errorf("publish friend application failed: %v", err)
+			}
 		}
 	}
 

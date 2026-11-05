@@ -24,12 +24,12 @@ func NewCreateUserBotDirectConversationLogic(ctx context.Context, svcCtx *svc.Se
 }
 
 func (l *CreateUserBotDirectConversationLogic) CreateUserBotDirectConversation(req *types.CreateUserBotDirectConversationRequest) (resp *types.CreateUserBotDirectConversationResponse, err error) {
-	identity, ok := authctx.IdentityFromContext(l.ctx)
-	if !ok {
-		return nil, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
+	userID, err := authctx.RequireUserID(l.ctx)
+	if err != nil {
+		return nil, err
 	}
 	rpcResp, err := l.svcCtx.LogicBotClient.CreateUserBotDirectConversation(l.ctx, &botservice.CreateUserBotDirectConversationReq{
-		OwnerUserId: identity.UserID, BotUserId: req.Id,
+		OwnerUserId: userID, BotUserId: req.Id,
 	})
 	if err != nil {
 		return nil, errorx.SanitizeGRPCError(l, "create user bot direct conversation", err)

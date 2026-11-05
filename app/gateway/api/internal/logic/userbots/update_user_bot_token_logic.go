@@ -24,12 +24,12 @@ func NewUpdateUserBotTokenLogic(ctx context.Context, svcCtx *svc.ServiceContext)
 }
 
 func (l *UpdateUserBotTokenLogic) UpdateUserBotToken(req *types.UpdateUserBotTokenRequest) (resp *types.UpdateUserBotTokenResponse, err error) {
-	identity, ok := authctx.IdentityFromContext(l.ctx)
-	if !ok {
-		return nil, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
+	userID, err := authctx.RequireUserID(l.ctx)
+	if err != nil {
+		return nil, err
 	}
 	rpcResp, err := l.svcCtx.LogicBotClient.UpdateUserBotToken(l.ctx, &botservice.UpdateUserBotTokenReq{
-		OwnerUserId: identity.UserID, BotUserId: req.Id, TokenId: req.TokenId,
+		OwnerUserId: userID, BotUserId: req.Id, TokenId: req.TokenId,
 		Name: req.Name, ExpiresAt: req.ExpiresAt, Actions: req.Actions,
 	})
 	if err != nil {

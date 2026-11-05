@@ -57,29 +57,6 @@ type FriendApplicationPublisher interface {
 	PublishFriendApplication(ctx context.Context, event events.FriendApplicationEvent) error
 }
 
-// noopPublisher is a no-op implementation for when no real publisher is configured.
-type noopPublisher struct{}
-
-func (noopPublisher) PublishFriendApplication(_ context.Context, event events.FriendApplicationEvent) error {
-	logx.WithContext(context.Background()).Debugf("friend application publish (noop): target=%d status=%s", event.TargetUserID, event.Status)
-	return nil
-}
-
-func (noopPublisher) PublishPresence(ctx context.Context, userID int64, status string) error {
-	logx.WithContext(ctx).Debugf("presence publish (noop): user=%d status=%s", userID, status)
-	return nil
-}
-
-func (noopPublisher) PublishTyping(ctx context.Context, fromUserID, conversationID int64) error {
-	logx.WithContext(ctx).Debugf("typing publish (noop): from=%d conv=%d", fromUserID, conversationID)
-	return nil
-}
-
-func (noopPublisher) PublishReadReceipt(ctx context.Context, fromUserID, conversationID, lastReadMessageID, updatedAt int64) error {
-	logx.WithContext(ctx).Debugf("read receipt publish (noop): from=%d conv=%d last_msg=%d", fromUserID, conversationID, lastReadMessageID)
-	return nil
-}
-
 // ── RocketMQ-based publishers ─────────────────────────────────────────────────
 
 // rocketmqPresencePublisher implements PresencePublisher via RocketMQ.
@@ -248,7 +225,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	}
 
 	if c.Auth.AccessSecret == "" {
-		c.Auth.AccessSecret = "aim-dev-access-secret"
+		logx.Must(errors.New("auth access secret is required: set Config.Auth.AccessSecret"))
 	}
 
 	client, err := zrpc.NewClient(c.AuthRpc)
@@ -326,9 +303,9 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		RedisClient:    redisClient,
 		EventProducer:  eventProducer,
 		FriendAppPub:   newFriendApplicationPub(eventProducer, c.RocketMQ.FriendApplicationTopic),
-		PresencePub:    newPresencePub(eventProducer, presenceTopic, c.GatewayNodeID, redisClient),
-		TypingPub:      newTypingPub(eventProducer, typingTopic, c.GatewayNodeID, redisClient),
-		ReadReceiptPub: newReadReceiptPub(eventProducer, readReceiptTopic, c.GatewayNodeID, redisClient),
+		PresencePub:    newPresencePub(eventProducer, presenceTopic, c.GatewayNodeID),
+		TypingPub:      newTypingPub(eventProducer, typingTopic, c.GatewayNodeID),
+		ReadReceiptPub: newReadReceiptPub(eventProducer, readReceiptTopic, c.GatewayNodeID),
 		WsManager:      wsManager,
 	}
 }
@@ -339,6 +316,9 @@ func NewServiceContext(c config.Config) *ServiceContext {
 func (s *ServiceContext) StartPresenceReaper() context.CancelFunc {
 	reaperCtx, cancel := context.WithCancel(context.Background())
 	reaper := ws.NewPresenceReaper(s.WsManager, func(ctx context.Context, userID int64, status string) error {
+		if s.PresencePub == nil {
+			return nil
+		}
 		return s.PresencePub.PublishPresence(ctx, userID, status)
 	})
 	s.reaperCancel = cancel
@@ -346,12 +326,9 @@ func (s *ServiceContext) StartPresenceReaper() context.CancelFunc {
 	return cancel
 }
 
-// gatewayProducerGroup is the broker-visible producer group of the gateway.
-const gatewayProducerGroup = "aim-gateway-producer"
-
 // newEventProducer builds the single producer shared by every gateway
-// publisher. A nil result means "not configured": the publishers degrade to
-// noopPublisher.
+// publisher. A nil result means "not configured": the publishers stay nil and
+// their call sites skip publishing.
 func newEventProducer(c config.Config) *rocketmq.Producer {
 	if c.RocketMQ.Endpoint == "" {
 		return nil
@@ -360,9 +337,11 @@ func newEventProducer(c config.Config) *rocketmq.Producer {
 	presenceTopic, typingTopic, readReceiptTopic := c.EventTopics()
 
 	producer, err := rocketmq.NewProducer(
-		rocketmq.EndpointConf{Endpoint: c.RocketMQ.Endpoint, AccessKey: c.RocketMQ.AccessKey, SecretKey: c.RocketMQ.SecretKey},
-		gatewayProducerGroup,
-		presenceTopic,
+		rocketmq.ProducerConf{
+			EndpointConf: rocketmq.EndpointConf{Endpoint: c.RocketMQ.Endpoint, AccessKey: c.RocketMQ.AccessKey, SecretKey: c.RocketMQ.SecretKey},
+			Group:        c.RocketMQ.ProducerGroup,
+			Topic:        presenceTopic,
+		},
 		typingTopic,
 		readReceiptTopic,
 		c.RocketMQ.FriendApplicationTopic,
@@ -390,40 +369,40 @@ func (s *ServiceContext) StartEventProducer() {
 	}
 }
 
-// newPresencePub creates a PresencePublisher (RocketMQ when a producer is
-// configured, otherwise noop).
-func newPresencePub(producer *rocketmq.Producer, topic, nodeID string, redisClient *redis.Client) PresencePublisher {
-	if producer != nil && topic != "" && redisClient != nil {
-		return &rocketmqPresencePublisher{producer: producer, topic: topic, nodeID: nodeID}
+// newPresencePub creates a PresencePublisher, or nil when the producer or its
+// topic is not configured.
+func newPresencePub(producer *rocketmq.Producer, topic, nodeID string) PresencePublisher {
+	if producer == nil || topic == "" {
+		return nil
 	}
-	return &noopPublisher{}
+	return &rocketmqPresencePublisher{producer: producer, topic: topic, nodeID: nodeID}
 }
 
-// newFriendApplicationPub creates a FriendApplicationPublisher (RocketMQ when a
-// producer and topic are configured, otherwise noop).
+// newFriendApplicationPub creates a FriendApplicationPublisher, or nil when the
+// producer or its topic is not configured.
 func newFriendApplicationPub(producer *rocketmq.Producer, topic string) FriendApplicationPublisher {
-	if producer != nil && topic != "" {
-		return &rocketmqFriendApplicationPublisher{producer: producer, topic: topic}
+	if producer == nil || topic == "" {
+		return nil
 	}
-	return &noopPublisher{}
+	return &rocketmqFriendApplicationPublisher{producer: producer, topic: topic}
 }
 
-// newTypingPub creates a TypingPublisher (RocketMQ when a producer is
-// configured, otherwise noop).
-func newTypingPub(producer *rocketmq.Producer, topic, nodeID string, redisClient *redis.Client) TypingPublisher {
-	if producer != nil && topic != "" && redisClient != nil {
-		return &rocketmqTypingPublisher{producer: producer, topic: topic, nodeID: nodeID}
+// newTypingPub creates a TypingPublisher, or nil when the producer or its topic
+// is not configured.
+func newTypingPub(producer *rocketmq.Producer, topic, nodeID string) TypingPublisher {
+	if producer == nil || topic == "" {
+		return nil
 	}
-	return &noopPublisher{}
+	return &rocketmqTypingPublisher{producer: producer, topic: topic, nodeID: nodeID}
 }
 
-// newReadReceiptPub creates a ReadReceiptPublisher (RocketMQ when a producer is
-// configured, otherwise noop).
-func newReadReceiptPub(producer *rocketmq.Producer, topic, nodeID string, redisClient *redis.Client) ReadReceiptPublisher {
-	if producer != nil && topic != "" && redisClient != nil {
-		return &rocketmqReadReceiptPublisher{producer: producer, topic: topic, nodeID: nodeID}
+// newReadReceiptPub creates a ReadReceiptPublisher, or nil when the producer or
+// its topic is not configured.
+func newReadReceiptPub(producer *rocketmq.Producer, topic, nodeID string) ReadReceiptPublisher {
+	if producer == nil || topic == "" {
+		return nil
 	}
-	return &noopPublisher{}
+	return &rocketmqReadReceiptPublisher{producer: producer, topic: topic, nodeID: nodeID}
 }
 
 // Close releases the Redis client.

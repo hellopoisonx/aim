@@ -31,13 +31,13 @@ func NewRevokeGroupAdminLogic(ctx context.Context, svcCtx *svc.ServiceContext) *
 }
 
 func (l *RevokeGroupAdminLogic) RevokeGroupAdmin(req *types.RevokeGroupAdminRequest) error {
-	identity, ok := authctx.IdentityFromContext(l.ctx)
-	if !ok {
-		return errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
+	userID, err := authctx.RequireUserID(l.ctx)
+	if err != nil {
+		return err
 	}
-	_, err := l.svcCtx.LogicConversationClient.RevokeGroupAdmin(l.ctx, &conversationservice.RevokeGroupAdminReq{
+	_, err = l.svcCtx.LogicConversationClient.RevokeGroupAdmin(l.ctx, &conversationservice.RevokeGroupAdminReq{
 		ConversationId: req.Id,
-		OperatorId:     identity.UserID,
+		OperatorId:     userID,
 		TargetUserId:   req.UserId,
 	})
 	if err != nil {

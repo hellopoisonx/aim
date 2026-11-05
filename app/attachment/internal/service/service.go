@@ -35,9 +35,6 @@ type Service struct {
 	producer *rocketmq.Producer
 }
 
-// attachmentProducerGroup is the broker-visible producer group of attachment.
-const attachmentProducerGroup = "aim-attachment-producer"
-
 // requireStore rejects every method that needs persistence when the service
 // booted without a datasource, instead of reporting per-method fallbacks.
 func (s *Service) requireStore() error {
@@ -128,7 +125,7 @@ func New(ctx context.Context, cfg config.Config) (*Service, error) {
 	// that refuses the first connection does not block startup: uploads then
 	// fail loudly instead of the whole service crash-looping.
 	if store != nil && cfg.UploadedProducer.IsConfigured() {
-		producer, err := rocketmq.NewProducer(cfg.UploadedProducer.EndpointConf, attachmentProducerGroup, cfg.UploadedProducer.Topic)
+		producer, err := rocketmq.NewProducer(cfg.UploadedProducer)
 		if err != nil {
 			return nil, err
 		}

@@ -109,21 +109,19 @@ func (s *Service) CompleteUpload(ctx context.Context, userID int64, fileID strin
 // markUploaded flips the file to uploaded and, when transactional publishing is
 // configured, publishes attachment.uploaded in the same commit.
 func (s *Service) markUploaded(ctx context.Context, userID int64, id uuid.UUID, sha256 string, info *FileInfo) error {
-	markUploaded := func(tx *dao.Store) (int64, error) {
-		return tx.MarkUploaded(ctx, id, userID, sha256, sharedattachment.KindFile)
+	mark := func(store *dao.Store) error {
+		rows, err := store.MarkUploaded(ctx, id, userID, sha256, sharedattachment.KindFile)
+		if err != nil {
+			return err
+		}
+		if rows == 0 {
+			return ErrNotFound
+		}
+		return nil
 	}
 
 	if s.producer == nil {
-		return s.store.WithTx(ctx, func(tx *dao.Store) error {
-			rows, err := markUploaded(tx)
-			if err != nil {
-				return err
-			}
-			if rows == 0 {
-				return ErrNotFound
-			}
-			return nil
-		})
+		return s.store.WithTx(ctx, mark)
 	}
 
 	// The half message body is fixed before the transaction opens, so the payload
@@ -140,14 +138,7 @@ func (s *Service) markUploaded(ctx context.Context, userID int64, id uuid.UUID, 
 		Key:      info.FileID,
 		Body:     body,
 	}, func(ctx context.Context, tx *gorm.DB) error {
-		rows, err := markUploaded(dao.New(tx))
-		if err != nil {
-			return err
-		}
-		if rows == 0 {
-			return ErrNotFound
-		}
-		return nil
+		return mark(dao.New(tx))
 	})
 }
 

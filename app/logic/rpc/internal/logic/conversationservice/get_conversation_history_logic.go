@@ -37,13 +37,7 @@ func (l *GetConversationHistoryLogic) GetConversationHistory(in *pb.GetConversat
 		return nil, errorx.NewCodeError(errorx.CodeInternal, "conversation service is not configured")
 	}
 
-	limit := in.GetLimit()
-	if limit <= 0 {
-		limit = 50
-	}
-	if limit > 100 {
-		limit = 100
-	}
+	limit := service.NormalizeHistoryLimit(in.GetLimit())
 
 	cursorCreatedAt := in.GetCursorCreatedAt()
 	cursorID := in.GetCursorId()

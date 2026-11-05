@@ -24,8 +24,8 @@ func NewListBotEventsLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Lis
 }
 
 func (l *ListBotEventsLogic) ListBotEvents() (resp *types.ListBotEventsResponse, err error) {
-	if _, ok := authctx.IdentityFromContext(l.ctx); !ok {
-		return nil, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
+	if _, err := authctx.RequireUserID(l.ctx); err != nil {
+		return nil, err
 	}
 	rpcResp, err := l.svcCtx.LogicBotClient.ListBotEvents(l.ctx, &botservice.ListBotEventsReq{})
 	if err != nil {

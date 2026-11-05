@@ -7,8 +7,15 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// allowAllPermissionChecker is the permissive stub used by permission tests.
+type allowAllPermissionChecker struct{}
+
+func (allowAllPermissionChecker) CheckMessagePermission(context.Context, PermissionCheck) (PermissionDecision, error) {
+	return PermissionDecision{Allowed: true, Code: CodeOK}, nil
+}
+
 func TestAllowAllPermissionChecker(t *testing.T) {
-	decision, err := AllowAllPermissionChecker{}.CheckMessagePermission(context.Background(), PermissionCheck{
+	decision, err := allowAllPermissionChecker{}.CheckMessagePermission(context.Background(), PermissionCheck{
 		SenderID:       10,
 		ConversationID: 20,
 		MessageType:    "text",

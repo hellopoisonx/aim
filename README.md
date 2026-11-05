@@ -13,7 +13,7 @@
 - **多端同步**：基于 DeviceId 的多设备登录，消息一致投递
 - **断线重连**：WS 帧等待队列 + 重放机制
 
-### [雪花ID](app/shared/tools/snowflake.go)
+### [雪花ID](app/shared/snowflake/snowflake.go)
 
 - 小回拨: 时间戳不变序列号递增
 - 大回拨: 等待系统时钟追赶/直接抛出错误

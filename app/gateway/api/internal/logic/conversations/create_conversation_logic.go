@@ -30,9 +30,9 @@ func NewCreateConversationLogic(ctx context.Context, svcCtx *svc.ServiceContext)
 }
 
 func (l *CreateConversationLogic) CreateConversation(req *types.CreateConversationRequest) (resp *types.CreateConversationResponse, err error) {
-	identity, ok := authctx.IdentityFromContext(l.ctx)
-	if !ok {
-		return nil, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
+	userID, err := authctx.RequireUserID(l.ctx)
+	if err != nil {
+		return nil, err
 	}
 
 	conversationType := sharedconversation.Type(req.ConversationType)
@@ -44,7 +44,7 @@ func (l *CreateConversationLogic) CreateConversation(req *types.CreateConversati
 
 	memberIDs := req.MemberIds
 	if conversationType == sharedconversation.TypeDirect {
-		if err := sharedconversation.RequireDirectPeer(memberIDs, identity.UserID); err != nil {
+		if err := sharedconversation.RequireDirectPeer(memberIDs, userID); err != nil {
 			return nil, err
 		}
 	} else {
@@ -59,7 +59,7 @@ func (l *CreateConversationLogic) CreateConversation(req *types.CreateConversati
 
 	rpcResp, err := l.svcCtx.LogicConversationClient.CreateConversation(l.ctx, &conversationservice.CreateConversationReq{
 		ConversationType: string(conversationType),
-		CreatorId:        identity.UserID,
+		CreatorId:        userID,
 		MemberIds:        memberIDs,
 		Name:             name,
 		Avatar:           req.Avatar,

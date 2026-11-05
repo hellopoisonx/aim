@@ -9,7 +9,7 @@ import (
 	"github.com/hellopoisonx/aim/app/core/rpc/internal/rpc"
 	logicpb "github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/rocketmq"
-	"github.com/hellopoisonx/aim/app/shared/tools"
+	"github.com/hellopoisonx/aim/app/shared/snowflake"
 
 	"github.com/redis/go-redis/v9"
 	"github.com/zeromicro/go-zero/core/logx"
@@ -19,7 +19,7 @@ import (
 type ServiceContext struct {
 	Config      config.Config
 	RedisClient *redis.Client
-	Snowflake   *tools.Snowflake
+	Snowflake   *snowflake.Snowflake
 	// PushProducer publishes gateway push events to the FIFO push topic.
 	// Nil when RocketMQ is not configured.
 	PushProducer            *rocketmq.Producer
@@ -30,8 +30,6 @@ type ServiceContext struct {
 	PresenceStore           cache.PresenceDirectory
 	AttachmentClient        attachmentpb.AttachmentServiceClient
 }
-
-const pushProducerGroup = "aim-core-push"
 
 // StartPushProducer connects the push producer. The RPC server starts
 // regardless: a broker outage surfaces as push publish errors instead of a
@@ -78,13 +76,13 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		logx.WithContext(context.Background()).Infof("Redis connected at %s", c.CacheRedis.Addr)
 	}
 
-	sf, err := tools.NewSnowflake(c.SnowflakeMachineID)
+	sf, err := snowflake.NewSnowflake(c.SnowflakeMachineID)
 	logx.Must(err)
 
 	var pushProducer *rocketmq.Producer
 
 	if c.PushProducerConf.IsConfigured() {
-		producer, err := rocketmq.NewProducer(c.PushProducerConf.EndpointConf, pushProducerGroup, c.PushProducerConf.Topic)
+		producer, err := rocketmq.NewProducer(c.PushProducerConf)
 		if err != nil {
 			logx.WithContext(context.Background()).Errorf("failed to create push producer: %v", err)
 		} else {

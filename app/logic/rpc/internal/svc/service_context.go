@@ -17,7 +17,7 @@ import (
 	sharedcache "github.com/hellopoisonx/aim/app/shared/cache"
 	"github.com/hellopoisonx/aim/app/shared/gormdb"
 	"github.com/hellopoisonx/aim/app/shared/rocketmq"
-	"github.com/hellopoisonx/aim/app/shared/tools"
+	"github.com/hellopoisonx/aim/app/shared/snowflake"
 
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/zrpc"
@@ -44,7 +44,7 @@ type ServiceContext struct {
 	SearchService       *service.SearchService
 	DAO                 *dao.Store
 	FriendshipDAO       FriendshipDAO
-	IDGen               *tools.Snowflake
+	IDGen               *snowflake.Snowflake
 	// Authorizer decides conversation permissions; nil without Postgres.
 	Authorizer       rbac.Authorizer
 	CacheManager     *sharedcache.CacheManager
@@ -72,13 +72,13 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		PermissionChecker: service.DenyAllPermissionChecker{},
 	}
 
-	snowflake, err := tools.NewSnowflake(c.MachineID)
+	idGen, err := snowflake.NewSnowflake(c.MachineID)
 	if err != nil {
 		logx.WithContext(context.Background()).Errorf("failed to create Snowflake generator with machineID=%d: %v", c.MachineID, err)
 		return svcCtx
 	}
 
-	svcCtx.IDGen = snowflake
+	svcCtx.IDGen = idGen
 	initSharedCaches(svcCtx, c)
 
 	if c.Postgres.DataSource != "" {
@@ -111,20 +111,16 @@ func NewServiceContext(c config.Config) *ServiceContext {
 			svcCtx.BotService = service.NewBotService(store, store,
 				service.WithBotTokenCache(svcCtx.BotTokenCache),
 				service.WithBotTxRunner(botTxRunner{store: store}),
-				service.WithBotIDGenerator(snowflake),
+				service.WithBotIDGenerator(idGen),
 			)
-			svcCtx.FriendTagService = service.NewFriendshipTagService(store, snowflake)
+			svcCtx.FriendTagService = service.NewFriendshipTagService(store, idGen)
 			svcCtx.SearchService = service.NewSearchService(store)
 
 			// Build ConversationService with optional transactional event publishing.
 			var convOpts []service.ConversationServiceOption
 
 			if c.ConversationEventProducerConf.IsConfigured() {
-				producer, err := rocketmq.NewProducer(
-					c.ConversationEventProducerConf.EndpointConf,
-					logicProducerGroup,
-					c.ConversationEventProducerConf.Topic,
-				)
+				producer, err := rocketmq.NewProducer(c.ConversationEventProducerConf)
 				if err != nil {
 					logx.Must(fmt.Errorf("logic service: conversation event producer: %w", err))
 				}
@@ -140,7 +136,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 			convOpts = append(convOpts, service.WithConversationCaches(svcCtx.ConvCache, svcCtx.ConvMembersCache))
 			convOpts = append(convOpts, service.WithRBAC(authz))
 			svcCtx.ConversationService = service.NewConversationService(
-				store, snowflake,
+				store, idGen,
 				conversationTxRunner{store: store, producer: svcCtx.EventProducer},
 				convOpts...,
 			)
@@ -157,8 +153,6 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	return svcCtx
 }
 
-const transferProducerGroup = "aim-logic-transfer"
-
 // initMessageService wires the chat message write path. It stays nil when a
 // dependency is missing: ingestion without a publisher or an idempotency store
 // would silently duplicate or drop messages, so the RPC surface reports an
@@ -170,11 +164,7 @@ func initMessageService(svcCtx *ServiceContext, c config.Config) {
 		return
 	}
 
-	producer, err := rocketmq.NewProducer(
-		c.TransferProducerConf.EndpointConf,
-		transferProducerGroup,
-		c.TransferProducerConf.Topic,
-	)
+	producer, err := rocketmq.NewProducer(c.TransferProducerConf)
 	if err != nil {
 		logx.WithContext(context.Background()).Errorf("failed to create transfer producer: %v", err)
 		return
@@ -254,9 +244,6 @@ func (r botTxRunner) WithTx(ctx context.Context, fn func(tx service.BotManagemen
 		return fn(tx)
 	})
 }
-
-// logicProducerGroup is the broker-visible producer group of logic.
-const logicProducerGroup = "aim-logic-producer"
 
 // StartEventProducer connects the conversation event producer.
 func (s *ServiceContext) StartEventProducer() {

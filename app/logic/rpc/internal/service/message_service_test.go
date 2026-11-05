@@ -8,7 +8,7 @@ import (
 
 	"github.com/hellopoisonx/aim/app/shared/attachment"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
-	"github.com/hellopoisonx/aim/app/shared/tools"
+	"github.com/hellopoisonx/aim/app/shared/snowflake"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -63,7 +63,7 @@ func (f *fakePublisher) Publish(_ context.Context, key string, value []byte) err
 func newMessageFixture(t *testing.T) (*IngestionService, *fakeChecker, *fakeIdempotency, *fakePublisher) {
 	t.Helper()
 
-	snowflake, err := tools.NewSnowflake(1)
+	idGen, err := snowflake.NewSnowflake(1)
 	require.NoError(t, err)
 
 	checker := &fakeChecker{decision: PermissionDecision{Allowed: true}}
@@ -72,7 +72,7 @@ func newMessageFixture(t *testing.T) (*IngestionService, *fakeChecker, *fakeIdem
 
 	attachments := NewGRPCAttachmentValidator(nil)
 
-	return NewMessageService(checker, idempotency, publisher, attachments, snowflake), checker, idempotency, publisher
+	return NewMessageService(checker, idempotency, publisher, attachments, idGen), checker, idempotency, publisher
 }
 
 func sampleInput() IngestMessageInput {
@@ -132,10 +132,10 @@ func TestIngestMessagePropagatesPermissionDenial(t *testing.T) {
 }
 
 func TestIngestMessageWithoutCheckerIsInternal(t *testing.T) {
-	snowflake, err := tools.NewSnowflake(1)
+	idGen, err := snowflake.NewSnowflake(1)
 	require.NoError(t, err)
 
-	svc := NewMessageService(nil, &fakeIdempotency{ids: map[string]int64{}}, &fakePublisher{}, nil, snowflake)
+	svc := NewMessageService(nil, &fakeIdempotency{ids: map[string]int64{}}, &fakePublisher{}, nil, idGen)
 
 	_, err = svc.IngestMessage(context.Background(), sampleInput())
 	require.Error(t, err)

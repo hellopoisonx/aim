@@ -2,12 +2,10 @@ package bot
 
 import (
 	"context"
-	"slices"
 
 	attachmentpb "github.com/hellopoisonx/aim/app/attachment/rpc/pb"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
-	"github.com/hellopoisonx/aim/app/logic/rpc/client/conversationservice"
 	sharedattachment "github.com/hellopoisonx/aim/app/shared/attachment"
 	"github.com/hellopoisonx/aim/app/shared/botperm"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
@@ -62,17 +60,8 @@ func (l *BotDownloadAttachmentLogic) BotDownloadAttachment(req *types.BotDownloa
 	}
 
 	// Verify the bot is a member of the conversation that owns the attachment.
-
-	membersResp, err := l.svcCtx.LogicConversationClient.GetConversationMembers(l.ctx,
-		&conversationservice.GetConversationMembersReq{
-			ConversationId: conversationID,
-		})
-	if err != nil {
-		return nil, errorx.SanitizeGRPCError(l, "bot download attachment", err)
-	}
-
-	if !slices.Contains(membersResp.GetMemberIds(), identity.BotUserID) {
-		return nil, errorx.NewCodeError(errorx.CodeForbidden, "bot is not a member of this conversation")
+	if err := ensureBotConversationMember(l.ctx, l.svcCtx.LogicConversationClient, identity, conversationID); err != nil {
+		return nil, err
 	}
 
 	// Authorize a presigned download URL.

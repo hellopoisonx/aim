@@ -49,19 +49,11 @@ func (l *BotGetConversationHistoryLogic) BotGetConversationHistory(req *types.Bo
 		return nil, err
 	}
 
-	limit := req.Limit
-	if limit <= 0 {
-		limit = 50
-	}
-	if limit > 100 {
-		limit = 100
-	}
-
 	rpcResp, err := client.GetConversationHistory(l.ctx, &conversationservice.GetConversationHistoryReq{
 		ConversationId:  conversationID,
 		CursorCreatedAt: req.CursorCreatedAt,
 		CursorId:        cursorID,
-		Limit:           limit,
+		Limit:           req.Limit,
 	})
 	if err != nil {
 		return nil, errorx.SanitizeGRPCErrorNoLog(err)

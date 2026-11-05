@@ -27,12 +27,6 @@ type PermissionChecker interface {
 	CheckMessagePermission(ctx context.Context, check PermissionCheck) (PermissionDecision, error)
 }
 
-type AllowAllPermissionChecker struct{}
-
-func (AllowAllPermissionChecker) CheckMessagePermission(context.Context, PermissionCheck) (PermissionDecision, error) {
-	return PermissionDecision{Allowed: true, Code: CodeOK}, nil
-}
-
 type DenyAllPermissionChecker struct{}
 
 func (DenyAllPermissionChecker) CheckMessagePermission(context.Context, PermissionCheck) (PermissionDecision, error) {

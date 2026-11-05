@@ -17,7 +17,7 @@ import (
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 	"github.com/hellopoisonx/aim/app/shared/events"
 	"github.com/hellopoisonx/aim/app/shared/rocketmq"
-	"github.com/hellopoisonx/aim/app/shared/tools"
+	"github.com/hellopoisonx/aim/app/shared/snowflake"
 	"github.com/hellopoisonx/aim/app/shared/tracing"
 	shareduser "github.com/hellopoisonx/aim/app/shared/user"
 
@@ -137,7 +137,7 @@ type systemMessageContent struct {
 type ConversationService struct {
 	store        ConversationStore
 	txRunner     ConversationTxRunner
-	idGen        *tools.Snowflake
+	idGen        *snowflake.Snowflake
 	eventTopic   string
 	convCache    *sharedcache.TypedCache[orm.Conversation]
 	membersCache *sharedcache.TypedCache[[]orm.ConversationMember]
@@ -168,7 +168,7 @@ func WithTransactionalEvents(topic string) ConversationServiceOption {
 	}
 }
 
-func NewConversationService(store ConversationStore, idGen *tools.Snowflake, txRunner ConversationTxRunner, opts ...ConversationServiceOption) *ConversationService {
+func NewConversationService(store ConversationStore, idGen *snowflake.Snowflake, txRunner ConversationTxRunner, opts ...ConversationServiceOption) *ConversationService {
 	svc := &ConversationService{store: store, txRunner: txRunner, idGen: idGen}
 	for _, opt := range opts {
 		if opt != nil {
@@ -181,6 +181,15 @@ func NewConversationService(store ConversationStore, idGen *tools.Snowflake, txR
 func (s *ConversationService) InTx(ctx context.Context, fn func(tx ConversationStore) error) error {
 	if s.txRunner == nil {
 		return fmt.Errorf("database transaction runner not available")
+	}
+	return s.txRunner.WithTx(ctx, fn)
+}
+
+// withStore runs fn in a transaction when one is configured, otherwise against
+// the plain store, so callers write the mutation once.
+func (s *ConversationService) withStore(ctx context.Context, fn func(store ConversationStore) error) error {
+	if s.txRunner == nil {
+		return fn(s.store)
 	}
 	return s.txRunner.WithTx(ctx, fn)
 }
@@ -590,10 +599,25 @@ func (s *ConversationService) GetConversationByID(ctx context.Context, id int64)
 	return row, nil
 }
 
-func (s *ConversationService) GetConversationHistory(ctx context.Context, conversationID int64, cursorCreatedAt int64, cursorID int64, limit int32) ([]orm.Message, error) {
-	if limit <= 0 || limit > 100 {
-		limit = 50
+const (
+	defaultConversationHistoryLimit int32 = 50
+	maxConversationHistoryLimit     int32 = 100
+)
+
+// NormalizeHistoryLimit resolves a caller-supplied page size to the one policy
+// every history entry point uses: default 50, capped at 100.
+func NormalizeHistoryLimit(limit int32) int32 {
+	if limit <= 0 {
+		return defaultConversationHistoryLimit
 	}
+	if limit > maxConversationHistoryLimit {
+		return maxConversationHistoryLimit
+	}
+	return limit
+}
+
+func (s *ConversationService) GetConversationHistory(ctx context.Context, conversationID int64, cursorCreatedAt int64, cursorID int64, limit int32) ([]orm.Message, error) {
+	limit = NormalizeHistoryLimit(limit)
 
 	if cursorCreatedAt == 0 && cursorID == 0 {
 		return s.GetConversationHistoryInitial(ctx, conversationID, limit)
@@ -616,9 +640,7 @@ func (s *ConversationService) GetConversationHistory(ctx context.Context, conver
 }
 
 func (s *ConversationService) GetConversationHistoryInitial(ctx context.Context, conversationID int64, limit int32) ([]orm.Message, error) {
-	if limit <= 0 || limit > 100 {
-		limit = 50
-	}
+	limit = NormalizeHistoryLimit(limit)
 
 	_, err := s.getConversationRow(ctx, conversationID)
 	if err != nil {
@@ -1043,33 +1065,19 @@ func (s *ConversationService) TransferGroupOwner(ctx context.Context, conversati
 		return orm.Conversation{}, errorx.NewCodeError(errorx.CodeBadInput, "bot cannot be group owner")
 	}
 
-	if s.txRunner != nil {
-		err = s.InTx(ctx, func(tx ConversationStore) error {
-			if rows, err := tx.UpdateConversationMemberRole(ctx, conversationID, operatorID, RoleAdmin); err != nil {
-				return err
-			} else if rows == 0 {
-				return ErrNotMember
-			}
-			if rows, err := tx.UpdateConversationMemberRole(ctx, conversationID, targetUserID, RoleOwner); err != nil {
-				return err
-			} else if rows == 0 {
-				return ErrNotMember
-			}
-			return tx.UpdateConversationCreator(ctx, conversationID, targetUserID)
-		})
-	} else {
-		if rows, err := s.store.UpdateConversationMemberRole(ctx, conversationID, operatorID, RoleAdmin); err != nil {
-			return orm.Conversation{}, err
+	err = s.withStore(ctx, func(store ConversationStore) error {
+		if rows, err := store.UpdateConversationMemberRole(ctx, conversationID, operatorID, RoleAdmin); err != nil {
+			return err
 		} else if rows == 0 {
-			return orm.Conversation{}, ErrNotMember
+			return ErrNotMember
 		}
-		if rows, err := s.store.UpdateConversationMemberRole(ctx, conversationID, targetUserID, RoleOwner); err != nil {
-			return orm.Conversation{}, err
+		if rows, err := store.UpdateConversationMemberRole(ctx, conversationID, targetUserID, RoleOwner); err != nil {
+			return err
 		} else if rows == 0 {
-			return orm.Conversation{}, ErrNotMember
+			return ErrNotMember
 		}
-		err = s.store.UpdateConversationCreator(ctx, conversationID, targetUserID)
-	}
+		return store.UpdateConversationCreator(ctx, conversationID, targetUserID)
+	})
 	if err != nil {
 		return orm.Conversation{}, err
 	}

@@ -28,14 +28,14 @@ func NewAddGroupMembersLogic(ctx context.Context, svcCtx *svc.ServiceContext) *A
 }
 
 func (l *AddGroupMembersLogic) AddGroupMembers(req *types.AddGroupMembersRequest) (resp *types.AddGroupMembersResponse, err error) {
-	identity, ok := authctx.IdentityFromContext(l.ctx)
-	if !ok {
-		return nil, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
+	userID, err := authctx.RequireUserID(l.ctx)
+	if err != nil {
+		return nil, err
 	}
 
 	rpcResp, err := l.svcCtx.LogicConversationClient.AddGroupMembers(l.ctx, &conversationservice.AddGroupMembersReq{
 		ConversationId: req.Id,
-		OperatorId:     identity.UserID,
+		OperatorId:     userID,
 		OperatorName:   "",
 		MemberIds:      req.MemberIds,
 	})

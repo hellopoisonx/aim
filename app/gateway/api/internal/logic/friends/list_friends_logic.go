@@ -33,12 +33,12 @@ func NewListFriendsLogic(ctx context.Context, svcCtx *svc.ServiceContext) *ListF
 }
 
 func (l *ListFriendsLogic) ListFriends() (resp *types.ListFriendsResponse, err error) {
-	identity, ok := authctx.IdentityFromContext(l.ctx)
-	if !ok {
-		return nil, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
+	userID, err := authctx.RequireUserID(l.ctx)
+	if err != nil {
+		return nil, err
 	}
 
-	rpcResp, err := l.svcCtx.LogicFriendshipClient.ListFriends(l.ctx, &friendshipservice.ListFriendsReq{UserId: identity.UserID})
+	rpcResp, err := l.svcCtx.LogicFriendshipClient.ListFriends(l.ctx, &friendshipservice.ListFriendsReq{UserId: userID})
 	if err != nil {
 		return nil, errorx.SanitizeGRPCError(l, "list friends", err)
 	}
@@ -60,7 +60,7 @@ func (l *ListFriendsLogic) ListFriends() (resp *types.ListFriendsResponse, err e
 		friends = append(friends, item)
 	}
 
-	enrichPeerInfos(l.ctx, l.svcCtx, identity.UserID, friends)
+	enrichPeerInfos(l.ctx, l.svcCtx, userID, friends)
 
 	return &types.ListFriendsResponse{Friends: friends}, nil
 }

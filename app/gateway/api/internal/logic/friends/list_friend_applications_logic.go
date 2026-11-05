@@ -31,12 +31,12 @@ func NewListFriendApplicationsLogic(ctx context.Context, svcCtx *svc.ServiceCont
 }
 
 func (l *ListFriendApplicationsLogic) ListFriendApplications() (*types.ListFriendApplicationsResponse, error) {
-	identity, ok := authctx.IdentityFromContext(l.ctx)
-	if !ok {
-		return nil, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
+	userID, err := authctx.RequireUserID(l.ctx)
+	if err != nil {
+		return nil, err
 	}
 
-	rpcResp, err := l.svcCtx.LogicFriendshipClient.ListFriendApplications(l.ctx, &friendshipservice.ListFriendApplicationsReq{UserId: identity.UserID})
+	rpcResp, err := l.svcCtx.LogicFriendshipClient.ListFriendApplications(l.ctx, &friendshipservice.ListFriendApplicationsReq{UserId: userID})
 	if err != nil {
 		return nil, errorx.SanitizeGRPCError(l, "list friend applications", err)
 	}

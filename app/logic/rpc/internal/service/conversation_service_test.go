@@ -13,14 +13,14 @@ import (
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 
 	"github.com/hellopoisonx/aim/app/logic/rpc/model/orm"
-	"github.com/hellopoisonx/aim/app/shared/tools"
+	"github.com/hellopoisonx/aim/app/shared/snowflake"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 // testSnowflake is a shared Snowflake instance for tests.
-var testSnowflake = func() *tools.Snowflake {
-	s, err := tools.NewSnowflake(1)
+var testSnowflake = func() *snowflake.Snowflake {
+	s, err := snowflake.NewSnowflake(1)
 	if err != nil {
 		panic(err)
 	}
@@ -523,10 +523,10 @@ func TestConversationService_GetConversationHistory_LimitNormalization(t *testin
 	store.Messages[1] = msgs
 	svc := NewConversationService(store, testSnowflake, nil, nil)
 
-	// When limit > 100, it should be normalized to 50
+	// When limit > 100, it should be capped at 100
 	messages, err := svc.GetConversationHistory(context.Background(), 1, 0, 0, 200)
 	require.NoError(t, err)
-	assert.Len(t, messages, 50)
+	assert.Len(t, messages, 100)
 }
 
 func TestConversationService_GetConversationHistory_ZeroLimit(t *testing.T) {
@@ -621,10 +621,10 @@ func TestConversationService_GetConversationHistoryInitial_LimitNormalization(t 
 	store.Messages[1] = msgs
 	svc := NewConversationService(store, testSnowflake, nil, nil)
 
-	// When limit > 100, it should be normalized to 50
+	// When limit > 100, it should be capped at 100
 	messages, err := svc.GetConversationHistoryInitial(context.Background(), 1, 200)
 	require.NoError(t, err)
-	assert.Len(t, messages, 50)
+	assert.Len(t, messages, 100)
 }
 
 // ---------------------------------------------------------------------------
@@ -969,7 +969,7 @@ func TestConversationService_GetConversationHistory_TableDriven(t *testing.T) {
 			cursorID:        0,
 			limit:           200,
 			wantErr:         false,
-			expectedCount:   3, // normalized to 50, but store only has 3 messages
+			expectedCount:   3, // capped at 100, but store only has 3 messages
 		},
 	}
 

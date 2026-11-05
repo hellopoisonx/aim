@@ -31,9 +31,9 @@ func NewLogoutLogic(ctx context.Context, svcCtx *svc.ServiceContext) *LogoutLogi
 }
 
 func (l *LogoutLogic) Logout() (resp *types.LogoutResponse, err error) {
-	identity, ok := authctx.IdentityFromContext(l.ctx)
-	if !ok || identity.UserID <= 0 {
-		return nil, errorx.NewCodeError(errorx.CodeAuth, "missing authorization")
+	identity, err := authctx.RequireIdentity(l.ctx)
+	if err != nil {
+		return nil, err
 	}
 
 	rpcResp, err := l.svcCtx.AuthClient.Logout(l.ctx, &authservice.LogoutReq{UserId: identity.UserID, DeviceId: identity.DeviceID})

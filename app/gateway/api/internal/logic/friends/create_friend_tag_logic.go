@@ -49,13 +49,13 @@ func NewCreateFriendTagLogic(ctx context.Context, svcCtx *svc.ServiceContext) *C
 }
 
 func (l *CreateFriendTagLogic) CreateFriendTag(req *types.CreateFriendTagRequest) (resp *types.CreateFriendTagResponse, err error) {
-	identity, ok := authctx.IdentityFromContext(l.ctx)
-	if !ok {
-		return nil, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
+	userID, err := authctx.RequireUserID(l.ctx)
+	if err != nil {
+		return nil, err
 	}
 
 	rpcResp, err := l.svcCtx.LogicFriendshipClient.CreateFriendTag(l.ctx, &friendshipservice.CreateFriendTagReq{
-		UserId: identity.UserID,
+		UserId: userID,
 		Name:   req.Name,
 	})
 	if err != nil {

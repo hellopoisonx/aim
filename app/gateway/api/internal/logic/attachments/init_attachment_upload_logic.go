@@ -6,6 +6,7 @@ import (
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/authctx"
 
 	attachmentpb "github.com/hellopoisonx/aim/app/attachment/rpc/pb"
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/membership"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
 
@@ -29,6 +30,10 @@ func NewInitAttachmentUploadLogic(ctx context.Context, svcCtx *svc.ServiceContex
 func (l *InitAttachmentUploadLogic) InitAttachmentUpload(req *types.InitAttachmentUploadRequest) (resp *types.InitAttachmentUploadResponse, err error) {
 	userID, err := authctx.RequireUserID(l.ctx)
 	if err != nil {
+		return nil, err
+	}
+
+	if err := membership.RequireMember(l.ctx, l, l.svcCtx.LogicConversationClient, req.ConversationId, userID, membership.ActorUser); err != nil {
 		return nil, err
 	}
 

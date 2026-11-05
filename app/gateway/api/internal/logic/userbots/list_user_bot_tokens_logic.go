@@ -24,12 +24,12 @@ func NewListUserBotTokensLogic(ctx context.Context, svcCtx *svc.ServiceContext) 
 }
 
 func (l *ListUserBotTokensLogic) ListUserBotTokens(req *types.ListUserBotTokensRequest) (resp *types.ListUserBotTokensResponse, err error) {
-	identity, ok := authctx.IdentityFromContext(l.ctx)
-	if !ok {
-		return nil, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
+	userID, err := authctx.RequireUserID(l.ctx)
+	if err != nil {
+		return nil, err
 	}
 	rpcResp, err := l.svcCtx.LogicBotClient.ListUserBotTokens(l.ctx, &botservice.ListUserBotTokensReq{
-		OwnerUserId: identity.UserID, BotUserId: req.Id,
+		OwnerUserId: userID, BotUserId: req.Id,
 	})
 	if err != nil {
 		return nil, errorx.SanitizeGRPCError(l, "list user bot tokens", err)

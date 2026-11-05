@@ -24,12 +24,12 @@ func NewCreateUserBotTokenLogic(ctx context.Context, svcCtx *svc.ServiceContext)
 }
 
 func (l *CreateUserBotTokenLogic) CreateUserBotToken(req *types.CreateUserBotTokenRequest) (resp *types.CreateUserBotTokenResponse, err error) {
-	identity, ok := authctx.IdentityFromContext(l.ctx)
-	if !ok {
-		return nil, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
+	userID, err := authctx.RequireUserID(l.ctx)
+	if err != nil {
+		return nil, err
 	}
 	rpcResp, err := l.svcCtx.LogicBotClient.CreateUserBotToken(l.ctx, &botservice.CreateUserBotTokenReq{
-		OwnerUserId: identity.UserID, BotUserId: req.Id, Name: req.Name, ExpiresAt: req.ExpiresAt, Actions: req.Actions,
+		OwnerUserId: userID, BotUserId: req.Id, Name: req.Name, ExpiresAt: req.ExpiresAt, Actions: req.Actions,
 	})
 	if err != nil {
 		return nil, errorx.SanitizeGRPCError(l, "create user bot token", err)

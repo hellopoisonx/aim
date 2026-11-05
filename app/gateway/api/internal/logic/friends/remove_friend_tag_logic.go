@@ -28,13 +28,13 @@ func NewRemoveFriendTagLogic(ctx context.Context, svcCtx *svc.ServiceContext) *R
 }
 
 func (l *RemoveFriendTagLogic) RemoveFriendTag(req *types.RemoveFriendTagRequest) (resp *types.RemoveFriendTagResponse, err error) {
-	identity, ok := authctx.IdentityFromContext(l.ctx)
-	if !ok {
-		return nil, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
+	userID, err := authctx.RequireUserID(l.ctx)
+	if err != nil {
+		return nil, err
 	}
 
 	rpcResp, err := l.svcCtx.LogicFriendshipClient.RemoveFriendTag(l.ctx, &friendshipservice.RemoveFriendTagReq{
-		UserId:   identity.UserID,
+		UserId:   userID,
 		FriendId: req.Id,
 		TagId:    req.TagId,
 	})

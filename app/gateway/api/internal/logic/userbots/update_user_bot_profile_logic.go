@@ -24,12 +24,12 @@ func NewUpdateUserBotProfileLogic(ctx context.Context, svcCtx *svc.ServiceContex
 }
 
 func (l *UpdateUserBotProfileLogic) UpdateUserBotProfile(req *types.UpdateUserBotProfileRequest) (resp *types.UpdateUserBotProfileResponse, err error) {
-	identity, ok := authctx.IdentityFromContext(l.ctx)
-	if !ok {
-		return nil, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
+	userID, err := authctx.RequireUserID(l.ctx)
+	if err != nil {
+		return nil, err
 	}
 	rpcResp, err := l.svcCtx.LogicBotClient.UpdateUserBotProfile(l.ctx, &botservice.UpdateUserBotProfileReq{
-		OwnerUserId: identity.UserID, BotUserId: req.Id, Nickname: req.Nickname, Avatar: req.Avatar,
+		OwnerUserId: userID, BotUserId: req.Id, Nickname: req.Nickname, Avatar: req.Avatar,
 	})
 	if err != nil {
 		return nil, errorx.SanitizeGRPCError(l, "update user bot profile", err)

@@ -13,7 +13,7 @@ import (
 	"github.com/hellopoisonx/aim/app/auth/rpc/model/dao"
 	"github.com/hellopoisonx/aim/app/shared/events"
 	"github.com/hellopoisonx/aim/app/shared/rocketmq"
-	"github.com/hellopoisonx/aim/app/shared/tools"
+	"github.com/hellopoisonx/aim/app/shared/snowflake"
 	"github.com/stretchr/testify/require"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -119,7 +119,7 @@ func (s *fakeSender) SendTransactional(ctx context.Context, db *gorm.DB, message
 }
 
 func TestUserRegistrarCreateUser(t *testing.T) {
-	idGen, err := tools.NewSnowflake(1)
+	idGen, err := snowflake.NewSnowflake(1)
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -169,7 +169,7 @@ func TestUserRegistrarCreateUser(t *testing.T) {
 }
 
 func TestNewUserRegistrarRequiresDependencies(t *testing.T) {
-	idGen, err := tools.NewSnowflake(1)
+	idGen, err := snowflake.NewSnowflake(1)
 	require.NoError(t, err)
 	db := newStubDB(t, nil)
 	sender := &fakeSender{}

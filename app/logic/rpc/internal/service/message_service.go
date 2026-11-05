@@ -8,7 +8,7 @@ import (
 
 	sharedattachment "github.com/hellopoisonx/aim/app/shared/attachment"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
-	"github.com/hellopoisonx/aim/app/shared/tools"
+	"github.com/hellopoisonx/aim/app/shared/snowflake"
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
@@ -60,7 +60,7 @@ type IngestionService struct {
 	idempotency IdempotencyStore
 	publisher   MessagePublisher
 	attachments AttachmentReferenceValidator
-	idGen       *tools.Snowflake
+	idGen       *snowflake.Snowflake
 }
 
 func NewMessageService(
@@ -68,7 +68,7 @@ func NewMessageService(
 	idempotency IdempotencyStore,
 	publisher MessagePublisher,
 	attachments AttachmentReferenceValidator,
-	idGen *tools.Snowflake,
+	idGen *snowflake.Snowflake,
 ) *IngestionService {
 	return &IngestionService{
 		checker:     checker,

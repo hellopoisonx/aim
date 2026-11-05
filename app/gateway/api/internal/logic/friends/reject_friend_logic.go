@@ -32,13 +32,13 @@ func NewRejectFriendLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Reje
 }
 
 func (l *RejectFriendLogic) RejectFriend(req *types.RejectFriendRequest) (resp *types.RejectFriendResponse, err error) {
-	identity, ok := authctx.IdentityFromContext(l.ctx)
-	if !ok {
-		return nil, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
+	userID, err := authctx.RequireUserID(l.ctx)
+	if err != nil {
+		return nil, err
 	}
 
 	rpcResp, err := l.svcCtx.LogicFriendshipClient.RejectFriend(l.ctx, &friendshipservice.RejectFriendReq{
-		UserId:   identity.UserID,
+		UserId:   userID,
 		FriendId: req.Id,
 	})
 	if err != nil {
@@ -53,15 +53,17 @@ func (l *RejectFriendLogic) RejectFriend(req *types.RejectFriendRequest) (resp *
 	// Notify the requester on every gateway node holding their connections.
 	// The push is best-effort: the REST response below is already committed, so a
 	// broker hiccup must not turn a successful reject into an error.
-	if err := l.svcCtx.FriendAppPub.PublishFriendApplication(l.ctx, events.FriendApplicationEvent{
-		TargetUserID: req.Id,
-		UserID:       identity.UserID,
-		FriendID:     req.Id,
-		Status:       friendship.GetStatus(),
-		CreatedAt:    friendship.GetCreatedAt(),
-		UpdatedAt:    friendship.GetUpdatedAt(),
-	}); err != nil {
-		l.Errorf("publish friend application after reject failed: %v", err)
+	if l.svcCtx.FriendAppPub != nil {
+		if err := l.svcCtx.FriendAppPub.PublishFriendApplication(l.ctx, events.FriendApplicationEvent{
+			TargetUserID: req.Id,
+			UserID:       userID,
+			FriendID:     req.Id,
+			Status:       friendship.GetStatus(),
+			CreatedAt:    friendship.GetCreatedAt(),
+			UpdatedAt:    friendship.GetUpdatedAt(),
+		}); err != nil {
+			l.Errorf("publish friend application after reject failed: %v", err)
+		}
 	}
 
 	item := types.FriendshipItem{

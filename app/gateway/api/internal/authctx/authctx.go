@@ -30,12 +30,22 @@ func IdentityFromContext(ctx context.Context) (Identity, bool) {
 	return id, ok
 }
 
+// RequireIdentity returns the authenticated caller and fails when ctx carries none.
+func RequireIdentity(ctx context.Context) (Identity, error) {
+	identity, ok := IdentityFromContext(ctx)
+	if !ok || identity.UserID <= 0 {
+		return Identity{}, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
+	}
+
+	return identity, nil
+}
+
 // RequireUserID returns the caller's user id and fails when ctx carries no
 // authenticated user.
 func RequireUserID(ctx context.Context) (int64, error) {
-	identity, ok := IdentityFromContext(ctx)
-	if !ok || identity.UserID <= 0 {
-		return 0, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
+	identity, err := RequireIdentity(ctx)
+	if err != nil {
+		return 0, err
 	}
 
 	return identity.UserID, nil

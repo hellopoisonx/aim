@@ -28,7 +28,7 @@ type pushRecord struct {
 	req *gwpb.PushMessageReq
 }
 
-func (f *fakeGatewayClient) PushMessage(ctx context.Context, req *gwpb.PushMessageReq) (*gwpb.PushMessageResp, error) {
+func (f *fakeGatewayClient) PushMessageToNode(ctx context.Context, _ string, req *gwpb.PushMessageReq) (*gwpb.PushMessageResp, error) {
 	if f.pushErr != nil {
 		return nil, f.pushErr
 	}
@@ -41,48 +41,24 @@ func (f *fakeGatewayClient) PushMessage(ctx context.Context, req *gwpb.PushMessa
 	return &gwpb.PushMessageResp{Success: true}, nil
 }
 
-func (f *fakeGatewayClient) PushPresence(ctx context.Context, req *gwpb.PushPresenceReq) (*gwpb.PushPresenceResp, error) {
+func (f *fakeGatewayClient) PushPresenceToNode(context.Context, string, *gwpb.PushPresenceReq) (*gwpb.PushPresenceResp, error) {
 	return &gwpb.PushPresenceResp{Success: true}, nil
 }
 
-func (f *fakeGatewayClient) PushTyping(ctx context.Context, req *gwpb.PushTypingReq) (*gwpb.PushTypingResp, error) {
+func (f *fakeGatewayClient) PushTypingToNode(_ context.Context, _ string, req *gwpb.PushTypingReq) (*gwpb.PushTypingResp, error) {
 	f.typingPushes = append(f.typingPushes, req)
 
 	return &gwpb.PushTypingResp{Success: true}, nil
 }
 
-func (f *fakeGatewayClient) PushReadReceipt(ctx context.Context, req *gwpb.PushReadReceiptReq) (*gwpb.PushReadReceiptResp, error) {
+func (f *fakeGatewayClient) PushReadReceiptToNode(_ context.Context, _ string, req *gwpb.PushReadReceiptReq) (*gwpb.PushReadReceiptResp, error) {
 	f.readReceiptPushes = append(f.readReceiptPushes, req)
 
 	return &gwpb.PushReadReceiptResp{Success: true}, nil
 }
 
-func (f *fakeGatewayClient) PushNotification(ctx context.Context, req *gwpb.PushNotificationReq) (*gwpb.PushNotificationResp, error) {
-	return &gwpb.PushNotificationResp{Success: true}, nil
-}
-
-func (f *fakeGatewayClient) PushFriendApplication(_ context.Context, _ *gwpb.PushFriendApplicationReq) (*gwpb.PushFriendApplicationResp, error) {
+func (f *fakeGatewayClient) PushFriendApplicationToNode(context.Context, string, *gwpb.PushFriendApplicationReq) (*gwpb.PushFriendApplicationResp, error) {
 	return &gwpb.PushFriendApplicationResp{Success: true}, nil
-}
-
-func (f *fakeGatewayClient) PushMessageToNode(ctx context.Context, _ string, req *gwpb.PushMessageReq) (*gwpb.PushMessageResp, error) {
-	return f.PushMessage(ctx, req)
-}
-
-func (f *fakeGatewayClient) PushPresenceToNode(ctx context.Context, _ string, req *gwpb.PushPresenceReq) (*gwpb.PushPresenceResp, error) {
-	return f.PushPresence(ctx, req)
-}
-
-func (f *fakeGatewayClient) PushTypingToNode(ctx context.Context, _ string, req *gwpb.PushTypingReq) (*gwpb.PushTypingResp, error) {
-	return f.PushTyping(ctx, req)
-}
-
-func (f *fakeGatewayClient) PushReadReceiptToNode(ctx context.Context, _ string, req *gwpb.PushReadReceiptReq) (*gwpb.PushReadReceiptResp, error) {
-	return f.PushReadReceipt(ctx, req)
-}
-
-func (f *fakeGatewayClient) PushFriendApplicationToNode(ctx context.Context, _ string, req *gwpb.PushFriendApplicationReq) (*gwpb.PushFriendApplicationResp, error) {
-	return f.PushFriendApplication(ctx, req)
 }
 
 func newFakeGatewayClient() *fakeGatewayClient {

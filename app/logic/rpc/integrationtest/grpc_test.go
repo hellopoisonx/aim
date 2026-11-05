@@ -28,7 +28,7 @@ import (
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 	"github.com/hellopoisonx/aim/app/shared/gormdb"
 	"github.com/hellopoisonx/aim/app/shared/pgtypes"
-	"github.com/hellopoisonx/aim/app/shared/tools"
+	"github.com/hellopoisonx/aim/app/shared/snowflake"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -45,10 +45,10 @@ func (r storeTxRunner) WithTx(ctx context.Context, fn func(tx service.Conversati
 	return r.store.WithTx(ctx, func(tx *dao.Store) error { return fn(tx) })
 }
 
-func mustSnowflake(t *testing.T) *tools.Snowflake {
+func mustSnowflake(t *testing.T) *snowflake.Snowflake {
 	t.Helper()
 
-	gen, err := tools.NewSnowflake(1)
+	gen, err := snowflake.NewSnowflake(1)
 	require.NoError(t, err)
 
 	return gen

@@ -13,7 +13,7 @@ import (
 	"github.com/hellopoisonx/aim/app/auth/rpc/model/orm"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 	sharedjwt "github.com/hellopoisonx/aim/app/shared/jwt"
-	"github.com/hellopoisonx/aim/app/shared/tools"
+	"github.com/hellopoisonx/aim/app/shared/snowflake"
 	"github.com/redis/go-redis/v9"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -56,7 +56,7 @@ type userDAO interface {
 
 type DAOUserStore struct {
 	store userDAO
-	ids   *tools.Snowflake
+	ids   *snowflake.Snowflake
 }
 
 func NewDAOUserStore(store userDAO) *DAOUserStore {
@@ -64,7 +64,7 @@ func NewDAOUserStore(store userDAO) *DAOUserStore {
 }
 
 func NewDAOUserStoreWithMachineID(store userDAO, machineID int64) *DAOUserStore {
-	ids, err := tools.NewSnowflake(machineID)
+	ids, err := snowflake.NewSnowflake(machineID)
 	if err != nil {
 		panic(err)
 	}
@@ -72,7 +72,7 @@ func NewDAOUserStoreWithMachineID(store userDAO, machineID int64) *DAOUserStore 
 	return NewDAOUserStoreWithIDGenerator(store, ids)
 }
 
-func NewDAOUserStoreWithIDGenerator(store userDAO, ids *tools.Snowflake) *DAOUserStore {
+func NewDAOUserStoreWithIDGenerator(store userDAO, ids *snowflake.Snowflake) *DAOUserStore {
 	return &DAOUserStore{store: store, ids: ids}
 }
 

@@ -24,7 +24,7 @@ CREATE INDEX idx_user_credentials_email ON user_credentials (email);
 
 - 按 `id` 查询
 - 按 `email` 查询
-- 插入新纪录：由 `app/shared/tools.Snowflake` 在 auth 服务侧生成 `BIGINT` 雪花 ID，并显式传入 `CreateUser`；`name` 必填且数据库约束为 `NOT NULL`
+- 插入新纪录：由 `app/shared/snowflake.Snowflake` 在 auth 服务侧生成 `BIGINT` 雪花 ID，并显式传入 `CreateUser`；`name` 必填且数据库约束为 `NOT NULL`
 - 修改 `password_hash`
 - 修改 `status`
 
@@ -47,6 +47,6 @@ CREATE INDEX idx_user_credentials_email ON user_credentials (email);
 
 ## 雪花 ID
 
-- 生成器：`app/shared/tools/snowflake.go`
+- 生成器：`app/shared/snowflake/snowflake.go`
 - auth 注入点：`app/auth/rpc/internal/service.NewDAOUserStoreWithMachineID`
 - 配置项：`Auth.SnowflakeMachineID`，多实例部署时每个 auth 实例必须使用不同 machine ID，避免 ID 冲突
