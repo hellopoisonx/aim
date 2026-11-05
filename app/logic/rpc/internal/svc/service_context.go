@@ -5,10 +5,13 @@ import (
 	"fmt"
 	"time"
 
+	attachmentpb "github.com/hellopoisonx/aim/app/attachment/rpc/pb"
+
 	"github.com/redis/go-redis/v9"
 
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/config"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/service"
+	"github.com/hellopoisonx/aim/app/logic/rpc/internal/service/rbac"
 	"github.com/hellopoisonx/aim/app/logic/rpc/model/dao"
 	"github.com/hellopoisonx/aim/app/logic/rpc/model/orm"
 	sharedcache "github.com/hellopoisonx/aim/app/shared/cache"
@@ -17,6 +20,7 @@ import (
 	"github.com/hellopoisonx/aim/app/shared/tools"
 
 	"github.com/zeromicro/go-zero/core/logx"
+	"github.com/zeromicro/go-zero/zrpc"
 	"gorm.io/gorm"
 )
 
@@ -41,16 +45,26 @@ type ServiceContext struct {
 	DAO                 *dao.Store
 	FriendshipDAO       FriendshipDAO
 	IDGen               *tools.Snowflake
-	CacheManager        *sharedcache.CacheManager
-	ConvCache           *sharedcache.TypedCache[orm.Conversation]
-	ConvMembersCache    *sharedcache.TypedCache[[]orm.ConversationMember]
-	UserCache           *sharedcache.TypedCache[orm.UserInfo]
-	UserTypeCache       *sharedcache.TypedCache[string]
-	FriendshipCache     *sharedcache.TypedCache[[]orm.Friendship]
-	BotTokenCache       *sharedcache.TypedCache[dao.BotTokenWithUser]
+	// Authorizer decides conversation permissions; nil without Postgres.
+	Authorizer       rbac.Authorizer
+	CacheManager     *sharedcache.CacheManager
+	ConvCache        *sharedcache.TypedCache[orm.Conversation]
+	ConvMembersCache *sharedcache.TypedCache[[]orm.ConversationMember]
+	UserCache        *sharedcache.TypedCache[orm.UserInfo]
+	UserTypeCache    *sharedcache.TypedCache[string]
+	FriendshipCache  *sharedcache.TypedCache[[]orm.Friendship]
+	BotTokenCache    *sharedcache.TypedCache[dao.BotTokenWithUser]
 	// EventProducer publishes conversation events as transactional messages.
 	// Nil when RocketMQ is not configured.
 	EventProducer *rocketmq.Producer
+	// TransferProducer publishes accepted messages to the FIFO delivery topic.
+	// Nil when RocketMQ is not configured.
+	TransferProducer *rocketmq.Producer
+	// IdempotencyRedis holds the client message id dedupe keys.
+	IdempotencyRedis *redis.Client
+	// MessageService is the chat message write entry; nil without Postgres,
+	// Redis or RocketMQ.
+	MessageService service.MessageService
 }
 
 func NewServiceContext(c config.Config) *ServiceContext {
@@ -83,12 +97,19 @@ func NewServiceContext(c config.Config) *ServiceContext {
 			if limit == 0 {
 				limit = service.DefaultTemporaryConversationMessageLimit
 			}
+			// Casbin persists its role assignments through the same store; the
+			// static policy matrix is seeded in memory on every start.
+			authz, err := rbac.New(store)
+			if err != nil {
+				logx.Must(fmt.Errorf("logic service: casbin authorizer: %w", err))
+			}
+			svcCtx.Authorizer = authz
 			svcCtx.PermissionChecker = service.NewDatabasePermissionCheckerWithLimitAndCaches(store, limit, service.DatabasePermissionCheckerCaches{
 				Conversation: svcCtx.ConvCache,
 				Members:      svcCtx.ConvMembersCache,
 				Friendship:   svcCtx.FriendshipCache,
 				UserType:     svcCtx.UserTypeCache,
-			})
+			}).WithAuthorizer(authz)
 			svcCtx.UserInfoService = service.NewUserInfoService(store, service.WithUserInfoCache(svcCtx.UserCache), service.WithUserTypeCache(svcCtx.UserTypeCache))
 			svcCtx.BotService = service.NewBotService(store, store,
 				service.WithBotTokenCache(svcCtx.BotTokenCache),
@@ -120,6 +141,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 			}
 
 			convOpts = append(convOpts, service.WithConversationCaches(svcCtx.ConvCache, svcCtx.ConvMembersCache))
+			convOpts = append(convOpts, service.WithRBAC(authz))
 			svcCtx.ConversationService = service.NewConversationService(
 				store, snowflake,
 				conversationTxRunner{store: store, producer: svcCtx.EventProducer},
@@ -131,9 +153,78 @@ func NewServiceContext(c config.Config) *ServiceContext {
 			} else {
 				logx.WithContext(context.Background()).Infof("Postgres connected, using DatabasePermissionChecker, UserInfoService and ConversationService")
 			}
+
+			initMessageService(svcCtx, c)
 		}
 	}
 	return svcCtx
+}
+
+// transferProducerGroup is the broker-visible producer group of the message
+// write path.
+const transferProducerGroup = "aim-logic-transfer"
+
+// initMessageService wires the chat message write path. It stays nil when a
+// dependency is missing: ingestion without a publisher or an idempotency store
+// would silently duplicate or drop messages, so the RPC surface reports an
+// internal error instead.
+func initMessageService(svcCtx *ServiceContext, c config.Config) {
+	if !c.TransferProducerConf.IsConfigured() || c.CacheRedis.Addr == "" {
+		logx.WithContext(context.Background()).Errorf(
+			"message ingestion disabled: transfer producer or Redis is not configured")
+		return
+	}
+
+	producer, err := rocketmq.NewProducer(
+		c.TransferProducerConf.EndpointConf,
+		transferProducerGroup,
+		c.TransferProducerConf.Topic,
+	)
+	if err != nil {
+		logx.WithContext(context.Background()).Errorf("failed to create transfer producer: %v", err)
+		return
+	}
+	svcCtx.TransferProducer = producer
+
+	idempotencyRedis := redis.NewClient(&redis.Options{
+		Addr:     c.CacheRedis.Addr,
+		Password: c.CacheRedis.Password,
+		DB:       c.CacheRedis.DB,
+	})
+	svcCtx.IdempotencyRedis = idempotencyRedis
+
+	var attachmentClient attachmentpb.AttachmentServiceClient
+	if c.AttachmentRpc.Etcd.Key != "" || len(c.AttachmentRpc.Endpoints) > 0 || c.AttachmentRpc.Target != "" {
+		client, err := zrpc.NewClient(c.AttachmentRpc)
+		if err != nil {
+			logx.WithContext(context.Background()).Errorf("failed to create RPC client for AttachmentRpc: %v", err)
+		} else {
+			attachmentClient = attachmentpb.NewAttachmentServiceClient(client.Conn())
+		}
+	}
+
+	svcCtx.MessageService = service.NewMessageService(
+		svcCtx.PermissionChecker,
+		service.NewRedisIdempotencyStore(idempotencyRedis),
+		service.NewRocketMQPublisher(producer, c.TransferProducerConf.Topic),
+		service.NewGRPCAttachmentValidator(attachmentClient),
+		svcCtx.IDGen,
+	)
+
+	logx.WithContext(context.Background()).Infof(
+		"message ingestion: topic=%s endpoint=%s attachment_rpc=%t",
+		c.TransferProducerConf.Topic, c.TransferProducerConf.Endpoint, attachmentClient != nil,
+	)
+}
+
+// StartTransferProducer connects the message transfer producer.
+func (s *ServiceContext) StartTransferProducer() {
+	if s == nil || s.TransferProducer == nil {
+		return
+	}
+	if err := s.TransferProducer.Start(); err != nil {
+		logx.WithContext(context.Background()).Errorf("failed to start rocketmq transfer producer: %v", err)
+	}
 }
 
 // conversationTxRunner adapts *dao.Store.WithTx to the service-level
@@ -193,8 +284,28 @@ func (s *ServiceContext) StopEventProducer() {
 	}
 }
 
+// StopTransferProducer flushes and disconnects the message transfer producer.
+func (s *ServiceContext) StopTransferProducer() {
+	if s == nil || s.TransferProducer == nil {
+		return
+	}
+	if err := s.TransferProducer.GracefulStop(); err != nil {
+		logx.WithContext(context.Background()).Errorf("failed to stop rocketmq transfer producer: %v", err)
+	}
+}
+
 func (s *ServiceContext) Close() {
-	if s == nil || s.CacheManager == nil {
+	if s == nil {
+		return
+	}
+
+	if s.IdempotencyRedis != nil {
+		if err := s.IdempotencyRedis.Close(); err != nil {
+			logx.WithContext(context.Background()).Errorf("failed to close idempotency redis: %v", err)
+		}
+	}
+
+	if s.CacheManager == nil {
 		return
 	}
 

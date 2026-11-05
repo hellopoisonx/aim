@@ -10,6 +10,7 @@ import (
 	serverbotservice "github.com/hellopoisonx/aim/app/logic/rpc/internal/server/botservice"
 	serverconversationservice "github.com/hellopoisonx/aim/app/logic/rpc/internal/server/conversationservice"
 	serverfriendshipservice "github.com/hellopoisonx/aim/app/logic/rpc/internal/server/friendshipservice"
+	servermessageservice "github.com/hellopoisonx/aim/app/logic/rpc/internal/server/messageservice"
 	serverpermissionservice "github.com/hellopoisonx/aim/app/logic/rpc/internal/server/permissionservice"
 	serversearchservice "github.com/hellopoisonx/aim/app/logic/rpc/internal/server/searchservice"
 	serveruserservice "github.com/hellopoisonx/aim/app/logic/rpc/internal/server/userservice"
@@ -36,9 +37,12 @@ func main() {
 	ctx := svc.NewServiceContext(c)
 	defer ctx.Close()
 
-	// Connect the transactional conversation event producer.
+	// Connect the transactional conversation event producer and the message
+	// transfer producer.
 	ctx.StartEventProducer()
+	ctx.StartTransferProducer()
 	proc.AddWrapUpListener(ctx.StopEventProducer)
+	proc.AddWrapUpListener(ctx.StopTransferProducer)
 
 	s := zrpc.MustNewServer(c.RpcServerConf, func(grpcServer *grpc.Server) {
 		registerLogicServers(grpcServer, ctx, c.Mode)
@@ -67,6 +71,7 @@ func registerLogicServers(grpcServer *grpc.Server, ctx *svc.ServiceContext, mode
 	pb.RegisterFriendshipServiceServer(grpcServer, serverfriendshipservice.NewFriendshipServiceServer(ctx))
 	pb.RegisterSearchServiceServer(grpcServer, serversearchservice.NewSearchServiceServer(ctx))
 	pb.RegisterBotServiceServer(grpcServer, serverbotservice.NewBotServiceServer(ctx))
+	pb.RegisterMessageServiceServer(grpcServer, servermessageservice.NewMessageServiceServer(ctx))
 
 	if mode == service.DevMode || mode == service.TestMode {
 		reflection.Register(grpcServer)

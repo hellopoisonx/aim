@@ -857,3 +857,33 @@ message ListBotEventsReq {}
 message ListBotEventsResp {
   repeated BotEventInfo events = 1;
 }
+
+// MessageService is the single write entry for chat messages: the gateway
+// forwards WebSocket send frames and the Bot OpenAPI forwards REST sends here.
+// It validates, authorizes, assigns the message id and publishes the transfer
+// event that core consumes for archiving and fan-out.
+service MessageService {
+  rpc IngestMessage(IngestMessageReq) returns (IngestMessageResp);
+}
+
+message IngestMessageReq {
+  int64 sender_id = 1;
+  // device_id identifies the originating device so the gateway can skip it when
+  // fanning the message back for multi-device sync.
+  string device_id = 2;
+  int64 conversation_id = 3;
+  // message_type is a short client-supported type such as text/image/file/voice/video.
+  string message_type = 4;
+  string content = 5;
+  // client_msg_id is the client-side idempotency key.
+  string client_msg_id = 6;
+  repeated string mentions = 7;
+}
+
+message IngestMessageResp {
+  // message_id is the server-assigned Snowflake id.
+  int64 message_id = 1;
+  string client_msg_id = 2;
+  // accepted_at is the server acceptance time in unix milliseconds.
+  int64 accepted_at = 3;
+}

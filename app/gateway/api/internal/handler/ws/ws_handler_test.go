@@ -23,7 +23,6 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/hellopoisonx/aim/app/auth/rpc/authservice"
-	corepb "github.com/hellopoisonx/aim/app/core/rpc/pb"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/config"
 	wsmanager "github.com/hellopoisonx/aim/app/gateway/api/internal/ws"
 	logicpb "github.com/hellopoisonx/aim/app/logic/rpc/pb"
@@ -603,13 +602,15 @@ func (noopAuthClient) CreateBotCredential(context.Context, *authservice.CreateBo
 	return nil, nil
 }
 
-// mockCoreClient implements corepb.TransferServiceClient for testing.
-type mockCoreClient struct {
-	resp *corepb.TransferResp
+// mockMessageClient implements messageservice.MessageService for testing.
+type mockMessageClient struct {
+	resp *logicpb.IngestMessageResp
 	err  error
+	last *logicpb.IngestMessageReq
 }
 
-func (m *mockCoreClient) Transfer(ctx context.Context, req *corepb.TransferReq, opts ...grpc.CallOption) (*corepb.TransferResp, error) {
+func (m *mockMessageClient) IngestMessage(ctx context.Context, req *logicpb.IngestMessageReq, opts ...grpc.CallOption) (*logicpb.IngestMessageResp, error) {
+	m.last = req
 	return m.resp, m.err
 }
 
@@ -678,7 +679,7 @@ func (m *mockConversationClient) ListConversationReadStates(context.Context, *lo
 	return nil, status.Error(codes.Unimplemented, "not implemented")
 }
 
-func newTestServiceContextWithCore(t *testing.T, coreClient corepb.TransferServiceClient) *svc.ServiceContext {
+func newTestServiceContextWithMessageClient(t *testing.T, messageClient *mockMessageClient) *svc.ServiceContext {
 	t.Helper()
 
 	var c config.Config
@@ -686,14 +687,14 @@ func newTestServiceContextWithCore(t *testing.T, coreClient corepb.TransferServi
 	c.Auth.AccessSecret = "test-secret"
 	c.WebSocket.MaxMsgSize = 32768
 
-	return svc.NewServiceContextWithCore(c, noopAuthClient{}, coreClient)
+	return svc.NewServiceContextWithMessageClient(c, noopAuthClient{}, messageClient)
 }
 
-// TestHandleSendMessageCoreSuccess verifies ACK_STATUS_ACCEPTED when core returns success.
+// TestHandleSendMessageCoreSuccess verifies ACK_STATUS_ACCEPTED when logic returns success.
 func TestHandleSendMessageCoreSuccess(t *testing.T) {
 	t.Parallel()
-	serverCtx := newTestServiceContextWithCore(t, &mockCoreClient{
-		resp: &corepb.TransferResp{MessageId: 999, ClientMsgId: "client-success"},
+	serverCtx := newTestServiceContextWithMessageClient(t, &mockMessageClient{
+		resp: &logicpb.IngestMessageResp{MessageId: 999, ClientMsgId: "client-success"},
 	})
 	handler := NewWsHandler(serverCtx, wsmanager.NewManager())
 	server := httptest.NewServer(http.HandlerFunc(handler.ServeWS))
@@ -784,7 +785,7 @@ func TestHandleSendMessageCoreRejected(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			serverCtx := newTestServiceContextWithCore(t, &mockCoreClient{err: tt.err})
+			serverCtx := newTestServiceContextWithMessageClient(t, &mockMessageClient{err: tt.err})
 			handler := NewWsHandler(serverCtx, wsmanager.NewManager())
 			server := httptest.NewServer(http.HandlerFunc(handler.ServeWS))
 			t.Cleanup(server.Close)
@@ -854,7 +855,7 @@ func TestHandleSendMessageCoreRetryable(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			serverCtx := newTestServiceContextWithCore(t, &mockCoreClient{err: tt.err})
+			serverCtx := newTestServiceContextWithMessageClient(t, &mockMessageClient{err: tt.err})
 			handler := NewWsHandler(serverCtx, wsmanager.NewManager())
 			server := httptest.NewServer(http.HandlerFunc(handler.ServeWS))
 			t.Cleanup(server.Close)
@@ -899,10 +900,10 @@ func TestHandleSendMessageCoreRetryable(t *testing.T) {
 	}
 }
 
-// TestHandleSendMessageCoreUnavailable verifies RETRYABLE when CoreClient is nil.
+// TestHandleSendMessageCoreUnavailable verifies RETRYABLE when MessageClient is nil.
 func TestHandleSendMessageCoreUnavailable(t *testing.T) {
 	t.Parallel()
-	serverCtx := newTestServiceContext(t) // CoreClient is nil via NewServiceContextWithAuth
+	serverCtx := newTestServiceContext(t) // MessageClient is nil via NewServiceContextWithAuth
 	handler := NewWsHandler(serverCtx, wsmanager.NewManager())
 	server := httptest.NewServer(http.HandlerFunc(handler.ServeWS))
 	t.Cleanup(server.Close)
@@ -943,12 +944,12 @@ func TestHandleSendMessageCoreUnavailable(t *testing.T) {
 	require.Equal(t, "client-nocore", ack.GetClientMsgId())
 }
 
-// TestMapTransferToAckSuccess unit tests mapTransferToAck with success response.
+// TestMapTransferToAckSuccess unit tests mapIngestToAck with success response.
 func TestMapTransferToAckSuccess(t *testing.T) {
 	t.Parallel()
 
-	resp := &corepb.TransferResp{MessageId: 123, ClientMsgId: "c1"}
-	ackFrame := mapTransferToAck(10, "c1", 1, resp, nil)
+	resp := &logicpb.IngestMessageResp{MessageId: 123, ClientMsgId: "c1"}
+	ackFrame := mapIngestToAck(10, "c1", 1, resp, nil)
 
 	ackPayload, err := wsmanager.DecodePayload(ackFrame)
 	require.NoError(t, err)
@@ -961,7 +962,7 @@ func TestMapTransferToAckSuccess(t *testing.T) {
 	require.Equal(t, int64(10), ack.GetAckSeq())
 }
 
-// TestMapTransferToAckRejected unit tests mapTransferToAck with rejected errors.
+// TestMapTransferToAckRejected unit tests mapIngestToAck with rejected errors.
 func TestMapTransferToAckRejected(t *testing.T) {
 	t.Parallel()
 
@@ -1014,7 +1015,7 @@ func TestMapTransferToAckRejected(t *testing.T) {
 			t.Parallel()
 
 			err := status.New(tt.grpcCode, tt.wantMsg).Err()
-			ackFrame := mapTransferToAck(10, "c1", 1, nil, err)
+			ackFrame := mapIngestToAck(10, "c1", 1, nil, err)
 
 			ackPayload, err := wsmanager.DecodePayload(ackFrame)
 			require.NoError(t, err)
@@ -1028,7 +1029,7 @@ func TestMapTransferToAckRejected(t *testing.T) {
 	}
 }
 
-// TestMapTransferToAckRetryable unit tests mapTransferToAck with retryable errors.
+// TestMapTransferToAckRetryable unit tests mapIngestToAck with retryable errors.
 func TestMapTransferToAckRetryable(t *testing.T) {
 	t.Parallel()
 
@@ -1068,7 +1069,7 @@ func TestMapTransferToAckRetryable(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			ackFrame := mapTransferToAck(10, "c1", 1, nil, tt.err)
+			ackFrame := mapIngestToAck(10, "c1", 1, nil, tt.err)
 
 			ackPayload, err := wsmanager.DecodePayload(ackFrame)
 			require.NoError(t, err)
@@ -1135,11 +1136,11 @@ func newTestServiceContextWithRedis(t *testing.T, presencePub *mockPresencePubli
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
 
 	sc := &svc.ServiceContext{
-		Config:      c,
-		AuthClient:  noopAuthClient{},
-		CoreClient:  nil,
-		RedisClient: rdb,
-		PresencePub: presencePub,
+		Config:        c,
+		AuthClient:    noopAuthClient{},
+		MessageClient: nil,
+		RedisClient:   rdb,
+		PresencePub:   presencePub,
 	}
 
 	t.Cleanup(func() {
@@ -1218,11 +1219,11 @@ func TestHandleHeartbeatPresenceFailureNonBlocking(t *testing.T) {
 	c.Auth.AccessSecret = "test-secret"
 	c.WebSocket.MaxMsgSize = 32768
 	sc := &svc.ServiceContext{
-		Config:      c,
-		AuthClient:  noopAuthClient{},
-		CoreClient:  nil,
-		RedisClient: nil,
-		PresencePub: nil,
+		Config:        c,
+		AuthClient:    noopAuthClient{},
+		MessageClient: nil,
+		RedisClient:   nil,
+		PresencePub:   nil,
 	}
 
 	handler := NewWsHandler(sc, wsmanager.NewManager())

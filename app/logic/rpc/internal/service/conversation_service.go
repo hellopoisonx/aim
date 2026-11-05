@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hellopoisonx/aim/app/logic/rpc/internal/service/rbac"
 	"github.com/hellopoisonx/aim/app/logic/rpc/model/dao"
 	"github.com/hellopoisonx/aim/app/logic/rpc/model/orm"
 	sharedcache "github.com/hellopoisonx/aim/app/shared/cache"
@@ -113,6 +114,9 @@ type ConversationStore interface {
 	InsertMessage(ctx context.Context, message orm.Message) error
 	UpsertConversationReadState(ctx context.Context, conversationID, userID, lastReadMessageID int64) (orm.ConversationReadState, error)
 	ListConversationReadStates(ctx context.Context, conversationID int64) ([]orm.ConversationReadState, error)
+	// GetUserType resolves the principal type (human/bot) that prefixes an RBAC
+	// subject.
+	GetUserType(ctx context.Context, id int64) (string, error)
 }
 
 // ConversationTxRunner starts a transaction whose callback receives a store
@@ -155,9 +159,18 @@ type ConversationService struct {
 	eventTopic   string
 	convCache    *sharedcache.TypedCache[orm.Conversation]
 	membersCache *sharedcache.TypedCache[[]orm.ConversationMember]
+	authz        rbac.Authorizer
 }
 
 type ConversationServiceOption func(*ConversationService)
+
+// WithRBAC authorizes group operations through the Casbin authorizer. Without
+// it the service falls back to the stored member role.
+func WithRBAC(authz rbac.Authorizer) ConversationServiceOption {
+	return func(s *ConversationService) {
+		s.authz = authz
+	}
+}
 
 func WithConversationCaches(convCache *sharedcache.TypedCache[orm.Conversation], membersCache *sharedcache.TypedCache[[]orm.ConversationMember]) ConversationServiceOption {
 	return func(s *ConversationService) {
@@ -304,20 +317,156 @@ func (s *ConversationService) memberRole(ctx context.Context, conversationID, us
 	return "", ErrNotMember
 }
 
-func (s *ConversationService) isOwner(ctx context.Context, conversationID, userID int64) (bool, error) {
-	role, err := s.memberRole(ctx, conversationID, userID)
-	if err != nil {
-		return false, err
+// requireAct authorizes userID for an RBAC action on the conversation.
+//
+// With an authorizer wired the decision comes from Casbin's role assignments;
+// otherwise it falls back to the stored member role, which keeps tests and the
+// no-Postgres setup working.
+func (s *ConversationService) requireAct(ctx context.Context, conversationID, userID int64, act string) error {
+	if s.authz == nil {
+		return s.requireStoredRole(ctx, conversationID, userID, act)
 	}
-	return role == RoleOwner, nil
+
+	userType, err := s.store.GetUserType(ctx, userID)
+	if err != nil {
+		if errors.Is(err, dao.ErrNotFound) {
+			return ErrNotMember
+		}
+		return err
+	}
+
+	allowed, err := s.authz.Authorize(ctx, rbac.Subject(userType, userID), rbac.Domain(conversationID), rbac.ObjectConversation, act)
+	if err != nil {
+		return err
+	}
+	if allowed {
+		return nil
+	}
+
+	if act == rbac.ActionGroupOwn {
+		return ErrNotOwner
+	}
+
+	return ErrNotAdmin
 }
 
-func (s *ConversationService) isAdminOrOwner(ctx context.Context, conversationID, userID int64) (bool, error) {
+// requireStoredRole is the authorizer-less fallback: the member role decides.
+func (s *ConversationService) requireStoredRole(ctx context.Context, conversationID, userID int64, act string) error {
 	role, err := s.memberRole(ctx, conversationID, userID)
 	if err != nil {
+		return err
+	}
+
+	switch act {
+	case rbac.ActionGroupOwn:
+		if role == RoleOwner {
+			return nil
+		}
+		return ErrNotOwner
+	case rbac.ActionGroupManage:
+		if role == RoleOwner || role == RoleAdmin {
+			return nil
+		}
+		return ErrNotAdmin
+	default:
+		if role == RoleOwner || role == RoleAdmin || role == RoleMember {
+			return nil
+		}
+		return ErrNotMember
+	}
+}
+
+// isBot reports whether the user is a bot principal. Bots can be group admins
+// but never the owner, so ownership writes consult it first.
+func (s *ConversationService) isBot(ctx context.Context, userID int64) (bool, error) {
+	userType, err := s.store.GetUserType(ctx, userID)
+	if err != nil {
+		if errors.Is(err, dao.ErrNotFound) {
+			return false, ErrNotMember
+		}
 		return false, err
 	}
-	return role == RoleOwner || role == RoleAdmin, nil
+
+	return userType == "bot", nil
+}
+
+// rbacSubject builds the Casbin subject of a user or bot.
+func (s *ConversationService) rbacSubject(ctx context.Context, userID int64) (string, error) {
+	userType, err := s.store.GetUserType(ctx, userID)
+	if err != nil {
+		if errors.Is(err, dao.ErrNotFound) {
+			return "", ErrNotMember
+		}
+		return "", err
+	}
+
+	return rbac.Subject(userType, userID), nil
+}
+
+// assignRole mirrors one conversation_members role into Casbin.
+//
+// Role assignments are a derived index of the member table, so a failure here
+// is logged instead of failing the committed business operation; the migration
+// backfill restores the assignments.
+func (s *ConversationService) assignRole(ctx context.Context, conversationID, userID int64, role string) {
+	if s.authz == nil {
+		return
+	}
+
+	subject, err := s.rbacSubject(ctx, userID)
+	if err != nil {
+		logx.WithContext(ctx).Errorf("rbac: resolve subject for user %d: %v", userID, err)
+		return
+	}
+
+	if err := s.authz.AssignRole(ctx, subject, rbac.Domain(conversationID), role); err != nil {
+		logx.WithContext(ctx).Errorf("rbac: assign %s to user %d in conversation %d: %v", role, userID, conversationID, err)
+	}
+}
+
+// changeRole mirrors a role transition into Casbin.
+func (s *ConversationService) changeRole(ctx context.Context, conversationID, userID int64, from, to string) {
+	if s.authz == nil {
+		return
+	}
+
+	subject, err := s.rbacSubject(ctx, userID)
+	if err != nil {
+		logx.WithContext(ctx).Errorf("rbac: resolve subject for user %d: %v", userID, err)
+		return
+	}
+
+	if err := s.authz.ChangeRole(ctx, subject, rbac.Domain(conversationID), from, to); err != nil {
+		logx.WithContext(ctx).Errorf("rbac: change role of user %d in conversation %d from %s to %s: %v", userID, conversationID, from, to, err)
+	}
+}
+
+// unassignRole drops every Casbin role of the user in the conversation.
+func (s *ConversationService) unassignRole(ctx context.Context, conversationID, userID int64) {
+	if s.authz == nil {
+		return
+	}
+
+	subject, err := s.rbacSubject(ctx, userID)
+	if err != nil {
+		logx.WithContext(ctx).Errorf("rbac: resolve subject for user %d: %v", userID, err)
+		return
+	}
+
+	if err := s.authz.Unassign(ctx, subject, rbac.Domain(conversationID)); err != nil {
+		logx.WithContext(ctx).Errorf("rbac: unassign user %d in conversation %d: %v", userID, conversationID, err)
+	}
+}
+
+// clearConversationRoles drops every Casbin role of a dismissed conversation.
+func (s *ConversationService) clearConversationRoles(ctx context.Context, conversationID int64) {
+	if s.authz == nil {
+		return
+	}
+
+	if err := s.authz.ClearConversation(ctx, rbac.Domain(conversationID)); err != nil {
+		logx.WithContext(ctx).Errorf("rbac: clear conversation %d: %v", conversationID, err)
+	}
 }
 
 func (s *ConversationService) CreateConversation(ctx context.Context, conversationType sharedconversation.Type, creatorID int64, memberIDs []int64, name string, avatar string) (orm.Conversation, error) {
@@ -411,6 +560,14 @@ func (s *ConversationService) CreateConversation(ctx context.Context, conversati
 	}
 
 	s.invalidateConversationAll(ctx, conv.ID)
+
+	for _, memberID := range memberIDs {
+		role := RoleMember
+		if memberID == creatorID {
+			role = RoleOwner
+		}
+		s.assignRole(ctx, conv.ID, memberID, string(role))
+	}
 
 	return conv, nil
 }
@@ -527,12 +684,8 @@ func (s *ConversationService) AddGroupMembers(ctx context.Context, conversationI
 	if conv.ConversationType != ConversationTypeGroup {
 		return orm.Conversation{}, ErrNotGroupConversation
 	}
-	ok, err := s.isAdminOrOwner(ctx, conversationID, operatorID)
-	if err != nil {
+	if err := s.requireAct(ctx, conversationID, operatorID, rbac.ActionGroupManage); err != nil {
 		return orm.Conversation{}, err
-	}
-	if !ok {
-		return orm.Conversation{}, ErrNotAdmin
 	}
 
 	for _, mid := range newMemberIDs {
@@ -568,6 +721,7 @@ func (s *ConversationService) AddGroupMembers(ctx context.Context, conversationI
 	}
 
 	content := s.buildSystemMessage("member_joined", operatorID, operatorName, newMemberIDs)
+	addRoles := make([]int64, 0, len(newMemberIDs))
 	err = s.inTxWithEvent(ctx, conversationEventPayload{
 		MessageID:      messageID,
 		ConversationID: conversationID,
@@ -594,6 +748,7 @@ func (s *ConversationService) AddGroupMembers(ctx context.Context, conversationI
 			if _, err := tx.AddConversationMemberWithRole(ctx, conversationID, mid, RoleMember); err != nil {
 				return err
 			}
+			addRoles = append(addRoles, mid)
 		}
 
 		return tx.InsertMessage(ctx, orm.Message{
@@ -609,6 +764,11 @@ func (s *ConversationService) AddGroupMembers(ctx context.Context, conversationI
 	}
 
 	s.invalidateConversationMembers(ctx, conversationID)
+
+	for _, mid := range addRoles {
+		s.assignRole(ctx, conversationID, mid, string(RoleMember))
+	}
+
 	conv, _ = s.GetConversationByID(ctx, conversationID)
 	return conv, nil
 }
@@ -622,12 +782,12 @@ func (s *ConversationService) RemoveGroupMembers(ctx context.Context, conversati
 	if conv.ConversationType != ConversationTypeGroup {
 		return ErrNotGroupConversation
 	}
+	if err := s.requireAct(ctx, conversationID, operatorID, rbac.ActionGroupManage); err != nil {
+		return err
+	}
 	operatorRole, err := s.memberRole(ctx, conversationID, operatorID)
 	if err != nil {
 		return err
-	}
-	if operatorRole != RoleOwner && operatorRole != RoleAdmin {
-		return ErrNotAdmin
 	}
 	for _, uid := range removeMemberIDs {
 		if uid <= 0 {
@@ -683,6 +843,11 @@ func (s *ConversationService) RemoveGroupMembers(ctx context.Context, conversati
 	}
 
 	s.invalidateConversationMembers(ctx, conversationID)
+
+	for _, uid := range removeMemberIDs {
+		s.unassignRole(ctx, conversationID, uid)
+	}
+
 	return nil
 }
 
@@ -737,6 +902,7 @@ func (s *ConversationService) LeaveGroup(ctx context.Context, conversationID, us
 	}
 
 	s.invalidateConversationMembers(ctx, conversationID)
+	s.unassignRole(ctx, conversationID, userID)
 	return nil
 }
 
@@ -749,8 +915,8 @@ func (s *ConversationService) DismissGroup(ctx context.Context, conversationID, 
 	if conv.ConversationType != ConversationTypeGroup {
 		return ErrNotGroupConversation
 	}
-	if operatorID != conv.CreatorID {
-		return ErrNotOwner
+	if err := s.requireAct(ctx, conversationID, operatorID, rbac.ActionGroupOwn); err != nil {
+		return err
 	}
 
 	// Everyone in the group is notified before it is deactivated.
@@ -791,6 +957,7 @@ func (s *ConversationService) DismissGroup(ctx context.Context, conversationID, 
 	}
 
 	s.invalidateConversationAll(ctx, conversationID)
+	s.clearConversationRoles(ctx, conversationID)
 	return nil
 }
 
@@ -803,12 +970,8 @@ func (s *ConversationService) UpdateGroupInfo(ctx context.Context, conversationI
 	if conv.ConversationType != ConversationTypeGroup {
 		return orm.Conversation{}, ErrNotGroupConversation
 	}
-	ok, err := s.isAdminOrOwner(ctx, conversationID, operatorID)
-	if err != nil {
+	if err := s.requireAct(ctx, conversationID, operatorID, rbac.ActionGroupManage); err != nil {
 		return orm.Conversation{}, err
-	}
-	if !ok {
-		return orm.Conversation{}, ErrNotAdmin
 	}
 
 	if name != nil {
@@ -885,12 +1048,8 @@ func (s *ConversationService) GrantGroupAdmin(ctx context.Context, conversationI
 	if conv.ConversationType != ConversationTypeGroup {
 		return ErrNotGroupConversation
 	}
-	ok, err := s.isOwner(ctx, conversationID, operatorID)
-	if err != nil {
+	if err := s.requireAct(ctx, conversationID, operatorID, rbac.ActionGroupOwn); err != nil {
 		return err
-	}
-	if !ok {
-		return ErrNotOwner
 	}
 	if targetUserID == operatorID {
 		return errorx.NewCodeError(errorx.CodeBadInput, "owner cannot grant admin to self")
@@ -916,6 +1075,7 @@ func (s *ConversationService) GrantGroupAdmin(ctx context.Context, conversationI
 		return ErrNotMember
 	}
 	s.invalidateConversationMembers(ctx, conversationID)
+	s.changeRole(ctx, conversationID, targetUserID, string(RoleMember), string(RoleAdmin))
 	return nil
 }
 
@@ -927,12 +1087,8 @@ func (s *ConversationService) RevokeGroupAdmin(ctx context.Context, conversation
 	if conv.ConversationType != ConversationTypeGroup {
 		return ErrNotGroupConversation
 	}
-	ok, err := s.isOwner(ctx, conversationID, operatorID)
-	if err != nil {
+	if err := s.requireAct(ctx, conversationID, operatorID, rbac.ActionGroupOwn); err != nil {
 		return err
-	}
-	if !ok {
-		return ErrNotOwner
 	}
 	if targetUserID == operatorID {
 		return errorx.NewCodeError(errorx.CodeBadInput, "owner cannot revoke self")
@@ -958,6 +1114,7 @@ func (s *ConversationService) RevokeGroupAdmin(ctx context.Context, conversation
 		return ErrNotMember
 	}
 	s.invalidateConversationMembers(ctx, conversationID)
+	s.changeRole(ctx, conversationID, targetUserID, string(RoleAdmin), string(RoleMember))
 	return nil
 }
 
@@ -969,12 +1126,8 @@ func (s *ConversationService) TransferGroupOwner(ctx context.Context, conversati
 	if conv.ConversationType != ConversationTypeGroup {
 		return orm.Conversation{}, ErrNotGroupConversation
 	}
-	ok, err := s.isOwner(ctx, conversationID, operatorID)
-	if err != nil {
+	if err := s.requireAct(ctx, conversationID, operatorID, rbac.ActionGroupOwn); err != nil {
 		return orm.Conversation{}, err
-	}
-	if !ok {
-		return orm.Conversation{}, ErrNotOwner
 	}
 	if targetUserID == operatorID {
 		return orm.Conversation{}, errorx.NewCodeError(errorx.CodeBadInput, "new owner must be a different member")
@@ -988,6 +1141,15 @@ func (s *ConversationService) TransferGroupOwner(ctx context.Context, conversati
 	}
 	if targetRole != RoleMember && targetRole != RoleAdmin {
 		return orm.Conversation{}, ErrNotMember
+	}
+
+	// A bot can administer a group but never own it.
+	isBot, err := s.isBot(ctx, targetUserID)
+	if err != nil {
+		return orm.Conversation{}, err
+	}
+	if isBot {
+		return orm.Conversation{}, errorx.NewCodeError(errorx.CodeBadInput, "bot cannot be group owner")
 	}
 
 	if s.txRunner != nil {
@@ -1021,6 +1183,9 @@ func (s *ConversationService) TransferGroupOwner(ctx context.Context, conversati
 		return orm.Conversation{}, err
 	}
 	s.invalidateConversationAll(ctx, conversationID)
+
+	s.changeRole(ctx, conversationID, operatorID, string(RoleOwner), string(RoleAdmin))
+	s.assignRole(ctx, conversationID, targetUserID, string(RoleOwner))
 
 	return s.GetConversationByID(ctx, conversationID)
 }

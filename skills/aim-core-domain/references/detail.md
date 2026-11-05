@@ -2,8 +2,7 @@
 
 只负责一件事：把消息送到对的人。
 
-- Transfer Service（消息路由）：消息流向判断（单聊/群聊）、查询接收方所在网关节点、发布到 RocketMQ FIFO topic
-- Delivery Consumer（投递消费者）：从 RocketMQ 消费消息，查找目标用户所在网关并投递
+- Delivery Consumer（投递消费者）：从 `aim-message-transfer` 消费消息，按单聊/群聊发布 `aim-gateway-push`（写扩散 / 读扩散）
 - Presence Consumer：消费 `aim-presence-events`，查好友列表 → 查 `aim:user_gateway:{friend_id}` → 调 `gateway.PushPresence`
 - Typing Consumer：消费 `aim-typing-events`，查会话成员 → 查 `aim:user_gateway:{member_id}` → 调 `gateway.PushTyping`
 - GatewayRouter：按 `node_id` 路由 gRPC 请求到目标网关实例。Gateway 节点注册走 etcd（`Etcd.Key: gateway.rpc`），但 client 端不依赖 etcd 发现 —— 走 `GatewayRpcConf.Target` / `GatewayRpcConf.Nodes` 静态配置，部署期在 YAML 写死 `node_id` → `target` 映射。
@@ -21,54 +20,19 @@
 
 **测试覆盖**：新增 `TestGatewayServerPushPresenceFallbackToUserId` 验证回退路径。
 
-## TransferService RPC 契约
+## 投递消费契约（写入口已迁至 logic）
 
-Proto 定义：`app/core/rpc/core.proto`，生成的 pb 代码在 `app/core/rpc/pb/`。
+消息写入口是 logic 的 `MessageService.IngestMessage`；core 只做投递扩散：
 
-```protobuf
-service TransferService {
-  rpc Transfer(TransferReq) returns (TransferResp);
-}
+1. `DeliveryConsumer` 消费 `aim-message-transfer`（FIFO，Key/MessageGroup = `conversation_id`）。
+2. 调 logic `ConversationService.GetConversationMembers` 取成员快照与 `conversation_type`（logic 不可达时退回只投递 sender）。
+3. 补 `SenderInfo`（logic `UserService.GetUserInfo`）。
+4. 按会话类型发布 `aim-gateway-push`（`PushProducerConf`，group `aim-core-push`）：
+   - `direct`：每个成员各发一条 `PushEvent`，`target_user_id` 为该成员（写扩散，每人一份拷贝）。
+   - 其它（`group`）：只发一条，`member_ids` 填成员快照（读扩散，接收侧各节点本地扇出）。
+5. 是否在线不再判断：各 gateway 节点只投递本地连接，离线用户靠历史拉取兜底。
 
-message TransferReq {
-  int64  sender_id       = 1; // 发送者用户 ID
-  string device_id       = 2; // 设备 ID（用于设备维度去重和限流）
-  int64  conversation_id = 3; // 会话 ID
-  string message_type    = 4; // 消息类型：text/image/file/voice/video等
-  string content         = 5; // 消息内容
-  string client_msg_id   = 6; // 客户端消息 ID（用于去重和幂等）
-  repeated string mentions = 7; // 被 @ 的用户 ID 列表
-}
-
-message TransferResp {
-  int64  message_id    = 1; // 服务端分配的消息 ID
-  string client_msg_id = 2; // 客户端消息 ID（回传用于确认）
-  int64  accepted_at   = 3; // 消息被服务端接受的时间戳（Unix 毫秒）
-}
-```
-
-### Transfer 职责
-
-1. **验证发送者资格**：调用 aim-logic `PermissionService.CheckMessagePermission` 查询发送者是否为会话成员、是否被禁言/拉黑
-2. **配额检查**：通过 Redis 滑动窗口实现实时限流
-3. **内容审核**：同步调用 in-process 内容审核库（硬审核同步拒绝，软审核异步记录）
-4. **消息去重**：基于 `(sender_id, device_id, client_msg_id)` 做幂等，重复请求返回已有 message_id
-5. **生成 message_id**：全局唯一 ID 生成器（snowflake 或 uuid）
-6. **RocketMQ 发布**：发布到 `aim-message-transfer`（FIFO），`Key` 与 MessageGroup 都取 `conversation_id`（保证同会话有序），事件 payload 必须携带 `traceparent`/`tracestate`，供 `DeliveryConsumer` 和 logic `ArchiveConsumer` 恢复链路追踪。
-7. **等待 broker 确认**：`Producer.Publish` 同步等待 SendReceipt，TransferResp 只在 broker 接受消息后返回
-
-### gRPC 错误 → biz code 映射
-
-| gRPC 状态码 | biz code | 含义 | 可重试 |
-| --- | --- | --- | --- |
-| `InvalidArgument` | `40000` | 参数校验失败 | 否 |
-| `Unauthenticated` | `40100` | 身份未认证 | 否 |
-| `PermissionDenied` | `40300` | 无权限（禁言/拉黑/非成员） | 否 |
-| `NotFound` | `40400` | 会话不存在 | 否 |
-| `ResourceExhausted` | `42900` | 配额/限流 | 否 |
-| `Internal` / `Unavailable` / `DataLoss` | `50000` | 基础设施错误 | 是 |
-
-网关根据 gRPC status code 映射到 WebSocket `AckStatus`（REJECTED / RETRYABLE）。
+`PushMessageReq.source_device_id` 仍透传发送设备，gateway 只跳过发送者本人的源设备，其余设备照常收到（多端同步）。
 
 ### 依赖方向
 

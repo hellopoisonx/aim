@@ -5,6 +5,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/hellopoisonx/aim/app/logic/rpc/internal/service/rbac"
 	"github.com/hellopoisonx/aim/app/logic/rpc/model/dao"
 	"github.com/hellopoisonx/aim/app/logic/rpc/model/orm"
 	sharedcache "github.com/hellopoisonx/aim/app/shared/cache"
@@ -33,6 +34,7 @@ type DatabasePermissionChecker struct {
 	membersCache                      *sharedcache.TypedCache[[]orm.ConversationMember]
 	friendshipCache                   *sharedcache.TypedCache[[]orm.Friendship]
 	userTypeCache                     *sharedcache.TypedCache[string]
+	authz                             rbac.Authorizer
 }
 
 type DatabasePermissionCheckerCaches struct {
@@ -61,6 +63,14 @@ func NewDatabasePermissionCheckerWithLimitAndCaches(queries PermissionQuerier, l
 		friendshipCache:                   caches.Friendship,
 		userTypeCache:                     caches.UserType,
 	}
+}
+
+// WithAuthorizer decides group membership through Casbin's role assignments
+// instead of scanning the member rows. Without it the checker keeps using the
+// stored member list.
+func (c *DatabasePermissionChecker) WithAuthorizer(authz rbac.Authorizer) *DatabasePermissionChecker {
+	c.authz = authz
+	return c
 }
 
 func (c *DatabasePermissionChecker) CheckMessagePermission(ctx context.Context, check PermissionCheck) (PermissionDecision, error) {
@@ -100,7 +110,16 @@ func (c *DatabasePermissionChecker) checkGroupPermission(ctx context.Context, ch
 			break
 		}
 	}
-	if !found {
+
+	if c.authz != nil {
+		allowed, err := c.authorizeSend(ctx, check)
+		if err != nil {
+			return PermissionDecision{}, err
+		}
+		if !allowed {
+			return PermissionDecision{Allowed: false, Code: CodePermissionDenied, Reason: "sender is not a member of this group"}, nil
+		}
+	} else if !found {
 		return PermissionDecision{Allowed: false, Code: CodePermissionDenied, Reason: "sender is not a member of this group"}, nil
 	}
 
@@ -129,6 +148,19 @@ func (c *DatabasePermissionChecker) checkGroupPermission(ctx context.Context, ch
 	}
 
 	return PermissionDecision{Allowed: true, Code: CodeOK, FilteredMentions: filtered}, nil
+}
+
+// authorizeSend asks Casbin whether the sender may post into the conversation.
+func (c *DatabasePermissionChecker) authorizeSend(ctx context.Context, check PermissionCheck) (bool, error) {
+	userType, err := c.getUserType(ctx, check.SenderID)
+	if err != nil {
+		if errors.Is(err, dao.ErrNotFound) {
+			return false, nil
+		}
+		return false, err
+	}
+
+	return c.authz.Authorize(ctx, rbac.Subject(userType, check.SenderID), rbac.Domain(check.ConversationID), rbac.ObjectConversation, rbac.ActionMessageSend)
 }
 
 func (c *DatabasePermissionChecker) checkDirectPermission(ctx context.Context, check PermissionCheck) (PermissionDecision, error) {

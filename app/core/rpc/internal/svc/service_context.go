@@ -20,10 +20,9 @@ type ServiceContext struct {
 	Config      config.Config
 	RedisClient *redis.Client
 	Snowflake   *tools.Snowflake
-	// TransferProducer publishes transfer events to the FIFO delivery topic.
+	// PushProducer publishes gateway push events to the FIFO push topic.
 	// Nil when RocketMQ is not configured.
-	TransferProducer        *rocketmq.Producer
-	LogicPermissionClient   logicpb.PermissionServiceClient
+	PushProducer            *rocketmq.Producer
 	LogicConversationClient logicpb.ConversationServiceClient
 	LogicFriendshipClient   logicpb.FriendshipServiceClient
 	LogicUserClient         logicpb.UserServiceClient
@@ -32,25 +31,25 @@ type ServiceContext struct {
 	AttachmentClient        attachmentpb.AttachmentServiceClient
 }
 
-// transferProducerGroup is the broker-visible producer group of core.
-const transferProducerGroup = "aim-core-transfer"
+// pushProducerGroup is the broker-visible producer group of core.
+const pushProducerGroup = "aim-core-push"
 
-// StartTransferProducer connects the transfer producer. The RPC server starts
-// regardless: a broker outage surfaces as transfer publish errors instead of a
+// StartPushProducer connects the push producer. The RPC server starts
+// regardless: a broker outage surfaces as push publish errors instead of a
 // crash loop.
-func (s *ServiceContext) StartTransferProducer() {
-	if s == nil || s.TransferProducer == nil {
+func (s *ServiceContext) StartPushProducer() {
+	if s == nil || s.PushProducer == nil {
 		return
 	}
-	if err := s.TransferProducer.Start(); err != nil {
-		logx.WithContext(context.Background()).Errorf("failed to start rocketmq transfer producer: %v", err)
+	if err := s.PushProducer.Start(); err != nil {
+		logx.WithContext(context.Background()).Errorf("failed to start rocketmq push producer: %v", err)
 	}
 }
 
 func (s *ServiceContext) Close() {
-	if s.TransferProducer != nil {
-		if err := s.TransferProducer.GracefulStop(); err != nil {
-			logx.WithContext(context.Background()).Errorf("failed to stop rocketmq transfer producer: %v", err)
+	if s.PushProducer != nil {
+		if err := s.PushProducer.GracefulStop(); err != nil {
+			logx.WithContext(context.Background()).Errorf("failed to stop rocketmq push producer: %v", err)
 		}
 	}
 
@@ -80,25 +79,24 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		logx.WithContext(context.Background()).Infof("Redis connected at %s", c.CacheRedis.Addr)
 	}
 
-	// Snowflake ID generator (fatal - without it, Transfer can't generate message IDs)
+	// Snowflake ID generator (fatal - without it, system messages get no id)
 	sf, err := tools.NewSnowflake(c.SnowflakeMachineID)
 	logx.Must(err)
 
-	// Transfer producer (nil if not configured)
-	var transferProducer *rocketmq.Producer
+	// Push producer (nil if not configured)
+	var pushProducer *rocketmq.Producer
 
-	if c.TransferProducerConf.IsConfigured() {
-		producer, err := rocketmq.NewProducer(c.TransferProducerConf.EndpointConf, transferProducerGroup, c.TransferProducerConf.Topic)
+	if c.PushProducerConf.IsConfigured() {
+		producer, err := rocketmq.NewProducer(c.PushProducerConf.EndpointConf, pushProducerGroup, c.PushProducerConf.Topic)
 		if err != nil {
-			logx.WithContext(context.Background()).Errorf("failed to create transfer producer: %v", err)
+			logx.WithContext(context.Background()).Errorf("failed to create push producer: %v", err)
 		} else {
-			transferProducer = producer
-			logx.WithContext(context.Background()).Infof("initializing rocketmq transfer producer: endpoint=%s topic=%s", c.TransferProducerConf.Endpoint, c.TransferProducerConf.Topic)
+			pushProducer = producer
+			logx.WithContext(context.Background()).Infof("initializing rocketmq push producer: endpoint=%s topic=%s", c.PushProducerConf.Endpoint, c.PushProducerConf.Topic)
 		}
 	}
 
 	// Logic RPC client (if configured)
-	var logicClient logicpb.PermissionServiceClient
 	var logicConversationClient logicpb.ConversationServiceClient
 
 	var logicFriendshipClient logicpb.FriendshipServiceClient
@@ -109,7 +107,6 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		if err != nil {
 			logx.WithContext(context.Background()).Errorf("failed to create RPC client for LogicRpc: %v", err)
 		} else {
-			logicClient = logicpb.NewPermissionServiceClient(client.Conn())
 			logicConversationClient = logicpb.NewConversationServiceClient(client.Conn())
 			logicFriendshipClient = logicpb.NewFriendshipServiceClient(client.Conn())
 			logicUserClient = logicpb.NewUserServiceClient(client.Conn())
@@ -163,8 +160,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		Config:                  c,
 		RedisClient:             redisClient,
 		Snowflake:               sf,
-		TransferProducer:        transferProducer,
-		LogicPermissionClient:   logicClient,
+		PushProducer:            pushProducer,
 		LogicConversationClient: logicConversationClient,
 		LogicFriendshipClient:   logicFriendshipClient,
 		LogicUserClient:         logicUserClient,

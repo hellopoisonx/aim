@@ -196,3 +196,25 @@ type UserBot struct {
 
 // TableName pins the physical table name.
 func (UserBot) TableName() string { return "user_bots" }
+
+// CasbinRule maps table casbin_rule (016). Casbin's generic column layout:
+// ptype is the policy type ("g" for role assignments) and v0..v5 the rule
+// values, unused columns staying empty.
+type CasbinRule struct {
+	ID    int64  `gorm:"column:id;primaryKey"`
+	Ptype string `gorm:"column:ptype;size:100;not null"`
+	V0    string `gorm:"column:v0;size:100;not null;default:''"`
+	V1    string `gorm:"column:v1;size:100;not null;default:''"`
+	V2    string `gorm:"column:v2;size:100;not null;default:''"`
+	V3    string `gorm:"column:v3;size:100;not null;default:''"`
+	V4    string `gorm:"column:v4;size:100;not null;default:''"`
+	V5    string `gorm:"column:v5;size:100;not null;default:''"`
+}
+
+// TableName pins the physical table name.
+func (CasbinRule) TableName() string { return "casbin_rule" }
+
+// Values returns the rule values without the id, matching Casbin's column order.
+func (r CasbinRule) Values() []string {
+	return []string{r.V0, r.V1, r.V2, r.V3, r.V4, r.V5}
+}

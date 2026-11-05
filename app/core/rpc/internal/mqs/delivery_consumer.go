@@ -3,28 +3,51 @@ package mqs
 import (
 	"context"
 	"encoding/json"
-	"fmt"
+	"strconv"
 
 	"github.com/hellopoisonx/aim/app/shared/events"
 
 	"github.com/hellopoisonx/aim/app/core/rpc/internal/svc"
 	logicpb "github.com/hellopoisonx/aim/app/logic/rpc/pb"
+	sharedconversation "github.com/hellopoisonx/aim/app/shared/conversation"
+	"github.com/hellopoisonx/aim/app/shared/rocketmq"
 	"github.com/hellopoisonx/aim/app/shared/tracing"
-	gwpb "github.com/hellopoisonx/aim/shared/proto/gateway/pb"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
+// pushProducer narrows the producer surface to what the consumer needs, so a
+// test can capture published events without a broker.
+type pushProducer interface {
+	Publish(ctx context.Context, message rocketmq.Message) error
+}
+
 type DeliveryConsumer struct {
 	ctx    context.Context
 	svcCtx *svc.ServiceContext
+	push   pushProducer
+	topic  string
 }
 
 func NewDeliveryConsumer(ctx context.Context, svcCtx *svc.ServiceContext) *DeliveryConsumer {
-	return &DeliveryConsumer{ctx: ctx, svcCtx: svcCtx}
+	consumer := &DeliveryConsumer{
+		ctx:    ctx,
+		svcCtx: svcCtx,
+		topic:  svcCtx.Config.PushProducerConf.Topic,
+	}
+	// Assign only a configured producer: a typed nil would swallow every event.
+	if svcCtx.PushProducer != nil {
+		consumer.push = svcCtx.PushProducer
+	}
+
+	return consumer
 }
 
-// Consume implements the rocketmq handler interface.
+// Consume resolves the conversation members and publishes the push events the
+// gateway nodes consume. Direct conversations are write fanned out (one event
+// per recipient), group conversations are read fanned out (one event carrying
+// the member snapshot) so each node shares a single message body per
+// conversation.
 func (c *DeliveryConsumer) Consume(ctx context.Context, key string, value string) error {
 	logx.WithContext(ctx).Infof("consuming delivery event, key=%s", key)
 
@@ -46,7 +69,12 @@ func (c *DeliveryConsumer) Consume(ctx context.Context, key string, value string
 	logx.WithContext(ctx).Infof("delivery event: msg_id=%d sender=%d conv=%d type=%s",
 		event.MessageID, event.SenderID, event.ConversationID, event.MessageType)
 
-	targetUserIDs, conversationType, err := c.resolveConversation(ctx, event)
+	if c.push == nil {
+		logx.WithContext(ctx).Errorf("dropping delivery event %d: push producer is not configured", event.MessageID)
+		return nil
+	}
+
+	memberIDs, conversationType, err := c.resolveConversation(ctx, event)
 	if err != nil {
 		span.RecordError(err)
 		return err
@@ -58,65 +86,57 @@ func (c *DeliveryConsumer) Consume(ctx context.Context, key string, value string
 		return err
 	}
 
-	for _, targetUserID := range targetUserIDs {
-		nodeIDs := c.userGatewayNodes(ctx, targetUserID)
-		if len(nodeIDs) == 0 {
-			// User offline on every gateway: skip — the message is acknowledged and downstream
-			// catch-up should rely on history fetch.
-			logx.WithContext(ctx).Debugf("no gateway nodes for user %d, skipping message push", targetUserID)
-			continue
+	base := events.PushEvent{
+		TraceContextFields: tracing.InjectTraceContext(ctx),
+		MessageID:          event.MessageID,
+		ConversationID:     event.ConversationID,
+		ConversationType:   conversationType,
+		MessageType:        event.MessageType,
+		Content:            event.Content,
+		SenderID:           event.SenderID,
+		SentAt:             event.Timestamp,
+		ClientMsgID:        event.ClientMsgID,
+		Mentions:           event.Mentions,
+		SenderInfo: &events.SenderInfo{
+			Name:  senderInfo.GetName(),
+			Email: senderInfo.GetEmail(),
+		},
+		SourceDeviceID: event.DeviceID,
+	}
+
+	outbound := make([]events.PushEvent, 0, len(memberIDs))
+	if conversationType == string(sharedconversation.TypeDirect) {
+		for _, targetUserID := range memberIDs {
+			push := base
+			push.TargetUserID = targetUserID
+			outbound = append(outbound, push)
+		}
+	} else {
+		push := base
+		push.MemberIDs = memberIDs
+		outbound = append(outbound, push)
+	}
+
+	conversationKey := strconv.FormatInt(event.ConversationID, 10)
+	for _, push := range outbound {
+		body, err := json.Marshal(push)
+		if err != nil {
+			span.RecordError(err)
+			return err
 		}
 
-		for _, nodeID := range nodeIDs {
-			req := &gwpb.PushMessageReq{
-				MessageId:        event.MessageID,
-				ConversationId:   event.ConversationID,
-				ConversationType: conversationType,
-				MessageType:      event.MessageType,
-				Content:          event.Content,
-				SenderId:         event.SenderID,
-				SentAt:           event.Timestamp,
-				ClientMsgId:      event.ClientMsgID,
-				Mentions:         event.Mentions,
-				TargetUserId:     targetUserID,
-				SenderInfo:       senderInfo,
-				SourceDeviceId:   event.DeviceID,
-			}
-
-			resp, err := pushMessageToNode(ctx, c.svcCtx.GatewayClient, nodeID, req)
-			if err != nil {
-				span.RecordError(err)
-				logx.WithContext(ctx).Errorf("failed to push message to user %d on node %s: %v", targetUserID, nodeID, err)
-				return err
-			}
-
-			logx.WithContext(ctx).Infof("message pushed to user %d on node %s, success=%v", targetUserID, nodeID, resp.Success)
+		if err := c.push.Publish(ctx, rocketmq.Message{
+			Topic:       c.topic,
+			Key:         conversationKey,
+			ShardingKey: conversationKey,
+			Body:        body,
+		}); err != nil {
+			span.RecordError(err)
+			return err
 		}
 	}
 
 	return nil
-}
-
-// userGatewayNodes returns the gateway node IDs for a user, falling back to a
-// single empty node ID so single-gateway dev setups still receive pushes.
-func (c *DeliveryConsumer) userGatewayNodes(ctx context.Context, userID int64) []string {
-	if c.svcCtx.PresenceStore != nil {
-		nodes, err := c.svcCtx.PresenceStore.GetUserGatewayNodes(ctx, userID)
-		if err == nil && len(nodes) > 0 {
-			return nodes
-		}
-	}
-
-	if c.svcCtx.RedisClient != nil {
-		key := fmt.Sprintf("%s%d", userGatewayKeyPrefix, userID)
-		nodes, err := c.svcCtx.RedisClient.SMembers(ctx, key).Result()
-		if err == nil && len(nodes) > 0 {
-			return nodes
-		}
-	}
-
-	// Single-gateway/no-presence fallback.
-	return []string{""}
 }
 
 // resolveConversation looks up the full recipient list and conversation type via logic.

@@ -15,6 +15,7 @@ import (
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/handler"
 	wshandler "github.com/hellopoisonx/aim/app/gateway/api/internal/handler/ws"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/httperr"
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/mqs"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/ws"
 	gwpb "github.com/hellopoisonx/aim/shared/proto/gateway/pb"
@@ -84,6 +85,13 @@ func main() {
 	group.Add(restServer)
 
 	group.Add(rpcServer)
+
+	// Chat message pushes arrive on the push topic; this node's consumer group
+	// is per node, so every node receives every event and delivers locally.
+	for _, consumer := range mqs.Consumers(context.Background(), ctx) {
+		group.Add(consumer)
+	}
+
 	defer group.Stop()
 
 	fmt.Printf("Starting REST server at %s:%d and GatewayService RPC server at %s...\n", c.Host, c.Port, c.GatewayRpc.ListenOn)

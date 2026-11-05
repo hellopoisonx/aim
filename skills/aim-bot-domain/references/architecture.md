@@ -65,25 +65,24 @@ sequenceDiagram
 sequenceDiagram
   participant Bot
   participant GW as gateway /api/bot/v1/messages
-  participant Core as core.Transfer
-  participant LG as logic.PermissionService
+  participant MSG as logic.MessageService
   participant K as RocketMQ aim-message-transfer
   participant DC as core DeliveryConsumer
+  participant GK as RocketMQ aim-gateway-push
   participant AC as logic ArchiveConsumer
   participant BWC as logic BotWebhookConsumer
 
   Bot->>GW: POST /messages {conv_id, type, content, client_msg_id}
   GW->>GW: BotIdentity.RequireAction("bot.message.send")
-  GW->>Core: Transfer{sender_id=bot_user_id, device_id="bot-api", ...}
-  Core->>Core: idempotency (sender, device, client_msg_id)
-  Core->>Core: quota window
-  Core->>LG: CheckMessagePermission(bot is conversation member)
-  LG-->>Core: allowed
-  Core->>K: PushWithKey(conv_id, transferEvent)
-  Core-->>GW: TransferResp{message_id, accepted_at}
+  GW->>MSG: IngestMessage{sender_id=bot_user_id, device_id="bot-api", ...}
+  MSG->>MSG: idempotency (sender, device, client_msg_id)
+  MSG->>MSG: PermissionChecker + Casbin message.send
+  MSG->>K: Publish(conv_id, transferEvent)
+  MSG-->>GW: IngestMessageResp{message_id, accepted_at}
   GW-->>Bot: 200 {message_id, ...}
 
-  K-->>DC: aim-core-delivery (humans get PUSH_MESSAGE)
+  K-->>DC: aim-core-delivery → aim-gateway-push
+  GK-->>GW: PushConsumer → PUSH_MESSAGE
   K-->>AC: aim-logic-archive (DB insert)
   K-->>BWC: aim-logic-bot-webhook (other bots get HTTP webhook)
 ```
@@ -115,7 +114,7 @@ sequenceDiagram
 | `app/gateway/api/gateway.api` | `/api/bot/v1/*` 路由声明 |
 | `app/gateway/api/internal/middleware/botauth_middleware.go` | BotAuth |
 | `app/gateway/api/internal/botctx/identity.go` | 上下文工具 |
-| `app/gateway/api/internal/logic/bot/bot_send_message_logic.go` | REST → core.Transfer |
+| `app/gateway/api/internal/logic/bot/bot_send_message_logic.go` | REST → logic `MessageService.IngestMessage` |
 | `app/shared/bottoken/bottoken.go` | token / secret 工具 |
 | `scripts/bot-provision/provision_bot.sh` | 运维 provision |
 | `scripts/bot-provision/provision_bot.sql` | provision SQL 模板 |

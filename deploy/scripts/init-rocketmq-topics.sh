@@ -55,8 +55,11 @@ update_topic() {
   sh "$MQADMIN" updateTopic $ADMIN_OPTS -t "$topic" -r "$ROCKETMQ_QUEUES" -w "$ROCKETMQ_QUEUES" ${attributes}
 }
 
-# ── Ordered topics: chat delivery and read receipts ─────────────────────────
+# ── Ordered topics: chat delivery, gateway push and read receipts ───────────
 update_topic aim-message-transfer "-a +message.type=FIFO"
+# Gateway 推送：core 发布，每个网关节点用独立消费组（aim-gateway-push-<node id>）
+# 订阅，由 broker 的 autoCreateSubscriptionGroup=true 动态创建，无需在此登记。
+update_topic aim-gateway-push "-a +message.type=FIFO"
 update_topic aim-read-receipt-events "-a +message.type=FIFO"
 
 # ── Transactional topics: events published with a local transaction ─────────
@@ -96,8 +99,9 @@ aim-logic-bot-webhook
 # ── Producer groups ─────────────────────────────────────────────────────────
 PRODUCER_GROUPS="
 aim-gateway-producer
-aim-core-transfer
+aim-core-push
 aim-logic-producer
+aim-logic-transfer
 aim-auth-producer
 aim-attachment-producer
 aim-data-parsing-producer

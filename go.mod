@@ -25,6 +25,9 @@ require (
 
 require (
 	contrib.go.opencensus.io/exporter/ocagent v0.7.0 // indirect
+	github.com/bmatcuk/doublestar/v4 v4.6.1 // indirect
+	github.com/casbin/casbin/v3 v3.11.0 // indirect
+	github.com/casbin/govaluate v1.3.0 // indirect
 	github.com/census-instrumentation/opencensus-proto v0.4.1 // indirect
 	github.com/dchest/siphash v1.2.3 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.9 // indirect

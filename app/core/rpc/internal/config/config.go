@@ -10,7 +10,7 @@ import (
 
 type Config struct {
 	zrpc.RpcServerConf
-	TransferProducerConf          rocketmq.ProducerConf `json:",optional"`
+	PushProducerConf              rocketmq.ProducerConf `json:",optional"`
 	DeliveryConsumerConf          rocketmq.ConsumerConf `json:",optional"`
 	PresenceConsumerConf          rocketmq.ConsumerConf `json:",optional"`
 	TypingConsumerConf            rocketmq.ConsumerConf `json:",optional"`

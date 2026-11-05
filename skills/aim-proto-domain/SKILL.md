@@ -14,9 +14,10 @@ description: aim 的 Protobuf 协议域。定义跨端/跨服务线缆协议。�
 - `references/protocol-rules.md`
 
 ## 最近变更
+- 2026-11-05: 消息写入口从 core 迁到 logic。`core.proto` 删除 `TransferService`/`TransferReq`/`TransferResp`（`core.proto` 暂无服务，`app/core/rpc/pb` 只有描述符）；`logic.proto` 新增 `MessageService.IngestMessage`（请求字段与原 `TransferReq` 一致，返回 `message_id`/`client_msg_id`/`accepted_at`）。推送侧新增 `action=aim-gateway-push`（FIFO）与 `events.PushEvent`（`target_user_id` 写扩散 / `member_ids` 读扩散互斥）。
 
 
-- 2026-06-02: 限流从 core 上提到 gateway。core 删除 `TransferQuotaConf` 与 `TransferLogic.checkQuota`;gateway 新增 `app/gateway/api/internal/middleware.RateLimitMiddleware` 与 `BotRateLimitMiddleware`,共享 `app/shared/quota.QuotaStore`,命名空间 `aim:gateway:quota` (人类 / key = `<deviceID>:<userID>`) 与 `aim:gateway:quota:bot` (Bot / 单维 `tokenID`)。WebSocket `handleSendMessage` 在调 `core.Transfer` 前手动限流,命中时通过 `ServerAckPayload` 返回 `ACK_STATUS_REJECTED + CodeRateLimit`。详见 `references/protocol-rules.md` §速率限流。
+- 2026-06-02: 限流从 core 上提到 gateway。core 删除 `TransferQuotaConf` 与 `TransferLogic.checkQuota`;gateway 新增 `app/gateway/api/internal/middleware.RateLimitMiddleware` 与 `BotRateLimitMiddleware`,共享 `app/shared/quota.QuotaStore`,命名空间 `aim:gateway:quota` (人类 / key = `<deviceID>:<userID>`) 与 `aim:gateway:quota:bot` (Bot / 单维 `tokenID`)。WebSocket `handleSendMessage` 在调 `logic.MessageService.IngestMessage` 前手动限流,命中时通过 `ServerAckPayload` 返回 `ACK_STATUS_REJECTED + CodeRateLimit`。详见 `references/protocol-rules.md` §速率限流。
 
 - 2026-05-24: 协议层 name 快照统一。`logic.proto` 新增字段：`ConversationResponse.display_name`(9)、`MemberDetailItem.display_name`(6)、`SenderInfo.display_name`(3)、`MessageReadDetailItem.display_name`(8)、`ReadStateItem.email`(4)/`avatar`(5)/`display_name`(6)、`MessageItem.is_system`(11)。`ws.proto` `SenderInfo` 新增 `display_name`(3)。`gateway.proto` `SenderInfo` 新增 `display_name`(3)。`GetConversationMembersDetail` SQL 新增 `ui.nickname AS display_name`。
 - 2026-05-23: @ 提及返回链路：`logic.MessageItem.mentions`（9）、`ws.PushMessagePayload.mentions`（11）；历史与 WS 推送均返回十进制用户 ID 字符串列表。

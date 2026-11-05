@@ -17,10 +17,13 @@ import (
 
 // ConversationStore is an in-memory ConversationStore with error injection.
 type ConversationStore struct {
-	Conversations       map[int64]orm.Conversation
-	Members             map[int64][]orm.ConversationMember // key: conversationID
-	Messages            map[int64][]orm.Message            // key: conversationID
-	ReadStates          map[int64]map[int64]orm.ConversationReadState
+	Conversations map[int64]orm.Conversation
+	Members       map[int64][]orm.ConversationMember // key: conversationID
+	Messages      map[int64][]orm.Message            // key: conversationID
+	ReadStates    map[int64]map[int64]orm.ConversationReadState
+	// BotUserIDs are the principals GetUserType reports as bots.
+	BotUserIDs          map[int64]struct{}
+	UserTypeErr         error
 	CreateErr           error
 	GetErr              error
 	AddMemberErr        error
@@ -247,6 +250,19 @@ func (f *ConversationStore) GetConversationMembers(ctx context.Context, conversa
 	return f.Members[conversationID], nil
 }
 
+// GetUserType reports every fake principal as a human unless a test says
+// otherwise through BotUserIDs.
+func (f *ConversationStore) GetUserType(_ context.Context, id int64) (string, error) {
+	if f.UserTypeErr != nil {
+		return "", f.UserTypeErr
+	}
+	if _, ok := f.BotUserIDs[id]; ok {
+		return "bot", nil
+	}
+
+	return "human", nil
+}
+
 func (f *ConversationStore) GetConversationsByUserID(ctx context.Context, userID int64) ([]orm.Conversation, error) {
 	var result []orm.Conversation
 	for convID, conv := range f.Conversations {
@@ -336,5 +352,6 @@ func NewConversationStore() *ConversationStore {
 		Members:       make(map[int64][]orm.ConversationMember),
 		Messages:      make(map[int64][]orm.Message),
 		ReadStates:    make(map[int64]map[int64]orm.ConversationReadState),
+		BotUserIDs:    make(map[int64]struct{}),
 	}
 }

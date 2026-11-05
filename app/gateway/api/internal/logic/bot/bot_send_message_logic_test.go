@@ -4,26 +4,24 @@ import (
 	"context"
 	"testing"
 
-	corepb "github.com/hellopoisonx/aim/app/core/rpc/pb"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/botctx"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
+	logicpb "github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 )
 
-type fakeCoreClient struct {
+type fakeMessageClient struct {
 	called bool
-	req    *corepb.TransferReq
-	resp   *corepb.TransferResp
+	req    *logicpb.IngestMessageReq
+	resp   *logicpb.IngestMessageResp
 	err    error
 }
 
-var _ corepb.TransferServiceClient = (*fakeCoreClient)(nil)
-
-func (f *fakeCoreClient) Transfer(_ context.Context, in *corepb.TransferReq, _ ...grpc.CallOption) (*corepb.TransferResp, error) {
+func (f *fakeMessageClient) IngestMessage(_ context.Context, in *logicpb.IngestMessageReq, _ ...grpc.CallOption) (*logicpb.IngestMessageResp, error) {
 	f.called = true
 	f.req = in
 	if f.err != nil {
@@ -32,7 +30,7 @@ func (f *fakeCoreClient) Transfer(_ context.Context, in *corepb.TransferReq, _ .
 	if f.resp != nil {
 		return f.resp, nil
 	}
-	return &corepb.TransferResp{
+	return &logicpb.IngestMessageResp{
 		MessageId:   42,
 		ClientMsgId: in.ClientMsgId,
 		AcceptedAt:  1700000000000,
@@ -48,8 +46,8 @@ func ctxWithBot(scopes ...string) context.Context {
 }
 
 func TestBotSendMessage_RequiresScope(t *testing.T) {
-	core := &fakeCoreClient{}
-	l := NewBotSendMessageLogic(ctxWithBot("bot.conversation.list"), &svc.ServiceContext{CoreClient: core})
+	core := &fakeMessageClient{}
+	l := NewBotSendMessageLogic(ctxWithBot("bot.conversation.list"), &svc.ServiceContext{MessageClient: core})
 
 	_, err := l.BotSendMessage(&types.BotSendMessageRequest{
 		ConversationId: "7",
@@ -66,8 +64,8 @@ func TestBotSendMessage_RequiresScope(t *testing.T) {
 }
 
 func TestBotSendMessage_ForwardsToCore(t *testing.T) {
-	core := &fakeCoreClient{}
-	l := NewBotSendMessageLogic(ctxWithBot("bot.message.send"), &svc.ServiceContext{CoreClient: core})
+	core := &fakeMessageClient{}
+	l := NewBotSendMessageLogic(ctxWithBot("bot.message.send"), &svc.ServiceContext{MessageClient: core})
 
 	resp, err := l.BotSendMessage(&types.BotSendMessageRequest{
 		ConversationId: "7",
@@ -90,8 +88,8 @@ func TestBotSendMessage_ForwardsToCore(t *testing.T) {
 }
 
 func TestBotSendMessage_ValidatesRequest(t *testing.T) {
-	core := &fakeCoreClient{}
-	l := NewBotSendMessageLogic(ctxWithBot("bot.message.send"), &svc.ServiceContext{CoreClient: core})
+	core := &fakeMessageClient{}
+	l := NewBotSendMessageLogic(ctxWithBot("bot.message.send"), &svc.ServiceContext{MessageClient: core})
 
 	_, err := l.BotSendMessage(&types.BotSendMessageRequest{ConversationId: "0", MessageType: "text", ClientMsgId: "x"})
 	require.Error(t, err)
@@ -100,8 +98,8 @@ func TestBotSendMessage_ValidatesRequest(t *testing.T) {
 
 func TestBotSendMessage_PropagatesCoreError(t *testing.T) {
 	rateLimit := errorx.NewCodeError(errorx.CodeRateLimit, "rate limit")
-	core := &fakeCoreClient{err: rateLimit}
-	l := NewBotSendMessageLogic(ctxWithBot("bot.message.send"), &svc.ServiceContext{CoreClient: core})
+	core := &fakeMessageClient{err: rateLimit}
+	l := NewBotSendMessageLogic(ctxWithBot("bot.message.send"), &svc.ServiceContext{MessageClient: core})
 
 	_, err := l.BotSendMessage(&types.BotSendMessageRequest{
 		ConversationId: "7",

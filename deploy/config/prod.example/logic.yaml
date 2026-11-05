@@ -45,6 +45,18 @@ ConversationEventProducerConf:
   Endpoint: rocketmq-proxy:8081
   Group: aim-logic-producer
   Topic: aim-conversation-events
+# 消息写入生产者：Gateway 把 WS / Bot OpenAPI 的发消息请求直接投递到 logic，
+# logic 完成校验/授权/幂等/ID 分配后发布到投递 topic，由 core 消费。
+TransferProducerConf:
+  Endpoint: rocketmq-proxy:8081
+  Group: aim-logic-transfer
+  Topic: aim-message-transfer
+# 附件消息引用校验（image/file/voice/video）。
+AttachmentRpc:
+  Etcd:
+    Hosts:
+      - etcd:2379
+    Key: attachment.rpc
 Dev:
   # 临时会话（非好友）单会话最多可发送的消息数。
   # 默认 10。设为 0 或负数表示不限制（仅供本地开发 / 压测使用，切勿在生产开启）。

@@ -17,6 +17,7 @@ description: aim 的核心域。对应 `core` 模块。
 - `references/transfer-pipeline.md`
 
 ## 最近变更
+- 2026-11-05: 消息写入口迁出 core。`TransferService`（`core.proto` 的 gRPC 服务、`internal/logic`、`internal/server`）整体删除，写链路改由 logic `MessageService.IngestMessage` 完成；core 的 `DeliveryConsumer` 只消费 `aim-message-transfer` 并按会话类型发布 `aim-gateway-push`：单聊逐成员写扩散（`target_user_id`），群聊单条读扩散（`member_ids`），不再查网关节点、不再逐节点 gRPC 推送。`TransferProducerConf` 换成 `PushProducerConf`（group `aim-core-push`，topic `aim-gateway-push`）；`LogicPermissionClient` 删除。`core.proto` 暂无服务定义，`core.rpc` 仍注册 etcd。
 
 - 2026-11-01: 迁移到 RocketMQ 5。`TransferProducerConf`（`aim-core-transfer` → `aim-message-transfer` FIFO，Key 与 MessageGroup 都是 `conversation_id`）取代 `KqPusherConf`；7 个 consumer 改为 `rocketmq.NewConsumerService`（`DeliveryConsumerConf` 等字段名保留，`Offset/Consumers/Processors` 换成 `Endpoint/Concurrency`），消费组名不变，失败不 Ack 由 broker 重投；tracing span 改为 `core.rocketmq.*`。
 - 2026-05-28: Core PresenceStore 增加 L1 内存缓存包装 `CachedPresenceStore`，使用 go-zero Redis `Sadd/Smembers/Scard/Expire` 维护 Redis presence Set，并以 5s L1 TTL 降低投递/typing/read-receipt 查目录延迟。

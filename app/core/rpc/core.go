@@ -7,9 +7,7 @@ import (
 
 	"github.com/hellopoisonx/aim/app/core/rpc/internal/config"
 	"github.com/hellopoisonx/aim/app/core/rpc/internal/mqs"
-	"github.com/hellopoisonx/aim/app/core/rpc/internal/server"
 	"github.com/hellopoisonx/aim/app/core/rpc/internal/svc"
-	"github.com/hellopoisonx/aim/app/core/rpc/pb"
 	rpcutil "github.com/hellopoisonx/aim/app/shared/rpc"
 
 	"github.com/zeromicro/go-zero/core/conf"
@@ -30,11 +28,9 @@ func main() {
 	ctx := svc.NewServiceContext(c)
 	defer ctx.Close()
 
-	ctx.StartTransferProducer()
+	ctx.StartPushProducer()
 
 	s := zrpc.MustNewServer(c.RpcServerConf, func(grpcServer *grpc.Server) {
-		pb.RegisterTransferServiceServer(grpcServer, server.NewTransferServiceServer(ctx))
-
 		if c.Mode == service.DevMode || c.Mode == service.TestMode {
 			reflection.Register(grpcServer)
 		}

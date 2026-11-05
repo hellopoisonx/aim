@@ -24,10 +24,11 @@ LogicRpc:
     Hosts:
       - bench-etcd:2379
     Key: logic.rpc
-TransferProducerConf:
+# 推送生产者：消费投递事件后发布 aim-gateway-push，各网关节点按消费组订阅并本地扇出。
+PushProducerConf:
   Endpoint: bench-rocketmq-proxy:8081
-  Group: aim-core-transfer
-  Topic: aim-message-transfer
+  Group: aim-core-push
+  Topic: aim-gateway-push
 DeliveryConsumerConf:
   Name: core-delivery-consumer
   Endpoint: bench-rocketmq-proxy:8081

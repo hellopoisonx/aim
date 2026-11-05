@@ -181,7 +181,86 @@ func (s *GatewayServer) PushMessage(ctx context.Context, req *pb.PushMessageReq)
 		return nil, status.Errorf(codes.InvalidArgument, "target_user_id is required")
 	}
 
-	// Build PushMessagePayload from the request.
+	if err := s.DeliverLocal(ctx, req); err != nil {
+		return &pb.PushMessageResp{Success: false}, nil
+	}
+
+	return &pb.PushMessageResp{Success: true}, nil
+}
+
+// DeliverLocal pushes a single-target message to the connections this node
+// holds for req.TargetUserId. A user with no local connection is not an error:
+// the node simply has nothing to deliver.
+func (s *GatewayServer) DeliverLocal(ctx context.Context, req *pb.PushMessageReq) error {
+	payload := pushMessagePayload(req)
+
+	// Look up all connections for the target user.
+	connections := s.manager.GetByUserID(req.TargetUserId)
+	if len(connections) == 0 {
+		// No local connections for this user — consider it a success since the user is not on this node.
+		logx.WithContext(ctx).Debugf("PushMessage: no local connections for user_id=%d", req.TargetUserId)
+		return nil
+	}
+
+	// Push to all eligible connections. When core fans out a message back to the
+	// sender for multi-device sync, skip only the original source device; other
+	// devices of the same user should still receive the message.
+	var pushErr error
+
+	for _, conn := range connections {
+		if skipsSourceDevice(req, conn) {
+			logx.WithContext(ctx).Debugf("PushMessage: skipped source device user_id=%d device_id=%s",
+				conn.Identity.UserID, conn.Identity.DeviceID)
+
+			continue
+		}
+
+		if err := conn.WriteFrame(ctx, wspb.FrameType_FRAME_TYPE_PUSH_MESSAGE, payload); err != nil {
+			logx.WithContext(ctx).Errorf("PushMessage: failed to write to user_id=%d device_id=%s: %v",
+				conn.Identity.UserID, conn.Identity.DeviceID, err)
+			pushErr = err // retain last error
+		} else {
+			logx.WithContext(ctx).Debugf("PushMessage: pushed to user_id=%d device_id=%s",
+				conn.Identity.UserID, conn.Identity.DeviceID)
+		}
+	}
+
+	return pushErr
+}
+
+// DeliverLocalMembers fans one conversation event out to the members this node
+// holds connections for. The payload is encoded once and shared by every
+// member: a group message costs one encode per node, not one per recipient.
+//
+// Per-connection write failures are logged and skipped: a single slow client
+// must not make the broker redeliver the whole conversation event.
+func (s *GatewayServer) DeliverLocalMembers(ctx context.Context, base *pb.PushMessageReq, memberIDs []int64) error {
+	payloadBytes, err := EncodePayload(pushMessagePayload(base))
+	if err != nil {
+		return fmt.Errorf("encode push payload: %w", err)
+	}
+
+	for _, memberID := range memberIDs {
+		for _, conn := range s.manager.GetByUserID(memberID) {
+			if skipsSourceDevice(base, conn) {
+				continue
+			}
+
+			// Each connection needs its own frame: the writer assigns the server
+			// seq on the frame it holds.
+			frame := BuildFrame(wspb.FrameType_FRAME_TYPE_PUSH_MESSAGE, 0, payloadBytes)
+			if err := conn.WriteEncodedFrame(ctx, frame); err != nil {
+				logx.WithContext(ctx).Errorf("PushMessage: failed to write conversation %d to user_id=%d device_id=%s: %v",
+					base.GetConversationId(), conn.Identity.UserID, conn.Identity.DeviceID, err)
+			}
+		}
+	}
+
+	return nil
+}
+
+// pushMessagePayload projects a push request onto the client payload.
+func pushMessagePayload(req *pb.PushMessageReq) *wspb.PushMessagePayload {
 	payload := &wspb.PushMessagePayload{
 		MessageId:        req.MessageId,
 		ConversationId:   req.ConversationId,
@@ -201,42 +280,17 @@ func (s *GatewayServer) PushMessage(ctx context.Context, req *pb.PushMessageReq)
 		}
 	}
 
-	// Look up all connections for the target user.
-	connections := s.manager.GetByUserID(req.TargetUserId)
-	if len(connections) == 0 {
-		// No local connections for this user — consider it a success since the user is not on this node.
-		logx.WithContext(ctx).Debugf("PushMessage: no local connections for user_id=%d", req.TargetUserId)
-		return &pb.PushMessageResp{Success: true}, nil
-	}
+	return payload
+}
 
-	// Push to all eligible connections. When core fans out a message back to the
-	// sender for multi-device sync, skip only the original source device; other
-	// devices of the same user should still receive the message.
-	var pushErr error
-
-	for _, conn := range connections {
-		if req.TargetUserId == req.SenderId && req.GetSourceDeviceId() != "" && conn.Identity.DeviceID == req.GetSourceDeviceId() {
-			logx.WithContext(ctx).Debugf("PushMessage: skipped source device user_id=%d device_id=%s",
-				conn.Identity.UserID, conn.Identity.DeviceID)
-
-			continue
-		}
-
-		if err := conn.WriteFrame(ctx, wspb.FrameType_FRAME_TYPE_PUSH_MESSAGE, payload); err != nil {
-			logx.WithContext(ctx).Errorf("PushMessage: failed to write to user_id=%d device_id=%s: %v",
-				conn.Identity.UserID, conn.Identity.DeviceID, err)
-			pushErr = err // retain last error
-		} else {
-			logx.WithContext(ctx).Debugf("PushMessage: pushed to user_id=%d device_id=%s",
-				conn.Identity.UserID, conn.Identity.DeviceID)
-		}
-	}
-
-	if pushErr != nil {
-		return &pb.PushMessageResp{Success: false}, nil
-	}
-
-	return &pb.PushMessageResp{Success: true}, nil
+// skipsSourceDevice reports whether conn is the device that sent the message.
+// It applies to both fan-out modes: the sending device gets the ACK, never an
+// echo push of its own message.
+func skipsSourceDevice(req *pb.PushMessageReq, conn *Connection) bool {
+	return req.SenderId != 0 &&
+		req.SenderId == conn.Identity.UserID &&
+		req.GetSourceDeviceId() != "" &&
+		conn.Identity.DeviceID == req.GetSourceDeviceId()
 }
 
 // PushTyping delivers a typing notice to all connections of the target user on this gateway node.

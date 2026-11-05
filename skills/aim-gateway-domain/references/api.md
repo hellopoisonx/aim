@@ -298,13 +298,23 @@ message PushFriendApplicationResp {
 }
 ```
 
-## CoreRpc 配置
+## 消息写入配置（无 CoreRpc）
 
-配置路径：Docker Compose 使用 `deploy/config/<env>/gateway-api.yaml`（容器内 `/app/etc/gateway-api.yaml`），本地 `go run` / 单服务调试使用 `app/gateway/api/etc/gateway-api.yaml`。配置结构定义在 `app/gateway/api/internal/config/config.go` 的 `CoreRpc zrpc.RpcClientConf` 字段。
+gateway 不再直连 core：WS 帧与 Bot OpenAPI 的发消息请求统一投递到 logic 的 `MessageService.IngestMessage`，复用 `LogicRpc` 客户端连接（`app/logic/rpc/client/messageservice`）。`CoreRpc` 配置块已删除。
 
-目标地址通过 etcd 服务发现自动获取（target 形如 `etcd://<hosts>/core.rpc`），需在 `CoreRpc` 配置块中指定 etcd 注册中心地址与 `Etcd.Key: core.rpc`（与 AuthRpc 配置方式一致）。
+配置路径：Docker Compose 使用 `deploy/config/<env>/gateway-api.yaml`（容器内 `/app/etc/gateway-api.yaml`），本地 `go run` / 单服务调试使用 `app/gateway/api/etc/gateway-api.yaml`。
 
-调用示例：`app/gateway/api/internal/svc/service_context.go` 使用 `zrpc.NewClient(c.CoreRpc)` 创建 core client，供 `Transfer` logic 使用。
+## 推送订阅配置（PushConsumer）
+
+聊天消息不再由 core 逐节点 gRPC `PushMessage` 推送，改由 gateway 订阅 `aim-gateway-push`（FIFO，Key/MessageGroup = `conversation_id`）：
+
+| 字段 | 说明 |
+| --- | --- |
+| `RocketMQ.PushTopic` | 订阅的推送 topic，默认 `aim-gateway-push` |
+| `PushConsumer.Endpoint/Topic/Concurrency` | 消费者连接与 topic；`Group` 由配置派生 |
+| `PushConsumer.Group` | 不配置：运行时取 `aim-gateway-push-<GatewayNodeID>`，每个节点独立消费组 ⇒ 广播语义 |
+
+`GatewayService.PushMessage` 仍保留，供 core 的 conversation-event / attachment-parsed 等系统消息路径使用。
 
 
 ## `ws` 通信

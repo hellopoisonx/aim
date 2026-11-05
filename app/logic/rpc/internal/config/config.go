@@ -15,10 +15,15 @@ type Config struct {
 	UserCreatedConsumerConf       rocketmq.ConsumerConf `json:",optional"`
 	BotWebhookConsumerConf        rocketmq.ConsumerConf `json:",optional"`
 	ConversationEventProducerConf rocketmq.ProducerConf `json:",optional"`
-	CacheRedis                    RedisConf             `json:",optional"`
-	Cache                         sharedcache.Config    `json:",optional"`
-	Dev                           DevConf               `json:",optional"`
-	MachineID                     int64                 `json:",default=1"`
+	// TransferProducerConf publishes accepted messages to the FIFO delivery
+	// topic consumed by core.
+	TransferProducerConf rocketmq.ProducerConf `json:",optional"`
+	// AttachmentRpc validates attachment message references.
+	AttachmentRpc zrpc.RpcClientConf `json:",optional"`
+	CacheRedis    RedisConf          `json:",optional"`
+	Cache         sharedcache.Config `json:",optional"`
+	Dev           DevConf            `json:",optional"`
+	MachineID     int64              `json:",default=1"`
 }
 
 type PostgresConf struct {

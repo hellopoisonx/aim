@@ -17,13 +17,13 @@ import (
 
 	attachmentpb "github.com/hellopoisonx/aim/app/attachment/rpc/pb"
 	"github.com/hellopoisonx/aim/app/auth/rpc/authservice"
-	"github.com/hellopoisonx/aim/app/core/rpc/pb"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/config"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/middleware"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/ws"
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/botservice"
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/conversationservice"
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/friendshipservice"
+	"github.com/hellopoisonx/aim/app/logic/rpc/client/messageservice"
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/searchservice"
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/userservice"
 	"github.com/hellopoisonx/aim/app/shared/quota"
@@ -221,7 +221,7 @@ func (p *rocketmqReadReceiptPublisher) PublishReadReceipt(ctx context.Context, f
 type ServiceContext struct {
 	Config                  config.Config
 	AuthClient              authservice.AuthService
-	CoreClient              pb.TransferServiceClient
+	MessageClient           messageservice.MessageService
 	LogicUserClient         userservice.UserService
 	LogicConversationClient conversationservice.ConversationService
 	LogicFriendshipClient   friendshipservice.FriendshipService
@@ -284,12 +284,6 @@ func NewServiceContext(c config.Config) *ServiceContext {
 
 	logx.Must(err)
 
-	// Core RPC client setup
-
-	coreClient, err := zrpc.NewClient(c.CoreRpc)
-
-	logx.Must(err)
-
 	logicClient, err := zrpc.NewClient(c.LogicRpc)
 
 	logx.Must(err)
@@ -343,7 +337,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	return &ServiceContext{
 		Config:                  c,
 		AuthClient:              authservice.NewAuthService(client),
-		CoreClient:              pb.NewTransferServiceClient(coreClient.Conn()),
+		MessageClient:           messageservice.NewMessageService(logicClient),
 		LogicUserClient:         userservice.NewUserService(logicClient),
 		LogicConversationClient: conversationservice.NewConversationService(logicClient),
 		LogicFriendshipClient:   friendshipservice.NewFriendshipService(logicClient),
@@ -487,7 +481,6 @@ func NewServiceContextWithAuth(c config.Config, authClient authservice.AuthServi
 		BotAuth:        middleware.NewBotAuthMiddleware(nil).Handle,
 		UserRateLimit:  middleware.NewUserRateLimitMiddleware(nil).Handle,
 		BotRateLimit:   middleware.NewBotRateLimitMiddleware(nil).Handle,
-		CoreClient:     nil,
 		RedisClient:    nil,
 		PresencePub:    nil,
 		TypingPub:      nil,
@@ -510,12 +503,13 @@ func NewServiceContextWithLogic(c config.Config, logicUserClient userservice.Use
 	}
 }
 
-// NewServiceContextWithCore creates a ServiceContext with injected auth and core clients for testing.
-func NewServiceContextWithCore(c config.Config, authClient authservice.AuthService, coreClient pb.TransferServiceClient) *ServiceContext {
+// NewServiceContextWithMessageClient creates a ServiceContext with an injected
+// auth client and message client for testing.
+func NewServiceContextWithMessageClient(c config.Config, authClient authservice.AuthService, messageClient messageservice.MessageService) *ServiceContext {
 	return &ServiceContext{
 		Config:         c,
 		AuthClient:     authClient,
-		CoreClient:     coreClient,
+		MessageClient:  messageClient,
 		Auth:           middleware.NewAuthMiddleware(c.Auth.AccessSecret).Handle,
 		BotAuth:        middleware.NewBotAuthMiddleware(nil).Handle,
 		RedisClient:    nil,
