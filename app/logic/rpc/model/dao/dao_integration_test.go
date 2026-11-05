@@ -226,9 +226,6 @@ func TestIntegrationDuplicateDetection(t *testing.T) {
 	require.ErrorIs(t, err, ErrDuplicateKey)
 }
 
-// TestIntegrationCasbinPolicyRoundTrip protects the Casbin adapter's column
-// mapping: role assignments must survive AddPolicy -> LoadPolicy and be removed
-// by both the exact and the domain-filtered delete.
 func TestIntegrationCasbinPolicyRoundTrip(t *testing.T) {
 	store := openTestStore(t)
 	truncate(t, store, "casbin_rule")
@@ -237,7 +234,6 @@ func TestIntegrationCasbinPolicyRoundTrip(t *testing.T) {
 	require.NoError(t, store.AddPolicy("g", "g", []string{"user:200", "role:member", "conv:1"}))
 	require.NoError(t, store.AddPolicy("g", "g", []string{"user:300", "role:member", "conv:2"}))
 
-	// A duplicate assignment is ignored instead of failing the write.
 	require.NoError(t, store.AddPolicy("g", "g", []string{"user:200", "role:member", "conv:1"}))
 
 	model, err := casbinmodel.NewModelFromString(`
@@ -258,7 +254,6 @@ m = g(r.sub, p.sub, r.dom)
 	policies, err := model.GetPolicy("g", "g")
 	require.NoError(t, err)
 	require.Len(t, policies, 3)
-	// Short rules load without the padding columns.
 	require.Equal(t, []string{"user:100", "role:owner", "conv:1"}, policies[0])
 
 	require.NoError(t, store.RemovePolicy("g", "g", []string{"user:300", "role:member", "conv:2"}))

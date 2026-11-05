@@ -22,7 +22,6 @@ import (
 
 // Message-frame handling and SERVER_ACK construction.
 
-// handleSendMessage forwards a send message to logic.IngestMessage and ACKs the result.
 func (h *WsHandler) handleSendMessage(ctx context.Context, conn *websocket.Conn, frame *pb.WsFrame) error {
 	tracer := otel.Tracer("github.com/hellopoisonx/aim/app/gateway/api")
 	ctx, span := tracer.Start(ctx, "ws.handle_send_message")
@@ -80,12 +79,10 @@ func (h *WsHandler) handleSendMessage(ctx context.Context, conn *websocket.Conn,
 		attribute.String("ws.message_type", sendPayload.GetMessageType()),
 	)
 
-	// Check if MessageClient is available (nil in test mode)
 	if h.srv.MessageClient == nil {
 		return h.writeErrorAck(ctx, conn, frame.GetSeq(), sendPayload.GetClientMsgId(), pb.AckStatus_ACK_STATUS_RETRYABLE, errorx.CodeInternal, "logic unavailable")
 	}
 
-	// Build IngestMessageReq from the SendMessagePayload
 	req := &logicpb.IngestMessageReq{
 		SenderId:       identity.UserID,
 		DeviceId:       identity.DeviceID,
@@ -96,7 +93,6 @@ func (h *WsHandler) handleSendMessage(ctx context.Context, conn *websocket.Conn,
 		Mentions:       sendPayload.GetMentions(),
 	}
 
-	// Call logic.IngestMessage with a timeout
 	ingestCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
 
@@ -138,8 +134,6 @@ func int32Code(code int) int32 {
 	return int32(code) //nolint:gosec // bounded above before conversion.
 }
 
-// mapIngestToAck maps the message ingest response/error to a SERVER_ACK frame.
-//
 // ACK mapping is decided by biz-code category (code/100), so sub-codes such as
 // 40010 or 40110 are classified exactly like their parent category:
 //   - nil error (success): ACK_STATUS_ACCEPTED, code=0, message_id from resp

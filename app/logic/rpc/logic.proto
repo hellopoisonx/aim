@@ -881,7 +881,6 @@ message IngestMessageReq {
 }
 
 message IngestMessageResp {
-  // message_id is the server-assigned Snowflake id.
   int64 message_id = 1;
   string client_msg_id = 2;
   // accepted_at is the server acceptance time in unix milliseconds.

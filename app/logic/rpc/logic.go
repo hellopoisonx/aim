@@ -37,8 +37,6 @@ func main() {
 	ctx := svc.NewServiceContext(c)
 	defer ctx.Close()
 
-	// Connect the transactional conversation event producer and the message
-	// transfer producer.
 	ctx.StartEventProducer()
 	ctx.StartTransferProducer()
 	proc.AddWrapUpListener(ctx.StopEventProducer)

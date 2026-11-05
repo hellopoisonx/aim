@@ -56,7 +56,6 @@ func TestConversationService_RBACRejectsMemberManagement(t *testing.T) {
 	require.ErrorIs(t, svc.DismissGroup(ctx, convID, 2), ErrNotOwner)
 	require.ErrorIs(t, svc.RevokeGroupAdmin(ctx, convID, 2, 3), ErrNotOwner)
 
-	// The owner may manage.
 	name := "renamed"
 	_, err = svc.UpdateGroupInfo(ctx, convID, 1, "alice", &name, nil)
 	require.NoError(t, err)
@@ -77,7 +76,6 @@ func TestConversationService_RBACAdminCannotOwn(t *testing.T) {
 
 	require.NoError(t, svc.GrantGroupAdmin(ctx, convID, 1, 2))
 
-	// Admin can manage members but never transfer ownership or dismiss.
 	_, err := svc.AddGroupMembers(ctx, convID, 2, "bob", []int64{4})
 	require.NoError(t, err)
 
@@ -99,7 +97,6 @@ func TestConversationService_TransferGroupOwnerRejectsBot(t *testing.T) {
 	require.ErrorAs(t, err, &codeErr)
 	assert.Equal(t, errorx.CodeBadInput, codeErr.Code)
 
-	// The bot keeps its member role and the owner keeps ownership.
 	ownerRole, err := authz.HasRole(ctx, rbac.Subject("human", 1), rbac.Domain(convID), rbac.RoleOwner)
 	require.NoError(t, err)
 	assert.True(t, ownerRole)
@@ -115,7 +112,6 @@ func TestConversationService_RemoveMemberRevokesRole(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, hasRole, "removed member must lose its role")
 
-	// The removed user can no longer manage the group.
 	_, err = svc.AddGroupMembers(ctx, convID, 3, "carol", []int64{4})
 	require.ErrorIs(t, err, ErrNotAdmin)
 }

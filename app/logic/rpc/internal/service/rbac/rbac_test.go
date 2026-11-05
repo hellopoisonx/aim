@@ -8,8 +8,6 @@ import (
 	"github.com/casbin/casbin/v3/persist"
 )
 
-// memoryAdapter is an in-memory persist.Adapter, standing in for the GORM one so
-// the permission matrix is testable without Postgres.
 type memoryAdapter struct {
 	rules [][]string // {ptype, sub, role, dom}
 }

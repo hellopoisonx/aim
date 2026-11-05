@@ -20,7 +20,6 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-// buildTransferEvent serializes the accepted message for the delivery topic.
 func buildTransferEvent(ctx context.Context, in IngestMessageInput, messageID int64) ([]byte, error) {
 	return json.Marshal(events.TransferEvent{
 		TraceContextFields: tracing.InjectTraceContext(ctx),
@@ -36,17 +35,14 @@ func buildTransferEvent(ctx context.Context, in IngestMessageInput, messageID in
 	})
 }
 
-// RedisIdempotencyStore keeps client message ids in Redis.
 type RedisIdempotencyStore struct {
 	client *redis.Client
 }
 
-// NewRedisIdempotencyStore wraps client as the idempotency store.
 func NewRedisIdempotencyStore(client *redis.Client) *RedisIdempotencyStore {
 	return &RedisIdempotencyStore{client: client}
 }
 
-// Check implements IdempotencyStore.
 func (s *RedisIdempotencyStore) Check(ctx context.Context, key string) (bool, int64, error) {
 	val, err := s.client.Get(ctx, key).Int64()
 	if errors.Is(err, redis.Nil) {
@@ -59,7 +55,6 @@ func (s *RedisIdempotencyStore) Check(ctx context.Context, key string) (bool, in
 	return true, val, nil
 }
 
-// Set implements IdempotencyStore.
 func (s *RedisIdempotencyStore) Set(ctx context.Context, key string, messageID int64, ttl time.Duration) error {
 	return s.client.Set(ctx, key, messageID, ttl).Err()
 }
@@ -71,12 +66,10 @@ type RocketMQPublisher struct {
 	topic    string
 }
 
-// NewRocketMQPublisher wraps producer as the transfer publisher.
 func NewRocketMQPublisher(producer *rocketmq.Producer, topic string) *RocketMQPublisher {
 	return &RocketMQPublisher{producer: producer, topic: topic}
 }
 
-// Publish implements MessagePublisher.
 func (p *RocketMQPublisher) Publish(ctx context.Context, key string, value []byte) error {
 	if p.producer == nil {
 		return errors.New("rocketmq producer is not configured")
@@ -90,15 +83,11 @@ func (p *RocketMQPublisher) Publish(ctx context.Context, key string, value []byt
 	})
 }
 
-// GRPCAttachmentValidator validates attachment references against the
-// attachment service.
 type GRPCAttachmentValidator struct {
 	client attachmentpb.AttachmentServiceClient
 }
 
-// NewGRPCAttachmentValidator wraps client as the attachment validator. A nil
-// client yields a nil validator, which rejects attachment messages.
-func NewGRPCAttachmentValidator(client attachmentpb.AttachmentServiceClient) *GRPCAttachmentValidator {
+func NewGRPCAttachmentValidator(client attachmentpb.AttachmentServiceClient) AttachmentReferenceValidator {
 	if client == nil {
 		return nil
 	}
@@ -106,7 +95,6 @@ func NewGRPCAttachmentValidator(client attachmentpb.AttachmentServiceClient) *GR
 	return &GRPCAttachmentValidator{client: client}
 }
 
-// ValidateReference implements AttachmentReferenceValidator.
 func (v *GRPCAttachmentValidator) ValidateReference(ctx context.Context, senderID, conversationID int64, kind, rawContent string) error {
 	content, err := sharedattachment.ParseContent(rawContent)
 	if err != nil {

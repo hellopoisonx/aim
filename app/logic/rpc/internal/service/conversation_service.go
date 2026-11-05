@@ -164,8 +164,6 @@ type ConversationService struct {
 
 type ConversationServiceOption func(*ConversationService)
 
-// WithRBAC authorizes group operations through the Casbin authorizer. Without
-// it the service falls back to the stored member role.
 func WithRBAC(authz rbac.Authorizer) ConversationServiceOption {
 	return func(s *ConversationService) {
 		s.authz = authz
@@ -317,11 +315,6 @@ func (s *ConversationService) memberRole(ctx context.Context, conversationID, us
 	return "", ErrNotMember
 }
 
-// requireAct authorizes userID for an RBAC action on the conversation.
-//
-// With an authorizer wired the decision comes from Casbin's role assignments;
-// otherwise it falls back to the stored member role, which keeps tests and the
-// no-Postgres setup working.
 func (s *ConversationService) requireAct(ctx context.Context, conversationID, userID int64, act string) error {
 	if s.authz == nil {
 		return s.requireStoredRole(ctx, conversationID, userID, act)
@@ -350,7 +343,6 @@ func (s *ConversationService) requireAct(ctx context.Context, conversationID, us
 	return ErrNotAdmin
 }
 
-// requireStoredRole is the authorizer-less fallback: the member role decides.
 func (s *ConversationService) requireStoredRole(ctx context.Context, conversationID, userID int64, act string) error {
 	role, err := s.memberRole(ctx, conversationID, userID)
 	if err != nil {
@@ -376,8 +368,6 @@ func (s *ConversationService) requireStoredRole(ctx context.Context, conversatio
 	}
 }
 
-// isBot reports whether the user is a bot principal. Bots can be group admins
-// but never the owner, so ownership writes consult it first.
 func (s *ConversationService) isBot(ctx context.Context, userID int64) (bool, error) {
 	userType, err := s.store.GetUserType(ctx, userID)
 	if err != nil {
@@ -390,7 +380,6 @@ func (s *ConversationService) isBot(ctx context.Context, userID int64) (bool, er
 	return userType == "bot", nil
 }
 
-// rbacSubject builds the Casbin subject of a user or bot.
 func (s *ConversationService) rbacSubject(ctx context.Context, userID int64) (string, error) {
 	userType, err := s.store.GetUserType(ctx, userID)
 	if err != nil {
@@ -403,11 +392,6 @@ func (s *ConversationService) rbacSubject(ctx context.Context, userID int64) (st
 	return rbac.Subject(userType, userID), nil
 }
 
-// assignRole mirrors one conversation_members role into Casbin.
-//
-// Role assignments are a derived index of the member table, so a failure here
-// is logged instead of failing the committed business operation; the migration
-// backfill restores the assignments.
 func (s *ConversationService) assignRole(ctx context.Context, conversationID, userID int64, role string) {
 	if s.authz == nil {
 		return
@@ -424,7 +408,6 @@ func (s *ConversationService) assignRole(ctx context.Context, conversationID, us
 	}
 }
 
-// changeRole mirrors a role transition into Casbin.
 func (s *ConversationService) changeRole(ctx context.Context, conversationID, userID int64, from, to string) {
 	if s.authz == nil {
 		return
@@ -441,7 +424,6 @@ func (s *ConversationService) changeRole(ctx context.Context, conversationID, us
 	}
 }
 
-// unassignRole drops every Casbin role of the user in the conversation.
 func (s *ConversationService) unassignRole(ctx context.Context, conversationID, userID int64) {
 	if s.authz == nil {
 		return
@@ -458,7 +440,6 @@ func (s *ConversationService) unassignRole(ctx context.Context, conversationID, 
 	}
 }
 
-// clearConversationRoles drops every Casbin role of a dismissed conversation.
 func (s *ConversationService) clearConversationRoles(ctx context.Context, conversationID int64) {
 	if s.authz == nil {
 		return
@@ -1143,7 +1124,6 @@ func (s *ConversationService) TransferGroupOwner(ctx context.Context, conversati
 		return orm.Conversation{}, ErrNotMember
 	}
 
-	// A bot can administer a group but never own it.
 	isBot, err := s.isBot(ctx, targetUserID)
 	if err != nil {
 		return orm.Conversation{}, err

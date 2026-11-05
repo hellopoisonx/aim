@@ -16,8 +16,6 @@ import (
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
-// pushProducer narrows the producer surface to what the consumer needs, so a
-// test can capture published events without a broker.
 type pushProducer interface {
 	Publish(ctx context.Context, message rocketmq.Message) error
 }
@@ -44,10 +42,7 @@ func NewDeliveryConsumer(ctx context.Context, svcCtx *svc.ServiceContext) *Deliv
 }
 
 // Consume resolves the conversation members and publishes the push events the
-// gateway nodes consume. Direct conversations are write fanned out (one event
-// per recipient), group conversations are read fanned out (one event carrying
-// the member snapshot) so each node shares a single message body per
-// conversation.
+// gateway nodes consume.
 func (c *DeliveryConsumer) Consume(ctx context.Context, key string, value string) error {
 	logx.WithContext(ctx).Infof("consuming delivery event, key=%s", key)
 
@@ -139,11 +134,6 @@ func (c *DeliveryConsumer) Consume(ctx context.Context, key string, value string
 	return nil
 }
 
-// resolveConversation looks up the full recipient list and conversation type via logic.
-// The sender is intentionally included so the sender's other devices can receive
-// the message for multi-device sync; gateway skips only the original source device.
-// Falls back to delivering only to the sender when logic is unreachable so that
-// single-instance dev setups still echo messages back to the originator.
 func (c *DeliveryConsumer) resolveConversation(ctx context.Context, event events.TransferEvent) ([]int64, string, error) {
 	if c.svcCtx.LogicConversationClient == nil {
 		return []int64{event.SenderID}, "", nil

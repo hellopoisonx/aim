@@ -14,8 +14,6 @@ func TestNewServiceContextDefaultsPermissionChecker(t *testing.T) {
 	svcCtx := NewServiceContext(config.Config{})
 
 	require.NotNil(t, svcCtx.PermissionChecker)
-	// Without Postgres, Redis and RocketMQ there is no message write path: the RPC
-	// surface must report an internal error instead of accepting the message.
 	require.Nil(t, svcCtx.MessageService)
 	decision, err := svcCtx.PermissionChecker.CheckMessagePermission(context.Background(), service.PermissionCheck{
 		SenderID:       10,

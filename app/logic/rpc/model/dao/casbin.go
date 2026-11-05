@@ -12,16 +12,9 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-// casbinPolicyColumns are the value columns of casbin_rule in Casbin's field
-// order. RemoveFilteredPolicy indexes into this slice.
+// casbinPolicyColumns are the value columns of casbin_rule in Casbin's field order.
 var casbinPolicyColumns = [...]string{"v0", "v1", "v2", "v3", "v4", "v5"}
 
-// The persist.Adapter methods below turn *Store into Casbin's policy store.
-//
-// Only grouping (g) rules are persisted: the static policy (p) rules are seeded
-// in memory at startup, so this table holds role assignments alone.
-
-// LoadPolicy reads every rule into the model.
 func (s *Store) LoadPolicy(m casbinmodel.Model) error {
 	if s == nil || s.db == nil {
 		return errors.New("logic dao: database is not configured")
@@ -42,13 +35,12 @@ func (s *Store) LoadPolicy(m casbinmodel.Model) error {
 	return nil
 }
 
-// SavePolicy is a no-op: the model is never rewritten wholesale, and a partial
-// save would drop rows the caller did not build. Callers mutate rules through
-// the incremental Add/Remove methods instead.
-func (s *Store) SavePolicy(casbinmodel.Model) error { return nil }
+// SavePolicy is unsupported: the static matrix is memory-only and the g rules are
+// written incrementally, so a wholesale save would drop rows the caller did not build.
+func (s *Store) SavePolicy(casbinmodel.Model) error {
+	return errors.New("logic dao: SavePolicy is unsupported; mutate rules through AddPolicy/RemovePolicy")
+}
 
-// AddPolicy inserts one rule; duplicates are ignored so a repeated assignment
-// stays idempotent.
 func (s *Store) AddPolicy(_ string, ptype string, rule []string) error {
 	if s == nil || s.db == nil {
 		return errors.New("logic dao: database is not configured")
@@ -64,7 +56,6 @@ func (s *Store) AddPolicy(_ string, ptype string, rule []string) error {
 	return nil
 }
 
-// RemovePolicy deletes the exact rule.
 func (s *Store) RemovePolicy(_ string, ptype string, rule []string) error {
 	if s == nil || s.db == nil {
 		return errors.New("logic dao: database is not configured")
@@ -106,8 +97,6 @@ func (s *Store) RemoveFilteredPolicy(_ string, ptype string, fieldIndex int, fie
 	return nil
 }
 
-// casbinQuery builds the equality filter for one rule, padding short rules so a
-// g rule of three values still matches its stored row.
 func (s *Store) casbinQuery(ptype string, rule []string) *gorm.DB {
 	query := s.db.WithContext(context.Background()).Where("ptype = ?", ptype)
 	for i, value := range trimTrailingEmpty(rule) {
@@ -116,7 +105,6 @@ func (s *Store) casbinQuery(ptype string, rule []string) *gorm.DB {
 	return query
 }
 
-// casbinRuleRow maps a Casbin rule onto its column layout.
 func casbinRuleRow(ptype string, rule []string) orm.CasbinRule {
 	values := trimTrailingEmpty(rule)
 	row := orm.CasbinRule{Ptype: ptype}

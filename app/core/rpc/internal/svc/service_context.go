@@ -31,7 +31,6 @@ type ServiceContext struct {
 	AttachmentClient        attachmentpb.AttachmentServiceClient
 }
 
-// pushProducerGroup is the broker-visible producer group of core.
 const pushProducerGroup = "aim-core-push"
 
 // StartPushProducer connects the push producer. The RPC server starts
@@ -79,11 +78,9 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		logx.WithContext(context.Background()).Infof("Redis connected at %s", c.CacheRedis.Addr)
 	}
 
-	// Snowflake ID generator (fatal - without it, system messages get no id)
 	sf, err := tools.NewSnowflake(c.SnowflakeMachineID)
 	logx.Must(err)
 
-	// Push producer (nil if not configured)
 	var pushProducer *rocketmq.Producer
 
 	if c.PushProducerConf.IsConfigured() {

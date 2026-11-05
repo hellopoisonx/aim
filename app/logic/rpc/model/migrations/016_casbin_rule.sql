@@ -1,6 +1,5 @@
--- Casbin policy storage. Only grouping (g) rules live here: the static policy
--- (p) rules are seeded in memory at startup, so this table is the durable half
--- of the model.
+-- Casbin policy storage. Only grouping (g) rules live here; the static policy
+-- matrix is seeded in memory at startup.
 CREATE TABLE IF NOT EXISTS casbin_rule (
     id   BIGSERIAL PRIMARY KEY,
     ptype VARCHAR(100) NOT NULL,
@@ -13,8 +12,6 @@ CREATE TABLE IF NOT EXISTS casbin_rule (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_casbin_rule ON casbin_rule (ptype, v0, v1, v2, v3, v4, v5);
 
--- Backfill role assignments from conversation_members. The subject prefix keeps
--- bot and human principals in disjoint namespaces: a bot can never be an owner.
 INSERT INTO casbin_rule (ptype, v0, v1, v2)
 SELECT 'g',
        CASE WHEN ui.user_type = 'bot' THEN 'bot:' ELSE 'user:' END || cm.user_id,

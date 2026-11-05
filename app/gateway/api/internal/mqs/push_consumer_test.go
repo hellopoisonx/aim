@@ -18,14 +18,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// localWS is one WebSocket client registered on a shared connection manager.
 type localWS struct {
 	conn  *websocket.Conn
 	close func()
 }
 
-// connectLocal registers a WebSocket connection for (userID, deviceID) on
-// manager, mirroring what ws_handler.ServeWS does in production.
 func connectLocal(t *testing.T, manager *ws.Manager, userID int64, deviceID string) *localWS {
 	t.Helper()
 
@@ -72,7 +69,6 @@ func connectLocal(t *testing.T, manager *ws.Manager, userID int64, deviceID stri
 	}
 }
 
-// readPush reads the next push frame the client receives.
 func readPush(t *testing.T, client *localWS) (*wspb.PushMessagePayload, []byte) {
 	t.Helper()
 
@@ -95,7 +91,6 @@ func readPush(t *testing.T, client *localWS) (*wspb.PushMessagePayload, []byte) 
 	return push, frame.GetPayload()
 }
 
-// expectNoFrame asserts the client receives nothing within a short window.
 func expectNoFrame(t *testing.T, client *localWS) {
 	t.Helper()
 
@@ -175,7 +170,6 @@ func TestPushConsumer_SkipsSourceDevice(t *testing.T) {
 	client := connectLocal(t, manager, 100, "sender-device")
 	t.Cleanup(client.close)
 
-	// The sender's own device must not receive the echo of its message.
 	require.NoError(t, consumer.Consume(context.Background(), "500", directPushValue(t, 100, 100, "sender-device")))
 	expectNoFrame(t, client)
 }
@@ -235,7 +229,6 @@ func TestPushConsumer_GroupEventSkipsSenderSourceDevice(t *testing.T) {
 
 	require.NoError(t, consumer.Consume(context.Background(), "605", string(value)))
 
-	// The sending device gets the ACK, not an echo of its own message.
 	expectNoFrame(t, sender)
 	push, _ := readPush(t, recipient)
 	require.Equal(t, int64(92), push.GetMessageId())
@@ -281,7 +274,6 @@ func TestPushConsumer_DropsAmbiguousEvent(t *testing.T) {
 	require.NoError(t, consumer.Consume(context.Background(), "602", string(value)))
 	expectNoFrame(t, client)
 
-	// Neither field set is dropped as well.
 	value, err = json.Marshal(events.PushEvent{MessageID: 91, ConversationID: 603, MessageType: "text", Content: "empty"})
 	require.NoError(t, err)
 	require.NoError(t, consumer.Consume(context.Background(), "603", string(value)))

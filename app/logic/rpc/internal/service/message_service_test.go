@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hellopoisonx/aim/app/shared/attachment"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 	"github.com/hellopoisonx/aim/app/shared/tools"
 	"github.com/stretchr/testify/assert"
@@ -69,7 +70,9 @@ func newMessageFixture(t *testing.T) (*IngestionService, *fakeChecker, *fakeIdem
 	idempotency := &fakeIdempotency{ids: make(map[string]int64)}
 	publisher := &fakePublisher{}
 
-	return NewMessageService(checker, idempotency, publisher, nil, snowflake), checker, idempotency, publisher
+	attachments := NewGRPCAttachmentValidator(nil)
+
+	return NewMessageService(checker, idempotency, publisher, attachments, snowflake), checker, idempotency, publisher
 }
 
 func sampleInput() IngestMessageInput {
@@ -178,6 +181,22 @@ func TestIngestMessageIdempotencyWriteFailureStillAccepts(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotZero(t, result.MessageID)
 	assert.Len(t, publisher.bodies, 1)
+}
+
+func TestIngestMessageAttachmentWithoutRPCIsInternal(t *testing.T) {
+	svc, _, _, _ := newMessageFixture(t)
+
+	in := sampleInput()
+	in.MessageType = attachment.KindImage
+	in.Content = `{"schema":"aim.attachment.v1","file_id":"file-1","kind":"image",` +
+		`"original":{"name":"a.png","mime":"image/png","size":10},"parse_status":"pending"}`
+
+	_, err := svc.IngestMessage(context.Background(), in)
+	require.Error(t, err)
+
+	var codeErr *errorx.CodeError
+	require.ErrorAs(t, err, &codeErr)
+	assert.Equal(t, errorx.CodeInternal, codeErr.Code)
 }
 
 func TestIngestMessageRejectsInvalidInput(t *testing.T) {

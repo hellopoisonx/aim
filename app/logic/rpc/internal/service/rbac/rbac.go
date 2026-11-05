@@ -23,17 +23,14 @@ import (
 	"github.com/casbin/casbin/v3/persist"
 )
 
-// rolePrefix scopes role principals so they cannot collide with user subjects.
 const rolePrefix = "role:"
 
-// Role principals of the conversation domain, spelled out for the static matrix.
 const (
 	subjectOwner  = rolePrefix + "owner"
 	subjectAdmin  = rolePrefix + "admin"
 	subjectMember = rolePrefix + "member"
 )
 
-// Roles and actions of the conversation domain.
 const (
 	RoleOwner  = "owner"
 	RoleAdmin  = "admin"
@@ -65,9 +62,8 @@ e = some(where (p.eft == allow))
 m = g(r.sub, p.sub, r.dom) && (p.dom == "*" || p.dom == r.dom) && r.obj == p.obj && r.act == p.act
 `
 
-// staticRules is the permission matrix. Every (role, action) pair is spelled
-// out instead of chaining roles: no inheritance means each grant is explicit,
-// and the default is deny, so an admin simply has no group.own rule.
+// staticRules is the permission matrix. The default is deny, so an admin
+// simply has no group.own rule.
 var staticRules = [][]string{
 	{subjectOwner, "*", ObjectConversation, ActionGroupOwn},
 	{subjectOwner, "*", ObjectConversation, ActionGroupManage},
@@ -93,7 +89,6 @@ type Authorizer interface {
 	HasRole(ctx context.Context, sub, dom, role string) (bool, error)
 }
 
-// Subject builds the principal string of a user or bot.
 func Subject(userType string, userID int64) string {
 	prefix := "user:"
 	if userType == "bot" {
@@ -102,29 +97,24 @@ func Subject(userType string, userID int64) string {
 	return prefix + strconv.FormatInt(userID, 10)
 }
 
-// Domain builds the conversation domain string.
 func Domain(conversationID int64) string {
 	return "conv:" + strconv.FormatInt(conversationID, 10)
 }
 
-// RoleSubject builds the role principal a subject is assigned to.
 func RoleSubject(role string) string {
 	return rolePrefix + role
 }
 
 // Enforcer is the Casbin-backed Authorizer.
 //
-// The enforcer lives in process memory and the logic service is single-writer
-// for this table, so no cross-instance invalidation is needed. Enforce holds a
-// read lock: rule mutations rewrite model slices that a concurrent Enforce
-// iterates.
+// Enforce holds a read lock: rule mutations rewrite model slices that a
+// concurrent Enforce iterates.
 type Enforcer struct {
 	enforcer *casbin.Enforcer
 	mu       sync.RWMutex
 }
 
 // New builds the enforcer and loads the persisted assignments through adapter.
-// A nil adapter yields an in-memory enforcer (tests and the no-Postgres setup).
 func New(adapter persist.Adapter) (*Enforcer, error) {
 	m, err := casbinmodel.NewModelFromString(modelDefinition)
 	if err != nil {
@@ -152,7 +142,6 @@ func New(adapter persist.Adapter) (*Enforcer, error) {
 	return &Enforcer{enforcer: enforcer}, nil
 }
 
-// Authorize implements Authorizer.
 func (a *Enforcer) Authorize(_ context.Context, sub, dom, obj, act string) (bool, error) {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
@@ -165,7 +154,6 @@ func (a *Enforcer) Authorize(_ context.Context, sub, dom, obj, act string) (bool
 	return allowed, nil
 }
 
-// AssignRole implements Authorizer.
 func (a *Enforcer) AssignRole(_ context.Context, sub, dom, role string) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -177,7 +165,6 @@ func (a *Enforcer) AssignRole(_ context.Context, sub, dom, role string) error {
 	return nil
 }
 
-// Unassign implements Authorizer.
 func (a *Enforcer) Unassign(_ context.Context, sub, dom string) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -190,7 +177,6 @@ func (a *Enforcer) Unassign(_ context.Context, sub, dom string) error {
 	return nil
 }
 
-// ChangeRole implements Authorizer.
 func (a *Enforcer) ChangeRole(ctx context.Context, sub, dom, fromRole, toRole string) error {
 	if fromRole == toRole {
 		return nil
@@ -202,7 +188,6 @@ func (a *Enforcer) ChangeRole(ctx context.Context, sub, dom, fromRole, toRole st
 	return a.AssignRole(ctx, sub, dom, toRole)
 }
 
-// ClearConversation implements Authorizer.
 func (a *Enforcer) ClearConversation(_ context.Context, dom string) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -214,7 +199,6 @@ func (a *Enforcer) ClearConversation(_ context.Context, dom string) error {
 	return nil
 }
 
-// HasRole implements Authorizer.
 func (a *Enforcer) HasRole(_ context.Context, sub, dom, role string) (bool, error) {
 	a.mu.RLock()
 	defer a.mu.RUnlock()

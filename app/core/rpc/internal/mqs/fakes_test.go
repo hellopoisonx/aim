@@ -15,8 +15,6 @@ import (
 	"google.golang.org/grpc"
 )
 
-// --- Fake implementations ---
-
 type fakeGatewayClient struct {
 	pushes            []pushRecord
 	typingPushes      []*gwpb.PushTypingReq
@@ -71,7 +69,6 @@ func newFakeGatewayClient() *fakeGatewayClient {
 	return &fakeGatewayClient{pushResp: &gwpb.PushMessageResp{Success: true}}
 }
 
-// Ensure fakeGatewayClient implements rpc.GatewayPusher
 var _ rpc.GatewayPusher = (*fakeGatewayClient)(nil)
 
 type fakeConversationClient struct {
@@ -147,8 +144,6 @@ func (f *fakeConversationClient) ListConversationReadStates(context.Context, *lo
 }
 
 var _ logicpb.ConversationServiceClient = (*fakeConversationClient)(nil)
-
-// --- Test helpers ---
 
 func newTestServiceContext(t *testing.T, gwClient rpc.GatewayPusher) *svc.ServiceContext {
 	mr := miniredis.NewMiniRedis()

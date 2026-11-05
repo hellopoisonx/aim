@@ -12,8 +12,6 @@ import (
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
-// Message ingestion limits, matching the validation core used to enforce before
-// the write path moved here.
 const (
 	maxMessageTypeLength = 32
 	maxMentions          = 20
@@ -21,7 +19,6 @@ const (
 	idempotencyTTL = 24 * time.Hour
 )
 
-// IngestMessageInput is one message write request.
 type IngestMessageInput struct {
 	SenderID       int64
 	DeviceID       string
@@ -32,19 +29,16 @@ type IngestMessageInput struct {
 	Mentions       []string
 }
 
-// IngestMessageResult is the accepted message.
 type IngestMessageResult struct {
 	MessageID   int64
 	ClientMsgID string
 	AcceptedAt  int64
 }
 
-// MessageService is the single write entry for chat messages.
 type MessageService interface {
 	IngestMessage(ctx context.Context, in IngestMessageInput) (IngestMessageResult, error)
 }
 
-// IdempotencyStore maps a client message key to the server-assigned message id.
 type IdempotencyStore interface {
 	Check(ctx context.Context, key string) (exists bool, messageID int64, err error)
 	Set(ctx context.Context, key string, messageID int64, ttl time.Duration) error
@@ -61,7 +55,6 @@ type AttachmentReferenceValidator interface {
 	ValidateReference(ctx context.Context, senderID, conversationID int64, kind, content string) error
 }
 
-// IngestionService validates, authorizes, numbers and publishes a message.
 type IngestionService struct {
 	checker     PermissionChecker
 	idempotency IdempotencyStore
@@ -70,8 +63,6 @@ type IngestionService struct {
 	idGen       *tools.Snowflake
 }
 
-// NewMessageService builds the message write path. A nil checker denies every
-// request: sending without an authorization source must never pass.
 func NewMessageService(
 	checker PermissionChecker,
 	idempotency IdempotencyStore,
@@ -88,7 +79,6 @@ func NewMessageService(
 	}
 }
 
-// IngestMessage implements MessageService.
 func (s *IngestionService) IngestMessage(ctx context.Context, in IngestMessageInput) (IngestMessageResult, error) {
 	if err := validateIngest(in); err != nil {
 		return IngestMessageResult{}, err
@@ -142,7 +132,6 @@ func (s *IngestionService) IngestMessage(ctx context.Context, in IngestMessageIn
 	}, nil
 }
 
-// checkIdempotency reports the message id already assigned to the client key.
 func (s *IngestionService) checkIdempotency(ctx context.Context, key string) (int64, bool, error) {
 	exists, messageID, err := s.idempotency.Check(ctx, key)
 	if err != nil {
@@ -152,8 +141,6 @@ func (s *IngestionService) checkIdempotency(ctx context.Context, key string) (in
 	return messageID, exists, nil
 }
 
-// authorize applies the permission decision and returns the input with mentions
-// filtered down to conversation members.
 func (s *IngestionService) authorize(ctx context.Context, in IngestMessageInput) (IngestMessageInput, error) {
 	if s.checker == nil {
 		return IngestMessageInput{}, errorx.NewCodeError(errorx.CodeInternal, "permission checker is not configured")
@@ -201,8 +188,6 @@ func (s *IngestionService) authorize(ctx context.Context, in IngestMessageInput)
 	return in, nil
 }
 
-// checkAttachmentReference validates attachment messages against the attachment
-// service and the content envelope.
 func (s *IngestionService) checkAttachmentReference(ctx context.Context, in IngestMessageInput) error {
 	if !sharedattachment.IsAttachmentMessageType(in.MessageType) {
 		return nil
@@ -217,7 +202,6 @@ func (s *IngestionService) checkAttachmentReference(ctx context.Context, in Inge
 	return nil
 }
 
-// validateIngest enforces the request shape.
 func validateIngest(in IngestMessageInput) error {
 	if in.SenderID <= 0 {
 		return errorx.NewCodeError(errorx.CodeBadInput, "sender_id is required")
@@ -246,13 +230,10 @@ func validateIngest(in IngestMessageInput) error {
 	return nil
 }
 
-// idempotencyKey scopes the client message id to its sender and device.
 func idempotencyKey(in IngestMessageInput) string {
 	return fmt.Sprintf("idempotency:transfer:%d:%s:%s", in.SenderID, in.DeviceID, in.ClientMsgID)
 }
 
-// parseMentionIDs converts the wire-format mentions into user ids. Empty input
-// is allowed; a non-positive or non-numeric entry is a bad request.
 func parseMentionIDs(raw []string) ([]int64, error) {
 	if len(raw) == 0 {
 		return nil, nil

@@ -23,7 +23,6 @@ func NewMessageServiceServer(svcCtx *svc.ServiceContext) *MessageServiceServer {
 	}
 }
 
-// IngestMessage is the single write entry for chat messages.
 func (s *MessageServiceServer) IngestMessage(ctx context.Context, in *pb.IngestMessageReq) (*pb.IngestMessageResp, error) {
 	ingestion := s.svcCtx.MessageService
 	if ingestion == nil {

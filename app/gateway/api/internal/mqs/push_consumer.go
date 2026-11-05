@@ -15,8 +15,7 @@ import (
 	"github.com/zeromicro/go-zero/core/service"
 )
 
-// pushConsumerGroupPrefix scopes the consumer group per gateway node. Every
-// node subscribes with a distinct group, so the topic broadcasts to all of them
+// Every node subscribes with a distinct group, so the topic broadcasts to all of them
 // and each node delivers only to its local connections.
 const pushConsumerGroupPrefix = "aim-gateway-push-"
 
@@ -29,7 +28,6 @@ func NewPushConsumer(svcCtx *svc.ServiceContext) *PushConsumer {
 	return &PushConsumer{svcCtx: svcCtx}
 }
 
-// Consume implements the rocketmq handler interface.
 func (c *PushConsumer) Consume(ctx context.Context, key string, value string) error {
 	var event events.PushEvent
 	if err := json.Unmarshal([]byte(value), &event); err != nil {
@@ -78,7 +76,6 @@ func (c *PushConsumer) Consume(ctx context.Context, key string, value string) er
 		req.TargetUserId = event.TargetUserID
 		err = gateway.DeliverLocal(ctx, req)
 	case event.TargetUserID == 0 && len(event.MemberIDs) > 0:
-		// Group conversation: fan the single shared event out to local members.
 		err = gateway.DeliverLocalMembers(ctx, req, event.MemberIDs)
 	default:
 		logx.WithContext(ctx).Errorf(
@@ -96,11 +93,9 @@ func (c *PushConsumer) Consume(ctx context.Context, key string, value string) er
 }
 
 // Consumers builds the RocketMQ consumer services of the gateway. The result is
-// empty when the push topic is not configured, which keeps single-service dev
-// setups working.
+// empty when the push topic is not configured.
 func Consumers(ctx context.Context, svcCtx *svc.ServiceContext) []service.Service {
 	conf := svcCtx.Config.PushConsumer
-	// The group is per node, so it is derived here instead of configured.
 	conf.Group = pushConsumerGroupPrefix + svcCtx.Config.GatewayNodeID
 
 	consumer, err := rocketmq.NewConsumerService(conf, NewPushConsumer(svcCtx).Consume)

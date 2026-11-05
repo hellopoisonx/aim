@@ -60,7 +60,6 @@ type ServiceContext struct {
 	// TransferProducer publishes accepted messages to the FIFO delivery topic.
 	// Nil when RocketMQ is not configured.
 	TransferProducer *rocketmq.Producer
-	// IdempotencyRedis holds the client message id dedupe keys.
 	IdempotencyRedis *redis.Client
 	// MessageService is the chat message write entry; nil without Postgres,
 	// Redis or RocketMQ.
@@ -97,8 +96,6 @@ func NewServiceContext(c config.Config) *ServiceContext {
 			if limit == 0 {
 				limit = service.DefaultTemporaryConversationMessageLimit
 			}
-			// Casbin persists its role assignments through the same store; the
-			// static policy matrix is seeded in memory on every start.
 			authz, err := rbac.New(store)
 			if err != nil {
 				logx.Must(fmt.Errorf("logic service: casbin authorizer: %w", err))
@@ -160,8 +157,6 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	return svcCtx
 }
 
-// transferProducerGroup is the broker-visible producer group of the message
-// write path.
 const transferProducerGroup = "aim-logic-transfer"
 
 // initMessageService wires the chat message write path. It stays nil when a
@@ -217,7 +212,6 @@ func initMessageService(svcCtx *ServiceContext, c config.Config) {
 	)
 }
 
-// StartTransferProducer connects the message transfer producer.
 func (s *ServiceContext) StartTransferProducer() {
 	if s == nil || s.TransferProducer == nil {
 		return
@@ -284,7 +278,6 @@ func (s *ServiceContext) StopEventProducer() {
 	}
 }
 
-// StopTransferProducer flushes and disconnects the message transfer producer.
 func (s *ServiceContext) StopTransferProducer() {
 	if s == nil || s.TransferProducer == nil {
 		return

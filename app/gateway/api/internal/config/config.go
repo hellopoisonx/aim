@@ -54,12 +54,8 @@ type Config struct {
 		// FriendApplicationTopic is the topic core consumes to fan friend
 		// application pushes out to every gateway node.
 		FriendApplicationTopic string `json:",default=aim-friend-application-events"` //nolint:staticcheck // go-zero conf uses json tag options for defaults.
-		// PushTopic carries chat message pushes from core. This node subscribes
-		// with a per-node group and delivers to its local connections only.
-		PushTopic string `json:",default=aim-gateway-push"` //nolint:staticcheck // go-zero conf uses json tag options for defaults.
+		PushTopic              string `json:",default=aim-gateway-push"`
 	}
-	// PushConsumer subscribes to PushTopic. The consumer group is derived from
-	// GatewayNodeID, so every node receives every event.
 	PushConsumer  rocketmq.ConsumerConf `json:",optional"`
 	AttachmentRpc zrpc.RpcClientConf
 	// GatewayNodeID identifies this gateway instance for the directory service.

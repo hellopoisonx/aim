@@ -37,8 +37,6 @@ type PushEvent struct {
 	SenderInfo       *SenderInfo `json:"sender_info,omitempty"`
 	SourceDeviceID   string      `json:"source_device_id"`
 
-	// TargetUserID is the single recipient of a direct-conversation copy.
-	TargetUserID int64 `json:"target_user_id,omitempty"`
-	// MemberIDs is the conversation member snapshot of a group event.
-	MemberIDs []int64 `json:"member_ids,omitempty"`
+	TargetUserID int64   `json:"target_user_id,omitempty"`
+	MemberIDs    []int64 `json:"member_ids,omitempty"`
 }

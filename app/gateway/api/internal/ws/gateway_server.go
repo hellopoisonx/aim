@@ -229,8 +229,7 @@ func (s *GatewayServer) DeliverLocal(ctx context.Context, req *pb.PushMessageReq
 }
 
 // DeliverLocalMembers fans one conversation event out to the members this node
-// holds connections for. The payload is encoded once and shared by every
-// member: a group message costs one encode per node, not one per recipient.
+// holds connections for.
 //
 // Per-connection write failures are logged and skipped: a single slow client
 // must not make the broker redeliver the whole conversation event.
@@ -246,8 +245,6 @@ func (s *GatewayServer) DeliverLocalMembers(ctx context.Context, base *pb.PushMe
 				continue
 			}
 
-			// Each connection needs its own frame: the writer assigns the server
-			// seq on the frame it holds.
 			frame := BuildFrame(wspb.FrameType_FRAME_TYPE_PUSH_MESSAGE, 0, payloadBytes)
 			if err := conn.WriteEncodedFrame(ctx, frame); err != nil {
 				logx.WithContext(ctx).Errorf("PushMessage: failed to write conversation %d to user_id=%d device_id=%s: %v",
@@ -259,7 +256,6 @@ func (s *GatewayServer) DeliverLocalMembers(ctx context.Context, base *pb.PushMe
 	return nil
 }
 
-// pushMessagePayload projects a push request onto the client payload.
 func pushMessagePayload(req *pb.PushMessageReq) *wspb.PushMessagePayload {
 	payload := &wspb.PushMessagePayload{
 		MessageId:        req.MessageId,
@@ -283,9 +279,6 @@ func pushMessagePayload(req *pb.PushMessageReq) *wspb.PushMessagePayload {
 	return payload
 }
 
-// skipsSourceDevice reports whether conn is the device that sent the message.
-// It applies to both fan-out modes: the sending device gets the ACK, never an
-// echo push of its own message.
 func skipsSourceDevice(req *pb.PushMessageReq, conn *Connection) bool {
 	return req.SenderId != 0 &&
 		req.SenderId == conn.Identity.UserID &&

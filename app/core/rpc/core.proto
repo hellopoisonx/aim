@@ -5,8 +5,5 @@ package core;
 
 option go_package = "./pb";
 
-// aim-core no longer exposes a write API: the message write path lives in
-// aim-logic (MessageService.IngestMessage) and core consumes the transfer topic
-// to publish gateway push events. The service keeps its zrpc server so deployment
-// ports, etcd registration and health checks stay stable; add core RPCs here when
-// they appear.
+// Core keeps its zrpc server (no RPCs) so deployment ports, etcd registration
+// and health checks stay stable.

@@ -17,11 +17,10 @@ import (
 
 // ConversationStore is an in-memory ConversationStore with error injection.
 type ConversationStore struct {
-	Conversations map[int64]orm.Conversation
-	Members       map[int64][]orm.ConversationMember // key: conversationID
-	Messages      map[int64][]orm.Message            // key: conversationID
-	ReadStates    map[int64]map[int64]orm.ConversationReadState
-	// BotUserIDs are the principals GetUserType reports as bots.
+	Conversations       map[int64]orm.Conversation
+	Members             map[int64][]orm.ConversationMember // key: conversationID
+	Messages            map[int64][]orm.Message            // key: conversationID
+	ReadStates          map[int64]map[int64]orm.ConversationReadState
 	BotUserIDs          map[int64]struct{}
 	UserTypeErr         error
 	CreateErr           error
@@ -250,8 +249,6 @@ func (f *ConversationStore) GetConversationMembers(ctx context.Context, conversa
 	return f.Members[conversationID], nil
 }
 
-// GetUserType reports every fake principal as a human unless a test says
-// otherwise through BotUserIDs.
 func (f *ConversationStore) GetUserType(_ context.Context, id int64) (string, error) {
 	if f.UserTypeErr != nil {
 		return "", f.UserTypeErr

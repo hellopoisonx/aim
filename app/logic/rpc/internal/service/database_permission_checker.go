@@ -65,9 +65,6 @@ func NewDatabasePermissionCheckerWithLimitAndCaches(queries PermissionQuerier, l
 	}
 }
 
-// WithAuthorizer decides group membership through Casbin's role assignments
-// instead of scanning the member rows. Without it the checker keeps using the
-// stored member list.
 func (c *DatabasePermissionChecker) WithAuthorizer(authz rbac.Authorizer) *DatabasePermissionChecker {
 	c.authz = authz
 	return c
@@ -150,7 +147,6 @@ func (c *DatabasePermissionChecker) checkGroupPermission(ctx context.Context, ch
 	return PermissionDecision{Allowed: true, Code: CodeOK, FilteredMentions: filtered}, nil
 }
 
-// authorizeSend asks Casbin whether the sender may post into the conversation.
 func (c *DatabasePermissionChecker) authorizeSend(ctx context.Context, check PermissionCheck) (bool, error) {
 	userType, err := c.getUserType(ctx, check.SenderID)
 	if err != nil {

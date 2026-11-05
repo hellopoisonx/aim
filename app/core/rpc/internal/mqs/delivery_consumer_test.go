@@ -17,7 +17,6 @@ import (
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 )
 
-// fakePushProducer captures the push events the consumer publishes.
 type fakePushProducer struct {
 	messages []rocketmq.Message
 	err      error
@@ -31,7 +30,6 @@ func (f *fakePushProducer) Publish(_ context.Context, message rocketmq.Message) 
 	return nil
 }
 
-// decodePush decodes the published body of message i.
 func decodePush(t *testing.T, producer *fakePushProducer, i int) events.PushEvent {
 	t.Helper()
 

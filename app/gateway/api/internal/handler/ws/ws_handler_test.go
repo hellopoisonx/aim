@@ -602,7 +602,6 @@ func (noopAuthClient) CreateBotCredential(context.Context, *authservice.CreateBo
 	return nil, nil
 }
 
-// mockMessageClient implements messageservice.MessageService for testing.
 type mockMessageClient struct {
 	resp *logicpb.IngestMessageResp
 	err  error
@@ -690,8 +689,7 @@ func newTestServiceContextWithMessageClient(t *testing.T, messageClient *mockMes
 	return svc.NewServiceContextWithMessageClient(c, noopAuthClient{}, messageClient)
 }
 
-// TestHandleSendMessageCoreSuccess verifies ACK_STATUS_ACCEPTED when logic returns success.
-func TestHandleSendMessageCoreSuccess(t *testing.T) {
+func TestHandleSendMessageAccepted(t *testing.T) {
 	t.Parallel()
 	serverCtx := newTestServiceContextWithMessageClient(t, &mockMessageClient{
 		resp: &logicpb.IngestMessageResp{MessageId: 999, ClientMsgId: "client-success"},
@@ -740,8 +738,7 @@ func TestHandleSendMessageCoreSuccess(t *testing.T) {
 	require.Equal(t, "client-success", ack.GetClientMsgId())
 }
 
-// TestHandleSendMessageCoreRejected verifies ACK_STATUS_REJECTED for business errors.
-func TestHandleSendMessageCoreRejected(t *testing.T) {
+func TestHandleSendMessageRejected(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -830,8 +827,7 @@ func TestHandleSendMessageCoreRejected(t *testing.T) {
 	}
 }
 
-// TestHandleSendMessageCoreRetryable verifies ACK_STATUS_RETRYABLE for infrastructure errors.
-func TestHandleSendMessageCoreRetryable(t *testing.T) {
+func TestHandleSendMessageRetryable(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -900,10 +896,9 @@ func TestHandleSendMessageCoreRetryable(t *testing.T) {
 	}
 }
 
-// TestHandleSendMessageCoreUnavailable verifies RETRYABLE when MessageClient is nil.
-func TestHandleSendMessageCoreUnavailable(t *testing.T) {
+func TestHandleSendMessageUnavailable(t *testing.T) {
 	t.Parallel()
-	serverCtx := newTestServiceContext(t) // MessageClient is nil via NewServiceContextWithAuth
+	serverCtx := newTestServiceContext(t)
 	handler := NewWsHandler(serverCtx, wsmanager.NewManager())
 	server := httptest.NewServer(http.HandlerFunc(handler.ServeWS))
 	t.Cleanup(server.Close)
@@ -944,8 +939,7 @@ func TestHandleSendMessageCoreUnavailable(t *testing.T) {
 	require.Equal(t, "client-nocore", ack.GetClientMsgId())
 }
 
-// TestMapTransferToAckSuccess unit tests mapIngestToAck with success response.
-func TestMapTransferToAckSuccess(t *testing.T) {
+func TestMapIngestToAckSuccess(t *testing.T) {
 	t.Parallel()
 
 	resp := &logicpb.IngestMessageResp{MessageId: 123, ClientMsgId: "c1"}
@@ -962,8 +956,7 @@ func TestMapTransferToAckSuccess(t *testing.T) {
 	require.Equal(t, int64(10), ack.GetAckSeq())
 }
 
-// TestMapTransferToAckRejected unit tests mapIngestToAck with rejected errors.
-func TestMapTransferToAckRejected(t *testing.T) {
+func TestMapIngestToAckRejected(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -1029,8 +1022,7 @@ func TestMapTransferToAckRejected(t *testing.T) {
 	}
 }
 
-// TestMapTransferToAckRetryable unit tests mapIngestToAck with retryable errors.
-func TestMapTransferToAckRetryable(t *testing.T) {
+func TestMapIngestToAckRetryable(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {

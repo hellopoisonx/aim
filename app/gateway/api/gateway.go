@@ -86,8 +86,6 @@ func main() {
 
 	group.Add(rpcServer)
 
-	// Chat message pushes arrive on the push topic; this node's consumer group
-	// is per node, so every node receives every event and delivers locally.
 	for _, consumer := range mqs.Consumers(context.Background(), ctx) {
 		group.Add(consumer)
 	}
