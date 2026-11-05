@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 
 	"github.com/hellopoisonx/aim/app/core/rpc/internal/svc"
-	logicpb "github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/tracing"
 	gwpb "github.com/hellopoisonx/aim/shared/proto/gateway/pb"
 	"github.com/zeromicro/go-zero/core/logx"
@@ -52,49 +51,30 @@ func (c *ReadReceiptConsumer) Consume(ctx context.Context, key string, value str
 	logx.WithContext(ctx).Infof("read receipt event: from=%d conv=%d last_msg=%d",
 		event.FromUserID, event.ConversationID, event.LastReadMessageID)
 
-	if c.svcCtx.LogicConversationClient == nil {
-		logx.WithContext(ctx).Debugf("no conversation client configured, skipping read receipt fan-out for conv=%d", event.ConversationID)
+	memberIDs, ok := conversationMemberIDs(ctx, c.svcCtx, event.ConversationID)
+	if !ok {
 		return nil
 	}
 
-	membersResp, err := c.svcCtx.LogicConversationClient.GetConversationMembers(ctx, &logicpb.GetConversationMembersReq{
-		ConversationId: event.ConversationID,
+	// A failed node is not retried: the client re-syncs read state on reconnect.
+	_ = pushToMemberNodes(ctx, c.svcCtx, memberIDs, event.FromUserID, event.GatewayNodeID, func(memberID int64, nodeID string) error {
+		req := &gwpb.PushReadReceiptReq{
+			TargetUserId:      memberID,
+			ConversationId:    event.ConversationID,
+			FromUserId:        event.FromUserID,
+			LastReadMessageId: event.LastReadMessageID,
+			UpdatedAt:         event.UpdatedAt,
+		}
+
+		if _, err := pushReadReceiptToNode(ctx, c.svcCtx.GatewayClient, nodeID, req); err != nil {
+			return err
+		}
+
+		logx.WithContext(ctx).Debugf("read receipt pushed: from=%d to member=%d conv=%d last_msg=%d node=%s",
+			event.FromUserID, memberID, event.ConversationID, event.LastReadMessageID, nodeID)
+
+		return nil
 	})
-	if err != nil {
-		logx.WithContext(ctx).Errorf("GetConversationMembers failed for conv %d: %v", event.ConversationID, err)
-		// Don't return error - downstream re-consume cannot help if logic is down for long.
-		return nil
-	}
-
-	for _, memberID := range membersResp.GetMemberIds() {
-		if memberID <= 0 || memberID == event.FromUserID {
-			continue
-		}
-
-		nodeIDs := gatewayNodes(ctx, c.svcCtx, memberID)
-
-		for _, nodeID := range nodeIDs {
-			if event.GatewayNodeID != "" && nodeID == event.GatewayNodeID {
-				continue
-			}
-
-			req := &gwpb.PushReadReceiptReq{
-				TargetUserId:      memberID,
-				ConversationId:    event.ConversationID,
-				FromUserId:        event.FromUserID,
-				LastReadMessageId: event.LastReadMessageID,
-				UpdatedAt:         event.UpdatedAt,
-			}
-
-			if _, err := pushReadReceiptToNode(ctx, c.svcCtx.GatewayClient, nodeID, req); err != nil {
-				logx.WithContext(ctx).Errorf("PushReadReceipt to node %s for member %d failed: %v", nodeID, memberID, err)
-				continue
-			}
-
-			logx.WithContext(ctx).Debugf("read receipt pushed: from=%d to member=%d conv=%d last_msg=%d node=%s",
-				event.FromUserID, memberID, event.ConversationID, event.LastReadMessageID, nodeID)
-		}
-	}
 
 	return nil
 }

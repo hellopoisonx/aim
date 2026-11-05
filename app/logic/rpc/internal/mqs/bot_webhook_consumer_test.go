@@ -16,6 +16,7 @@ import (
 
 	"github.com/hellopoisonx/aim/app/logic/rpc/model/orm"
 	"github.com/hellopoisonx/aim/app/shared/events"
+	botsdk "github.com/hellopoisonx/aim/bot_sdk"
 
 	"github.com/stretchr/testify/require"
 )
@@ -134,7 +135,7 @@ func TestBuildPayload_ContainsAllFields(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, eventID)
 
-	var got botWebhookPayload
+	var got botsdk.WebhookEvent
 	require.NoError(t, json.Unmarshal(body, &got))
 	require.Equal(t, eventID, got.EventID)
 	require.Equal(t, botWebhookEventType, got.Type)

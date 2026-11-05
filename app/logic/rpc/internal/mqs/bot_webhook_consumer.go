@@ -21,6 +21,7 @@ import (
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/logic/rpc/model/orm"
 	"github.com/hellopoisonx/aim/app/shared/tracing"
+	botsdk "github.com/hellopoisonx/aim/bot_sdk"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -273,38 +274,18 @@ func (c *BotWebhookConsumer) deliver(ctx context.Context, hook orm.BotWebhook, e
 		hook.BotUserID, event.MessageID, botWebhookMaxRetries)
 }
 
-// botWebhookPayload is the V0 message.created envelope.
-type botWebhookPayload struct {
-	EventID        string                   `json:"event_id"`
-	Type           string                   `json:"type"`
-	CreatedAt      int64                    `json:"created_at"`
-	ConversationID string                   `json:"conversation_id"`
-	Message        botWebhookMessagePayload `json:"message"`
-}
-
-type botWebhookMessagePayload struct {
-	MessageID   string   `json:"message_id"`
-	SenderID    string   `json:"sender_id"`
-	SenderType  string   `json:"sender_type,omitempty"`
-	MessageType string   `json:"message_type"`
-	Content     string   `json:"content"`
-	ClientMsgID string   `json:"client_msg_id,omitempty"`
-	Mentions    []string `json:"mentions,omitempty"`
-	Timestamp   int64    `json:"timestamp"`
-}
-
 func (c *BotWebhookConsumer) buildPayload(event events.TransferEvent, senderType string) ([]byte, string, error) {
 	eventID, err := newEventID()
 	if err != nil {
 		return nil, "", err
 	}
 
-	payload := botWebhookPayload{
+	payload := botsdk.WebhookEvent{
 		EventID:        eventID,
 		Type:           botWebhookEventType,
 		CreatedAt:      c.now().UnixMilli(),
 		ConversationID: strconv.FormatInt(event.ConversationID, 10),
-		Message: botWebhookMessagePayload{
+		Message: botsdk.WebhookMessage{
 			MessageID:   strconv.FormatInt(event.MessageID, 10),
 			SenderID:    strconv.FormatInt(event.SenderID, 10),
 			SenderType:  senderType,

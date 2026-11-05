@@ -9,6 +9,7 @@ import (
 	"github.com/hellopoisonx/aim/app/core/rpc/internal/svc"
 	logicpb "github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	sharedattachment "github.com/hellopoisonx/aim/app/shared/attachment"
+	"github.com/hellopoisonx/aim/app/shared/events"
 	"github.com/hellopoisonx/aim/app/shared/tracing"
 	gwpb "github.com/hellopoisonx/aim/shared/proto/gateway/pb"
 
@@ -28,22 +29,8 @@ func NewAttachmentParsedConsumer(ctx context.Context, svcCtx *svc.ServiceContext
 
 // Consume 实现 rocketmq 消息处理接口。
 func (c *AttachmentParsedConsumer) Consume(ctx context.Context, key string, value string) error {
-	var event struct {
-		tracing.TraceContextFields
-		FileID             string         `json:"file_id"`
-		Kind               string         `json:"kind"`
-		ParseStatus        string         `json:"parse_status"`
-		ThumbnailObjectKey string         `json:"thumbnail_object_key,omitempty"`
-		ThumbnailFileID    string         `json:"thumbnail_file_id,omitempty"`
-		DurationMS         int64          `json:"duration_ms,omitempty"`
-		Width              int            `json:"width,omitempty"`
-		Height             int            `json:"height,omitempty"`
-		Metadata           map[string]any `json:"metadata,omitempty"`
-		Error              string         `json:"error,omitempty"`
-		ParsedAt           int64          `json:"parsed_at"`
-	}
-
-	if err := json.Unmarshal([]byte(value), &event); err != nil {
+	event, metaBytes, err := decodeAttachmentParsedEvent([]byte(value))
+	if err != nil {
 		// A malformed payload never decodes on redelivery: dropping it keeps the
 		// partition moving instead of replaying the same poison message forever.
 		logx.WithContext(ctx).Errorf(
@@ -85,7 +72,6 @@ func (c *AttachmentParsedConsumer) Consume(ctx context.Context, key string, valu
 	}
 
 	// 构建更新后的附件 Content JSON。
-	metaBytes, _ := json.Marshal(event.Metadata)
 	content := sharedattachment.Content{
 		Schema: sharedattachment.ContentSchemaV1,
 		FileID: event.FileID,
@@ -125,39 +111,51 @@ func (c *AttachmentParsedConsumer) Consume(ctx context.Context, key string, valu
 	}
 
 	// 推送到每个会话成员所在网关节点。
-	for _, targetUserID := range targetUserIDs {
-		nodeIDs := gatewayNodes(ctx, c.svcCtx, targetUserID)
-		if len(nodeIDs) == 0 {
-			logx.WithContext(ctx).Debugf("no gateway nodes for user %d, skipping attachment parsed push", targetUserID)
-			continue
+	pushErr := pushToMemberNodes(ctx, c.svcCtx, targetUserIDs, 0, "", func(targetUserID int64, nodeID string) error {
+		req := &gwpb.PushMessageReq{
+			MessageId:        msgID,
+			ConversationId:   conversationID,
+			ConversationType: conversationType,
+			MessageType:      event.Kind,
+			Content:          contentStr,
+			SenderId:         0, // 系统消息
+			SentAt:           event.ParsedAt,
+			TargetUserId:     targetUserID,
+			IsSystem:         true,
+			SenderInfo:       gatewaySystemSenderInfo(),
 		}
 
-		for _, nodeID := range nodeIDs {
-			req := &gwpb.PushMessageReq{
-				MessageId:        msgID,
-				ConversationId:   conversationID,
-				ConversationType: conversationType,
-				MessageType:      event.Kind,
-				Content:          contentStr,
-				SenderId:         0, // 系统消息
-				SentAt:           event.ParsedAt,
-				TargetUserId:     targetUserID,
-				IsSystem:         true,
-				SenderInfo:       gatewaySystemSenderInfo(),
-			}
-
-			resp, pushErr := pushMessageToNode(ctx, c.svcCtx.GatewayClient, nodeID, req)
-			if pushErr != nil {
-				span.RecordError(pushErr)
-				logx.WithContext(ctx).Errorf("failed to push attachment parsed to user %d on node %s: %v", targetUserID, nodeID, pushErr)
-				return pushErr
-			}
-
-			logx.WithContext(ctx).Debugf("attachment parsed pushed to user %d on node %s, success=%v", targetUserID, nodeID, resp.Success)
+		resp, err := pushMessageToNode(ctx, c.svcCtx.GatewayClient, nodeID, req)
+		if err != nil {
+			return err
 		}
+
+		logx.WithContext(ctx).Debugf("attachment parsed pushed to user %d on node %s, success=%v", targetUserID, nodeID, resp.Success)
+
+		return nil
+	})
+	if pushErr != nil {
+		span.RecordError(pushErr)
+		return pushErr
 	}
 
 	return nil
+}
+
+// decodeAttachmentParsedEvent decodes the shared event and returns the metadata
+// exactly as published: it is echoed into message content verbatim, so it is
+// captured raw rather than re-marshalled through MediaMetadata.
+func decodeAttachmentParsedEvent(value []byte) (events.AttachmentParsedEvent, json.RawMessage, error) {
+	var wire struct {
+		events.AttachmentParsedEvent
+		Metadata json.RawMessage `json:"metadata,omitempty"`
+	}
+
+	if err := json.Unmarshal(value, &wire); err != nil {
+		return events.AttachmentParsedEvent{}, nil, err
+	}
+
+	return wire.AttachmentParsedEvent, wire.Metadata, nil
 }
 
 // resolveConversationMembers 查询会话成员列表及会话类型。
@@ -178,18 +176,5 @@ func resolveConversationMembers(ctx context.Context, svcCtx *svc.ServiceContext,
 		return nil, resp.GetConversationType(), nil
 	}
 
-	seen := make(map[int64]struct{}, len(memberIDs))
-	targets := make([]int64, 0, len(memberIDs))
-	for _, memberID := range memberIDs {
-		if memberID <= 0 {
-			continue
-		}
-		if _, ok := seen[memberID]; ok {
-			continue
-		}
-		seen[memberID] = struct{}{}
-		targets = append(targets, memberID)
-	}
-
-	return targets, resp.GetConversationType(), nil
+	return positiveUniqueIDs(memberIDs), resp.GetConversationType(), nil
 }

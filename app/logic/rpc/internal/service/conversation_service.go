@@ -15,6 +15,7 @@ import (
 	sharedcache "github.com/hellopoisonx/aim/app/shared/cache"
 	sharedconversation "github.com/hellopoisonx/aim/app/shared/conversation"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
+	"github.com/hellopoisonx/aim/app/shared/events"
 	"github.com/hellopoisonx/aim/app/shared/rocketmq"
 	"github.com/hellopoisonx/aim/app/shared/tools"
 	"github.com/hellopoisonx/aim/app/shared/tracing"
@@ -141,17 +142,6 @@ type systemMessageContent struct {
 	TargetNames  []int64 `json:"target_names"`
 }
 
-type conversationEventPayload struct {
-	tracing.TraceContextFields
-	MessageID      int64   `json:"message_id"`
-	ConversationID int64   `json:"conversation_id"`
-	SenderID       int64   `json:"sender_id"`
-	MessageType    string  `json:"message_type"`
-	Content        string  `json:"content"`
-	TargetUserIDs  []int64 `json:"target_user_ids"`
-	Timestamp      int64   `json:"timestamp"`
-}
-
 type ConversationService struct {
 	store        ConversationStore
 	txRunner     ConversationTxRunner
@@ -209,7 +199,7 @@ func (s *ConversationService) InTx(ctx context.Context, fn func(tx ConversationS
 //
 // The payload must therefore be complete before the transaction starts: the
 // half message body is fixed at send time.
-func (s *ConversationService) inTxWithEvent(ctx context.Context, payload conversationEventPayload, fn func(tx ConversationStore) error) error {
+func (s *ConversationService) inTxWithEvent(ctx context.Context, payload events.ConversationEvent, fn func(tx ConversationStore) error) error {
 	runner, ok := s.txRunner.(TransactionalConversationTxRunner)
 	if !ok || s.eventTopic == "" {
 		return s.InTx(ctx, fn)
@@ -703,7 +693,7 @@ func (s *ConversationService) AddGroupMembers(ctx context.Context, conversationI
 
 	content := s.buildSystemMessage("member_joined", operatorID, operatorName, newMemberIDs)
 	addRoles := make([]int64, 0, len(newMemberIDs))
-	err = s.inTxWithEvent(ctx, conversationEventPayload{
+	err = s.inTxWithEvent(ctx, events.ConversationEvent{
 		MessageID:      messageID,
 		ConversationID: conversationID,
 		SenderID:       0,
@@ -798,7 +788,7 @@ func (s *ConversationService) RemoveGroupMembers(ctx context.Context, conversati
 	}
 
 	content := s.buildSystemMessage("member_removed", operatorID, operatorName, removeMemberIDs)
-	err = s.inTxWithEvent(ctx, conversationEventPayload{
+	err = s.inTxWithEvent(ctx, events.ConversationEvent{
 		MessageID:      messageID,
 		ConversationID: conversationID,
 		SenderID:       0,
@@ -857,7 +847,7 @@ func (s *ConversationService) LeaveGroup(ctx context.Context, conversationID, us
 	}
 
 	content := s.buildSystemMessage("member_left", userID, userName, []int64{userID})
-	err = s.inTxWithEvent(ctx, conversationEventPayload{
+	err = s.inTxWithEvent(ctx, events.ConversationEvent{
 		MessageID:      messageID,
 		ConversationID: conversationID,
 		SenderID:       0,
@@ -912,7 +902,7 @@ func (s *ConversationService) DismissGroup(ctx context.Context, conversationID, 
 	}
 
 	content := s.buildSystemMessage("group_dismissed", operatorID, "", nil)
-	err = s.inTxWithEvent(ctx, conversationEventPayload{
+	err = s.inTxWithEvent(ctx, events.ConversationEvent{
 		MessageID:      messageID,
 		ConversationID: conversationID,
 		SenderID:       0,
@@ -991,7 +981,7 @@ func (s *ConversationService) UpdateGroupInfo(ctx context.Context, conversationI
 	}
 
 	content := s.buildSystemMessage(eventType, operatorID, operatorName, nil)
-	err = s.inTxWithEvent(ctx, conversationEventPayload{
+	err = s.inTxWithEvent(ctx, events.ConversationEvent{
 		MessageID:      messageID,
 		ConversationID: conversationID,
 		SenderID:       0,

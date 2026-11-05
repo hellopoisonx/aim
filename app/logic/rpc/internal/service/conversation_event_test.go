@@ -8,6 +8,7 @@ import (
 
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/servicefakes"
 	sharedconversation "github.com/hellopoisonx/aim/app/shared/conversation"
+	"github.com/hellopoisonx/aim/app/shared/events"
 	"github.com/hellopoisonx/aim/app/shared/rocketmq"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -84,7 +85,7 @@ func TestAddGroupMembers_PublishesTransactionalEvent(t *testing.T) {
 	assert.Contains(t, message.EventUID, "conversation.event:")
 	assert.Equal(t, formatConversationKey(conversationID), message.Key)
 
-	var payload conversationEventPayload
+	var payload events.ConversationEvent
 	require.NoError(t, json.Unmarshal(message.Body, &payload))
 	assert.Equal(t, conversationID, payload.ConversationID)
 	assert.ElementsMatch(t, []int64{1, 2, 3, 4}, payload.TargetUserIDs, "recipients include existing and new members")
@@ -107,7 +108,7 @@ func TestUpdateGroupInfo_PublishesAvatarEvent(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Len(t, runner.messages, 1)
-	var payload conversationEventPayload
+	var payload events.ConversationEvent
 	require.NoError(t, json.Unmarshal(runner.messages[0].Body, &payload))
 	assert.Contains(t, payload.Content, "group_avatar_changed")
 	assert.ElementsMatch(t, []int64{1, 2, 3}, payload.TargetUserIDs)
@@ -123,7 +124,7 @@ func TestDismissGroup_PublishesBeforeDeactivation(t *testing.T) {
 	require.NoError(t, svc.DismissGroup(context.Background(), conversationID, 1))
 
 	require.Len(t, runner.messages, 1)
-	var payload conversationEventPayload
+	var payload events.ConversationEvent
 	require.NoError(t, json.Unmarshal(runner.messages[0].Body, &payload))
 	assert.ElementsMatch(t, []int64{1, 2, 3}, payload.TargetUserIDs)
 	assert.False(t, store.Conversations[conversationID].IsActive)

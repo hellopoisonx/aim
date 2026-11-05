@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 
 	"github.com/hellopoisonx/aim/app/core/rpc/internal/svc"
-	logicpb "github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/tracing"
 	gwpb "github.com/hellopoisonx/aim/shared/proto/gateway/pb"
 	"github.com/zeromicro/go-zero/core/logx"
@@ -48,50 +47,29 @@ func (c *TypingConsumer) Consume(ctx context.Context, key string, value string) 
 
 	logx.WithContext(ctx).Infof("typing event: from=%d conv=%d", event.FromUserID, event.ConversationID)
 
-	// Get conversation members.
-	if c.svcCtx.LogicConversationClient == nil {
-		logx.WithContext(ctx).Debugf("no conversation client configured, skipping typing fan-out for conv=%d", event.ConversationID)
+	memberIDs, ok := conversationMemberIDs(ctx, c.svcCtx, event.ConversationID)
+	if !ok {
 		return nil
 	}
 
-	membersResp, err := c.svcCtx.LogicConversationClient.GetConversationMembers(ctx, &logicpb.GetConversationMembersReq{
-		ConversationId: event.ConversationID,
+	// Typing is transient: a failed node is not worth a retry.
+	_ = pushToMemberNodes(ctx, c.svcCtx, memberIDs, event.FromUserID, event.GatewayNodeID, func(memberID int64, nodeID string) error {
+		req := &gwpb.PushTypingReq{
+			TargetUserId:   memberID,
+			FromUserId:     event.FromUserID,
+			ConversationId: event.ConversationID,
+			Timestamp:      event.Timestamp,
+		}
+
+		if _, err := pushTypingToNode(ctx, c.svcCtx.GatewayClient, nodeID, req); err != nil {
+			return err
+		}
+
+		logx.WithContext(ctx).Debugf("typing pushed: from=%d to member=%d conv=%d node=%s",
+			event.FromUserID, memberID, event.ConversationID, nodeID)
+
+		return nil
 	})
-	if err != nil {
-		logx.WithContext(ctx).Errorf("GetConversationMembers failed for conv %d: %v", event.ConversationID, err)
-		// Don't return error for typing - it's transient.
-		return nil
-	}
-
-	// For each member (except sender), find their gateway node(s) and push.
-	for _, memberID := range membersResp.GetMemberIds() {
-		if memberID <= 0 || memberID == event.FromUserID {
-			continue
-		}
-
-		nodeIDs := gatewayNodes(ctx, c.svcCtx, memberID)
-
-		for _, nodeID := range nodeIDs {
-			if event.GatewayNodeID != "" && nodeID == event.GatewayNodeID {
-				continue
-			}
-
-			req := &gwpb.PushTypingReq{
-				TargetUserId:   memberID,
-				FromUserId:     event.FromUserID,
-				ConversationId: event.ConversationID,
-				Timestamp:      event.Timestamp,
-			}
-
-			if _, err := pushTypingToNode(ctx, c.svcCtx.GatewayClient, nodeID, req); err != nil {
-				logx.WithContext(ctx).Errorf("PushTyping to node %s for member %d failed: %v", nodeID, memberID, err)
-				continue
-			}
-
-			logx.WithContext(ctx).Debugf("typing pushed: from=%d to member=%d conv=%d node=%s",
-				event.FromUserID, memberID, event.ConversationID, nodeID)
-		}
-	}
 
 	return nil
 }

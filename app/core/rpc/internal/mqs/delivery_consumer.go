@@ -152,18 +152,5 @@ func (c *DeliveryConsumer) resolveConversation(ctx context.Context, event events
 		return []int64{event.SenderID}, conversationType, nil
 	}
 
-	seen := make(map[int64]struct{}, len(memberIDs))
-	targets := make([]int64, 0, len(memberIDs))
-	for _, memberID := range memberIDs {
-		if memberID <= 0 {
-			continue
-		}
-		if _, ok := seen[memberID]; ok {
-			continue
-		}
-		seen[memberID] = struct{}{}
-		targets = append(targets, memberID)
-	}
-
-	return targets, conversationType, nil
+	return positiveUniqueIDs(memberIDs), conversationType, nil
 }
