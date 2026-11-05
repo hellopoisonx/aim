@@ -42,21 +42,5 @@ func (l *SetFriendTagsLogic) SetFriendTags(req *types.SetFriendTagsRequest) (res
 		return nil, errorx.SanitizeGRPCError(l, "set friend tags", err)
 	}
 
-	f := rpcResp.GetFriendship()
-	tags := make([]types.FriendTagItem, 0, len(f.GetTags()))
-	for _, t := range f.GetTags() {
-		tags = append(tags, friendTagToType(t))
-	}
-
-	item := types.FriendshipItem{
-		UserId:    f.GetUserId(),
-		FriendId:  f.GetFriendId(),
-		Status:    f.GetStatus(),
-		CreatedAt: f.GetCreatedAt(),
-		UpdatedAt: f.GetUpdatedAt(),
-		Tags:      tags,
-	}
-	enrichPeerInfo(l.ctx, l.svcCtx, f.GetFriendId(), &item)
-
-	return &types.SetFriendTagsResponse{Friendship: item}, nil
+	return &types.SetFriendTagsResponse{Friendship: friendshipToItem(l.ctx, l.svcCtx, rpcResp.GetFriendship())}, nil
 }

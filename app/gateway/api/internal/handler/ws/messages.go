@@ -18,6 +18,7 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // Message-frame handling and SERVER_ACK construction.
@@ -43,10 +44,7 @@ func (h *WsHandler) handleSendMessage(ctx context.Context, conn *websocket.Conn,
 	// Extract identity from context
 	identity, ok := authctx.IdentityFromContext(ctx)
 	if !ok {
-		codeErr := errorx.NewCodeError(errorx.CodeAuth, "no identity in context")
-		span.RecordError(codeErr)
-		span.SetStatus(codes.Error, codeErr.Message)
-		return h.writeErrorAck(ctx, conn, frame.GetSeq(), sendPayload.GetClientMsgId(), pb.AckStatus_ACK_STATUS_REJECTED, codeErr.Code, codeErr.Message)
+		return h.writeAuthErrorAck(ctx, conn, span, frame, sendPayload.GetClientMsgId())
 	}
 
 	// Per-(device_id, user_id) sliding-window rate limit. Mirrors the REST
@@ -124,6 +122,15 @@ func (h *WsHandler) writeErrorAck(ctx context.Context, conn *websocket.Conn, ack
 	}
 
 	return h.writeFrame(ctx, conn, ackFrame)
+}
+
+// writeAuthErrorAck rejects a frame whose context carries no identity.
+func (h *WsHandler) writeAuthErrorAck(ctx context.Context, conn *websocket.Conn, span trace.Span, frame *pb.WsFrame, clientMsgID string) error {
+	codeErr := errorx.NewCodeError(errorx.CodeAuth, "no identity in context")
+	span.RecordError(codeErr)
+	span.SetStatus(codes.Error, codeErr.Message)
+
+	return h.writeErrorAck(ctx, conn, frame.GetSeq(), clientMsgID, pb.AckStatus_ACK_STATUS_REJECTED, codeErr.Code, codeErr.Message)
 }
 
 func int32Code(code int) int32 {

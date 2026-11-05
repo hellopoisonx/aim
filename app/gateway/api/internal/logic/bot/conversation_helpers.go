@@ -46,6 +46,32 @@ func ensureBotConversationMember(
 	return membership.RequireMember(ctx, noLogLogger{}, client, conversationID, identity.BotUserID, membership.ActorBot)
 }
 
+// botConversationRequest authorises the bot for action, parses the target
+// conversation id and checks the bot is a member of it.
+func botConversationRequest(
+	ctx context.Context,
+	svcCtx *svc.ServiceContext,
+	action string,
+	rawConversationID string,
+) (int64, conversationservice.ConversationService, error) {
+	identity, err := requireBotAction(ctx, action)
+	if err != nil {
+		return 0, nil, err
+	}
+
+	conversationID, err := parseRequiredID(rawConversationID, "id")
+	if err != nil {
+		return 0, nil, err
+	}
+
+	client := logicConversationClient(svcCtx)
+	if err := ensureBotConversationMember(ctx, client, identity, conversationID); err != nil {
+		return 0, nil, err
+	}
+
+	return conversationID, client, nil
+}
+
 // noLogLogger satisfies errorx.ErrorLogger for call paths that own logging.
 type noLogLogger struct{}
 

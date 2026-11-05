@@ -38,10 +38,6 @@ func (l *CreateUserBotDirectConversationLogic) CreateUserBotDirectConversation(r
 	if conv == nil {
 		return nil, errorx.NewCodeError(errorx.CodeInternal, "internal error")
 	}
-	return &types.CreateUserBotDirectConversationResponse{
-		ConversationId: conv.GetId(), ConversationType: conv.GetConversationType(),
-		IsActive: conv.GetIsActive(), CreatedAt: conv.GetCreatedAt(),
-		MemberIds: conv.GetMemberIds(), Name: conv.GetName(), Avatar: conv.GetAvatar(),
-		CreatorId: conv.GetCreatorId(),
-	}, nil
+	item := types.CreateUserBotDirectConversationResponse(conversationResponseToType(conv))
+	return &item, nil
 }

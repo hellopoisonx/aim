@@ -39,10 +39,6 @@ func (l *AddUserBotToConversationLogic) AddUserBotToConversation(req *types.AddU
 	if conv == nil {
 		return nil, errorx.NewCodeError(errorx.CodeInternal, "internal error")
 	}
-	return &types.AddUserBotToConversationResponse{
-		ConversationId: conv.GetId(), ConversationType: conv.GetConversationType(),
-		IsActive: conv.GetIsActive(), CreatedAt: conv.GetCreatedAt(),
-		MemberIds: conv.GetMemberIds(), Name: conv.GetName(), Avatar: conv.GetAvatar(),
-		CreatorId: conv.GetCreatorId(),
-	}, nil
+	item := types.AddUserBotToConversationResponse(conversationResponseToType(conv))
+	return &item, nil
 }

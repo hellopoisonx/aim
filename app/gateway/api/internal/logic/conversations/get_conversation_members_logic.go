@@ -29,13 +29,13 @@ func NewGetConversationMembersLogic(ctx context.Context, svcCtx *svc.ServiceCont
 }
 
 func (l *GetConversationMembersLogic) GetConversationMembers(req *types.GetConversationMembersDetailRequest) (resp *types.GetConversationMembersResponse, err error) {
-	identity, ok := authctx.IdentityFromContext(l.ctx)
-	if !ok || identity.UserID <= 0 {
-		return nil, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
+	userID, err := authctx.RequireUserID(l.ctx)
+	if err != nil {
+		return nil, err
 	}
 
 	// The member list is conversation-scoped data: only members may read it.
-	if err := membership.RequireMember(l.ctx, l, l.svcCtx.LogicConversationClient, req.Id, identity.UserID, membership.ActorUser); err != nil {
+	if err := membership.RequireMember(l.ctx, l, l.svcCtx.LogicConversationClient, req.Id, userID, membership.ActorUser); err != nil {
 		return nil, err
 	}
 

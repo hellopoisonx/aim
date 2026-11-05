@@ -88,10 +88,7 @@ func (h *WsHandler) handleReadReceipt(ctx context.Context, conn *websocket.Conn,
 
 	identity, ok := authctx.IdentityFromContext(ctx)
 	if !ok {
-		codeErr := errorx.NewCodeError(errorx.CodeAuth, "no identity in context")
-		span.RecordError(codeErr)
-		span.SetStatus(codes.Error, codeErr.Message)
-		return h.writeErrorAck(ctx, conn, frame.GetSeq(), "", pb.AckStatus_ACK_STATUS_REJECTED, codeErr.Code, codeErr.Message)
+		return h.writeAuthErrorAck(ctx, conn, span, frame, "")
 	}
 
 	span.SetAttributes(

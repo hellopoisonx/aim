@@ -28,19 +28,8 @@ func NewBotGetConversationMembersLogic(ctx context.Context, svcCtx *svc.ServiceC
 }
 
 func (l *BotGetConversationMembersLogic) BotGetConversationMembers(req *types.BotGetConversationMembersRequest) (*types.BotGetConversationMembersResponse, error) {
-	identity, err := requireBotAction(l.ctx, botperm.ActionConversationMembersRead)
+	conversationID, client, err := botConversationRequest(l.ctx, l.svcCtx, botperm.ActionConversationMembersRead, req.Id)
 	if err != nil {
-		return nil, err
-	}
-
-	conversationID, err := parseRequiredID(req.Id, "id")
-	if err != nil {
-		return nil, err
-	}
-
-	client := logicConversationClient(l.svcCtx)
-
-	if err := ensureBotConversationMember(l.ctx, client, identity, conversationID); err != nil {
 		return nil, err
 	}
 

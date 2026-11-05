@@ -3,12 +3,8 @@ package userbots
 import (
 	"context"
 
-	"github.com/hellopoisonx/aim/app/gateway/api/internal/authctx"
-
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
-	"github.com/hellopoisonx/aim/app/logic/rpc/client/botservice"
-	"github.com/hellopoisonx/aim/app/shared/errorx"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -24,15 +20,10 @@ func NewDisableUserBotLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Di
 }
 
 func (l *DisableUserBotLogic) DisableUserBot(req *types.DisableUserBotRequest) (resp *types.DisableUserBotResponse, err error) {
-	identity, ok := authctx.IdentityFromContext(l.ctx)
-	if !ok {
-		return nil, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
-	}
-	rpcResp, err := l.svcCtx.LogicBotClient.SetUserBotStatus(l.ctx, &botservice.SetUserBotStatusReq{
-		OwnerUserId: identity.UserID, BotUserId: req.Id, Enabled: false,
-	})
+	bot, err := setUserBotStatus(l.ctx, l.svcCtx, l, "disable user bot", req.Id, false)
 	if err != nil {
-		return nil, errorx.SanitizeGRPCError(l, "disable user bot", err)
+		return nil, err
 	}
-	return &types.DisableUserBotResponse{Bot: userBotToType(rpcResp.GetBot())}, nil
+
+	return &types.DisableUserBotResponse{Bot: userBotToType(bot)}, nil
 }

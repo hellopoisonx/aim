@@ -48,19 +48,7 @@ func (l *AddGroupMembersLogic) AddGroupMembers(req *types.AddGroupMembersRequest
 		return nil, errorx.NewCodeError(errorx.CodeInternal, "internal error")
 	}
 
-	memberIDs := conv.GetMemberIds()
-	if memberIDs == nil {
-		memberIDs = []int64{}
-	}
+	item := types.AddGroupMembersResponse(conversationItemFromPB(conv))
 
-	return &types.AddGroupMembersResponse{
-		ConversationId:   conv.GetId(),
-		ConversationType: conv.GetConversationType(),
-		IsActive:         conv.GetIsActive(),
-		CreatedAt:        conv.GetCreatedAt(),
-		MemberIds:        memberIDs,
-		Name:             conv.GetName(),
-		Avatar:           conv.GetAvatar(),
-		CreatorId:        conv.GetCreatorId(),
-	}, nil
+	return &item, nil
 }

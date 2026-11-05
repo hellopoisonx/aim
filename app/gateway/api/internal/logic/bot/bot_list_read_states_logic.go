@@ -28,19 +28,8 @@ func NewBotListReadStatesLogic(ctx context.Context, svcCtx *svc.ServiceContext) 
 }
 
 func (l *BotListReadStatesLogic) BotListReadStates(req *types.BotListReadStatesRequest) (*types.BotListReadStatesResponse, error) {
-	identity, err := requireBotAction(l.ctx, botperm.ActionReadReceiptRead)
+	conversationID, client, err := botConversationRequest(l.ctx, l.svcCtx, botperm.ActionReadReceiptRead, req.Id)
 	if err != nil {
-		return nil, err
-	}
-
-	conversationID, err := parseRequiredID(req.Id, "id")
-	if err != nil {
-		return nil, err
-	}
-
-	client := logicConversationClient(l.svcCtx)
-
-	if err := ensureBotConversationMember(l.ctx, client, identity, conversationID); err != nil {
 		return nil, err
 	}
 
