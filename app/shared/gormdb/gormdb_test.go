@@ -7,6 +7,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestOpenOptionalSkipsEmptyDSN(t *testing.T) {
+	db, err := OpenOptional("")
+	require.NoError(t, err)
+	require.Nil(t, db)
+}
+
 func TestOpenRejectsBadDSN(t *testing.T) {
 	// An unparsable DSN must fail instead of returning a half-configured handle.
 	_, err := Open("this-is-not-a-dsn")

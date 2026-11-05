@@ -15,6 +15,16 @@ import (
 	gormlogger "gorm.io/gorm/logger"
 )
 
+// OpenOptional opens Postgres only when dsn is set, so services can run without
+// a database. It returns (nil, nil) for an empty dsn.
+func OpenOptional(dsn string) (*gorm.DB, error) {
+	if dsn == "" {
+		return nil, nil
+	}
+
+	return Open(dsn)
+}
+
 // Open connects to Postgres with the given DSN. TranslateError is enabled so
 // unique/FK violations surface as gorm.ErrDuplicatedKey and friends instead of
 // driver-specific error types.

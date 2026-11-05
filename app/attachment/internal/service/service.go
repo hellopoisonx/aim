@@ -38,6 +38,8 @@ type Service struct {
 // attachmentProducerGroup is the broker-visible producer group of attachment.
 const attachmentProducerGroup = "aim-attachment-producer"
 
+const attachmentTracerName = "github.com/hellopoisonx/aim/app/attachment"
+
 type InitUploadRequest struct {
 	OwnerID        int64  `json:"owner_id"`
 	ConversationID int64  `json:"conversation_id"`
@@ -91,12 +93,12 @@ type DownloadResponse struct {
 }
 
 func New(ctx context.Context, cfg config.Config) (*Service, error) {
+	db, err := gormdb.OpenOptional(cfg.Postgres.DataSource)
+	if err != nil {
+		return nil, err
+	}
 	var store *dao.Store
-	if cfg.Postgres.DataSource != "" {
-		db, err := gormdb.Open(cfg.Postgres.DataSource)
-		if err != nil {
-			return nil, err
-		}
+	if db != nil {
 		store = dao.New(db)
 	}
 

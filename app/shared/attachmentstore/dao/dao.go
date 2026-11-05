@@ -52,23 +52,7 @@ func (s *Store) WithTx(ctx context.Context, fn func(tx *Store) error) error {
 	})
 }
 
-// PendingFile is the file row joined with its original object.
-type PendingFile struct {
-	FileID         uuid.UUID
-	OwnerID        int64
-	ConversationID int64
-	Kind           string
-	OriginalName   string
-	Mime           string
-	SizeBytes      int64
-	Sha256         string
-	Status         string
-	ParseStatus    string
-	Bucket         string
-	ObjectKey      string
-}
-
-// FileRow is the full file view used by GetFile.
+// FileRow is the full file view used by GetFile and GetPendingOriginal.
 type FileRow struct {
 	FileID             uuid.UUID
 	OwnerID            int64
@@ -107,21 +91,29 @@ func (s *Store) CreateAttachmentObject(ctx context.Context, object orm.Attachmen
 	return nil
 }
 
-// GetPendingOriginal loads a pending file joined with its original object.
-func (s *Store) GetPendingOriginal(ctx context.Context, fileID uuid.UUID, ownerID int64) (PendingFile, error) {
+// GetPendingOriginal loads a pending file with its original/thumbnail objects
+// and parse result, so both read paths share one row shape.
+func (s *Store) GetPendingOriginal(ctx context.Context, fileID uuid.UUID, ownerID int64) (FileRow, error) {
 	const query = `
 SELECT f.file_id, f.owner_id, f.conversation_id, f.kind, f.original_name, f.mime, f.size_bytes,
-       COALESCE(f.sha256, '') AS sha256, f.status, f.parse_status, o.bucket, o.object_key
+       COALESCE(f.sha256, '') AS sha256, f.status, f.parse_status, o.bucket, o.object_key,
+       COALESCE(t.object_key, '') AS thumbnail_object_key,
+       COALESCE(r.duration_ms, 0) AS duration_ms,
+       COALESCE(r.width, 0) AS width,
+       COALESCE(r.height, 0) AS height,
+       COALESCE(r.metadata, '{}'::jsonb) AS metadata
 FROM attachment_files f
 JOIN attachment_objects o ON o.file_id = f.file_id AND o.object_role = 'original'
+LEFT JOIN attachment_objects t ON t.file_id = f.file_id AND t.object_role = 'thumbnail'
+LEFT JOIN attachment_parse_results r ON r.file_id = f.file_id
 WHERE f.file_id = ? AND f.owner_id = ? AND f.status = 'pending'`
 
-	var row PendingFile
+	var row FileRow
 	if err := s.db.WithContext(ctx).Raw(query, fileID, ownerID).Scan(&row).Error; err != nil {
-		return PendingFile{}, err
+		return FileRow{}, err
 	}
 	if row.FileID == uuid.Nil {
-		return PendingFile{}, ErrNotFound
+		return FileRow{}, ErrNotFound
 	}
 
 	return row, nil

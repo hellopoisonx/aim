@@ -28,12 +28,13 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/propagation"
-	"go.opentelemetry.io/otel/trace"
 )
 
 // parsedProducerGroup is the broker-visible producer group of the parsing
 // worker.
 const parsedProducerGroup = "aim-data-parsing-producer"
+
+const dataParsingTracerName = "github.com/hellopoisonx/aim/app/data_parsing"
 
 type Worker struct {
 	cfg      config.Config
@@ -43,12 +44,12 @@ type Worker struct {
 }
 
 func New(ctx context.Context, cfg config.Config) (*Worker, error) {
+	db, err := gormdb.OpenOptional(cfg.Postgres.DataSource)
+	if err != nil {
+		return nil, err
+	}
 	var store *dao.Store
-	if cfg.Postgres.DataSource != "" {
-		db, err := gormdb.Open(cfg.Postgres.DataSource)
-		if err != nil {
-			return nil, err
-		}
+	if db != nil {
 		store = dao.New(db)
 	}
 	var producer *rocketmq.Producer
@@ -230,12 +231,7 @@ func (w *Worker) objectURL(key string) string {
 }
 
 func (w *Worker) getObject(ctx context.Context, key string) ([]byte, error) {
-	ctx, span := otel.Tracer("github.com/hellopoisonx/aim/app/data_parsing").Start(
-		ctx,
-		"data_parsing.seaweed.get_object",
-		trace.WithSpanKind(trace.SpanKindClient),
-		trace.WithAttributes(attribute.String("seaweed.object_key", key)),
-	)
+	ctx, span := tracing.StartClientSpan(ctx, dataParsingTracerName, "data_parsing.seaweed.get_object", attribute.String("seaweed.object_key", key))
 	defer span.End()
 
 	url := w.objectURL(key)
@@ -271,12 +267,7 @@ func (w *Worker) getObject(ctx context.Context, key string) ([]byte, error) {
 }
 
 func (w *Worker) putObject(ctx context.Context, key, mime string, data []byte) error {
-	ctx, span := otel.Tracer("github.com/hellopoisonx/aim/app/data_parsing").Start(
-		ctx,
-		"data_parsing.seaweed.put_object",
-		trace.WithSpanKind(trace.SpanKindClient),
-		trace.WithAttributes(attribute.String("seaweed.object_key", key)),
-	)
+	ctx, span := tracing.StartClientSpan(ctx, dataParsingTracerName, "data_parsing.seaweed.put_object", attribute.String("seaweed.object_key", key))
 	defer span.End()
 
 	url := w.objectURL(key)

@@ -30,6 +30,10 @@ func (s *Service) GetFile(ctx context.Context, userID int64, fileID string) (*Fi
 		return nil, err
 	}
 
+	return fileInfo(row), nil
+}
+
+func fileInfo(row dao.FileRow) *FileInfo {
 	info := &FileInfo{
 		FileID:             row.FileID.String(),
 		OwnerID:            row.OwnerID,
@@ -49,7 +53,8 @@ func (s *Service) GetFile(ctx context.Context, userID int64, fileID string) (*Fi
 		Height:             int(row.Height),
 	}
 	_ = json.Unmarshal(row.Metadata, &info.Metadata)
-	return info, nil
+
+	return info
 }
 
 func (s *Service) Download(ctx context.Context, userID int64, fileID string) (*DownloadResponse, error) {

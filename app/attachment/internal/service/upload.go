@@ -19,7 +19,6 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/propagation"
-	"go.opentelemetry.io/otel/trace"
 	"gorm.io/gorm"
 )
 
@@ -189,29 +188,11 @@ func (s *Service) getPendingOriginal(ctx context.Context, userID int64, fileID u
 		}
 		return nil, err
 	}
-	return &FileInfo{
-		FileID:         row.FileID.String(),
-		OwnerID:        row.OwnerID,
-		ConversationID: row.ConversationID,
-		Kind:           row.Kind,
-		OriginalName:   row.OriginalName,
-		Mime:           row.Mime,
-		Size:           row.SizeBytes,
-		SHA256:         row.Sha256,
-		Status:         row.Status,
-		ParseStatus:    row.ParseStatus,
-		Bucket:         row.Bucket,
-		ObjectKey:      row.ObjectKey,
-	}, nil
+	return fileInfo(row), nil
 }
 
 func (s *Service) verifyObject(ctx context.Context, key string, expectedSize int64) error {
-	ctx, span := otel.Tracer("github.com/hellopoisonx/aim/app/attachment").Start(
-		ctx,
-		"attachment.seaweed.verify_object",
-		trace.WithSpanKind(trace.SpanKindClient),
-		trace.WithAttributes(attribute.String("seaweed.object_key", key)),
-	)
+	ctx, span := tracing.StartClientSpan(ctx, attachmentTracerName, "attachment.seaweed.verify_object", attribute.String("seaweed.object_key", key))
 	defer span.End()
 
 	url, headers, err := s.signer.PresignInternal(http.MethodHead, key, time.Minute, nil)
