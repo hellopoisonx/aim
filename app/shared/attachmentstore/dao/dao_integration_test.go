@@ -57,7 +57,7 @@ func applyMigrations(t *testing.T, db *gorm.DB) {
 	t.Helper()
 
 	// The attachment migrations live with the service that owns the schema.
-	dir, err := filepath.Abs(filepath.Join("..", "..", "..", "attachment", "model", "migrations"))
+	dir, err := filepath.Abs(filepath.Join("..", "..", "..", "attachment", "rpc", "model", "migrations"))
 	require.NoError(t, err)
 
 	entries, err := os.ReadDir(dir)

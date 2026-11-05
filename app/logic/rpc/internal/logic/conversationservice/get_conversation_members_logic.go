@@ -5,7 +5,6 @@ import (
 
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
-	"github.com/hellopoisonx/aim/app/shared/errorx"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -33,7 +32,7 @@ func (l *GetConversationMembersLogic) GetConversationMembers(in *pb.GetConversat
 
 	conv, err := convSvc.GetConversationByID(l.ctx, in.GetConversationId())
 	if err != nil {
-		return nil, errorx.ToGRPCError(err)
+		return nil, err
 	}
 
 	memberIDs, err := conversationMemberIDs(l.ctx, convSvc, in.GetConversationId())

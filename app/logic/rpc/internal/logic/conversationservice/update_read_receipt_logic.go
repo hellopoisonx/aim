@@ -34,7 +34,7 @@ func (l *UpdateReadReceiptLogic) UpdateReadReceipt(in *pb.UpdateReadReceiptReq) 
 
 	state, err := convSvc.UpdateReadReceipt(l.ctx, in.GetConversationId(), service.Actor(in.GetUserId()), in.GetLastReadMessageId())
 	if err != nil {
-		return nil, errorx.ToGRPCError(err)
+		return nil, err
 	}
 
 	return &pb.UpdateReadReceiptResp{

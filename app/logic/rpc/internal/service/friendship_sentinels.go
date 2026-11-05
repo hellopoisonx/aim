@@ -8,8 +8,8 @@ const (
 	FriendshipStatusBlocked  = "blocked"
 )
 
-// Domain errors carry their biz code directly; handlers return them through
-// errorx.ToGRPCError.
+// Domain errors carry their biz code directly; the RPC error interceptor
+// passes them through to the caller untouched.
 var (
 	ErrSelfAdd        = errorx.NewCodeError(errorx.CodeFriendshipSelfAdd, "cannot add yourself as friend")
 	ErrBlocked        = errorx.NewCodeError(errorx.CodeFriendshipBlocked, "user is blocked")

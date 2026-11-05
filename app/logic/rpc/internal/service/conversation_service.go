@@ -33,8 +33,8 @@ const (
 	MessageTypeSystem = sharedconversation.MessageTypeSystem
 )
 
-// Domain errors carry their biz code directly so every RPC handler can return
-// them through errorx.ToGRPCError without a hand-written converter.
+// Domain errors carry their biz code directly, so RPC handlers return them as-is
+// and the error interceptor preserves the code without a hand-written converter.
 var (
 	ErrConversationNotFound = errorx.NewCodeError(errorx.CodeConversationNotFound, "conversation not found")
 	ErrNotMember            = errorx.NewCodeError(errorx.CodeConversationNotMember, "not a member of the conversation")

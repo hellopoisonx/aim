@@ -141,7 +141,7 @@ services:
       AIM_DATABASE: aim_attachment
       AIM_MIGRATIONS_DIR: /migrations
     volumes:
-      - ../../app/attachment/model/migrations:/migrations:ro
+      - ../../app/attachment/rpc/model/migrations:/migrations:ro
       - ../scripts/migrate-postgres.sh:/scripts/migrate-postgres.sh:ro
     command: ["/bin/sh", "/scripts/migrate-postgres.sh"]
     networks:
@@ -182,7 +182,7 @@ services:
   aim-attachment:
     build:
       context: ../..
-      dockerfile: app/attachment/Dockerfile
+      dockerfile: app/attachment/rpc/Dockerfile
     container_name: aim-attachment
     expose:
       - "8091"  # internal-only gRPC

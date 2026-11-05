@@ -363,12 +363,12 @@ func TestUnifiedSearchErrorMapping(t *testing.T) {
 			message:  "search query must not be empty",
 		},
 		{
-			name:     "infrastructure errors are sanitised",
+			name:     "infrastructure errors reach the interceptor unsanitised",
 			store:    &fakeSearchStore{err: errors.New("dial tcp: connection refused")},
 			query:    "alice",
 			code:     errorx.CodeInternal,
-			grpcCode: codes.Internal,
-			message:  "internal error",
+			grpcCode: codes.Unknown,
+			message:  "dial tcp: connection refused",
 		},
 	}
 
@@ -377,6 +377,11 @@ func TestUnifiedSearchErrorMapping(t *testing.T) {
 			_, err := NewUnifiedSearchLogic(context.Background(), searchSvcCtx(tt.store)).UnifiedSearch(
 				&pb.UnifiedSearchReq{UserId: 3, Query: tt.query})
 			require.Equal(t, tt.grpcCode, status.Code(err))
+			if tt.grpcCode == codes.Unknown {
+				require.Contains(t, err.Error(), tt.message)
+
+				return
+			}
 			requireBizCode(t, err, tt.code, tt.message)
 		})
 	}

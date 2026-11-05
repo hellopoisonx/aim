@@ -11,8 +11,6 @@ import (
 	shareduser "github.com/hellopoisonx/aim/app/shared/user"
 
 	"github.com/hellopoisonx/aim/app/shared/pgtypes"
-
-	"github.com/lib/pq"
 )
 
 // Conversation maps table conversations (001, 004).
@@ -112,10 +110,10 @@ func (BotToken) TableName() string { return "bot_tokens" }
 
 // BotWebhook maps table bot_webhooks (008).
 type BotWebhook struct {
-	BotUserID  int64          `gorm:"column:bot_user_id;primaryKey" json:"bot_user_id"`
-	Url        string         `gorm:"column:url;size:512;not null" json:"url"`
-	SecretHash string         `gorm:"column:secret_hash;size:128;not null" json:"secret_hash"`
-	Events     pq.StringArray `gorm:"column:events;type:text[];not null" json:"events"`
+	BotUserID  int64             `gorm:"column:bot_user_id;primaryKey" json:"bot_user_id"`
+	Url        string            `gorm:"column:url;size:512;not null" json:"url"`
+	SecretHash string            `gorm:"column:secret_hash;size:128;not null" json:"secret_hash"`
+	Events     pgtypes.TextArray `gorm:"column:events;type:text[];not null" json:"events"`
 	// Enabled is always written explicitly; false must be persisted rather than
 	// falling back to the DDL default.
 	Enabled   bool      `gorm:"column:enabled;not null" json:"enabled"`

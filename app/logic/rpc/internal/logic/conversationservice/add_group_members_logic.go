@@ -6,7 +6,6 @@ import (
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/pbconv"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
-	"github.com/hellopoisonx/aim/app/shared/errorx"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -33,7 +32,7 @@ func (l *AddGroupMembersLogic) AddGroupMembers(in *pb.AddGroupMembersReq) (*pb.A
 
 	conv, err := convSvc.AddGroupMembers(l.ctx, in.GetConversationId(), in.GetOperatorId(), in.GetOperatorName(), in.GetMemberIds())
 	if err != nil {
-		return nil, errorx.ToGRPCError(err)
+		return nil, err
 	}
 
 	memberIDs, err := conversationMemberIDs(l.ctx, convSvc, conv.ID)

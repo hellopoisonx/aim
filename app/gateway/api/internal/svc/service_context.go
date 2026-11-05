@@ -276,7 +276,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 
 	// Create WebSocket connection manager shared by HTTP handler and gRPC server.
 	// Use presence-aware manager when Redis and node ID are available.
-	wsManager := ws.NewManagerWithPresence(redisClient, c.GatewayNodeID, c.Redis.PresenceTTL)
+	wsManager := ws.NewManager(ws.WithPresence(redisClient, c.GatewayNodeID, c.Redis.PresenceTTL))
 
 	logicBotClient := botservice.NewBotService(logicClient)
 
@@ -342,9 +342,7 @@ func newEventProducer(c config.Config) *rocketmq.Producer {
 			Group:        c.RocketMQ.ProducerGroup,
 			Topic:        presenceTopic,
 		},
-		typingTopic,
-		readReceiptTopic,
-		c.RocketMQ.FriendApplicationTopic,
+		rocketmq.WithExtraTopics(typingTopic, readReceiptTopic, c.RocketMQ.FriendApplicationTopic),
 	)
 	if err != nil {
 		logx.WithContext(context.Background()).Errorf("failed to create rocketmq producer: %v", err)

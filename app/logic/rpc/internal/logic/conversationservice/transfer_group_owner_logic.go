@@ -38,7 +38,7 @@ func (l *TransferGroupOwnerLogic) TransferGroupOwner(in *pb.TransferGroupOwnerRe
 
 	conv, err := convSvc.TransferGroupOwner(l.ctx, in.GetConversationId(), service.Actor(in.GetOperatorId()), service.Target(in.GetTargetUserId()))
 	if err != nil {
-		return nil, errorx.ToGRPCError(err)
+		return nil, err
 	}
 
 	memberIDs, err := conversationMemberIDs(l.ctx, convSvc, conv.ID)

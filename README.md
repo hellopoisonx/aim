@@ -260,7 +260,7 @@ aim/
 │   ├── core/rpc/          # 消息投递服务
 │   ├── gateway/api/       # 对外入口（REST + WebSocket）
 │   ├── logic/rpc/         # 业务逻辑服务
-│   ├── attachment/        # 附件服务
+│   ├── attachment/rpc/    # 附件服务
 │   ├── data_parsing/      # 数据解析服务
 │   └── shared/            # 进程内共享包
 ├── bot_sdk/               # AIM Bot Go SDK

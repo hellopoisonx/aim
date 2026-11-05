@@ -13,7 +13,7 @@ import (
 
 func newTestReplayStore(t *testing.T, capacity int, ttl time.Duration) *ReplayStore {
 	t.Helper()
-	store, err := NewReplayStoreWithOptions(capacity, ttl, 64)
+	store, err := NewReplayStore(WithReplayCapacity(capacity), WithReplayTTL(ttl), WithReplayL1Limit(64))
 	require.NoError(t, err)
 	return store
 }

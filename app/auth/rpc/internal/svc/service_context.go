@@ -79,7 +79,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	svcCtx := &ServiceContext{
 		Config:      c,
 		DAO:         store,
-		Users:       service.NewDAOUserStoreWithIDGenerator(store, idGen),
+		Users:       service.NewDAOUserStore(store, idGen),
 		Sessions:    service.NewRedisSessionStore(redisClient, c.Token.RefreshTTL),
 		TokenIssuer: service.NewJWTIssuer(c.Token.AccessSecret, c.Token.AccessTTL),
 		IDGen:       idGen,
@@ -88,11 +88,10 @@ func NewServiceContext(c config.Config) *ServiceContext {
 
 	// Transactional user.created publishing, when configured.
 	if c.IsUserEventProducerConfigured() {
-		producer, err := rocketmq.NewProducer(c.UserEventProducerConf)
+		producer, err := rocketmq.NewProducer(c.UserEventProducerConf, rocketmq.WithJournalChecker(store.DB()))
 		if err != nil {
 			logx.Must(fmt.Errorf("auth service: user event producer: %w", err))
 		}
-		producer.WithJournalChecker(store.DB())
 		svcCtx.EventProducer = producer
 		svcCtx.Registrar = service.NewUserRegistrar(store.DB(), idGen, producer, c.UserEventProducerConf.Topic)
 	}

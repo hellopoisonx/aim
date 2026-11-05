@@ -38,7 +38,7 @@ func (l *GetUserInfoByNicknameLogic) GetUserInfoByNickname(in *pb.GetUserInfoByN
 
 	info, err := userSvc.GetUserInfoByNickname(l.ctx, in.GetNickname())
 	if err != nil {
-		return nil, errorx.ToGRPCError(err)
+		return nil, err
 	}
 
 	return &pb.GetUserInfoResp{

@@ -49,7 +49,7 @@ func TestDAOUserStore(t *testing.T) {
 	fake := &fakeUserDAO{user: orm.UserCredential{ID: 11, Email: "ada@example.com", PasswordHash: "hash", Name: "Ada", Status: StatusNormal}}
 	ids, err := snowflake.NewSnowflake(1)
 	require.NoError(t, err)
-	store := NewDAOUserStoreWithIDGenerator(fake, ids)
+	store := NewDAOUserStore(fake, ids)
 
 	created, err := store.CreateUser(context.Background(), "ada@example.com", "hash", "Ada")
 	require.NoError(t, err)
@@ -70,7 +70,7 @@ func TestDAOUserStorePropagatesQueryErrors(t *testing.T) {
 	fake := &fakeUserDAO{err: errQuery}
 	ids, err := snowflake.NewSnowflake(1)
 	require.NoError(t, err)
-	store := NewDAOUserStoreWithIDGenerator(fake, ids)
+	store := NewDAOUserStore(fake, ids)
 
 	_, err = store.CreateUser(context.Background(), "ada@example.com", "hash", "Ada")
 	require.ErrorIs(t, err, errQuery)

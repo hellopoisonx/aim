@@ -36,7 +36,7 @@ func (l *RevokeGroupAdminLogic) RevokeGroupAdmin(in *pb.RevokeGroupAdminReq) (*p
 	}
 
 	if err := convSvc.RevokeGroupAdmin(l.ctx, in.GetConversationId(), service.Actor(in.GetOperatorId()), service.Target(in.GetTargetUserId())); err != nil {
-		return nil, errorx.ToGRPCError(err)
+		return nil, err
 	}
 	return &pb.RevokeGroupAdminResp{}, nil
 }

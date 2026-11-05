@@ -2,7 +2,6 @@ package friendshipservicelogic
 
 import (
 	"context"
-	"errors"
 
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/service"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
@@ -38,7 +37,7 @@ func (l *AddFriendLogic) AddFriend(in *pb.AddFriendReq) (*pb.AddFriendResp, erro
 	}
 
 	if userID == friendID {
-		return nil, errorx.ToGRPCError(service.ErrSelfAdd)
+		return nil, service.ErrSelfAdd
 	}
 
 	userSvc := l.svcCtx.UserInfoService
@@ -48,11 +47,7 @@ func (l *AddFriendLogic) AddFriend(in *pb.AddFriendReq) (*pb.AddFriendResp, erro
 
 	// Verify target user exists.
 	if _, err := userSvc.GetUserInfo(l.ctx, friendID); err != nil {
-		if errors.Is(err, service.ErrUserNotFound) {
-			return nil, errorx.ToGRPCError(service.ErrUserNotFound)
-		}
-
-		return nil, errorx.ToGRPCError(err)
+		return nil, err
 	}
 
 	friendshipSvc, err := requireFriendshipService(l.svcCtx)
@@ -62,7 +57,7 @@ func (l *AddFriendLogic) AddFriend(in *pb.AddFriendReq) (*pb.AddFriendResp, erro
 
 	record, err := friendshipSvc.AddFriend(l.ctx, userID, friendID)
 	if err != nil {
-		return nil, errorx.ToGRPCError(err)
+		return nil, err
 	}
 	l.svcCtx.InvalidateFriendship(l.ctx, userID, friendID)
 

@@ -18,20 +18,20 @@ import (
 
 // ConversationStore is an in-memory ConversationStore with error injection.
 type ConversationStore struct {
-	Conversations       map[int64]orm.Conversation
-	Members             map[int64][]orm.ConversationMember // key: conversationID
-	Messages            map[int64][]orm.Message            // key: conversationID
-	ReadStates          map[int64]map[int64]orm.ConversationReadState
-	BotUserIDs          map[int64]struct{}
-	UserTypeErr         error
-	CreateErr           error
-	GetErr              error
-	AddMemberErr        error
-	GetMembersErr       error
-	ListMessagesErr     error
-	CountErr            error
-	UpsertReadErr       error
-	ListReadStatesErr   error
+	Conversations     map[int64]orm.Conversation
+	Members           map[int64][]orm.ConversationMember // key: conversationID
+	Messages          map[int64][]orm.Message            // key: conversationID
+	ReadStates        map[int64]map[int64]orm.ConversationReadState
+	BotUserIDs        map[int64]struct{}
+	UserTypeErr       error
+	CreateErr         error
+	GetErr            error
+	AddMemberErr      error
+	GetMembersErr     error
+	ListMessagesErr   error
+	CountErr          error
+	UpsertReadErr     error
+	ListReadStatesErr error
 }
 
 func (f *ConversationStore) CreateConversation(ctx context.Context, id int64, conversationType sharedconversation.Type, name, avatar string, creatorID int64) (orm.Conversation, error) {

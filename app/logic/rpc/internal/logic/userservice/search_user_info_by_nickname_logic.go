@@ -47,7 +47,7 @@ func (l *SearchUserInfoByNicknameLogic) SearchUserInfoByNickname(in *pb.SearchUs
 
 	infos, err := userSvc.SearchUserInfoByNickname(l.ctx, in.GetNickname(), limit)
 	if err != nil {
-		return nil, errorx.ToGRPCError(err)
+		return nil, err
 	}
 
 	users := make([]*pb.UserInfoResponse, 0, len(infos))

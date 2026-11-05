@@ -5,7 +5,6 @@ import (
 
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
-	"github.com/hellopoisonx/aim/app/shared/errorx"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -33,7 +32,7 @@ func (l *ListFriendApplicationsLogic) ListFriendApplications(in *pb.ListFriendAp
 
 	records, err := friendshipSvc.ListPendingApplications(l.ctx, in.GetUserId())
 	if err != nil {
-		return nil, errorx.ToGRPCError(err)
+		return nil, err
 	}
 
 	applications := make([]*pb.FriendshipResponse, 0, len(records))

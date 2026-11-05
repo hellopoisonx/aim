@@ -38,7 +38,7 @@ func (l *UpdateUserInfoProfileLogic) UpdateUserInfoProfile(in *pb.UpdateUserInfo
 
 	info, err := userSvc.UpdateUserInfoProfile(l.ctx, in.GetId(), in.GetNickname(), in.GetAvatar())
 	if err != nil {
-		return nil, errorx.ToGRPCError(err)
+		return nil, err
 	}
 
 	return &pb.UpdateUserInfoProfileResp{

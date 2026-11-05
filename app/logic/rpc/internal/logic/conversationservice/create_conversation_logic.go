@@ -52,11 +52,11 @@ func (l *CreateConversationLogic) CreateConversation(in *pb.CreateConversationRe
 		if l.svcCtx.UserInfoService != nil {
 			creatorInfo, err := l.svcCtx.UserInfoService.GetUserInfo(l.ctx, in.GetCreatorId())
 			if err != nil {
-				return nil, errorx.ToGRPCError(err)
+				return nil, err
 			}
 			peerInfo, err := l.svcCtx.UserInfoService.GetUserInfo(l.ctx, peerID)
 			if err != nil {
-				return nil, errorx.ToGRPCError(err)
+				return nil, err
 			}
 			name = creatorInfo.Nickname + " | " + peerInfo.Nickname
 			displayName = peerInfo.Nickname
@@ -79,7 +79,7 @@ func (l *CreateConversationLogic) CreateConversation(in *pb.CreateConversationRe
 
 	conv, err := convSvc.CreateConversation(l.ctx, sharedconversation.Type(in.GetConversationType()), in.GetCreatorId(), memberIDs, name, in.GetAvatar())
 	if err != nil {
-		return nil, errorx.ToGRPCError(err)
+		return nil, err
 	}
 
 	respMemberIDs, err := conversationMemberIDs(l.ctx, convSvc, conv.ID)

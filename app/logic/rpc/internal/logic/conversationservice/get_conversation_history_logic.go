@@ -48,7 +48,7 @@ func (l *GetConversationHistoryLogic) GetConversationHistory(in *pb.GetConversat
 
 	messages, err := convSvc.GetConversationHistory(l.ctx, in.GetConversationId(), cursor, limit)
 	if err != nil {
-		return nil, errorx.ToGRPCError(err)
+		return nil, err
 	}
 
 	senderInfoCache := make(map[int64]*pb.SenderInfo)
@@ -95,7 +95,7 @@ func (l *GetConversationHistoryLogic) GetConversationHistory(in *pb.GetConversat
 
 	readStates, err := convSvc.ListConversationReadStates(l.ctx, in.GetConversationId())
 	if err != nil {
-		return nil, errorx.ToGRPCError(err)
+		return nil, err
 	}
 
 	pbReadStates := make([]*pb.ReadStateItem, len(readStates))
@@ -111,7 +111,7 @@ func (l *GetConversationHistoryLogic) GetConversationHistory(in *pb.GetConversat
 
 	members, err := convSvc.GetConversationMembersDetail(l.ctx, in.GetConversationId())
 	if err != nil {
-		return nil, errorx.ToGRPCError(err)
+		return nil, err
 	}
 
 	// Enrich read states and read details with member name snapshots.

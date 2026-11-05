@@ -32,20 +32,26 @@ type Manager struct {
 	accessTTL time.Duration
 }
 
+// ManagerOption customises a Manager.
+type ManagerOption func(*Manager)
+
+// WithAccessTTL sets the access token lifetime.
+func WithAccessTTL(ttl time.Duration) ManagerOption {
+	return func(m *Manager) { m.accessTTL = ttl }
+}
+
 // NewManager creates a new JWT Manager
-func NewManager(secretKey string) *Manager {
-	return &Manager{
+func NewManager(secretKey string, opts ...ManagerOption) *Manager {
+	m := &Manager{
 		secretKey: []byte(secretKey),
 		accessTTL: AccessTokenTTL,
 	}
-}
-
-// NewManagerWithTTL creates a new JWT Manager with a custom access token TTL.
-func NewManagerWithTTL(secretKey string, ttl time.Duration) *Manager {
-	return &Manager{
-		secretKey: []byte(secretKey),
-		accessTTL: ttl,
+	for _, opt := range opts {
+		if opt != nil {
+			opt(m)
+		}
 	}
+	return m
 }
 
 // GenerateAccessToken generates a new JWT access token

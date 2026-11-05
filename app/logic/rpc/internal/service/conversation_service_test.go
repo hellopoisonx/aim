@@ -695,9 +695,9 @@ func TestConversationService_IsMember_StoreError(t *testing.T) {
 // Domain error contract
 // ---------------------------------------------------------------------------
 
-// Domain sentinels must carry their biz code themselves: RPC handlers return
-// them through errorx.ToGRPCError, which passes *CodeError values through
-// untouched. If a sentinel lost its code, clients would see 50000 instead.
+// Domain sentinels must carry their biz code themselves: the error interceptor
+// passes *CodeError values through untouched. If a sentinel lost its code,
+// clients would see 50000 instead.
 func TestConversationDomainErrorsCarryBizCodes(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -720,16 +720,6 @@ func TestConversationDomainErrorsCarryBizCodes(t *testing.T) {
 			assert.ErrorIs(t, tt.err, errorx.NewCodeError(tt.wantCode, "different message"))
 		})
 	}
-}
-
-// A validation error raised by the service must survive the RPC boundary with
-// its own code instead of being flattened into 50000.
-func TestConversationDomainErrorSurvivesRPCConversion(t *testing.T) {
-	validation := errorx.NewCodeError(errorx.CodeBadInput, "id must be positive")
-	var codeErr *errorx.CodeError
-	require.ErrorAs(t, errorx.ToGRPCError(validation), &codeErr)
-	assert.Equal(t, errorx.CodeBadInput, codeErr.Code)
-	assert.Equal(t, "id must be positive", codeErr.Message)
 }
 
 // ---------------------------------------------------------------------------

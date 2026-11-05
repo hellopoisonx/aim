@@ -4,9 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/lib/pq"
-
 	"github.com/hellopoisonx/aim/app/logic/rpc/model/orm"
+	"github.com/hellopoisonx/aim/app/shared/pgtypes"
 	shareduser "github.com/hellopoisonx/aim/app/shared/user"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -118,7 +117,7 @@ func (s *Store) UpsertBotWebhook(ctx context.Context, botUserID int64, url, secr
 		BotUserID:  botUserID,
 		Url:        url,
 		SecretHash: secretHash,
-		Events:     pq.StringArray(events),
+		Events:     pgtypes.TextArray(events),
 		Enabled:    enabled,
 	}
 	err := s.db.WithContext(ctx).Clauses(clause.OnConflict{
@@ -126,7 +125,7 @@ func (s *Store) UpsertBotWebhook(ctx context.Context, botUserID int64, url, secr
 		DoUpdates: clause.Assignments(map[string]any{
 			"url":           url,
 			"secret_hash":   secretHash,
-			"events":        pq.StringArray(events),
+			"events":        pgtypes.TextArray(events),
 			"enabled":       enabled,
 			columnUpdatedAt: time.Now(),
 		}),

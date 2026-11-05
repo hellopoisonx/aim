@@ -5,7 +5,6 @@ import (
 
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
-	"github.com/hellopoisonx/aim/app/shared/errorx"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -33,7 +32,7 @@ func (l *DeleteFriendTagLogic) DeleteFriendTag(in *pb.DeleteFriendTagReq) (*pb.D
 
 	deleted, err := tagSvc.DeleteTag(l.ctx, in.GetUserId(), in.GetTagId())
 	if err != nil {
-		return nil, errorx.ToGRPCError(err)
+		return nil, err
 	}
 
 	return &pb.DeleteFriendTagResp{Deleted: deleted}, nil

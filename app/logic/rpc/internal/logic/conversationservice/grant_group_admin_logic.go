@@ -36,7 +36,7 @@ func (l *GrantGroupAdminLogic) GrantGroupAdmin(in *pb.GrantGroupAdminReq) (*pb.G
 	}
 
 	if err := convSvc.GrantGroupAdmin(l.ctx, in.GetConversationId(), service.Actor(in.GetOperatorId()), service.Target(in.GetTargetUserId())); err != nil {
-		return nil, errorx.ToGRPCError(err)
+		return nil, err
 	}
 	return &pb.GrantGroupAdminResp{}, nil
 }

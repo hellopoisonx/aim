@@ -14,7 +14,7 @@
 // transactional messages: the half message is sent first, the local transaction
 // writes business rows plus an event_journal row, and the commit/rollback
 // resolution follows. A lost resolution is resolved by the broker's check-back,
-// which consults event_journal (see [Producer.WithJournalChecker]).
+// which consults event_journal (see [WithJournalChecker]).
 //
 // # Optional dependencies
 //

@@ -75,21 +75,23 @@ func WithClockBackwardWaitTimeout(d time.Duration) SnowflakeOption {
 	}
 }
 
+// WithEpoch sets the epoch (in milliseconds) embedded in generated IDs.
+func WithEpoch(epoch int64) SnowflakeOption {
+	return func(s *Snowflake) {
+		s.epoch = epoch
+	}
+}
+
 // NewSnowflake creates a new Snowflake generator with the given machine ID.
 // Default: tolerates up to 5ms clock rollback, waits up to 10s for recovery.
 func NewSnowflake(machineID int64, opts ...SnowflakeOption) (*Snowflake, error) {
-	return NewSnowflakeWithEpoch(machineID, SnowflakeDefaultEpoch, opts...)
-}
-
-// NewSnowflakeWithEpoch creates a new Snowflake generator with a custom epoch in milliseconds.
-func NewSnowflakeWithEpoch(machineID, epoch int64, opts ...SnowflakeOption) (*Snowflake, error) {
 	if machineID < 0 || machineID > snowflakeMaxMachineID {
 		return nil, ErrInvalidSnowflakeMachineID
 	}
 
 	s := &Snowflake{
 		machineID:                machineID,
-		epoch:                    epoch,
+		epoch:                    SnowflakeDefaultEpoch,
 		now:                      currentMilliseconds,
 		clockBackwardToleranceMs: defaultClockBackwardToleranceMs,
 		clockBackwardWaitTimeout: defaultClockBackwardWaitTimeout,

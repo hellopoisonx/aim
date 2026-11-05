@@ -4,10 +4,9 @@ import (
 	"context"
 	"encoding/json"
 
-	attachmentservice "github.com/hellopoisonx/aim/app/attachment/internal/service"
+	attachmentservice "github.com/hellopoisonx/aim/app/attachment/rpc/internal/service"
 
 	"github.com/hellopoisonx/aim/app/attachment/rpc/pb"
-	"github.com/hellopoisonx/aim/app/shared/errorx"
 )
 
 type AttachmentServiceServer struct {
@@ -30,7 +29,7 @@ func (s *AttachmentServiceServer) InitUpload(ctx context.Context, req *pb.InitUp
 		SHA256:         req.GetSha256(),
 	})
 	if err != nil {
-		return nil, errorx.ToGRPCError(err)
+		return nil, err
 	}
 	return &pb.InitUploadResp{
 		FileId:       resp.FileID,
@@ -46,7 +45,7 @@ func (s *AttachmentServiceServer) InitUpload(ctx context.Context, req *pb.InitUp
 func (s *AttachmentServiceServer) CompleteUpload(ctx context.Context, req *pb.CompleteUploadReq) (*pb.FileInfo, error) {
 	info, err := s.svc.CompleteUpload(ctx, req.GetUserId(), req.GetFileId(), attachmentservice.CompleteUploadRequest{SHA256: req.GetSha256()})
 	if err != nil {
-		return nil, errorx.ToGRPCError(err)
+		return nil, err
 	}
 	return fileInfoToPB(info), nil
 }
@@ -54,7 +53,7 @@ func (s *AttachmentServiceServer) CompleteUpload(ctx context.Context, req *pb.Co
 func (s *AttachmentServiceServer) GetFile(ctx context.Context, req *pb.GetFileReq) (*pb.FileInfo, error) {
 	info, err := s.svc.GetFile(ctx, req.GetUserId(), req.GetFileId())
 	if err != nil {
-		return nil, errorx.ToGRPCError(err)
+		return nil, err
 	}
 	return fileInfoToPB(info), nil
 }
@@ -62,7 +61,7 @@ func (s *AttachmentServiceServer) GetFile(ctx context.Context, req *pb.GetFileRe
 func (s *AttachmentServiceServer) AuthorizeDownload(ctx context.Context, req *pb.AuthorizeDownloadReq) (*pb.AuthorizeDownloadResp, error) {
 	resp, err := s.svc.Download(ctx, req.GetUserId(), req.GetFileId())
 	if err != nil {
-		return nil, errorx.ToGRPCError(err)
+		return nil, err
 	}
 	return &pb.AuthorizeDownloadResp{Url: resp.URL, Headers: resp.Headers, ExpiresAt: resp.ExpiresAt}, nil
 }
@@ -70,7 +69,7 @@ func (s *AttachmentServiceServer) AuthorizeDownload(ctx context.Context, req *pb
 func (s *AttachmentServiceServer) ValidateReference(ctx context.Context, req *pb.ValidateReferenceReq) (*pb.FileInfo, error) {
 	info, err := s.svc.ValidateReference(ctx, req.GetUserId(), req.GetConversationId(), req.GetFileId(), req.GetKind())
 	if err != nil {
-		return nil, errorx.ToGRPCError(err)
+		return nil, err
 	}
 	return fileInfoToPB(info), nil
 }

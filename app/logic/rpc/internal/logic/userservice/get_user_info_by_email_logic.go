@@ -38,7 +38,7 @@ func (l *GetUserInfoByEmailLogic) GetUserInfoByEmail(in *pb.GetUserInfoByEmailRe
 
 	info, err := userSvc.GetUserInfoByEmail(l.ctx, in.GetEmail())
 	if err != nil {
-		return nil, errorx.ToGRPCError(err)
+		return nil, err
 	}
 
 	return &pb.GetUserInfoResp{

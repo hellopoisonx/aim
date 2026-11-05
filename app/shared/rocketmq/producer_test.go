@@ -128,7 +128,6 @@ func TestNilProducerIsNoop(t *testing.T) {
 	assert.NoError(t, producer.Publish(context.Background(), Message{Topic: "aim-typing-events"}))
 	assert.NoError(t, producer.Start())
 	assert.NoError(t, producer.GracefulStop())
-	assert.Nil(t, producer.WithJournalChecker(nil))
 }
 
 func TestSendTransactionalCommitsAfterLocalTransaction(t *testing.T) {
@@ -258,21 +257,41 @@ func TestNewProducerValidation(t *testing.T) {
 	cases := []struct {
 		name    string
 		conf    ProducerConf
-		extra   []string
+		opts    []ProducerOption
 		wantErr string
 	}{
 		{name: "group", conf: ProducerConf{EndpointConf: endpoint, Topic: "aim-user-events"}, wantErr: "producer group is required"},
 		{name: "topic", conf: ProducerConf{EndpointConf: endpoint, Group: "aim-auth-producer"}, wantErr: "producer topic is required"},
-		{name: "empty extra topic", conf: ProducerConf{EndpointConf: endpoint, Group: "aim-auth-producer", Topic: "aim-user-events"}, extra: []string{""}, wantErr: "producer topic is required"},
+		{name: "empty extra topic", conf: ProducerConf{EndpointConf: endpoint, Group: "aim-auth-producer", Topic: "aim-user-events"}, opts: []ProducerOption{WithExtraTopics("")}, wantErr: "producer topic is required"},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := NewProducer(tc.conf, tc.extra...)
+			_, err := NewProducer(tc.conf, tc.opts...)
 
 			require.ErrorContains(t, err, tc.wantErr)
 		})
 	}
+}
+
+// Options are resolved by NewProducer, so a constructed producer already carries
+// the journal handle and the extra topics instead of needing a later mutator call.
+func TestNewProducerAppliesOptions(t *testing.T) {
+	db := &gorm.DB{}
+	producer, err := NewProducer(
+		ProducerConf{
+			EndpointConf: EndpointConf{Endpoint: "rocketmq-proxy:8081"},
+			Group:        "aim-gateway-producer",
+			Topic:        "aim-presence-events",
+		},
+		WithExtraTopics("aim-typing-events", "aim-read-receipt-events"),
+		WithJournalChecker(db),
+	)
+	require.NoError(t, err)
+	require.NotNil(t, producer)
+
+	assert.Equal(t, []string{"aim-presence-events", "aim-typing-events", "aim-read-receipt-events"}, producer.topics)
+	assert.Same(t, db, producer.journals.Load())
 }
 
 // A config that passes IsConfigured must be constructible: the readiness gate

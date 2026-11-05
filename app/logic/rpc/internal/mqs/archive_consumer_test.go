@@ -300,7 +300,7 @@ func TestConsumers_ReturnsQueueService(t *testing.T) {
 func TestConsumers_ReturnsTwoQueuesWhenBothConfigsSet(t *testing.T) {
 	svcCtx := &svc.ServiceContext{
 		Config: config.Config{
-			ArchiveConsumerConf:    rocketmq.ConsumerConf{EndpointConf: rocketmq.EndpointConf{Endpoint: "127.0.0.1:8081"}, Group: "test-group-archive", Topic: "test-topic-archive", Concurrency: 1},
+			ArchiveConsumerConf:     rocketmq.ConsumerConf{EndpointConf: rocketmq.EndpointConf{Endpoint: "127.0.0.1:8081"}, Group: "test-group-archive", Topic: "test-topic-archive", Concurrency: 1},
 			UserCreatedConsumerConf: rocketmq.ConsumerConf{EndpointConf: rocketmq.EndpointConf{Endpoint: "127.0.0.1:8081"}, Group: "test-group-user-created", Topic: "test-topic-user-created", Concurrency: 1},
 		},
 	}

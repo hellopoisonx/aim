@@ -39,7 +39,7 @@ func (l *UpdateUserInfoStatusLogic) UpdateUserInfoStatus(in *pb.UpdateUserInfoSt
 
 	info, err := userSvc.UpdateUserInfoStatus(l.ctx, in.GetId(), int16(in.GetStatus())) //nolint:gosec // bounded above before conversion.
 	if err != nil {
-		return nil, errorx.ToGRPCError(err)
+		return nil, err
 	}
 
 	return &pb.UpdateUserInfoStatusResp{

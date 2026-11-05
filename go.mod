@@ -9,7 +9,6 @@ require (
 	github.com/coder/websocket v1.8.14
 	github.com/golang-jwt/jwt/v4 v4.5.2
 	github.com/google/uuid v1.6.0
-	github.com/lib/pq v1.12.3
 	github.com/redis/go-redis/v9 v9.21.0
 	github.com/stretchr/testify v1.11.1
 	github.com/zeromicro/go-zero v1.10.3

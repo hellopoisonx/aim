@@ -33,7 +33,7 @@ func (l *ListConversationReadStatesLogic) ListConversationReadStates(in *pb.List
 
 	states, err := convSvc.ListConversationReadStates(l.ctx, in.GetConversationId())
 	if err != nil {
-		return nil, errorx.ToGRPCError(err)
+		return nil, err
 	}
 
 	items := make([]*pb.ReadStateItem, len(states))

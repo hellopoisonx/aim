@@ -11,7 +11,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/hellopoisonx/aim/app/attachment/internal/config"
+	"github.com/hellopoisonx/aim/app/attachment/rpc/internal/config"
 	"github.com/hellopoisonx/aim/app/shared/attachmentstore/dao"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 	"github.com/hellopoisonx/aim/app/shared/gormdb"
@@ -20,8 +20,8 @@ import (
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
-// Domain errors carry their biz code so the RPC server can return them through
-// errorx.ToGRPCError without inspecting error strings.
+// Domain errors carry their biz code so the RPC server can return them without
+// inspecting error strings.
 var (
 	ErrNotFound        = errorx.NewCodeError(errorx.CodeNotFound, "attachment not found")
 	ErrNotUploaded     = errorx.NewCodeError(errorx.CodeBadInput, "file is not uploaded")
@@ -125,11 +125,10 @@ func New(ctx context.Context, cfg config.Config) (*Service, error) {
 	// that refuses the first connection does not block startup: uploads then
 	// fail loudly instead of the whole service crash-looping.
 	if store != nil && cfg.UploadedProducer.IsConfigured() {
-		producer, err := rocketmq.NewProducer(cfg.UploadedProducer)
+		producer, err := rocketmq.NewProducer(cfg.UploadedProducer, rocketmq.WithJournalChecker(store.DB()))
 		if err != nil {
 			return nil, err
 		}
-		producer.WithJournalChecker(store.DB())
 		if err := producer.Start(); err != nil {
 			logx.WithContext(ctx).Errorf("failed to start rocketmq attachment producer: %v", err)
 		}

@@ -181,7 +181,7 @@ services:
   aim-attachment:
     build:
       context: ../../..
-      dockerfile: app/attachment/Dockerfile
+      dockerfile: app/attachment/rpc/Dockerfile
     container_name: aim-it-attachment
     expose:
       - "8091"  # internal-only gRPC: gateway/core call attachment.rpc; do not publish to host

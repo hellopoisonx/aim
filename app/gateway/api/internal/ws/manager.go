@@ -59,27 +59,32 @@ type Manager struct {
 	replay *ReplayStore // pending/replay 队列，服务侧面向心跳重放用
 }
 
-// NewManager creates a new connection manager without Redis or node identity.
-// Use NewManagerWithPresence for production setups.
-func NewManager() *Manager {
+// ManagerOption customises a Manager at construction.
+type ManagerOption func(*Manager)
+
+// WithPresence makes the manager synchronise Redis presence sets and applies the
+// production heartbeat and reconnect-grace defaults.
+func WithPresence(redisClient *redis.Client, nodeID string, ttlSeconds int) ManagerOption {
+	return func(m *Manager) {
+		m.redisClient = redisClient
+		m.nodeID = nodeID
+		m.presenceTTL = time.Duration(ttlSeconds) * time.Second
+		m.heartbeatTimeout = 60 * time.Second
+		m.reconnectGrace = 30 * time.Second
+	}
+}
+
+// NewManager creates a new connection manager. Without [WithPresence] it keeps
+// no Redis presence state and treats the heartbeat timeout as unconfigured.
+func NewManager(opts ...ManagerOption) *Manager {
 	m := &Manager{
 		connections:    make(map[authctx.Identity]*Connection),
 		pendingOffline: make(map[authctx.Identity]time.Time),
 	}
-	m.replay = mustNewReplayStore()
-	return m
-}
-
-// NewManagerWithPresence creates a manager that synchronises Redis presence sets.
-func NewManagerWithPresence(redisClient *redis.Client, nodeID string, ttlSeconds int) *Manager {
-	m := &Manager{
-		connections:      make(map[authctx.Identity]*Connection),
-		redisClient:      redisClient,
-		nodeID:           nodeID,
-		presenceTTL:      time.Duration(ttlSeconds) * time.Second,
-		heartbeatTimeout: 60 * time.Second, // default: 60s heartbeat timeout
-		reconnectGrace:   30 * time.Second, // default: 30s token-refresh grace
-		pendingOffline:   make(map[authctx.Identity]time.Time),
+	for _, opt := range opts {
+		if opt != nil {
+			opt(m)
+		}
 	}
 	m.replay = mustNewReplayStore()
 	return m

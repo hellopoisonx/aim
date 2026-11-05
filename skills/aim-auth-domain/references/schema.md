@@ -48,5 +48,5 @@ CREATE INDEX idx_user_credentials_email ON user_credentials (email);
 ## 雪花 ID
 
 - 生成器：`app/shared/snowflake/snowflake.go`
-- auth 注入点：`app/auth/rpc/internal/service.NewDAOUserStoreWithMachineID`
+- auth 注入点：`app/auth/rpc/internal/service.NewDAOUserStore(store, idGen)`
 - 配置项：`Auth.SnowflakeMachineID`，多实例部署时每个 auth 实例必须使用不同 machine ID，避免 ID 冲突

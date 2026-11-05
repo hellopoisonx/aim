@@ -52,18 +52,23 @@ type Manager struct {
     accessTTL time.Duration  // 新增字段
 }
 
-func NewManager(secretKey string) *Manager {
-    return &Manager{
-        secretKey: []byte(secretKey),
-        accessTTL: AccessTokenTTL,  // 默认 5min，保持向后兼容
+type ManagerOption func(*Manager)
+
+func WithAccessTTL(ttl time.Duration) ManagerOption {
+    return func(m *Manager) {
+        m.accessTTL = ttl             // 使用自定义 TTL
     }
 }
 
-func NewManagerWithTTL(secretKey string, ttl time.Duration) *Manager {
-    return &Manager{
+func NewManager(secretKey string, opts ...ManagerOption) *Manager {
+    m := &Manager{
         secretKey: []byte(secretKey),
-        accessTTL: ttl,             // 使用自定义 TTL
+        accessTTL: AccessTokenTTL,  // 默认 5min
     }
+    for _, opt := range opts {
+        opt(m)
+    }
+    return m
 }
 
 func (m *Manager) GenerateAccessToken(...) (string, int64, error) {
@@ -85,7 +90,7 @@ func NewJWTIssuer(secret string, ttl time.Duration) *JWTIssuer {
 }
 
 func (i *JWTIssuer) Issue(...) (string, int64, error) {
-    return sharedjwt.NewManagerWithTTL(i.secret, i.ttl).GenerateAccessToken(userID, deviceID)
+    return sharedjwt.NewManager(i.secret, sharedjwt.WithAccessTTL(i.ttl)).GenerateAccessToken(userID, deviceID)
 }
 ```
 
@@ -205,7 +210,7 @@ Token:
   AccessTTL: 30m    # 从 5m 增加到 30m，覆盖典型压测时长
 ```
 
-现在该值会真正生效（经过 `JWTIssuer` → `NewManagerWithTTL` → `GenerateAccessToken`）。
+现在该值会真正生效（经过 `JWTIssuer` → `NewManager(..., WithAccessTTL(ttl))` → `GenerateAccessToken`）。
 
 ---
 

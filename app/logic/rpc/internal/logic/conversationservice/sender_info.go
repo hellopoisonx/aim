@@ -31,7 +31,7 @@ func senderInfoForUser(ctx context.Context, svcCtx *svc.ServiceContext, userID i
 
 	info, err := userSvc.GetUserInfo(ctx, userID)
 	if err != nil {
-		return nil, errorx.ToGRPCError(err)
+		return nil, err
 	}
 
 	return &pb.SenderInfo{

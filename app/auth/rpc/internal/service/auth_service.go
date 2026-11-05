@@ -59,20 +59,7 @@ type DAOUserStore struct {
 	ids   *snowflake.Snowflake
 }
 
-func NewDAOUserStore(store userDAO) *DAOUserStore {
-	return NewDAOUserStoreWithMachineID(store, 1)
-}
-
-func NewDAOUserStoreWithMachineID(store userDAO, machineID int64) *DAOUserStore {
-	ids, err := snowflake.NewSnowflake(machineID)
-	if err != nil {
-		panic(err)
-	}
-
-	return NewDAOUserStoreWithIDGenerator(store, ids)
-}
-
-func NewDAOUserStoreWithIDGenerator(store userDAO, ids *snowflake.Snowflake) *DAOUserStore {
+func NewDAOUserStore(store userDAO, ids *snowflake.Snowflake) *DAOUserStore {
 	return &DAOUserStore{store: store, ids: ids}
 }
 
@@ -208,7 +195,7 @@ func NewJWTIssuer(secret string, ttl time.Duration) *JWTIssuer {
 }
 
 func (i *JWTIssuer) Issue(_ context.Context, userID int64, deviceID string) (string, int64, error) {
-	return sharedjwt.NewManagerWithTTL(i.secret, i.ttl).GenerateAccessToken(userID, deviceID)
+	return sharedjwt.NewManager(i.secret, sharedjwt.WithAccessTTL(i.ttl)).GenerateAccessToken(userID, deviceID)
 }
 
 func HashPassword(password string) (string, error) {

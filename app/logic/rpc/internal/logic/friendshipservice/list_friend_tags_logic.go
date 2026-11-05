@@ -5,7 +5,6 @@ import (
 
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
-	"github.com/hellopoisonx/aim/app/shared/errorx"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -32,7 +31,7 @@ func (l *ListFriendTagsLogic) ListFriendTags(in *pb.ListFriendTagsReq) (*pb.List
 
 	tags, err := tagSvc.ListTags(l.ctx, in.GetUserId())
 	if err != nil {
-		return nil, errorx.ToGRPCError(err)
+		return nil, err
 	}
 
 	pbTags := make([]*pb.FriendTagResponse, 0, len(tags))

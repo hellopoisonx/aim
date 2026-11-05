@@ -55,7 +55,7 @@ func requireConversationService(convSvc service.ConversationQuerier) (service.Co
 func conversationMemberIDs(ctx context.Context, convSvc service.ConversationQuerier, conversationID int64) ([]int64, error) {
 	members, err := convSvc.GetConversationMembers(ctx, conversationID)
 	if err != nil {
-		return nil, errorx.ToGRPCError(err)
+		return nil, err
 	}
 
 	memberIDs := make([]int64, len(members))

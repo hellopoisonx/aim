@@ -378,7 +378,7 @@ func TestBotServiceLogicErrorMapping(t *testing.T) {
 			code: errorx.CodeUserNotFound, grpcCode: codes.NotFound, message: "user not found",
 		},
 		{
-			name: "GetBotProfile sanitises unclassified errors",
+			name: "GetBotProfile forwards unclassified errors to the interceptor",
 			svcCtx: func() *svc.ServiceContext {
 				c, q, _ := workingBotSvcCtx()
 				q.userInfoErr = infraErr
@@ -388,7 +388,7 @@ func TestBotServiceLogicErrorMapping(t *testing.T) {
 				_, err := NewGetBotProfileLogic(ctx, c).GetBotProfile(&pb.GetBotProfileReq{BotUserId: 7})
 				return err
 			},
-			code: errorx.CodeInternal, grpcCode: codes.Internal, message: "internal error",
+			code: errorx.CodeInternal, grpcCode: codes.Unknown, message: infraErr.Error(),
 		},
 		{
 			name: "GetBotProfile rejects non-bot identities",

@@ -40,7 +40,7 @@ func (l *GetUserConversationsLogic) GetUserConversations(in *pb.GetUserConversat
 
 	conversations, err := convSvc.GetUserConversations(l.ctx, in.GetUserId())
 	if err != nil {
-		return nil, errorx.ToGRPCError(err)
+		return nil, err
 	}
 
 	pbConversations := make([]*pb.ConversationResponse, 0, len(conversations))

@@ -926,8 +926,8 @@ func expiryValue(ts *time.Time) time.Time {
 }
 
 // botManagementErr maps a DAO miss onto the resource-specific not-found message
-// and leaves every other error untouched; callers pass it to
-// errorx.ToGRPCError, which preserves typed biz errors.
+// and leaves every other error untouched; typed biz errors survive the RPC
+// boundary through the error interceptor.
 func botManagementErr(err error, notFoundMsg string) error {
 	if errors.Is(err, dao.ErrNotFound) {
 		return errorx.NewCodeError(errorx.CodeNotFound, notFoundMsg)

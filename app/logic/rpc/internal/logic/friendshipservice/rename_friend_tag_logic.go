@@ -5,7 +5,6 @@ import (
 
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
-	"github.com/hellopoisonx/aim/app/shared/errorx"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -32,7 +31,7 @@ func (l *RenameFriendTagLogic) RenameFriendTag(in *pb.RenameFriendTagReq) (*pb.R
 
 	tag, err := tagSvc.RenameTag(l.ctx, in.GetUserId(), in.GetTagId(), in.GetName())
 	if err != nil {
-		return nil, errorx.ToGRPCError(err)
+		return nil, err
 	}
 
 	return &pb.RenameFriendTagResp{Tag: friendTagToProto(tag)}, nil

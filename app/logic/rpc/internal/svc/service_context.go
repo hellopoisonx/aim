@@ -127,11 +127,10 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	var convOpts []service.ConversationServiceOption
 
 	if c.ConversationEventProducerConf.IsConfigured() {
-		producer, err := rocketmq.NewProducer(c.ConversationEventProducerConf)
+		producer, err := rocketmq.NewProducer(c.ConversationEventProducerConf, rocketmq.WithJournalChecker(store.DB()))
 		if err != nil {
 			logx.Must(fmt.Errorf("logic service: conversation event producer: %w", err))
 		}
-		producer.WithJournalChecker(store.DB())
 		svcCtx.EventProducer = producer
 		convOpts = append(convOpts, service.WithTransactionalEvents(c.ConversationEventProducerConf.Topic))
 		logx.WithContext(context.Background()).Infof(

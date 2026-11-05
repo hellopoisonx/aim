@@ -25,7 +25,7 @@ aim/
 ├── app/core/rpc/        # 消息投递
 ├── app/gateway/api/     # 对外入口
 ├── app/logic/rpc/       # 业务上下文
-├── app/attachment/      # 附件服务
+├── app/attachment/rpc/  # 附件服务
 ├── app/data_parsing/    # 数据解析
 ├── app/shared/          # 共享库
 ├── bot_sdk/             # Bot Go SDK

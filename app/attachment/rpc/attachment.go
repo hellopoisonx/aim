@@ -4,9 +4,9 @@ import (
 	"context"
 	"flag"
 
-	"github.com/hellopoisonx/aim/app/attachment/internal/config"
-	"github.com/hellopoisonx/aim/app/attachment/internal/server"
-	attachmentservice "github.com/hellopoisonx/aim/app/attachment/internal/service"
+	"github.com/hellopoisonx/aim/app/attachment/rpc/internal/config"
+	"github.com/hellopoisonx/aim/app/attachment/rpc/internal/server"
+	attachmentservice "github.com/hellopoisonx/aim/app/attachment/rpc/internal/service"
 	"github.com/hellopoisonx/aim/app/attachment/rpc/pb"
 	rpcutil "github.com/hellopoisonx/aim/app/shared/rpc"
 	"github.com/zeromicro/go-zero/core/conf"

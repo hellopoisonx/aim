@@ -1155,7 +1155,7 @@ func TestHandleHeartbeatWritesPresenceToRedis(t *testing.T) {
 	sc, mr := newTestServiceContextWithRedis(t, presencePub)
 	// Use presence-aware manager so TTL renewal and Set-based presence work.
 	nodeID := "test-node-1"
-	mgr := wsmanager.NewManagerWithPresence(sc.RedisClient, nodeID, 45)
+	mgr := wsmanager.NewManager(wsmanager.WithPresence(sc.RedisClient, nodeID, 45))
 	handler := NewWsHandler(sc, mgr)
 	server := httptest.NewServer(http.HandlerFunc(handler.ServeWS))
 	t.Cleanup(server.Close)
@@ -1259,7 +1259,7 @@ func TestServeWSDisconnectWritesOfflinePresence(t *testing.T) {
 	presencePub := &mockPresencePublisher{}
 	sc, _ := newTestServiceContextWithRedis(t, presencePub)
 	nodeID := "test-node-1"
-	mgr := wsmanager.NewManagerWithPresence(sc.RedisClient, nodeID, 45)
+	mgr := wsmanager.NewManager(wsmanager.WithPresence(sc.RedisClient, nodeID, 45))
 	handler := NewWsHandler(sc, mgr)
 	server := httptest.NewServer(http.HandlerFunc(handler.ServeWS))
 	t.Cleanup(server.Close)
@@ -1327,7 +1327,7 @@ func TestHandleHeartbeatPublishesPresenceEvent(t *testing.T) {
 	presencePub := &mockPresencePublisher{}
 	sc, _ := newTestServiceContextWithRedis(t, presencePub)
 	nodeID := "test-node-1"
-	mgr := wsmanager.NewManagerWithPresence(sc.RedisClient, nodeID, 45)
+	mgr := wsmanager.NewManager(wsmanager.WithPresence(sc.RedisClient, nodeID, 45))
 	handler := NewWsHandler(sc, mgr)
 	server := httptest.NewServer(http.HandlerFunc(handler.ServeWS))
 	t.Cleanup(server.Close)

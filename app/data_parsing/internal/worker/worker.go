@@ -68,18 +68,15 @@ func New(ctx context.Context, cfg config.Config) (*Worker, error) {
 	if db != nil {
 		store = newStore(db)
 	}
-	producer, err := rocketmq.NewProducer(cfg.ParsedProducer)
+	// Parsed events are published with the parse-result writes, so the
+	// transaction check-back must resolve them from this database.
+	producer, err := rocketmq.NewProducer(cfg.ParsedProducer, rocketmq.WithJournalChecker(db))
 	if err != nil {
 		return nil, err
 	}
 	var pub publisher
 	if producer != nil {
 		pub = producer
-		// Parsed events are published with the parse-result writes, so the
-		// transaction check-back must resolve them from this database.
-		if db != nil {
-			producer.WithJournalChecker(db)
-		}
 		// An unreachable broker must not crash-loop the consumer: parsing keeps
 		// running and publishes fail loudly instead.
 		if err := producer.Start(); err != nil {

@@ -496,6 +496,8 @@ func TestSearchUserInfoByNickname(t *testing.T) {
 	}
 }
 
+// Handler-level errors stay raw: the server interceptor is what turns an
+// unclassified failure into CodeInternal for the client.
 func TestCreateUserInfo_InternalError(t *testing.T) {
 	svcCtx := newTestServiceContext(&fakeUserInfoService{err: errors.New("database error")})
 	_, err := NewCreateUserInfoLogic(context.Background(), svcCtx).CreateUserInfo(&pb.CreateUserInfoReq{
@@ -504,5 +506,6 @@ func TestCreateUserInfo_InternalError(t *testing.T) {
 		Nickname: "Test",
 	})
 	require.Error(t, err)
-	require.Equal(t, codes.Internal, status.Code(err))
+	require.Equal(t, codes.Unknown, status.Code(err))
+	require.Contains(t, err.Error(), "database error")
 }

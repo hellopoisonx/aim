@@ -39,7 +39,7 @@ func (l *LeaveGroupLogic) LeaveGroup(in *pb.LeaveGroupReq) (*pb.LeaveGroupResp, 
 
 	err := convSvc.LeaveGroup(l.ctx, in.GetConversationId(), in.GetUserId(), in.GetUserName())
 	if err != nil {
-		return nil, errorx.ToGRPCError(err)
+		return nil, err
 	}
 
 	return &pb.LeaveGroupResp{}, nil

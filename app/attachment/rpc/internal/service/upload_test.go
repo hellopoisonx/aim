@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/hellopoisonx/aim/app/attachment/internal/config"
+	"github.com/hellopoisonx/aim/app/attachment/rpc/internal/config"
 	sharedattachment "github.com/hellopoisonx/aim/app/shared/attachment"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 	"github.com/hellopoisonx/aim/app/shared/s3signer"

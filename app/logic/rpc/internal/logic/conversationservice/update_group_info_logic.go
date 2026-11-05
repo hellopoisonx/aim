@@ -7,7 +7,6 @@ import (
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/pbconv"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
-	"github.com/hellopoisonx/aim/app/shared/errorx"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -48,7 +47,7 @@ func (l *UpdateGroupInfoLogic) UpdateGroupInfo(in *pb.UpdateGroupInfoReq) (*pb.U
 
 	conv, err := convSvc.UpdateGroupInfo(l.ctx, in.GetConversationId(), in.GetOperatorId(), in.GetOperatorName(), name, avatar)
 	if err != nil {
-		return nil, errorx.ToGRPCError(err)
+		return nil, err
 	}
 
 	memberIDs, err := conversationMemberIDs(l.ctx, convSvc, conv.ID)

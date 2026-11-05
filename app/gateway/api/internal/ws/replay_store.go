@@ -58,29 +58,61 @@ type ReplayStore struct {
 	mu sync.Mutex
 }
 
-// NewReplayStore 构造默认 L1 容量与 TTL 的 ReplayStore。
-func NewReplayStore() (*ReplayStore, error) {
-	return NewReplayStoreWithOptions(defaultReplayCapacity, defaultReplayTTL, defaultReplayL1Limit)
+// ReplayStoreOption customises a ReplayStore at construction.
+type ReplayStoreOption func(*replayStoreOptions)
+
+type replayStoreOptions struct {
+	capacity int
+	ttl      time.Duration
+	l1Limit  int
 }
 
-// NewReplayStoreWithOptions 提供自定义容量/TTL；用于测试或后续配置注入。
-func NewReplayStoreWithOptions(capacity int, ttl time.Duration, l1Limit int) (*ReplayStore, error) {
-	if capacity <= 0 {
-		capacity = defaultReplayCapacity
+// WithReplayCapacity sets how many frames per connection stay replayable.
+func WithReplayCapacity(capacity int) ReplayStoreOption {
+	return func(o *replayStoreOptions) {
+		if capacity > 0 {
+			o.capacity = capacity
+		}
 	}
-	if ttl <= 0 {
-		ttl = defaultReplayTTL
+}
+
+// WithReplayTTL sets how long a pending frame stays replayable.
+func WithReplayTTL(ttl time.Duration) ReplayStoreOption {
+	return func(o *replayStoreOptions) {
+		if ttl > 0 {
+			o.ttl = ttl
+		}
 	}
-	if l1Limit <= 0 {
-		l1Limit = defaultReplayL1Limit
+}
+
+// WithReplayL1Limit sets how many connections the L1 cache holds.
+func WithReplayL1Limit(l1Limit int) ReplayStoreOption {
+	return func(o *replayStoreOptions) {
+		if l1Limit > 0 {
+			o.l1Limit = l1Limit
+		}
+	}
+}
+
+// NewReplayStore 构造 ReplayStore；未通过选项覆盖的参数使用默认值。
+func NewReplayStore(opts ...ReplayStoreOption) (*ReplayStore, error) {
+	cfg := replayStoreOptions{
+		capacity: defaultReplayCapacity,
+		ttl:      defaultReplayTTL,
+		l1Limit:  defaultReplayL1Limit,
+	}
+	for _, opt := range opts {
+		if opt != nil {
+			opt(&cfg)
+		}
 	}
 
-	l1, err := collection.NewCache(ttl, collection.WithLimit(l1Limit), collection.WithName(sharedcache.NameWsReplay))
+	l1, err := collection.NewCache(cfg.ttl, collection.WithLimit(cfg.l1Limit), collection.WithName(sharedcache.NameWsReplay))
 	if err != nil {
 		return nil, err
 	}
 
-	return &ReplayStore{l1: l1, capacity: capacity, ttl: ttl}, nil
+	return &ReplayStore{l1: l1, capacity: cfg.capacity, ttl: cfg.ttl}, nil
 }
 
 func (s *ReplayStore) key(identity authctx.Identity) string {

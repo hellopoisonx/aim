@@ -5,7 +5,6 @@ import (
 
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
-	"github.com/hellopoisonx/aim/app/shared/errorx"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -37,7 +36,7 @@ func (l *RejectFriendLogic) RejectFriend(in *pb.RejectFriendReq) (*pb.RejectFrie
 
 	record, err := friendshipSvc.RejectFriend(l.ctx, friendID, userID)
 	if err != nil {
-		return nil, errorx.ToGRPCError(err)
+		return nil, err
 	}
 	l.svcCtx.InvalidateFriendship(l.ctx, userID, friendID)
 
