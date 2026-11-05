@@ -37,7 +37,7 @@ func (l *LeaveGroupLogic) LeaveGroup(in *pb.LeaveGroupReq) (*pb.LeaveGroupResp, 
 		return nil, errorx.NewCodeError(errorx.CodeInternal, "conversation service is not configured")
 	}
 
-	err := convSvc.LeaveGroup(l.ctx, in.GetConversationId(), in.GetUserId(), in.GetUserName())
+	err := convSvc.LeaveGroup(l.ctx, in.GetConversationId(), in.GetUserId())
 	if err != nil {
 		return nil, err
 	}

@@ -58,11 +58,11 @@ type ConversationQuerier interface {
 	GetConversationHistory(ctx context.Context, conversationID int64, cursor sharedconversation.MessageCursor, limit int32) ([]orm.Message, error)
 	GetConversationMembers(ctx context.Context, conversationID int64) ([]orm.ConversationMember, error)
 	GetUserConversations(ctx context.Context, userID int64) ([]orm.Conversation, error)
-	AddGroupMembers(ctx context.Context, conversationID, operatorID int64, operatorName string, newMemberIDs []int64) (orm.Conversation, error)
-	RemoveGroupMembers(ctx context.Context, conversationID, operatorID int64, operatorName string, removeMemberIDs []int64) error
-	LeaveGroup(ctx context.Context, conversationID, userID int64, userName string) error
+	AddGroupMembers(ctx context.Context, conversationID, operatorID int64, newMemberIDs []int64) (orm.Conversation, error)
+	RemoveGroupMembers(ctx context.Context, conversationID, operatorID int64, removeMemberIDs []int64) error
+	LeaveGroup(ctx context.Context, conversationID, userID int64) error
 	DismissGroup(ctx context.Context, conversationID, operatorID int64) error
-	UpdateGroupInfo(ctx context.Context, conversationID, operatorID int64, operatorName string, name, avatar *string) (orm.Conversation, error)
+	UpdateGroupInfo(ctx context.Context, conversationID, operatorID int64, name, avatar *string) (orm.Conversation, error)
 	GrantGroupAdmin(ctx context.Context, conversationID int64, actor Actor, target Target) error
 	RevokeGroupAdmin(ctx context.Context, conversationID int64, actor Actor, target Target) error
 	TransferGroupOwner(ctx context.Context, conversationID int64, actor Actor, target Target) (orm.Conversation, error)
@@ -129,11 +129,10 @@ type TransactionalConversationTxRunner interface {
 }
 
 type systemMessageContent struct {
-	Event        string  `json:"event"`
-	OperatorID   int64   `json:"operator_id"`
-	OperatorName string  `json:"operator_name"`
-	TargetIDs    []int64 `json:"target_ids"`
-	TargetNames  []int64 `json:"target_names"`
+	Event       string  `json:"event"`
+	OperatorID  int64   `json:"operator_id"`
+	TargetIDs   []int64 `json:"target_ids"`
+	TargetNames []int64 `json:"target_names"`
 }
 
 type ConversationService struct {
@@ -252,12 +251,11 @@ func (s *ConversationService) getConversationMemberRows(ctx context.Context, con
 	})
 }
 
-func (s *ConversationService) buildSystemMessage(event string, operatorID int64, operatorName string, targetIDs []int64) []byte {
+func (s *ConversationService) buildSystemMessage(event string, operatorID int64, targetIDs []int64) []byte {
 	content := systemMessageContent{
-		Event:        event,
-		OperatorID:   operatorID,
-		OperatorName: operatorName,
-		TargetIDs:    targetIDs,
+		Event:      event,
+		OperatorID: operatorID,
+		TargetIDs:  targetIDs,
 	}
 	data, _ := json.Marshal(content)
 	return data
@@ -266,13 +264,13 @@ func (s *ConversationService) buildSystemMessage(event string, operatorID int64,
 // insertSystemMessageTx writes the group system message and publishes its
 // conversation event in one transaction. contentTargetIDs are named in the
 // message body, notifyTargetIDs receive the event.
-func (s *ConversationService) insertSystemMessageTx(ctx context.Context, conversationID, operatorID int64, operatorName, event string, contentTargetIDs, notifyTargetIDs []int64, mutate func(ConversationStore) error) error {
+func (s *ConversationService) insertSystemMessageTx(ctx context.Context, conversationID, operatorID int64, event string, contentTargetIDs, notifyTargetIDs []int64, mutate func(ConversationStore) error) error {
 	messageID, err := s.idGen.NextID()
 	if err != nil {
 		return err
 	}
 
-	content := s.buildSystemMessage(event, operatorID, operatorName, contentTargetIDs)
+	content := s.buildSystemMessage(event, operatorID, contentTargetIDs)
 	return s.inTxWithEvent(ctx, events.ConversationEvent{
 		MessageID:      messageID,
 		ConversationID: conversationID,
@@ -635,7 +633,7 @@ func (s *ConversationService) GetUserConversations(ctx context.Context, userID i
 	return rows, nil
 }
 
-func (s *ConversationService) AddGroupMembers(ctx context.Context, conversationID, operatorID int64, operatorName string, newMemberIDs []int64) (orm.Conversation, error) {
+func (s *ConversationService) AddGroupMembers(ctx context.Context, conversationID, operatorID int64, newMemberIDs []int64) (orm.Conversation, error) {
 	conv, err := s.GetConversationByID(ctx, conversationID)
 	if err != nil {
 		return orm.Conversation{}, err
@@ -675,7 +673,7 @@ func (s *ConversationService) AddGroupMembers(ctx context.Context, conversationI
 		targetUserIDs = append(targetUserIDs, mid)
 	}
 
-	err = s.insertSystemMessageTx(ctx, conversationID, operatorID, operatorName, "member_joined", newMemberIDs, targetUserIDs, func(tx ConversationStore) error {
+	err = s.insertSystemMessageTx(ctx, conversationID, operatorID, "member_joined", newMemberIDs, targetUserIDs, func(tx ConversationStore) error {
 		existingMembers, err := tx.GetConversationMembers(ctx, conversationID)
 		if err != nil {
 			return err
@@ -705,7 +703,7 @@ func (s *ConversationService) AddGroupMembers(ctx context.Context, conversationI
 	return s.GetConversationByID(ctx, conversationID)
 }
 
-func (s *ConversationService) RemoveGroupMembers(ctx context.Context, conversationID, operatorID int64, operatorName string, removeMemberIDs []int64) error {
+func (s *ConversationService) RemoveGroupMembers(ctx context.Context, conversationID, operatorID int64, removeMemberIDs []int64) error {
 	conv, err := s.GetConversationByID(ctx, conversationID)
 	if err != nil {
 		return err
@@ -746,7 +744,7 @@ func (s *ConversationService) RemoveGroupMembers(ctx context.Context, conversati
 		return err
 	}
 
-	err = s.insertSystemMessageTx(ctx, conversationID, operatorID, operatorName, "member_removed", removeMemberIDs, memberUserIDs(members), func(tx ConversationStore) error {
+	err = s.insertSystemMessageTx(ctx, conversationID, operatorID, "member_removed", removeMemberIDs, memberUserIDs(members), func(tx ConversationStore) error {
 		_, err := tx.RemoveConversationMembers(ctx, conversationID, removeMemberIDs)
 		return err
 	})
@@ -761,7 +759,7 @@ func (s *ConversationService) RemoveGroupMembers(ctx context.Context, conversati
 	return nil
 }
 
-func (s *ConversationService) LeaveGroup(ctx context.Context, conversationID, userID int64, userName string) error {
+func (s *ConversationService) LeaveGroup(ctx context.Context, conversationID, userID int64) error {
 	conv, err := s.GetConversationByID(ctx, conversationID)
 	if err != nil {
 		return err
@@ -783,7 +781,7 @@ func (s *ConversationService) LeaveGroup(ctx context.Context, conversationID, us
 		return err
 	}
 
-	err = s.insertSystemMessageTx(ctx, conversationID, userID, userName, "member_left", []int64{userID}, memberUserIDs(members), func(tx ConversationStore) error {
+	err = s.insertSystemMessageTx(ctx, conversationID, userID, "member_left", []int64{userID}, memberUserIDs(members), func(tx ConversationStore) error {
 		_, err := tx.RemoveConversationMembers(ctx, conversationID, []int64{userID})
 		return err
 	})
@@ -816,7 +814,7 @@ func (s *ConversationService) DismissGroup(ctx context.Context, conversationID, 
 		return err
 	}
 
-	err = s.insertSystemMessageTx(ctx, conversationID, operatorID, "", "group_dismissed", nil, memberUserIDs(members), func(tx ConversationStore) error {
+	err = s.insertSystemMessageTx(ctx, conversationID, operatorID, "group_dismissed", nil, memberUserIDs(members), func(tx ConversationStore) error {
 		return tx.DeactivateConversation(ctx, conversationID)
 	})
 	if err != nil {
@@ -829,7 +827,7 @@ func (s *ConversationService) DismissGroup(ctx context.Context, conversationID, 
 	return nil
 }
 
-func (s *ConversationService) UpdateGroupInfo(ctx context.Context, conversationID, operatorID int64, operatorName string, name, avatar *string) (orm.Conversation, error) {
+func (s *ConversationService) UpdateGroupInfo(ctx context.Context, conversationID, operatorID int64, name, avatar *string) (orm.Conversation, error) {
 	conv, err := s.GetConversationByID(ctx, conversationID)
 	if err != nil {
 		return orm.Conversation{}, err
@@ -874,7 +872,7 @@ func (s *ConversationService) UpdateGroupInfo(ctx context.Context, conversationI
 		return orm.Conversation{}, err
 	}
 
-	err = s.insertSystemMessageTx(ctx, conversationID, operatorID, operatorName, eventType, nil, memberUserIDs(members), func(tx ConversationStore) error {
+	err = s.insertSystemMessageTx(ctx, conversationID, operatorID, eventType, nil, memberUserIDs(members), func(tx ConversationStore) error {
 		return tx.UpdateConversation(ctx, conversationID, name, avatar)
 	})
 	if err != nil {

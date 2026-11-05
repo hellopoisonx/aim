@@ -220,20 +220,20 @@ func TestConversationService_RoleGuards(t *testing.T) {
 	conv, err := svc.CreateConversation(context.Background(), "group", 1, []int64{1, 2, 3}, "Group", "")
 	require.NoError(t, err)
 
-	_, err = svc.AddGroupMembers(context.Background(), conv.ID, 2, "u2", []int64{4})
+	_, err = svc.AddGroupMembers(context.Background(), conv.ID, 2, []int64{4})
 	require.ErrorIs(t, err, ErrNotAdmin)
 
-	err = svc.RemoveGroupMembers(context.Background(), conv.ID, 2, "u2", []int64{3})
+	err = svc.RemoveGroupMembers(context.Background(), conv.ID, 2, []int64{3})
 	require.ErrorIs(t, err, ErrNotAdmin)
 
 	name := "n"
-	_, err = svc.UpdateGroupInfo(context.Background(), conv.ID, 2, "u2", &name, nil)
+	_, err = svc.UpdateGroupInfo(context.Background(), conv.ID, 2, &name, nil)
 	require.ErrorIs(t, err, ErrNotAdmin)
 
 	err = svc.DismissGroup(context.Background(), conv.ID, 2)
 	require.ErrorIs(t, err, ErrNotOwner)
 
-	err = svc.LeaveGroup(context.Background(), conv.ID, 1, "u1")
+	err = svc.LeaveGroup(context.Background(), conv.ID, 1)
 	require.ErrorIs(t, err, ErrOwnerMustTransfer)
 }
 
@@ -243,12 +243,12 @@ func TestConversationService_LeaveGroupRejectsNonMember(t *testing.T) {
 	conv, err := svc.CreateConversation(context.Background(), "group", 1, []int64{1, 2}, "Group", "")
 	require.NoError(t, err)
 
-	err = svc.LeaveGroup(context.Background(), conv.ID, 3, "outsider")
+	err = svc.LeaveGroup(context.Background(), conv.ID, 3)
 	require.ErrorIs(t, err, ErrNotMember)
 	assert.Len(t, store.Members[conv.ID], 2)
 	assert.Empty(t, store.Messages[conv.ID], "a rejected leave must not write a system message")
 
-	require.NoError(t, svc.LeaveGroup(context.Background(), conv.ID, 2, "u2"))
+	require.NoError(t, svc.LeaveGroup(context.Background(), conv.ID, 2))
 	assert.Len(t, store.Members[conv.ID], 1)
 }
 
@@ -302,13 +302,13 @@ func TestConversationService_AdminRemovePermissionMatrix(t *testing.T) {
 	require.NoError(t, svc.GrantGroupAdmin(context.Background(), conv.ID, 1, 2))
 	require.NoError(t, svc.GrantGroupAdmin(context.Background(), conv.ID, 1, 3))
 
-	err = svc.RemoveGroupMembers(context.Background(), conv.ID, 2, "admin", []int64{1})
+	err = svc.RemoveGroupMembers(context.Background(), conv.ID, 2, []int64{1})
 	require.ErrorIs(t, err, ErrOwnerTarget)
 
-	err = svc.RemoveGroupMembers(context.Background(), conv.ID, 2, "admin", []int64{3})
+	err = svc.RemoveGroupMembers(context.Background(), conv.ID, 2, []int64{3})
 	require.ErrorIs(t, err, ErrNotAdmin)
 
-	err = svc.RemoveGroupMembers(context.Background(), conv.ID, 2, "admin", []int64{2})
+	err = svc.RemoveGroupMembers(context.Background(), conv.ID, 2, []int64{2})
 	var codeErr *errorx.CodeError
 	require.ErrorAs(t, err, &codeErr)
 	assert.Equal(t, errorx.CodeBadInput, codeErr.Code)

@@ -57,17 +57,17 @@ func TestConversationService_RBACRejectsMemberManagement(t *testing.T) {
 	svc, _, _, convID := newRBACFixture(t)
 	ctx := context.Background()
 
-	_, err := svc.AddGroupMembers(ctx, convID, 2, "bob", []int64{4})
+	_, err := svc.AddGroupMembers(ctx, convID, 2, []int64{4})
 	require.ErrorIs(t, err, ErrNotAdmin)
 
 	require.ErrorIs(t, svc.GrantGroupAdmin(ctx, convID, 2, 3), ErrNotOwner)
-	_, err = svc.UpdateGroupInfo(ctx, convID, 2, "bob", nil, nil)
+	_, err = svc.UpdateGroupInfo(ctx, convID, 2, nil, nil)
 	require.ErrorIs(t, err, ErrNotAdmin)
 	require.ErrorIs(t, svc.DismissGroup(ctx, convID, 2), ErrNotOwner)
 	require.ErrorIs(t, svc.RevokeGroupAdmin(ctx, convID, 2, 3), ErrNotOwner)
 
 	name := "renamed"
-	_, err = svc.UpdateGroupInfo(ctx, convID, 1, "alice", &name, nil)
+	_, err = svc.UpdateGroupInfo(ctx, convID, 1, &name, nil)
 	require.NoError(t, err)
 	require.NoError(t, svc.GrantGroupAdmin(ctx, convID, 1, 2))
 
@@ -86,7 +86,7 @@ func TestConversationService_RBACAdminCannotOwn(t *testing.T) {
 
 	require.NoError(t, svc.GrantGroupAdmin(ctx, convID, 1, 2))
 
-	_, err := svc.AddGroupMembers(ctx, convID, 2, "bob", []int64{4})
+	_, err := svc.AddGroupMembers(ctx, convID, 2, []int64{4})
 	require.NoError(t, err)
 
 	_, err = svc.TransferGroupOwner(ctx, convID, 2, 3)
@@ -116,13 +116,13 @@ func TestConversationService_RemoveMemberRevokesRole(t *testing.T) {
 	svc, _, authz, convID := newRBACFixture(t)
 	ctx := context.Background()
 
-	require.NoError(t, svc.RemoveGroupMembers(ctx, convID, 1, "alice", []int64{3}))
+	require.NoError(t, svc.RemoveGroupMembers(ctx, convID, 1, []int64{3}))
 
 	hasRole, err := authz.HasRole(ctx, mustSubject(t, shareduser.TypeHuman, 3), rbac.Domain(convID), sharedconversation.RoleMember)
 	require.NoError(t, err)
 	assert.False(t, hasRole, "removed member must lose its role")
 
-	_, err = svc.AddGroupMembers(ctx, convID, 3, "carol", []int64{4})
+	_, err = svc.AddGroupMembers(ctx, convID, 3, []int64{4})
 	require.ErrorIs(t, err, ErrNotAdmin)
 }
 
@@ -148,11 +148,11 @@ func TestConversationService_LostRolesFailClosedThenRebuild(t *testing.T) {
 	require.NoError(t, authz.ClearConversation(ctx, rbac.Domain(convID)))
 
 	name := "renamed"
-	_, err := svc.UpdateGroupInfo(ctx, convID, 1, "alice", &name, nil)
+	_, err := svc.UpdateGroupInfo(ctx, convID, 1, &name, nil)
 	require.ErrorIs(t, err, ErrNotAdmin, "the owner lost its rule, so the guard rejects it")
 
 	require.NoError(t, svc.syncRoles(ctx, convID))
-	_, err = svc.UpdateGroupInfo(ctx, convID, 1, "alice", &name, nil)
+	_, err = svc.UpdateGroupInfo(ctx, convID, 1, &name, nil)
 	require.NoError(t, err)
 
 	memberRole, err := authz.HasRole(ctx, mustSubject(t, shareduser.TypeHuman, 3), rbac.Domain(convID), sharedconversation.RoleMember)

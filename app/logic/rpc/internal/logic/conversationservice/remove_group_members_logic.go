@@ -29,7 +29,7 @@ func (l *RemoveGroupMembersLogic) RemoveGroupMembers(in *pb.RemoveGroupMembersRe
 		return nil, err
 	}
 
-	err = convSvc.RemoveGroupMembers(l.ctx, in.GetConversationId(), in.GetOperatorId(), in.GetOperatorName(), in.GetMemberIds())
+	err = convSvc.RemoveGroupMembers(l.ctx, in.GetConversationId(), in.GetOperatorId(), in.GetMemberIds())
 	if err != nil {
 		return nil, err
 	}

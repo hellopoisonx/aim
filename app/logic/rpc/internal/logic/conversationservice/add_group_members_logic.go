@@ -30,7 +30,7 @@ func (l *AddGroupMembersLogic) AddGroupMembers(in *pb.AddGroupMembersReq) (*pb.A
 		return nil, err
 	}
 
-	conv, err := convSvc.AddGroupMembers(l.ctx, in.GetConversationId(), in.GetOperatorId(), in.GetOperatorName(), in.GetMemberIds())
+	conv, err := convSvc.AddGroupMembers(l.ctx, in.GetConversationId(), in.GetOperatorId(), in.GetMemberIds())
 	if err != nil {
 		return nil, err
 	}

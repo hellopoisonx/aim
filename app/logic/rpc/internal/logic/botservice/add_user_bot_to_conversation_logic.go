@@ -42,7 +42,7 @@ func (l *AddUserBotToConversationLogic) AddUserBotToConversation(in *pb.AddUserB
 
 	conv, err := l.svcCtx.ConversationService.AddGroupMembers(l.ctx,
 		in.GetConversationId(), in.GetOperatorId(),
-		in.GetOperatorName(), []int64{in.GetBotUserId()})
+		[]int64{in.GetBotUserId()})
 	if err != nil {
 		return nil, err
 	}

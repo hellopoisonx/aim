@@ -78,7 +78,7 @@ func TestAddGroupMembers_PublishesTransactionalEvent(t *testing.T) {
 	svc.eventTopic = "aim-conversation-events"
 
 	conversationID := firstConversationID(t, store)
-	_, err := svc.AddGroupMembers(context.Background(), conversationID, 1, "owner", []int64{4})
+	_, err := svc.AddGroupMembers(context.Background(), conversationID, 1, []int64{4})
 	require.NoError(t, err)
 
 	require.Len(t, runner.messages, 1)
@@ -106,7 +106,7 @@ func TestUpdateGroupInfo_PublishesAvatarEvent(t *testing.T) {
 
 	conversationID := firstConversationID(t, store)
 	avatar := "https://example.test/a.png"
-	_, err := svc.UpdateGroupInfo(context.Background(), conversationID, 1, "owner", nil, &avatar)
+	_, err := svc.UpdateGroupInfo(context.Background(), conversationID, 1, nil, &avatar)
 	require.NoError(t, err)
 
 	require.Len(t, runner.messages, 1)
@@ -125,7 +125,7 @@ func TestUpdateGroupInfo_RenameAndAvatarAnnounceRename(t *testing.T) {
 	conversationID := firstConversationID(t, store)
 	name := "renamed"
 	avatar := "https://example.test/b.png"
-	_, err := svc.UpdateGroupInfo(context.Background(), conversationID, 1, "owner", &name, &avatar)
+	_, err := svc.UpdateGroupInfo(context.Background(), conversationID, 1, &name, &avatar)
 	require.NoError(t, err)
 
 	require.Len(t, runner.messages, 1)
@@ -164,11 +164,11 @@ func TestGroupMutation_RefetchErrorIsPropagated(t *testing.T) {
 	svc.store = refetchFail
 
 	name := "renamed"
-	_, err = svc.UpdateGroupInfo(context.Background(), conversationID, 1, "owner", &name, nil)
+	_, err = svc.UpdateGroupInfo(context.Background(), conversationID, 1, &name, nil)
 	require.ErrorContains(t, err, "refetch failed")
 
 	refetchFail.gets = 0
-	_, err = svc.AddGroupMembers(context.Background(), conversationID, 1, "owner", []int64{4})
+	_, err = svc.AddGroupMembers(context.Background(), conversationID, 1, []int64{4})
 	require.ErrorContains(t, err, "refetch failed")
 	require.Equal(t, 3, refetchFail.gets)
 }
@@ -195,7 +195,7 @@ func TestGroupMutation_WithoutTransactionalRunnerPublishesNothing(t *testing.T) 
 	svc.eventTopic = "aim-conversation-events"
 
 	conversationID := firstConversationID(t, store)
-	_, err := svc.AddGroupMembers(context.Background(), conversationID, 1, "owner", []int64{4})
+	_, err := svc.AddGroupMembers(context.Background(), conversationID, 1, []int64{4})
 	require.NoError(t, err)
 
 	// The write still commits even though no event can be published.

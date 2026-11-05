@@ -45,7 +45,7 @@ func (l *UpdateGroupInfoLogic) UpdateGroupInfo(in *pb.UpdateGroupInfoReq) (*pb.U
 		}
 	}
 
-	conv, err := convSvc.UpdateGroupInfo(l.ctx, in.GetConversationId(), in.GetOperatorId(), in.GetOperatorName(), name, avatar)
+	conv, err := convSvc.UpdateGroupInfo(l.ctx, in.GetConversationId(), in.GetOperatorId(), name, avatar)
 	if err != nil {
 		return nil, err
 	}
