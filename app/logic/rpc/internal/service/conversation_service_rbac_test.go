@@ -137,3 +137,24 @@ func TestConversationService_DismissClearsRoles(t *testing.T) {
 		assert.False(t, role, "user %d must have no role after dismissal", userID)
 	}
 }
+
+// A lost assignment denies the owner (fail closed) and the next rebuild from
+// conversation_members restores every member's rule.
+func TestConversationService_LostRolesFailClosedThenRebuild(t *testing.T) {
+	svc, _, authz, convID := newRBACFixture(t)
+	ctx := context.Background()
+
+	require.NoError(t, authz.ClearConversation(ctx, rbac.Domain(convID)))
+
+	name := "renamed"
+	_, err := svc.UpdateGroupInfo(ctx, convID, 1, "alice", &name, nil)
+	require.ErrorIs(t, err, ErrNotAdmin, "the owner lost its rule, so the guard rejects it")
+
+	require.NoError(t, svc.syncRoles(ctx, convID))
+	_, err = svc.UpdateGroupInfo(ctx, convID, 1, "alice", &name, nil)
+	require.NoError(t, err)
+
+	memberRole, err := authz.HasRole(ctx, mustSubject(t, shareduser.TypeHuman, 3), rbac.Domain(convID), rbac.RoleMember)
+	require.NoError(t, err)
+	assert.True(t, memberRole, "post-commit rebuild restores every member's role")
+}

@@ -446,46 +446,6 @@ func TestGatewayServerPushPresence(t *testing.T) {
 	require.Equal(t, "online", pushPresence.GetStatus())
 }
 
-func TestGatewayServerPushPresenceFallbackToUserId(t *testing.T) {
-	t.Parallel()
-
-	env := setupGatewayTest(t)
-	t.Cleanup(env.cleanup)
-
-	userID := int64(12346)
-	deviceID := "test-device-presence-fallback"
-
-	wsServer := newWSTestServer(t, env.manager, userID, deviceID)
-	t.Cleanup(wsServer.close)
-
-	conn, err := wsServer.dialWebSocket("test-token")
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = conn.Close(websocket.StatusNormalClosure, "test done") })
-
-	// Call PushPresence without TargetUserId — should fall back to UserId for delivery.
-	ctx := context.Background()
-	resp, err := env.client.PushPresence(ctx, &pb.PushPresenceReq{
-		UserId:    userID, // both the status-changed user and the target (fallback)
-		Status:    "offline",
-		UpdatedAt: time.Now().UnixMilli(),
-	})
-	require.NoError(t, err)
-	require.True(t, resp.Success)
-
-	// Read the pushed presence frame
-	frame, err := readFrame(ctx, conn)
-	require.NoError(t, err)
-	require.Equal(t, wspb.FrameType_FRAME_TYPE_PUSH_PRESENCE, frame.GetType())
-
-	payload, err := DecodePayload(frame)
-	require.NoError(t, err)
-
-	pushPresence, ok := payload.(*wspb.PushPresencePayload)
-	require.True(t, ok)
-	require.Equal(t, userID, pushPresence.GetUserId())
-	require.Equal(t, "offline", pushPresence.GetStatus())
-}
-
 func TestGatewayServerKickUser(t *testing.T) {
 	t.Parallel()
 
@@ -691,9 +651,9 @@ func TestGatewayServerPushPresenceInvalidArgument(t *testing.T) {
 
 	ctx := context.Background()
 
-	// user_id = 0 should fail
+	// target_user_id = 0 should fail
 	_, err := env.client.PushPresence(ctx, &pb.PushPresenceReq{
-		UserId: 0,
+		TargetUserId: 0,
 	})
 	require.Error(t, err)
 }

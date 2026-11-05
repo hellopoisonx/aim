@@ -61,6 +61,8 @@ func (f *fakeGatewayClient) PushFriendApplicationToNode(context.Context, string,
 	return &gwpb.PushFriendApplicationResp{Success: true}, nil
 }
 
+func (f *fakeGatewayClient) Close() error { return nil }
+
 func newFakeGatewayClient() *fakeGatewayClient {
 	return &fakeGatewayClient{pushResp: &gwpb.PushMessageResp{Success: true}}
 }

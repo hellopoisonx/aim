@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 
 	"github.com/hellopoisonx/aim/app/core/rpc/internal/svc"
-	logicpb "github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/events"
 	"github.com/hellopoisonx/aim/app/shared/tracing"
 	gwpb "github.com/hellopoisonx/aim/shared/proto/gateway/pb"
@@ -39,9 +38,13 @@ func (c *ConversationEventConsumer) Consume(ctx context.Context, key string, val
 	logx.WithContext(ctx).Infof("conversation event: conv=%d msg_id=%d type=%s targets=%d",
 		event.ConversationID, event.MessageID, event.MessageType, len(event.TargetUserIDs))
 
-	conversationType := c.lookupConversationType(ctx, event.ConversationID)
+	_, conversationType, err := conversationRecipients(ctx, c.svcCtx, event.ConversationID)
+	if err != nil {
+		// The type only decorates the frame; a lookup failure must not drop the event.
+		logx.WithContext(ctx).Errorf("conversation type lookup conv=%d failed: %v", event.ConversationID, err)
+	}
 
-	err := pushToMemberNodes(ctx, c.svcCtx, event.TargetUserIDs, 0, "", func(targetUserID int64, nodeID string) error {
+	err = pushToMemberNodes(ctx, c.svcCtx, event.TargetUserIDs, 0, "", func(targetUserID int64, nodeID string) error {
 		req := &gwpb.PushMessageReq{
 			MessageId:        event.MessageID,
 			ConversationId:   event.ConversationID,
@@ -70,22 +73,4 @@ func (c *ConversationEventConsumer) Consume(ctx context.Context, key string, val
 	}
 
 	return nil
-}
-
-// lookupConversationType fetches the conversation type from logic. Returns empty
-// string when logic is unavailable so push frames omit the field rather than fabricating it.
-func (c *ConversationEventConsumer) lookupConversationType(ctx context.Context, conversationID int64) string {
-	if c.svcCtx.LogicConversationClient == nil {
-		return ""
-	}
-
-	resp, err := c.svcCtx.LogicConversationClient.GetConversationMembers(ctx, &logicpb.GetConversationMembersReq{
-		ConversationId: conversationID,
-	})
-	if err != nil {
-		logx.WithContext(ctx).Errorf("lookupConversationType conv=%d failed: %v", conversationID, err)
-		return ""
-	}
-
-	return resp.GetConversationType()
 }

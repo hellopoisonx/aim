@@ -95,16 +95,16 @@ type ConversationReadState struct {
 // TableName pins the physical table name.
 func (ConversationReadState) TableName() string { return "conversation_read_states" }
 
-// BotToken maps table bot_tokens (007). Scopes is a legacy text[] column.
+// BotToken maps table bot_tokens (007). Action permissions live in
+// bot_token_permissions (009).
 type BotToken struct {
-	ID        int64          `gorm:"column:id;primaryKey" json:"id"`
-	BotUserID int64          `gorm:"column:bot_user_id;not null;index:idx_bot_tokens_bot_user_id" json:"bot_user_id"`
-	TokenHash string         `gorm:"column:token_hash;size:128;not null;uniqueIndex" json:"token_hash"`
-	Name      string         `gorm:"column:name;size:64;not null;default:''" json:"name"`
-	Scopes    pq.StringArray `gorm:"column:scopes;type:text[];not null" json:"scopes"`
-	ExpiresAt *time.Time     `gorm:"column:expires_at" json:"expires_at"`
-	RevokedAt *time.Time     `gorm:"column:revoked_at" json:"revoked_at"`
-	CreatedAt time.Time      `gorm:"column:created_at;not null" json:"created_at"`
+	ID        int64      `gorm:"column:id;primaryKey" json:"id"`
+	BotUserID int64      `gorm:"column:bot_user_id;not null;index:idx_bot_tokens_bot_user_id" json:"bot_user_id"`
+	TokenHash string     `gorm:"column:token_hash;size:128;not null;uniqueIndex" json:"token_hash"`
+	Name      string     `gorm:"column:name;size:64;not null;default:''" json:"name"`
+	ExpiresAt *time.Time `gorm:"column:expires_at" json:"expires_at"`
+	RevokedAt *time.Time `gorm:"column:revoked_at" json:"revoked_at"`
+	CreatedAt time.Time  `gorm:"column:created_at;not null" json:"created_at"`
 }
 
 // TableName pins the physical table name.

@@ -42,8 +42,12 @@ func (c *ReadReceiptConsumer) Consume(ctx context.Context, key string, value str
 	logx.WithContext(ctx).Infof("read receipt event: from=%d conv=%d last_msg=%d",
 		event.FromUserID, event.ConversationID, event.LastReadMessageID)
 
-	memberIDs, ok := conversationMemberIDs(ctx, c.svcCtx, event.ConversationID)
-	if !ok {
+	memberIDs, _, err := conversationRecipients(ctx, c.svcCtx, event.ConversationID)
+	if err != nil {
+		logx.WithContext(ctx).Errorf("conversation member lookup conv=%d failed: %v", event.ConversationID, err)
+		return nil
+	}
+	if len(memberIDs) == 0 {
 		return nil
 	}
 

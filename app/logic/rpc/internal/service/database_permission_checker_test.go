@@ -244,7 +244,7 @@ func TestDatabasePermissionChecker_DirectTemporaryConversationLimitReached(t *te
 				{UserID: 100, FriendID: 200, Status: "pending"},
 			},
 		},
-		messageCounts: map[int64]int64{200: temporaryConversationMessageLimit},
+		messageCounts: map[int64]int64{200: DefaultTemporaryConversationMessageLimit},
 	}
 	checker := NewDatabasePermissionChecker(fq)
 
@@ -289,7 +289,7 @@ func TestDatabasePermissionChecker_DirectBotConversationSkipsTemporaryLimit(t *t
 						{UserID: tt.senderID, FriendID: tt.peerID, Status: "pending"},
 					},
 				},
-				messageCounts: map[int64]int64{200: temporaryConversationMessageLimit},
+				messageCounts: map[int64]int64{200: DefaultTemporaryConversationMessageLimit},
 				userTypes:     map[int64]string{9001: string(shareduser.TypeBot)},
 			}
 			checker := NewDatabasePermissionChecker(fq)

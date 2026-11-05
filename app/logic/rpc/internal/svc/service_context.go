@@ -2,6 +2,7 @@ package svc
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -60,96 +61,107 @@ type ServiceContext struct {
 	// TransferProducer publishes accepted messages to the FIFO delivery topic.
 	// Nil when RocketMQ is not configured.
 	TransferProducer *rocketmq.Producer
-	IdempotencyRedis *redis.Client
+	// RedisClient backs both the cache invalidation stream and the message
+	// idempotency store. Nil when CacheRedis is not configured; Close owns it.
+	RedisClient *redis.Client
 	// MessageService is the chat message write entry; nil without Postgres,
 	// Redis or RocketMQ.
 	MessageService service.MessageService
 }
 
 func NewServiceContext(c config.Config) *ServiceContext {
-	svcCtx := &ServiceContext{
-		Config:            c,
-		PermissionChecker: service.DenyAllPermissionChecker{},
-	}
+	svcCtx := &ServiceContext{Config: c}
 
 	idGen, err := snowflake.NewSnowflake(c.MachineID)
 	if err != nil {
-		logx.WithContext(context.Background()).Errorf("failed to create Snowflake generator with machineID=%d: %v", c.MachineID, err)
-		return svcCtx
+		logx.Must(fmt.Errorf("failed to create Snowflake generator with machineID=%d: %w", c.MachineID, err))
 	}
 
 	svcCtx.IDGen = idGen
-	initSharedCaches(svcCtx, c)
 
-	if c.Postgres.DataSource != "" {
-		db, err := gormdb.Open(c.Postgres.DataSource)
-		if err != nil {
-			// Fail fast: a half-booted logic service answers every permission
-			// check with DenyAll and cannot serve conversations, so the
-			// container should restart until Postgres is reachable.
-			logx.Must(fmt.Errorf("logic service requires Postgres: %w", err))
-		} else {
-			store := dao.New(db)
-			svcCtx.DAO = store
-			svcCtx.FriendshipDAO = store
-			limit := c.Dev.TemporaryConversationMessageLimit
-			if limit == 0 {
-				limit = service.DefaultTemporaryConversationMessageLimit
-			}
-			authz, err := rbac.New(store)
-			if err != nil {
-				logx.Must(fmt.Errorf("logic service: casbin authorizer: %w", err))
-			}
-			svcCtx.Authorizer = authz
-			svcCtx.PermissionChecker = service.NewDatabasePermissionCheckerWithLimitAndCaches(store, limit, service.DatabasePermissionCheckerCaches{
-				Conversation: svcCtx.ConvCache,
-				Members:      svcCtx.ConvMembersCache,
-				Friendship:   svcCtx.FriendshipCache,
-				UserType:     svcCtx.UserTypeCache,
-			}).WithAuthorizer(authz)
-			svcCtx.UserInfoService = service.NewUserInfoService(store, service.WithUserInfoCache(svcCtx.UserCache), service.WithUserTypeCache(svcCtx.UserTypeCache))
-			svcCtx.BotService = service.NewBotService(store, store,
-				service.WithBotTokenCache(svcCtx.BotTokenCache),
-				service.WithBotTxRunner(botTxRunner{store: store}),
-				service.WithBotIDGenerator(idGen),
-			)
-			svcCtx.FriendTagService = service.NewFriendshipTagService(store, idGen)
-			svcCtx.SearchService = service.NewSearchService(store)
-
-			// Build ConversationService with optional transactional event publishing.
-			var convOpts []service.ConversationServiceOption
-
-			if c.ConversationEventProducerConf.IsConfigured() {
-				producer, err := rocketmq.NewProducer(c.ConversationEventProducerConf)
-				if err != nil {
-					logx.Must(fmt.Errorf("logic service: conversation event producer: %w", err))
-				}
-				producer.WithJournalChecker(store.DB())
-				svcCtx.EventProducer = producer
-				convOpts = append(convOpts, service.WithTransactionalEvents(c.ConversationEventProducerConf.Topic))
-				logx.WithContext(context.Background()).Infof(
-					"conversation events: transactional topic=%s endpoint=%s",
-					c.ConversationEventProducerConf.Topic, c.ConversationEventProducerConf.Endpoint,
-				)
-			}
-
-			convOpts = append(convOpts, service.WithConversationCaches(svcCtx.ConvCache, svcCtx.ConvMembersCache))
-			convOpts = append(convOpts, service.WithRBAC(authz))
-			svcCtx.ConversationService = service.NewConversationService(
-				store, idGen,
-				conversationTxRunner{store: store, producer: svcCtx.EventProducer},
-				convOpts...,
-			)
-
-			if limit != service.DefaultTemporaryConversationMessageLimit {
-				logx.WithContext(context.Background()).Infof("Postgres connected, using DatabasePermissionChecker (temporary conversation message limit=%d), UserInfoService and ConversationService", limit)
-			} else {
-				logx.WithContext(context.Background()).Infof("Postgres connected, using DatabasePermissionChecker, UserInfoService and ConversationService")
-			}
-
-			initMessageService(svcCtx, c)
-		}
+	var rds *redis.Client
+	if c.CacheRedis.Addr != "" {
+		rds = redis.NewClient(&redis.Options{
+			Addr:     c.CacheRedis.Addr,
+			Password: c.CacheRedis.Password,
+			DB:       c.CacheRedis.DB,
+		})
 	}
+	svcCtx.RedisClient = rds
+	initSharedCaches(svcCtx, c, rds)
+
+	// Fail fast: a half-booted logic service answers every permission check
+	// with DenyAll and cannot serve conversations, so the container should
+	// restart until Postgres is reachable.
+	if c.Postgres.DataSource == "" {
+		logx.Must(errors.New("logic service requires Postgres: Config.Postgres.DataSource is empty"))
+	}
+
+	db, err := gormdb.Open(c.Postgres.DataSource)
+	if err != nil {
+		logx.Must(fmt.Errorf("logic service requires Postgres: %w", err))
+	}
+
+	store := dao.New(db)
+	svcCtx.DAO = store
+	svcCtx.FriendshipDAO = store
+	limit := c.Dev.TemporaryConversationMessageLimit
+	if limit == 0 {
+		limit = service.DefaultTemporaryConversationMessageLimit
+	}
+	authz, err := rbac.New(store)
+	if err != nil {
+		logx.Must(fmt.Errorf("logic service: casbin authorizer: %w", err))
+	}
+	svcCtx.Authorizer = authz
+	svcCtx.PermissionChecker = service.NewDatabasePermissionCheckerWithLimitAndCaches(store, limit, service.DatabasePermissionCheckerCaches{
+		Conversation: svcCtx.ConvCache,
+		Members:      svcCtx.ConvMembersCache,
+		Friendship:   svcCtx.FriendshipCache,
+		UserType:     svcCtx.UserTypeCache,
+	}).WithAuthorizer(authz)
+	svcCtx.UserInfoService = service.NewUserInfoService(store, service.WithUserInfoCache(svcCtx.UserCache), service.WithUserTypeCache(svcCtx.UserTypeCache))
+	svcCtx.BotService = service.NewBotService(store, store,
+		service.WithBotTokenCache(svcCtx.BotTokenCache),
+		service.WithBotTxRunner(botTxRunner{store: store}),
+		service.WithBotIDGenerator(idGen),
+	)
+	svcCtx.FriendTagService = service.NewFriendshipTagService(store, idGen)
+	svcCtx.SearchService = service.NewSearchService(store)
+
+	// Build ConversationService with optional transactional event publishing.
+	var convOpts []service.ConversationServiceOption
+
+	if c.ConversationEventProducerConf.IsConfigured() {
+		producer, err := rocketmq.NewProducer(c.ConversationEventProducerConf)
+		if err != nil {
+			logx.Must(fmt.Errorf("logic service: conversation event producer: %w", err))
+		}
+		producer.WithJournalChecker(store.DB())
+		svcCtx.EventProducer = producer
+		convOpts = append(convOpts, service.WithTransactionalEvents(c.ConversationEventProducerConf.Topic))
+		logx.WithContext(context.Background()).Infof(
+			"conversation events: transactional topic=%s endpoint=%s",
+			c.ConversationEventProducerConf.Topic, c.ConversationEventProducerConf.Endpoint,
+		)
+	}
+
+	convOpts = append(convOpts, service.WithConversationCaches(svcCtx.ConvCache, svcCtx.ConvMembersCache))
+	convOpts = append(convOpts, service.WithRBAC(authz))
+	svcCtx.ConversationService = service.NewConversationService(
+		store, idGen,
+		conversationTxRunner{store: store, producer: svcCtx.EventProducer},
+		convOpts...,
+	)
+
+	if limit != service.DefaultTemporaryConversationMessageLimit {
+		logx.WithContext(context.Background()).Infof("Postgres connected, using DatabasePermissionChecker (temporary conversation message limit=%d), UserInfoService and ConversationService", limit)
+	} else {
+		logx.WithContext(context.Background()).Infof("Postgres connected, using DatabasePermissionChecker, UserInfoService and ConversationService")
+	}
+
+	initMessageService(svcCtx, c)
+
 	return svcCtx
 }
 
@@ -158,7 +170,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 // would silently duplicate or drop messages, so the RPC surface reports an
 // internal error instead.
 func initMessageService(svcCtx *ServiceContext, c config.Config) {
-	if !c.TransferProducerConf.IsConfigured() || c.CacheRedis.Addr == "" {
+	if !c.TransferProducerConf.IsConfigured() || svcCtx.RedisClient == nil {
 		logx.WithContext(context.Background()).Errorf(
 			"message ingestion disabled: transfer producer or Redis is not configured")
 		return
@@ -170,13 +182,6 @@ func initMessageService(svcCtx *ServiceContext, c config.Config) {
 		return
 	}
 	svcCtx.TransferProducer = producer
-
-	idempotencyRedis := redis.NewClient(&redis.Options{
-		Addr:     c.CacheRedis.Addr,
-		Password: c.CacheRedis.Password,
-		DB:       c.CacheRedis.DB,
-	})
-	svcCtx.IdempotencyRedis = idempotencyRedis
 
 	var attachmentClient attachmentpb.AttachmentServiceClient
 	if c.AttachmentRpc.Etcd.Key != "" || len(c.AttachmentRpc.Endpoints) > 0 || c.AttachmentRpc.Target != "" {
@@ -190,7 +195,7 @@ func initMessageService(svcCtx *ServiceContext, c config.Config) {
 
 	svcCtx.MessageService = service.NewMessageService(
 		svcCtx.PermissionChecker,
-		service.NewRedisIdempotencyStore(idempotencyRedis),
+		service.NewRedisIdempotencyStore(svcCtx.RedisClient),
 		service.NewRocketMQPublisher(producer, c.TransferProducerConf.Topic),
 		service.NewGRPCAttachmentValidator(attachmentClient),
 		svcCtx.IDGen,
@@ -279,17 +284,15 @@ func (s *ServiceContext) Close() {
 		return
 	}
 
-	if s.IdempotencyRedis != nil {
-		if err := s.IdempotencyRedis.Close(); err != nil {
-			logx.WithContext(context.Background()).Errorf("failed to close idempotency redis: %v", err)
+	if s.CacheManager != nil {
+		s.CacheManager.Close()
+	}
+
+	if s.RedisClient != nil {
+		if err := s.RedisClient.Close(); err != nil {
+			logx.WithContext(context.Background()).Errorf("failed to close redis: %v", err)
 		}
 	}
-
-	if s.CacheManager == nil {
-		return
-	}
-
-	s.CacheManager.Close()
 }
 
 func (s *ServiceContext) InvalidateFriendship(ctx context.Context, userID, friendID int64) {
@@ -300,14 +303,12 @@ func (s *ServiceContext) InvalidateFriendship(ctx context.Context, userID, frien
 	_ = s.FriendshipCache.Del(ctx, sharedcache.FriendshipKey(userID, friendID))
 }
 
-func initSharedCaches(svcCtx *ServiceContext, c config.Config) {
-	if c.CacheRedis.Addr == "" {
+func initSharedCaches(svcCtx *ServiceContext, c config.Config, rds *redis.Client) {
+	if rds == nil {
 		return
 	}
 
 	conf := c.Cache.WithDefaults()
-	rds := redis.NewClient(&redis.Options{Addr: c.CacheRedis.Addr, Password: c.CacheRedis.Password})
-
 	manager := sharedcache.NewCacheManager(rds, conf.InvalidateStream)
 	svcCtx.CacheManager = manager
 
@@ -319,19 +320,4 @@ func initSharedCaches(svcCtx *ServiceContext, c config.Config) {
 	svcCtx.UserTypeCache = sharedcache.MustTyped[string](manager, sharedcache.NameUserType, l1TTL, l2TTL, conf.L1Capacity)
 	svcCtx.FriendshipCache = sharedcache.MustTyped[[]orm.Friendship](manager, sharedcache.NameFriendship, l1TTL, l2TTL, conf.L1Capacity)
 	svcCtx.BotTokenCache = sharedcache.MustTyped[dao.BotTokenWithUser](manager, sharedcache.NameBotToken, 15*time.Second, 3*time.Minute, min(conf.L1Capacity, 500))
-}
-
-func NewServiceContextWithChecker(c config.Config, checker service.PermissionChecker, userSvc service.UserInfoQuerier) *ServiceContext {
-	return &ServiceContext{
-		Config:            c,
-		PermissionChecker: checker,
-		UserInfoService:   userSvc,
-	}
-}
-
-func NewServiceContextWithPermissionChecker(c config.Config, checker service.PermissionChecker) *ServiceContext {
-	return &ServiceContext{
-		Config:            c,
-		PermissionChecker: checker,
-	}
 }

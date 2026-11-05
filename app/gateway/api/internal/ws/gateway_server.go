@@ -163,6 +163,9 @@ func (c *Connection) writeQueuedFrame(ctx context.Context, frame *wspb.WsFrame) 
 }
 
 // GatewayServer implements the GatewayServiceServer interface.
+//
+// Every push RPC reports delivery failure through its returned error only; the
+// Success/AffectedCount fields describe a delivery that did not fail.
 type GatewayServer struct {
 	pb.UnimplementedGatewayServiceServer
 	manager *Manager
@@ -212,14 +215,43 @@ func (s *GatewayServer) pushTo(ctx context.Context, op string, connections []*Co
 	})
 }
 
+// deliver is the single delivery path behind every GatewayService push RPC.
+// Having no local connection is not a failure (the user is simply not on this
+// node); a delivery where every attempted write failed is returned as an error
+// so the caller retries. Partial failures stay per-connection and are logged,
+// because retrying would duplicate frames on the devices that already got them.
+func (s *GatewayServer) deliver(ctx context.Context, op string, connections []*Connection, frameType wspb.FrameType, payload proto.Message, skip func(*Connection) bool) (int32, error) {
+	if len(connections) == 0 {
+		logx.WithContext(ctx).Debugf("%s: no local connections", op)
+		return 0, nil
+	}
+
+	written, err := s.pushTo(ctx, op, connections, frameType, payload, skip)
+	if written == 0 && err != nil {
+		return 0, err
+	}
+
+	return written, nil
+}
+
+// pushFailed converts a delivery failure into the gRPC status error every push
+// RPC returns; the response's Success field is not a failure channel.
+func pushFailed(op string, err error) error {
+	return status.Errorf(codes.Unavailable, "%s: %v", op, err)
+}
+
 // PushMessage delivers a chat message to all connections of the target user on this gateway node.
 func (s *GatewayServer) PushMessage(ctx context.Context, req *pb.PushMessageReq) (*pb.PushMessageResp, error) {
 	if req.TargetUserId == 0 {
 		return nil, status.Errorf(codes.InvalidArgument, "target_user_id is required")
 	}
 
-	if err := s.DeliverLocal(ctx, req); err != nil {
-		return &pb.PushMessageResp{Success: false}, nil
+	_, err := s.deliver(ctx, "PushMessage", s.manager.GetByUserID(req.TargetUserId),
+		wspb.FrameType_FRAME_TYPE_PUSH_MESSAGE, pushMessagePayload(req), func(conn *Connection) bool {
+			return skipsSourceDevice(req, conn)
+		})
+	if err != nil {
+		return nil, pushFailed("PushMessage", err)
 	}
 
 	return &pb.PushMessageResp{Success: true}, nil
@@ -314,10 +346,9 @@ func (s *GatewayServer) PushTyping(ctx context.Context, req *pb.PushTypingReq) (
 		ConversationId: req.ConversationId,
 	}
 
-	_, pushErr := s.pushTo(ctx, "PushTyping", s.manager.GetByUserID(req.TargetUserId), wspb.FrameType_FRAME_TYPE_PUSH_TYPING, payload, nil)
-
-	if pushErr != nil {
-		return &pb.PushTypingResp{Success: false}, nil
+	if _, err := s.deliver(ctx, "PushTyping", s.manager.GetByUserID(req.TargetUserId),
+		wspb.FrameType_FRAME_TYPE_PUSH_TYPING, payload, nil); err != nil {
+		return nil, pushFailed("PushTyping", err)
 	}
 
 	return &pb.PushTypingResp{Success: true}, nil
@@ -325,29 +356,21 @@ func (s *GatewayServer) PushTyping(ctx context.Context, req *pb.PushTypingReq) (
 
 // PushPresence delivers a presence update to all connections of the target user.
 func (s *GatewayServer) PushPresence(ctx context.Context, req *pb.PushPresenceReq) (*pb.PushPresenceResp, error) {
-	if req.UserId == 0 {
-		return nil, status.Errorf(codes.InvalidArgument, "user_id is required")
+	if req.TargetUserId == 0 {
+		return nil, status.Errorf(codes.InvalidArgument, "target_user_id is required")
 	}
 
-	// TargetUserId specifies the user whose connections should receive the push.
-	// Fall back to UserId for backward compatibility if TargetUserId is not set.
-	targetUserID := req.TargetUserId
-	if targetUserID == 0 {
-		targetUserID = req.UserId
-	}
-
-	// Build PushPresencePayload.
+	// user_id names the subject of the update; target_user_id is the only
+	// routing field.
 	payload := &wspb.PushPresencePayload{
 		UserId:    req.UserId,
 		Status:    req.Status,
 		UpdatedAt: req.UpdatedAt,
 	}
 
-	// Deliver to all connections of the target user.
-	_, pushErr := s.pushTo(ctx, "PushPresence", s.manager.GetByUserID(targetUserID), wspb.FrameType_FRAME_TYPE_PUSH_PRESENCE, payload, nil)
-
-	if pushErr != nil {
-		return &pb.PushPresenceResp{Success: false}, nil
+	if _, err := s.deliver(ctx, "PushPresence", s.manager.GetByUserID(req.TargetUserId),
+		wspb.FrameType_FRAME_TYPE_PUSH_PRESENCE, payload, nil); err != nil {
+		return nil, pushFailed("PushPresence", err)
 	}
 
 	return &pb.PushPresenceResp{Success: true}, nil
@@ -366,10 +389,9 @@ func (s *GatewayServer) PushReadReceipt(ctx context.Context, req *pb.PushReadRec
 		UpdatedAt:         req.UpdatedAt,
 	}
 
-	_, pushErr := s.pushTo(ctx, "PushReadReceipt", s.manager.GetByUserID(req.TargetUserId), wspb.FrameType_FRAME_TYPE_PUSH_READ_RECEIPT, payload, nil)
-
-	if pushErr != nil {
-		return &pb.PushReadReceiptResp{Success: false}, nil
+	if _, err := s.deliver(ctx, "PushReadReceipt", s.manager.GetByUserID(req.TargetUserId),
+		wspb.FrameType_FRAME_TYPE_PUSH_READ_RECEIPT, payload, nil); err != nil {
+		return nil, pushFailed("PushReadReceipt", err)
 	}
 
 	return &pb.PushReadReceiptResp{Success: true}, nil
@@ -389,14 +411,9 @@ func (s *GatewayServer) PushFriendApplication(ctx context.Context, req *pb.PushF
 		UpdatedAt: req.UpdatedAt,
 	}
 
-	connections := s.manager.GetByUserID(req.TargetUserId)
-	if len(connections) == 0 {
-		logx.WithContext(ctx).Debugf("PushFriendApplication: no local connections for user_id=%d", req.TargetUserId)
-		return &pb.PushFriendApplicationResp{Success: true}, nil
-	}
-
-	if _, pushErr := s.pushTo(ctx, "PushFriendApplication", connections, wspb.FrameType_FRAME_TYPE_PUSH_FRIEND_APPLICATION, payload, nil); pushErr != nil {
-		return &pb.PushFriendApplicationResp{Success: false}, nil
+	if _, err := s.deliver(ctx, "PushFriendApplication", s.manager.GetByUserID(req.TargetUserId),
+		wspb.FrameType_FRAME_TYPE_PUSH_FRIEND_APPLICATION, payload, nil); err != nil {
+		return nil, pushFailed("PushFriendApplication", err)
 	}
 
 	return &pb.PushFriendApplicationResp{Success: true}, nil
@@ -419,16 +436,12 @@ func (s *GatewayServer) PushNotification(ctx context.Context, req *pb.PushNotifi
 		connections = s.manager.GetByUserID(req.TargetUserId)
 	}
 
-	if len(connections) == 0 {
-		logx.WithContext(ctx).Debugf("PushNotification: no local connections for user_id=%d", req.TargetUserId)
-		return &pb.PushNotificationResp{Success: true}, nil
+	affected, err := s.deliver(ctx, "PushNotification", connections,
+		wspb.FrameType_FRAME_TYPE_PUSH_NOTIFICATION, payload, nil)
+	if err != nil {
+		return nil, pushFailed("PushNotification", err)
 	}
 
-	affected, pushErr := s.pushTo(ctx, "PushNotification", connections, wspb.FrameType_FRAME_TYPE_PUSH_NOTIFICATION, payload, nil)
-
-	if pushErr != nil {
-		return &pb.PushNotificationResp{Success: false, AffectedCount: affected}, nil
-	}
 	return &pb.PushNotificationResp{Success: true, AffectedCount: affected}, nil
 }
 

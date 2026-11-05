@@ -7,7 +7,7 @@ import (
 
 	"github.com/hellopoisonx/aim/app/auth/rpc/authservice"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/config"
-	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc/svctest"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 	"github.com/stretchr/testify/require"
@@ -18,7 +18,7 @@ import (
 
 func TestGatewayAuthProxyLogic(t *testing.T) {
 	client := &proxyAuthClient{}
-	svcCtx := svc.NewServiceContextWithAuth(config.Config{}, client)
+	svcCtx := svctest.WithAuth(config.Config{}, client)
 	ctx := context.Background()
 
 	registered, err := NewRegisterLogic(ctx, svcCtx).Register(&types.RegisterRequest{Email: "ada@example.com", Password: "password123", Username: "Ada", DeviceId: "desktop-1"})
@@ -41,7 +41,7 @@ func TestGatewayAuthProxyLogic(t *testing.T) {
 func TestGatewayAuthProxyLogicSanitizesPlainError(t *testing.T) {
 	t.Parallel()
 
-	svcCtx := svc.NewServiceContextWithAuth(config.Config{}, &failingAuthClient{err: errors.New("postgres password leaked")})
+	svcCtx := svctest.WithAuth(config.Config{}, &failingAuthClient{err: errors.New("postgres password leaked")})
 	ctx := context.Background()
 
 	_, err := NewRegisterLogic(ctx, svcCtx).Register(&types.RegisterRequest{Email: "ada@example.com", Password: "password123", Username: "Ada", DeviceId: "desktop-1"})
@@ -60,7 +60,7 @@ func TestGatewayAuthProxyLogicPreservesGrpcBizCode(t *testing.T) {
 	// gRPC status error from auth service: invalid credentials → 40100.
 	grpcErr := status.Error(codes.Unauthenticated, "invalid credentials")
 	client := &failingAuthClient{err: grpcErr}
-	svcCtx := svc.NewServiceContextWithAuth(config.Config{}, client)
+	svcCtx := svctest.WithAuth(config.Config{}, client)
 	ctx := context.Background()
 
 	_, err := NewLoginLogic(ctx, svcCtx).Login(&types.LoginRequest{Email: "ada@example.com", Password: "wrong", DeviceId: "desktop-1"})
@@ -73,7 +73,7 @@ func TestGatewayAuthProxyLogicSanitizesGrpcInternal(t *testing.T) {
 	// gRPC Internal errors should still sanitize the message.
 	grpcErr := status.Error(codes.Internal, "postgres password leaked")
 	client := &failingAuthClient{err: grpcErr}
-	svcCtx := svc.NewServiceContextWithAuth(config.Config{}, client)
+	svcCtx := svctest.WithAuth(config.Config{}, client)
 	ctx := context.Background()
 
 	_, err := NewLoginLogic(ctx, svcCtx).Login(&types.LoginRequest{Email: "ada@example.com", Password: "wrong", DeviceId: "desktop-1"})
@@ -85,7 +85,7 @@ func TestGatewayAuthProxyPreservesGrpcConflict(t *testing.T) {
 
 	grpcErr := status.Error(codes.AlreadyExists, "email already registered")
 	client := &failingAuthClient{err: grpcErr}
-	svcCtx := svc.NewServiceContextWithAuth(config.Config{}, client)
+	svcCtx := svctest.WithAuth(config.Config{}, client)
 	ctx := context.Background()
 
 	_, err := NewRegisterLogic(ctx, svcCtx).Register(&types.RegisterRequest{Email: "ada@example.com", Password: "password123", Username: "Ada", DeviceId: "desktop-1"})

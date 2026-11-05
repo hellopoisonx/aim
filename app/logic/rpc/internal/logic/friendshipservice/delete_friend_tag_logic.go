@@ -24,6 +24,7 @@ func NewDeleteFriendTagLogic(ctx context.Context, svcCtx *svc.ServiceContext) *D
 	}
 }
 
+// DeleteFriendTag deletes the tag itself, which drops it from every friend.
 func (l *DeleteFriendTagLogic) DeleteFriendTag(in *pb.DeleteFriendTagReq) (*pb.DeleteFriendTagResp, error) {
 	tagSvc, err := requireTagOp(l.svcCtx, in.GetUserId(), in.GetTagId())
 	if err != nil {

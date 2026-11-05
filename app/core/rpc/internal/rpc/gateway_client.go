@@ -23,6 +23,8 @@ type GatewayPusher interface {
 	PushTypingToNode(ctx context.Context, nodeID string, req *gwpb.PushTypingReq) (*gwpb.PushTypingResp, error)
 	PushReadReceiptToNode(ctx context.Context, nodeID string, req *gwpb.PushReadReceiptReq) (*gwpb.PushReadReceiptResp, error)
 	PushFriendApplicationToNode(ctx context.Context, nodeID string, req *gwpb.PushFriendApplicationReq) (*gwpb.PushFriendApplicationResp, error)
+	// Close releases every underlying connection; it is safe to call twice.
+	Close() error
 }
 
 type GatewayClient struct {

@@ -31,7 +31,7 @@ func (l *CreateUserBotTokenLogic) CreateUserBotToken(in *pb.CreateUserBotTokenRe
 
 	info, plaintext, err := botSvc.CreateUserBotToken(l.ctx,
 		in.GetOwnerUserId(), in.GetBotUserId(),
-		in.GetName(), in.GetExpiresAt(), in.GetActions())
+		in.GetName(), deadlineFromMillis(in.GetExpiresAt()), in.GetActions())
 	if err != nil {
 		return nil, err
 	}

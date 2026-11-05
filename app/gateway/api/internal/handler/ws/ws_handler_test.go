@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/authctx"
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc/svctest"
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/coder/websocket"
@@ -573,7 +574,7 @@ func newTestServiceContext(t *testing.T) *svc.ServiceContext {
 	c.Auth.AccessSecret = "test-secret"
 	c.WebSocket.MaxMsgSize = 32768
 
-	return svc.NewServiceContextWithAuth(c, noopAuthClient{})
+	return svctest.WithAuth(c, noopAuthClient{})
 }
 
 func dialTestWebSocket(ctx context.Context, serverURL string, token string) (*websocket.Conn, *http.Response, error) {
@@ -688,7 +689,7 @@ func newTestServiceContextWithMessageClient(t *testing.T, messageClient *mockMes
 	c.Auth.AccessSecret = "test-secret"
 	c.WebSocket.MaxMsgSize = 32768
 
-	return svc.NewServiceContextWithMessageClient(c, noopAuthClient{}, messageClient)
+	return svctest.WithMessageClient(c, noopAuthClient{}, messageClient)
 }
 
 func TestHandleSendMessageAccepted(t *testing.T) {

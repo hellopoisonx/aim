@@ -104,7 +104,6 @@ func NewBotWebhookConsumer(ctx context.Context, svcCtx *svc.ServiceContext) *Bot
 		jobs:   make(chan webhookJob, botWebhookQueueSize),
 		stopCh: make(chan struct{}),
 	}
-	c.Start()
 
 	return c
 }

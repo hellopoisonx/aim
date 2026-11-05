@@ -3,11 +3,9 @@ package mqs
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 
 	attachmentpb "github.com/hellopoisonx/aim/app/attachment/rpc/pb"
 	"github.com/hellopoisonx/aim/app/core/rpc/internal/svc"
-	logicpb "github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	sharedattachment "github.com/hellopoisonx/aim/app/shared/attachment"
 	"github.com/hellopoisonx/aim/app/shared/events"
 	"github.com/hellopoisonx/aim/app/shared/tracing"
@@ -95,10 +93,14 @@ func (c *AttachmentParsedConsumer) Consume(ctx context.Context, key string, valu
 	}
 
 	// 获取会话成员列表。
-	targetUserIDs, conversationType, err := resolveConversationMembers(ctx, c.svcCtx, conversationID)
+	targetUserIDs, conversationType, err := conversationRecipients(ctx, c.svcCtx, conversationID)
 	if err != nil {
 		span.RecordError(err)
 		return err
+	}
+	if len(targetUserIDs) == 0 {
+		logx.WithContext(ctx).Infof("attachment parsed event for %s has no conversation members, skipping push", event.FileID)
+		return nil
 	}
 
 	// 生成系统消息 ID。
@@ -154,25 +156,4 @@ func decodeAttachmentParsedEvent(value []byte) (events.AttachmentParsedEvent, js
 	}
 
 	return wire.AttachmentParsedEvent, wire.Metadata, nil
-}
-
-// resolveConversationMembers 查询会话成员列表及会话类型。
-func resolveConversationMembers(ctx context.Context, svcCtx *svc.ServiceContext, conversationID int64) ([]int64, string, error) {
-	if svcCtx.LogicConversationClient == nil {
-		return nil, "", fmt.Errorf("logic conversation client not configured")
-	}
-
-	resp, err := svcCtx.LogicConversationClient.GetConversationMembers(ctx, &logicpb.GetConversationMembersReq{
-		ConversationId: conversationID,
-	})
-	if err != nil {
-		return nil, "", err
-	}
-
-	memberIDs := resp.GetMemberIds()
-	if len(memberIDs) == 0 {
-		return nil, resp.GetConversationType(), nil
-	}
-
-	return positiveUniqueIDs(memberIDs), resp.GetConversationType(), nil
 }

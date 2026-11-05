@@ -124,8 +124,8 @@ type ConsumerService struct {
 }
 
 // NewConsumerService builds the consumer, or returns (nil, nil) when the
-// configuration is absent — services wire the result into their service group
-// unconditionally.
+// configuration is absent. A nil *ConsumerService tolerates Start and Stop, so
+// services may wire the result into their service group unconditionally.
 func NewConsumerService(conf ConsumerConf, handler Handler) (*ConsumerService, error) {
 	if !conf.IsConfigured() {
 		return nil, nil

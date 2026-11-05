@@ -50,6 +50,8 @@ func NewCacheManager(rds redis.UniversalClient, stream string) *CacheManager {
 	return m
 }
 
+// Close stops the invalidation loop and waits for it. The Redis client is
+// owned by the caller and is left open.
 func (m *CacheManager) Close() {
 	if m == nil || m.cancel == nil {
 		return

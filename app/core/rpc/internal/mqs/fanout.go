@@ -2,6 +2,7 @@ package mqs
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/hellopoisonx/aim/app/core/rpc/internal/svc"
 	logicpb "github.com/hellopoisonx/aim/app/logic/rpc/pb"
@@ -9,24 +10,23 @@ import (
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
-// conversationMemberIDs resolves a conversation's members. ok is false when the
-// conversation client is unconfigured or the lookup failed: callers skip the
-// fan-out instead of retrying, since a redelivery cannot fix a logic outage.
-func conversationMemberIDs(ctx context.Context, svcCtx *svc.ServiceContext, conversationID int64) ([]int64, bool) {
+// conversationRecipients is the single member resolver for every core consumer:
+// an unconfigured logic client yields no recipients and no error, a failed
+// lookup yields the error, an empty conversation yields an empty slice. Callers
+// choose their own degradation (skip, retry, fall back to the sender).
+func conversationRecipients(ctx context.Context, svcCtx *svc.ServiceContext, conversationID int64) ([]int64, string, error) {
 	if svcCtx.LogicConversationClient == nil {
-		logx.WithContext(ctx).Debugf("no conversation client configured, skipping fan-out for conv=%d", conversationID)
-		return nil, false
+		return nil, "", nil
 	}
 
 	resp, err := svcCtx.LogicConversationClient.GetConversationMembers(ctx, &logicpb.GetConversationMembersReq{
 		ConversationId: conversationID,
 	})
 	if err != nil {
-		logx.WithContext(ctx).Errorf("GetConversationMembers failed for conv %d: %v", conversationID, err)
-		return nil, false
+		return nil, "", fmt.Errorf("GetConversationMembers conv %d: %w", conversationID, err)
 	}
 
-	return resp.GetMemberIds(), true
+	return positiveUniqueIDs(resp.GetMemberIds()), resp.GetConversationType(), nil
 }
 
 // pushToMemberNodes calls push once per (member, gateway node), skipping

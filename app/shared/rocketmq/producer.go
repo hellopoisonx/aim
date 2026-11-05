@@ -53,8 +53,9 @@ type Message struct {
 
 // Producer wraps the SDK producer with AIM's message shape.
 //
-// A nil *Producer is safe to use: Start, GracefulStop and Publish become no-ops
-// so services can wire an optional producer unconditionally.
+// A nil *Producer means RocketMQ is not configured. Start, GracefulStop and
+// Publish are no-ops on it (the work is droppable); SendTransactional returns an
+// error because silently reporting a committed transaction would lose an event.
 type Producer struct {
 	producer messageSender
 	group    string
@@ -67,12 +68,15 @@ type Producer struct {
 // NewProducer builds a producer for conf.Topic plus any extraTopics; one
 // producer may span several topics (the gateway's event producer does).
 //
+// An absent endpoint means RocketMQ is disabled for this component and yields
+// (nil, nil); a partially configured producer is a configuration error.
+//
 // Journal-backed transaction check-back is enabled separately by
 // [Producer.WithJournalChecker]; the checker closure is installed up front so
 // enabling it after construction works.
 func NewProducer(conf ProducerConf, extraTopics ...string) (*Producer, error) {
 	if conf.Endpoint == "" {
-		return nil, errors.New("rocketmq: endpoint is required")
+		return nil, nil
 	}
 	if conf.Group == "" {
 		return nil, errors.New("rocketmq: producer group is required")

@@ -137,6 +137,7 @@ func TestSendTransactionalCommitsAfterLocalTransaction(t *testing.T) {
 
 	var journals []EventJournal
 	producer.journalTx = journalStub(&journals, nil)
+	producer.journals.Store(&gorm.DB{})
 
 	ran := false
 	err := producer.SendTransactional(context.Background(), &gorm.DB{}, TransactionalMessage{
@@ -170,6 +171,7 @@ func TestSendTransactionalRollsBackWhenLocalTransactionFails(t *testing.T) {
 	localErr := errors.New("insert credential failed")
 	var journals []EventJournal
 	producer.journalTx = journalStub(&journals, nil)
+	producer.journals.Store(&gorm.DB{})
 
 	err := producer.SendTransactional(context.Background(), &gorm.DB{}, TransactionalMessage{
 		Topic:    "aim-user-events",
@@ -191,6 +193,7 @@ func TestSendTransactionalSkipsLocalTransactionWhenHalfMessageFails(t *testing.T
 
 	var journals []EventJournal
 	producer.journalTx = journalStub(&journals, nil)
+	producer.journals.Store(&gorm.DB{})
 
 	ran := false
 	err := producer.SendTransactional(context.Background(), &gorm.DB{}, TransactionalMessage{
@@ -220,6 +223,18 @@ func TestSendTransactionalRejectsIncompleteMessages(t *testing.T) {
 	require.Error(t, nilProducer.SendTransactional(context.Background(), &gorm.DB{}, TransactionalMessage{Topic: "t", EventUID: "x"}, noop))
 }
 
+func TestSendTransactionalRequiresJournalChecker(t *testing.T) {
+	sender := &fakeSender{}
+	producer := &Producer{group: "test-group", producer: sender}
+
+	err := producer.SendTransactional(context.Background(), &gorm.DB{}, TransactionalMessage{
+		Topic:    "aim-attachment-parsed",
+		EventUID: "attachment.parsed:file-1",
+	}, func(context.Context, *gorm.DB) error { return nil })
+	require.ErrorContains(t, err, "journal checker")
+	assert.Empty(t, sender.sentTx, "no half message may be sent without check-back")
+}
+
 func TestResolveWithoutJournalDatabaseIsUnknown(t *testing.T) {
 	producer := newTestProducer(&fakeSender{})
 	assert.Equal(t, rmq.UNKNOWN, producer.resolve("aim-user-events", []string{"user.created:1"}))
@@ -232,6 +247,12 @@ func TestResolveWithoutKeysIsUnknown(t *testing.T) {
 	assert.Equal(t, rmq.UNKNOWN, producer.resolve("aim-user-events", nil))
 }
 
+func TestNewProducerAbsentConfigReturnsNil(t *testing.T) {
+	producer, err := NewProducer(ProducerConf{})
+	require.NoError(t, err)
+	require.Nil(t, producer)
+}
+
 func TestNewProducerValidation(t *testing.T) {
 	endpoint := EndpointConf{Endpoint: "rocketmq-proxy:8081"}
 	cases := []struct {
@@ -240,7 +261,6 @@ func TestNewProducerValidation(t *testing.T) {
 		extra   []string
 		wantErr string
 	}{
-		{name: "endpoint", wantErr: "endpoint is required"},
 		{name: "group", conf: ProducerConf{EndpointConf: endpoint, Topic: "aim-user-events"}, wantErr: "producer group is required"},
 		{name: "topic", conf: ProducerConf{EndpointConf: endpoint, Group: "aim-auth-producer"}, wantErr: "producer topic is required"},
 		{name: "empty extra topic", conf: ProducerConf{EndpointConf: endpoint, Group: "aim-auth-producer", Topic: "aim-user-events"}, extra: []string{""}, wantErr: "producer topic is required"},

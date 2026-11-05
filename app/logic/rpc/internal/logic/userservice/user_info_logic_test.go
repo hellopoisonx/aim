@@ -8,6 +8,7 @@ import (
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/config"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/service"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
+	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc/svctest"
 	"github.com/hellopoisonx/aim/app/logic/rpc/model/orm"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
 
@@ -79,7 +80,7 @@ func (f *fakeUserInfoService) SearchUserInfoByNickname(ctx context.Context, nick
 }
 
 func newTestServiceContext(userSvc service.UserInfoQuerier) *svc.ServiceContext {
-	return svc.NewServiceContextWithChecker(config.Config{}, service.DenyAllPermissionChecker{}, userSvc)
+	return svctest.WithChecker(config.Config{}, service.DenyAllPermissionChecker{}, userSvc)
 }
 
 func TestCreateUserInfo(t *testing.T) {

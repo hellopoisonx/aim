@@ -25,6 +25,7 @@ func NewRemoveFriendTagLogic(ctx context.Context, svcCtx *svc.ServiceContext) *R
 	}
 }
 
+// RemoveFriendTag detaches one tag from one friend; the tag itself survives.
 func (l *RemoveFriendTagLogic) RemoveFriendTag(in *pb.RemoveFriendTagReq) (*pb.RemoveFriendTagResp, error) {
 	tagSvc, err := requireTagOp(l.svcCtx, in.GetUserId(), in.GetTagId())
 	if err != nil {
@@ -35,7 +36,7 @@ func (l *RemoveFriendTagLogic) RemoveFriendTag(in *pb.RemoveFriendTagReq) (*pb.R
 		return nil, errorx.NewCodeError(errorx.CodeBadInput, "friend_id is required and must be positive")
 	}
 
-	if _, err := tagSvc.RemoveTag(l.ctx, in.GetUserId(), in.GetFriendId(), in.GetTagId()); err != nil {
+	if _, err := tagSvc.UntagFriend(l.ctx, in.GetUserId(), in.GetFriendId(), in.GetTagId()); err != nil {
 		return nil, errorx.ToGRPCError(err)
 	}
 

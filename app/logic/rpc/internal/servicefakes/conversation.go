@@ -29,7 +29,6 @@ type ConversationStore struct {
 	AddMemberErr        error
 	GetMembersErr       error
 	ListMessagesErr     error
-	ListMessagesInitErr error
 	CountErr            error
 	UpsertReadErr       error
 	ListReadStatesErr   error
@@ -274,7 +273,7 @@ func (f *ConversationStore) GetConversationsByUserID(ctx context.Context, userID
 	return result, nil
 }
 
-func (f *ConversationStore) ListMessagesByConversation(ctx context.Context, conversationID int64, cursorCreatedAt time.Time, cursorID int64, limit int32) ([]orm.Message, error) {
+func (f *ConversationStore) ListMessagesByConversation(_ context.Context, conversationID int64, cursor sharedconversation.MessageCursor, limit int32) ([]orm.Message, error) {
 	if f.ListMessagesErr != nil {
 		return nil, f.ListMessagesErr
 	}
@@ -284,11 +283,10 @@ func (f *ConversationStore) ListMessagesByConversation(ctx context.Context, conv
 		return []orm.Message{}, nil
 	}
 
-	// Filter Messages based on cursor (CreatedAt and ID)
 	var result []orm.Message
 	for _, msg := range msgs {
 		// Simple cursor filter: Messages with ID < cursorID
-		if cursorID > 0 && msg.ID >= cursorID {
+		if cursor.ID > 0 && msg.ID >= cursor.ID {
 			continue
 		}
 		result = append(result, msg)
@@ -297,23 +295,6 @@ func (f *ConversationStore) ListMessagesByConversation(ctx context.Context, conv
 		}
 	}
 	return result, nil
-}
-
-func (f *ConversationStore) ListMessagesByConversationInitial(ctx context.Context, conversationID int64, limit int32) ([]orm.Message, error) {
-	if f.ListMessagesInitErr != nil {
-		return nil, f.ListMessagesInitErr
-	}
-
-	msgs := f.Messages[conversationID]
-	if msgs == nil {
-		return []orm.Message{}, nil
-	}
-
-	// Return first N Messages
-	if int64(len(msgs)) <= int64(limit) {
-		return msgs, nil
-	}
-	return msgs[:limit], nil
 }
 
 func (f *ConversationStore) CountMessagesByConversation(ctx context.Context, conversationID int64) (int64, error) {

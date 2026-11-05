@@ -15,6 +15,16 @@
 // writes business rows plus an event_journal row, and the commit/rollback
 // resolution follows. A lost resolution is resolved by the broker's check-back,
 // which consults event_journal (see [Producer.WithJournalChecker]).
+//
+// # Optional dependencies
+//
+// A dependency that is not configured is represented by nil and nothing else.
+// Constructors return (nil, nil) when their configuration is absent; callers
+// pass that nil through rather than inventing a second sentinel. Nil is safe to
+// use: every method on the constructed type tolerates a nil receiver — dropping
+// work that is allowed to be dropped is a no-op returning nil, while dropping
+// work that would lose committed data returns an error naming the missing
+// dependency (see [Producer.SendTransactional]).
 package rocketmq
 
 //lint:file-ignore SA5008 go-zero conf uses json tag options for defaults.
@@ -51,9 +61,9 @@ type ProducerConf struct {
 	Topic string `json:",optional"`
 }
 
-// IsConfigured reports whether the producer has enough configuration to start.
-// It matches [NewProducer]'s validation, so a configured producer is
-// constructible.
+// IsConfigured reports whether the producer names an endpoint plus the group
+// and topic [NewProducer] requires. A missing endpoint means RocketMQ is
+// disabled (NewProducer returns a nil producer); a partial config is an error.
 func (c ProducerConf) IsConfigured() bool {
 	return c.Endpoint != "" && c.Group != "" && c.Topic != ""
 }

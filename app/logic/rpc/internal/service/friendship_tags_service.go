@@ -143,8 +143,9 @@ func (s *FriendshipTagService) SetTags(ctx context.Context, userID, friendID int
 	return s.store.ReplaceFriendTags(ctx, userID, friendID, tagIDs)
 }
 
-// RemoveTag removes a single tag from a friend.
-func (s *FriendshipTagService) RemoveTag(ctx context.Context, userID, friendID, tagID int64) (bool, error) {
+// UntagFriend detaches one tag from one friend, leaving the tag and every
+// other friend's assignment intact.
+func (s *FriendshipTagService) UntagFriend(ctx context.Context, userID, friendID, tagID int64) (bool, error) {
 	if err := s.ensureAcceptedFriend(ctx, userID, friendID); err != nil {
 		return false, err
 	}

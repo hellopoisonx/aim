@@ -448,7 +448,7 @@ func TestConversationService_GetConversationHistory_WithCursor(t *testing.T) {
 	svc := NewConversationService(store, testSnowflake, nil, nil)
 
 	// Get messages with cursor at message ID 2
-	messages, err := svc.GetConversationHistory(context.Background(), 1, 0, 2, 10)
+	messages, err := svc.GetConversationHistory(context.Background(), 1, sharedconversation.MessageCursor{ID: 2}, 10)
 	require.NoError(t, err)
 	assert.Len(t, messages, 1)
 	assert.Equal(t, int64(1), messages[0].ID)
@@ -469,8 +469,8 @@ func TestConversationService_GetConversationHistory_InitialPage(t *testing.T) {
 	}
 	svc := NewConversationService(store, testSnowflake, nil, nil)
 
-	// When cursor is 0,0 it should call GetConversationHistoryInitial
-	messages, err := svc.GetConversationHistory(context.Background(), 1, 0, 0, 10)
+	// A zero cursor addresses the newest page.
+	messages, err := svc.GetConversationHistory(context.Background(), 1, sharedconversation.MessageCursor{}, 10)
 	require.NoError(t, err)
 	assert.Len(t, messages, 2)
 }
@@ -479,7 +479,7 @@ func TestConversationService_GetConversationHistory_ConversationNotFound(t *test
 	store := servicefakes.NewConversationStore()
 	svc := NewConversationService(store, testSnowflake, nil, nil)
 
-	_, err := svc.GetConversationHistory(context.Background(), 999, 0, 1, 10)
+	_, err := svc.GetConversationHistory(context.Background(), 999, sharedconversation.MessageCursor{ID: 1}, 10)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, ErrConversationNotFound)
 }
@@ -495,7 +495,7 @@ func TestConversationService_GetConversationHistory_StoreError(t *testing.T) {
 	store.ListMessagesErr = errors.New("database error")
 	svc := NewConversationService(store, testSnowflake, nil, nil)
 
-	_, err := svc.GetConversationHistory(context.Background(), 1, 0, 1, 10)
+	_, err := svc.GetConversationHistory(context.Background(), 1, sharedconversation.MessageCursor{ID: 1}, 10)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "database error")
 }
@@ -524,7 +524,7 @@ func TestConversationService_GetConversationHistory_LimitNormalization(t *testin
 	svc := NewConversationService(store, testSnowflake, nil, nil)
 
 	// When limit > 100, it should be capped at 100
-	messages, err := svc.GetConversationHistory(context.Background(), 1, 0, 0, 200)
+	messages, err := svc.GetConversationHistory(context.Background(), 1, sharedconversation.MessageCursor{}, 200)
 	require.NoError(t, err)
 	assert.Len(t, messages, 100)
 }
@@ -544,87 +544,9 @@ func TestConversationService_GetConversationHistory_ZeroLimit(t *testing.T) {
 	svc := NewConversationService(store, testSnowflake, nil, nil)
 
 	// When limit <= 0, it should default to 50
-	messages, err := svc.GetConversationHistory(context.Background(), 1, 0, 0, 0)
+	messages, err := svc.GetConversationHistory(context.Background(), 1, sharedconversation.MessageCursor{}, 0)
 	require.NoError(t, err)
 	assert.NotNil(t, messages)
-}
-
-// ---------------------------------------------------------------------------
-// GetConversationHistoryInitial tests
-// ---------------------------------------------------------------------------
-
-func TestConversationService_GetConversationHistoryInitial_Found(t *testing.T) {
-	store := servicefakes.NewConversationStore()
-	store.Conversations[1] = orm.Conversation{
-		ID:               1,
-		ConversationType: "group",
-		IsActive:         true,
-		CreatedAt:        time.Now(),
-	}
-	now := time.Now()
-	store.Messages[1] = []orm.Message{
-		{ID: 1, ConversationID: 1, SenderID: 1, Content: []byte("first"), CreatedAt: now},
-		{ID: 2, ConversationID: 1, SenderID: 2, Content: []byte("second"), CreatedAt: now.Add(time.Second)},
-	}
-	svc := NewConversationService(store, testSnowflake, nil, nil)
-
-	messages, err := svc.GetConversationHistoryInitial(context.Background(), 1, 10)
-	require.NoError(t, err)
-	assert.Len(t, messages, 2)
-}
-
-func TestConversationService_GetConversationHistoryInitial_NotFound(t *testing.T) {
-	store := servicefakes.NewConversationStore()
-	svc := NewConversationService(store, testSnowflake, nil, nil)
-
-	_, err := svc.GetConversationHistoryInitial(context.Background(), 999, 10)
-	require.Error(t, err)
-	assert.ErrorIs(t, err, ErrConversationNotFound)
-}
-
-func TestConversationService_GetConversationHistoryInitial_StoreError(t *testing.T) {
-	store := servicefakes.NewConversationStore()
-	store.Conversations[1] = orm.Conversation{
-		ID:               1,
-		ConversationType: "direct",
-		IsActive:         true,
-		CreatedAt:        time.Now(),
-	}
-	store.ListMessagesInitErr = errors.New("database error")
-	svc := NewConversationService(store, testSnowflake, nil, nil)
-
-	_, err := svc.GetConversationHistoryInitial(context.Background(), 1, 10)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "database error")
-}
-
-func TestConversationService_GetConversationHistoryInitial_LimitNormalization(t *testing.T) {
-	store := servicefakes.NewConversationStore()
-	store.Conversations[1] = orm.Conversation{
-		ID:               1,
-		ConversationType: "direct",
-		IsActive:         true,
-		CreatedAt:        time.Now(),
-	}
-	now := time.Now()
-	// Create more than 100 messages
-	var msgs []orm.Message
-	for i := int64(1); i <= 150; i++ {
-		msgs = append(msgs, orm.Message{
-			ID:             i,
-			ConversationID: 1,
-			SenderID:       1,
-			Content:        []byte("msg"),
-			CreatedAt:      now.Add(time.Duration(i) * time.Second),
-		})
-	}
-	store.Messages[1] = msgs
-	svc := NewConversationService(store, testSnowflake, nil, nil)
-
-	// When limit > 100, it should be capped at 100
-	messages, err := svc.GetConversationHistoryInitial(context.Background(), 1, 200)
-	require.NoError(t, err)
-	assert.Len(t, messages, 100)
 }
 
 // ---------------------------------------------------------------------------
@@ -975,7 +897,7 @@ func TestConversationService_GetConversationHistory_TableDriven(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			messages, err := svc.GetConversationHistory(context.Background(), tt.conversationID, tt.cursorCreatedAt, tt.cursorID, tt.limit)
+			messages, err := svc.GetConversationHistory(context.Background(), tt.conversationID, sharedconversation.MessageCursor{CreatedAt: time.UnixMilli(tt.cursorCreatedAt), ID: tt.cursorID}, tt.limit)
 
 			if tt.wantErr {
 				require.Error(t, err)
@@ -1129,7 +1051,7 @@ func TestConversationService_UpdateReadReceipt_ValidationErrors(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := svc.UpdateReadReceipt(context.Background(), tt.conversationID, tt.userID, tt.lastReadMessageID)
+			_, err := svc.UpdateReadReceipt(context.Background(), tt.conversationID, Actor(tt.userID), tt.lastReadMessageID)
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), tt.errContains)
 		})

@@ -25,7 +25,10 @@ func main() {
 	ctx := svc.NewServiceContext(c)
 
 	ctx.StartEventProducer()
-	proc.AddWrapUpListener(ctx.StopEventProducer)
+	proc.AddWrapUpListener(func() {
+		ctx.StopEventProducer()
+		ctx.Close()
+	})
 
 	rpcutil.Run(c.RpcServerConf, func(grpcServer *grpc.Server) {
 		pb.RegisterAuthServiceServer(grpcServer, server.NewAuthServiceServer(ctx))

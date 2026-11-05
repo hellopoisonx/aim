@@ -8,7 +8,6 @@ import (
 	"github.com/hellopoisonx/aim/app/shared/events"
 
 	"github.com/hellopoisonx/aim/app/core/rpc/internal/svc"
-	logicpb "github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	sharedconversation "github.com/hellopoisonx/aim/app/shared/conversation"
 	"github.com/hellopoisonx/aim/app/shared/rocketmq"
 	"github.com/hellopoisonx/aim/app/shared/tracing"
@@ -33,7 +32,8 @@ func NewDeliveryConsumer(ctx context.Context, svcCtx *svc.ServiceContext) *Deliv
 		svcCtx: svcCtx,
 		topic:  svcCtx.Config.PushProducerConf.Topic,
 	}
-	// Assign only a configured producer: a typed nil would swallow every event.
+	// Leave the interface field unset when RocketMQ is disabled: Consume then logs
+	// the drop instead of publishing into a nil producer.
 	if svcCtx.PushProducer != nil {
 		consumer.push = svcCtx.PushProducer
 	}
@@ -133,22 +133,14 @@ func (c *DeliveryConsumer) Consume(ctx context.Context, key string, value string
 }
 
 func (c *DeliveryConsumer) resolveConversation(ctx context.Context, event events.TransferEvent) ([]int64, string, error) {
-	if c.svcCtx.LogicConversationClient == nil {
-		return []int64{event.SenderID}, "", nil
-	}
-
-	resp, err := c.svcCtx.LogicConversationClient.GetConversationMembers(ctx, &logicpb.GetConversationMembersReq{
-		ConversationId: event.ConversationID,
-	})
+	memberIDs, conversationType, err := conversationRecipients(ctx, c.svcCtx, event.ConversationID)
 	if err != nil {
 		return nil, "", err
 	}
 
-	conversationType := resp.GetConversationType()
-	memberIDs := resp.GetMemberIds()
 	if len(memberIDs) == 0 {
 		return []int64{event.SenderID}, conversationType, nil
 	}
 
-	return positiveUniqueIDs(memberIDs), conversationType, nil
+	return memberIDs, conversationType, nil
 }

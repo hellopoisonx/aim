@@ -28,12 +28,14 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/propagation"
+	"gorm.io/gorm"
 )
 
 const dataParsingTracerName = "github.com/hellopoisonx/aim/app/data_parsing"
 
 type Worker struct {
 	cfg      config.Config
+	db       *gorm.DB
 	store    *dao.Store
 	parser   parser.Parser
 	producer *rocketmq.Producer
@@ -48,20 +50,23 @@ func New(ctx context.Context, cfg config.Config) (*Worker, error) {
 	if db != nil {
 		store = dao.New(db)
 	}
-	var producer *rocketmq.Producer
-	if cfg.ParsedProducer.IsConfigured() {
-		created, err := rocketmq.NewProducer(cfg.ParsedProducer)
-		if err != nil {
-			return nil, err
+	producer, err := rocketmq.NewProducer(cfg.ParsedProducer)
+	if err != nil {
+		return nil, err
+	}
+	if producer != nil {
+		// Parsed events are published with the parse-result writes, so the
+		// transaction check-back must resolve them from this database.
+		if db != nil {
+			producer.WithJournalChecker(db)
 		}
 		// An unreachable broker must not crash-loop the consumer: parsing keeps
 		// running and publishes fail loudly instead.
-		if err := created.Start(); err != nil {
+		if err := producer.Start(); err != nil {
 			logx.WithContext(ctx).Errorf("failed to start rocketmq parsed producer: %v", err)
 		}
-		producer = created
 	}
-	return &Worker{cfg: cfg, store: store, parser: parser.DefaultParser{}, producer: producer}, nil
+	return &Worker{cfg: cfg, db: db, store: store, parser: parser.DefaultParser{}, producer: producer}, nil
 }
 
 func (w *Worker) Close() {
@@ -122,27 +127,85 @@ func (w *Worker) Consume(ctx context.Context, key string, value string) (err err
 	if err != nil {
 		return w.fail(ctx, event, err)
 	}
-	thumbKey := fmt.Sprintf("attachments/derived/%s/thumbnail.png", event.FileID)
+	thumbKey := ""
 	if len(res.Thumbnail) > 0 {
+		thumbKey = fmt.Sprintf("attachments/derived/%s/thumbnail.png", event.FileID)
 		if err := w.putObject(ctx, thumbKey, res.ThumbMIME, res.Thumbnail); err != nil {
 			return w.fail(ctx, event, err)
 		}
 	}
 	meta, _ := json.Marshal(res.Metadata)
-	if w.store != nil {
-		fileID, parseErr := uuid.Parse(event.FileID)
-		if parseErr != nil {
-			return w.fail(ctx, event, parseErr)
+	parsed := events.AttachmentParsedEvent{
+		FileID:             event.FileID,
+		Kind:               event.Kind,
+		ParseStatus:        attachment.ParseStatusReady,
+		ThumbnailObjectKey: thumbKey,
+		DurationMS:         res.DurationMS,
+		Width:              res.Width,
+		Height:             res.Height,
+		Metadata:           &res.Metadata,
+		ParsedAt:           time.Now().UnixMilli(),
+	}
+
+	if w.db == nil {
+		return w.publish(ctx, parsed)
+	}
+
+	fileID, err := uuid.Parse(event.FileID)
+	if err != nil {
+		return w.fail(ctx, event, err)
+	}
+
+	if w.producer != nil {
+		ctx, span := tracing.StartMQProducerSpan(
+			ctx,
+			"data_parsing.rocketmq.attachment_parsed.publish",
+			attribute.String("attachment.file_id", event.FileID),
+		)
+		defer span.End()
+
+		parsed.TraceContextFields = tracing.InjectTraceContext(ctx)
+		body, err := json.Marshal(parsed)
+		if err != nil {
+			tracing.RecordSpanError(span, err)
+			return err
 		}
+
+		err = w.producer.SendTransactional(ctx, w.db, rocketmq.TransactionalMessage{
+			Topic:    w.cfg.ParsedProducer.Topic,
+			EventUID: "attachment.parsed:" + fileID.String(),
+			Key:      fileID.String(),
+			Body:     body,
+		}, func(ctx context.Context, tx *gorm.DB) error {
+			return w.persistParseResult(ctx, tx, fileID, event.Bucket, thumbKey, res, meta)
+		})
+		if err != nil {
+			tracing.RecordSpanError(span, err)
+		}
+
+		return err
+	}
+
+	if err := w.persistParseResult(ctx, w.db, fileID, event.Bucket, thumbKey, res, meta); err != nil {
+		return w.fail(ctx, event, err)
+	}
+
+	return w.publish(ctx, parsed)
+}
+
+// persistParseResult writes the parse output on db, which is either a
+// transaction supplied by SendTransactional or the worker's own handle.
+func (w *Worker) persistParseResult(ctx context.Context, db *gorm.DB, fileID uuid.UUID, bucket, thumbKey string, res *parser.Result, meta []byte) error {
+	store := dao.New(db)
+
+	if thumbKey != "" {
 		size := int64(len(res.Thumbnail))
 		thumbWidth := clampInt32(res.ThumbWidth)
 		thumbHeight := clampInt32(res.ThumbHeight)
-		width := clampInt32(res.Width)
-		height := clampInt32(res.Height)
-		if err = w.store.UpsertAttachmentObject(ctx, orm.AttachmentObject{
+		if err := store.UpsertAttachmentObject(ctx, orm.AttachmentObject{
 			FileID:     fileID,
 			ObjectRole: "thumbnail",
-			Bucket:     event.Bucket,
+			Bucket:     bucket,
 			ObjectKey:  thumbKey,
 			Mime:       res.ThumbMIME,
 			SizeBytes:  &size,
@@ -150,23 +213,24 @@ func (w *Worker) Consume(ctx context.Context, key string, value string) (err err
 			Height:     &thumbHeight,
 			DurationMs: &res.DurationMS,
 		}); err != nil {
-			return w.fail(ctx, event, err)
-		}
-		if err = w.store.UpsertAttachmentParseResult(ctx, orm.AttachmentParseResult{
-			FileID:     fileID,
-			DurationMs: &res.DurationMS,
-			Width:      &width,
-			Height:     &height,
-			Metadata:   pgtypes.JSON(meta),
-		}); err != nil {
-			return w.fail(ctx, event, err)
-		}
-		if _, err = w.store.SetParseStatus(ctx, fileID, attachment.ParseStatusReady); err != nil {
-			return w.fail(ctx, event, err)
+			return err
 		}
 	}
 
-	return w.publish(ctx, events.AttachmentParsedEvent{TraceContextFields: tracing.InjectTraceContext(ctx), FileID: event.FileID, Kind: event.Kind, ParseStatus: attachment.ParseStatusReady, ThumbnailObjectKey: thumbKey, DurationMS: res.DurationMS, Width: res.Width, Height: res.Height, Metadata: &res.Metadata, ParsedAt: time.Now().UnixMilli()})
+	width := clampInt32(res.Width)
+	height := clampInt32(res.Height)
+	if err := store.UpsertAttachmentParseResult(ctx, orm.AttachmentParseResult{
+		FileID:     fileID,
+		DurationMs: &res.DurationMS,
+		Width:      &width,
+		Height:     &height,
+		Metadata:   pgtypes.JSON(meta),
+	}); err != nil {
+		return err
+	}
+
+	_, err := store.SetParseStatus(ctx, fileID, attachment.ParseStatusReady)
+	return err
 }
 
 // clampInt32 narrows a parser-reported dimension to the int32 column range.

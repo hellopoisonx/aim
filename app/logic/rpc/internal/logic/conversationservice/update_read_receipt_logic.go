@@ -3,6 +3,7 @@ package conversationservicelogic
 import (
 	"context"
 
+	"github.com/hellopoisonx/aim/app/logic/rpc/internal/service"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
@@ -31,7 +32,7 @@ func (l *UpdateReadReceiptLogic) UpdateReadReceipt(in *pb.UpdateReadReceiptReq) 
 		return nil, errorx.NewCodeError(errorx.CodeInternal, "conversation service is not configured")
 	}
 
-	state, err := convSvc.UpdateReadReceipt(l.ctx, in.GetConversationId(), in.GetUserId(), in.GetLastReadMessageId())
+	state, err := convSvc.UpdateReadReceipt(l.ctx, in.GetConversationId(), service.Actor(in.GetUserId()), in.GetLastReadMessageId())
 	if err != nil {
 		return nil, errorx.ToGRPCError(err)
 	}

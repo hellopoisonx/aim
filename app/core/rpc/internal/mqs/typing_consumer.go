@@ -40,8 +40,12 @@ func (c *TypingConsumer) Consume(ctx context.Context, key string, value string) 
 
 	logx.WithContext(ctx).Infof("typing event: from=%d conv=%d", event.FromUserID, event.ConversationID)
 
-	memberIDs, ok := conversationMemberIDs(ctx, c.svcCtx, event.ConversationID)
-	if !ok {
+	memberIDs, _, err := conversationRecipients(ctx, c.svcCtx, event.ConversationID)
+	if err != nil {
+		logx.WithContext(ctx).Errorf("conversation member lookup conv=%d failed: %v", event.ConversationID, err)
+		return nil
+	}
+	if len(memberIDs) == 0 {
 		return nil
 	}
 

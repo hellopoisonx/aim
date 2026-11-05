@@ -2,6 +2,8 @@ package svc
 
 import (
 	"context"
+	"errors"
+	"fmt"
 
 	attachmentpb "github.com/hellopoisonx/aim/app/attachment/rpc/pb"
 	"github.com/hellopoisonx/aim/app/core/rpc/internal/cache"
@@ -56,8 +58,8 @@ func (s *ServiceContext) Close() {
 		}
 	}
 
-	if closer, ok := s.GatewayClient.(interface{ Close() error }); ok {
-		if err := closer.Close(); err != nil {
+	if s.GatewayClient != nil {
+		if err := s.GatewayClient.Close(); err != nil {
 			logx.WithContext(context.Background()).Errorf("failed to close gateway client: %v", err)
 		}
 	}
@@ -91,22 +93,18 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		}
 	}
 
-	// Logic RPC client (if configured)
-	var logicConversationClient logicpb.ConversationServiceClient
-
-	var logicFriendshipClient logicpb.FriendshipServiceClient
-	var logicUserClient logicpb.UserServiceClient
-
-	if c.LogicRpc.Etcd.Key != "" || len(c.LogicRpc.Endpoints) > 0 || c.LogicRpc.Target != "" {
-		client, err := zrpc.NewClient(c.LogicRpc)
-		if err != nil {
-			logx.WithContext(context.Background()).Errorf("failed to create RPC client for LogicRpc: %v", err)
-		} else {
-			logicConversationClient = logicpb.NewConversationServiceClient(client.Conn())
-			logicFriendshipClient = logicpb.NewFriendshipServiceClient(client.Conn())
-			logicUserClient = logicpb.NewUserServiceClient(client.Conn())
-		}
+	// Logic RPC is required: every core consumer and push path resolves users
+	// and conversations through it, so a missing client is a boot failure.
+	if c.LogicRpc.Etcd.Key == "" && len(c.LogicRpc.Endpoints) == 0 && c.LogicRpc.Target == "" {
+		logx.Must(errors.New("core service requires LogicRpc: set Config.LogicRpc"))
 	}
+	logicClient, err := zrpc.NewClient(c.LogicRpc)
+	if err != nil {
+		logx.Must(fmt.Errorf("core service: logic rpc client: %w", err))
+	}
+	logicConversationClient := logicpb.NewConversationServiceClient(logicClient.Conn())
+	logicFriendshipClient := logicpb.NewFriendshipServiceClient(logicClient.Conn())
+	logicUserClient := logicpb.NewUserServiceClient(logicClient.Conn())
 
 	var attachmentClient attachmentpb.AttachmentServiceClient
 	if c.AttachmentRpc.Etcd.Key != "" || len(c.AttachmentRpc.Endpoints) > 0 || c.AttachmentRpc.Target != "" {
@@ -118,11 +116,10 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		}
 	}
 
-	// Presence store (nil if not configured)
+	// Presence store (nil if not configured); it shares the owned RedisClient.
 	var presenceStore cache.PresenceDirectory
 	if c.Presence.TTLSeconds > 0 {
-		rds := redis.NewClient(&redis.Options{Addr: c.CacheRedis.Addr, Password: c.CacheRedis.Password})
-		if store, err := cache.NewCachedPresenceStore(rds, c.Presence.TTLSeconds); err != nil {
+		if store, err := cache.NewCachedPresenceStore(redisClient, c.Presence.TTLSeconds); err != nil {
 			logx.WithContext(context.Background()).Errorf("failed to create cached presence store: %v", err)
 		} else {
 			presenceStore = store

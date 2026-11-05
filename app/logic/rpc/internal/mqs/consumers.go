@@ -24,8 +24,10 @@ func Consumers(ctx context.Context, svcCtx *svc.ServiceContext) []service.Servic
 	// deliveries.
 	if cfg.IsBotWebhookConsumerConfigured() {
 		webhookConsumer := NewBotWebhookConsumer(ctx, svcCtx)
-		services = registerConsumer(ctx, services, "bot webhook", cfg.BotWebhookConsumerConf, webhookConsumer.Consume)
+		// The handler owns a lazily started worker pool; it joins the service
+		// group so Stop drains accepted deliveries.
 		services = append(services, webhookConsumer)
+		services = registerConsumer(ctx, services, "bot webhook", cfg.BotWebhookConsumerConf, webhookConsumer.Consume)
 	}
 
 	return services

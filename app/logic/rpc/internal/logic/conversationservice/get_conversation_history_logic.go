@@ -3,10 +3,12 @@ package conversationservicelogic
 import (
 	"context"
 	"encoding/json"
+	"time"
 
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/service"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
+	sharedconversation "github.com/hellopoisonx/aim/app/shared/conversation"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 
 	"github.com/zeromicro/go-zero/core/logx"
@@ -39,10 +41,12 @@ func (l *GetConversationHistoryLogic) GetConversationHistory(in *pb.GetConversat
 
 	limit := service.NormalizeHistoryLimit(in.GetLimit())
 
-	cursorCreatedAt := in.GetCursorCreatedAt()
-	cursorID := in.GetCursorId()
+	cursor := sharedconversation.MessageCursor{ID: in.GetCursorId()}
+	if createdAt := in.GetCursorCreatedAt(); createdAt > 0 {
+		cursor.CreatedAt = time.UnixMilli(createdAt)
+	}
 
-	messages, err := convSvc.GetConversationHistory(l.ctx, in.GetConversationId(), cursorCreatedAt, cursorID, limit)
+	messages, err := convSvc.GetConversationHistory(l.ctx, in.GetConversationId(), cursor, limit)
 	if err != nil {
 		return nil, errorx.ToGRPCError(err)
 	}

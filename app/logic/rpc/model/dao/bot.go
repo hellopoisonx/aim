@@ -50,7 +50,7 @@ type BotEvent struct {
 // GetBotTokenByHash loads a token and its bot profile in one query.
 func (s *Store) GetBotTokenByHash(ctx context.Context, tokenHash string) (BotTokenWithUser, error) {
 	const query = `
-SELECT bt.id, bt.bot_user_id, bt.token_hash, bt.name, bt.scopes, bt.expires_at, bt.revoked_at, bt.created_at,
+SELECT bt.id, bt.bot_user_id, bt.token_hash, bt.name, bt.expires_at, bt.revoked_at, bt.created_at,
        ui.user_type, ui.status AS user_status, ui.nickname, ui.avatar
 FROM bot_tokens bt
 JOIN user_info ui ON ui.id = bt.bot_user_id
@@ -309,13 +309,12 @@ func (s *Store) RevokeAllBotTokensByBot(ctx context.Context, botUserID int64) (i
 }
 
 // CreateBotToken inserts a token row.
-func (s *Store) CreateBotToken(ctx context.Context, id, botUserID int64, tokenHash, name string, scopes []string, expiresAt *time.Time) (orm.BotToken, error) {
+func (s *Store) CreateBotToken(ctx context.Context, id, botUserID int64, tokenHash, name string, expiresAt *time.Time) (orm.BotToken, error) {
 	token := orm.BotToken{
 		ID:        id,
 		BotUserID: botUserID,
 		TokenHash: tokenHash,
 		Name:      name,
-		Scopes:    pq.StringArray(scopes),
 		ExpiresAt: expiresAt,
 	}
 	if err := s.db.WithContext(ctx).Create(&token).Error; err != nil {
@@ -341,7 +340,7 @@ func (s *Store) ListBotTokensByBot(ctx context.Context, botUserID int64) ([]orm.
 // GetManagedBotToken loads a token through its bot ownership row.
 func (s *Store) GetManagedBotToken(ctx context.Context, ownerUserID, botUserID, tokenID int64) (orm.BotToken, error) {
 	const query = `
-SELECT bt.id, bt.bot_user_id, bt.token_hash, bt.name, bt.scopes, bt.expires_at, bt.revoked_at, bt.created_at
+SELECT bt.id, bt.bot_user_id, bt.token_hash, bt.name, bt.expires_at, bt.revoked_at, bt.created_at
 FROM bot_tokens bt
 JOIN user_bots ub ON ub.bot_user_id = bt.bot_user_id
 WHERE ub.owner_user_id = ?
@@ -372,7 +371,7 @@ WHERE ub.bot_user_id = bt.bot_user_id
   AND ub.deleted_at IS NULL
   AND bt.id = ?
   AND bt.revoked_at IS NULL
-RETURNING bt.id, bt.bot_user_id, bt.token_hash, bt.name, bt.scopes, bt.expires_at, bt.revoked_at, bt.created_at`
+RETURNING bt.id, bt.bot_user_id, bt.token_hash, bt.name, bt.expires_at, bt.revoked_at, bt.created_at`
 
 	var token orm.BotToken
 	if err := s.db.WithContext(ctx).Raw(query, name, expiresAt, ownerUserID, botUserID, tokenID).Scan(&token).Error; err != nil {

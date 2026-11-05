@@ -8,6 +8,7 @@ import (
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/config"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/service"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
+	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc/svctest"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
 
 	"github.com/stretchr/testify/require"
@@ -147,7 +148,7 @@ func TestCheckMessagePermission(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			svcCtx := svc.NewServiceContextWithPermissionChecker(config.Config{}, tt.checker)
+			svcCtx := svctest.WithPermissionChecker(config.Config{}, tt.checker)
 
 			got, err := NewCheckMessagePermissionLogic(ctx, svcCtx).CheckMessagePermission(tt.req)
 			if tt.wantCode != codes.OK {
@@ -163,8 +164,8 @@ func TestCheckMessagePermission(t *testing.T) {
 	}
 }
 
-func TestDefaultServiceContextDeniesMessagePermission(t *testing.T) {
-	svcCtx := svc.NewServiceContext(config.Config{})
+func TestDenyAllPermissionCheckerDeniesMessagePermission(t *testing.T) {
+	svcCtx := &svc.ServiceContext{PermissionChecker: service.DenyAllPermissionChecker{}}
 	got, err := NewCheckMessagePermissionLogic(context.Background(), svcCtx).CheckMessagePermission(&pb.CheckMessagePermissionReq{
 		SenderId:       10,
 		ConversationId: 20,

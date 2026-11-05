@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/hellopoisonx/aim/app/logic/rpc/model/orm"
+	sharedconversation "github.com/hellopoisonx/aim/app/shared/conversation"
 )
 
 // MessageSearchRow is a message plus search highlighting metadata.
@@ -23,26 +24,16 @@ func (s *Store) InsertMessage(ctx context.Context, message orm.Message) error {
 	return nil
 }
 
-// ListMessagesByConversation lists messages older than the cursor.
-func (s *Store) ListMessagesByConversation(ctx context.Context, conversationID int64, cursorCreatedAt time.Time, cursorID int64, limit int32) ([]orm.Message, error) {
-	var messages []orm.Message
-	if err := s.db.WithContext(ctx).
-		Where("conversation_id = ?", conversationID).
-		Where("created_at < ? OR (created_at = ? AND id < ?)", cursorCreatedAt, cursorCreatedAt, cursorID).
-		Order("created_at DESC, id DESC").
-		Limit(int(limit)).
-		Find(&messages).Error; err != nil {
-		return nil, err
+// ListMessagesByConversation lists messages older than cursor; the zero cursor
+// addresses the newest page.
+func (s *Store) ListMessagesByConversation(ctx context.Context, conversationID int64, cursor sharedconversation.MessageCursor, limit int32) ([]orm.Message, error) {
+	query := s.db.WithContext(ctx).Where("conversation_id = ?", conversationID)
+	if !cursor.IsZero() {
+		query = query.Where("created_at < ? OR (created_at = ? AND id < ?)", cursor.CreatedAt, cursor.CreatedAt, cursor.ID)
 	}
 
-	return messages, nil
-}
-
-// ListMessagesByConversationInitial lists the newest messages in a conversation.
-func (s *Store) ListMessagesByConversationInitial(ctx context.Context, conversationID int64, limit int32) ([]orm.Message, error) {
 	var messages []orm.Message
-	if err := s.db.WithContext(ctx).
-		Where("conversation_id = ?", conversationID).
+	if err := query.
 		Order("created_at DESC, id DESC").
 		Limit(int(limit)).
 		Find(&messages).Error; err != nil {

@@ -71,7 +71,7 @@ update_topic aim-attachment-uploaded "-a +message.type=TRANSACTION"
 update_topic aim-presence-events ""
 update_topic aim-typing-events ""
 update_topic aim-friend-application-events ""
-update_topic aim-attachment-parsed ""
+update_topic aim-attachment-parsed "-a +message.type=TRANSACTION"
 
 # ── Consumer groups ─────────────────────────────────────────────────────────
 CONSUMER_GROUPS="

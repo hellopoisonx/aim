@@ -31,7 +31,7 @@ func (l *UpdateUserBotTokenLogic) UpdateUserBotToken(in *pb.UpdateUserBotTokenRe
 
 	info, err := botSvc.UpdateUserBotToken(l.ctx,
 		in.GetOwnerUserId(), in.GetBotUserId(), in.GetTokenId(),
-		in.GetName(), in.GetExpiresAt(), in.GetActions())
+		in.GetName(), deadlineFromMillis(in.GetExpiresAt()), in.GetActions())
 	if err != nil {
 		return nil, err
 	}

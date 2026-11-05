@@ -3,6 +3,7 @@ package conversationservicelogic
 import (
 	"context"
 
+	"github.com/hellopoisonx/aim/app/logic/rpc/internal/service"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
@@ -34,7 +35,7 @@ func (l *GrantGroupAdminLogic) GrantGroupAdmin(in *pb.GrantGroupAdminReq) (*pb.G
 		return nil, errorx.NewCodeError(errorx.CodeBadInput, "target_user_id is required")
 	}
 
-	if err := convSvc.GrantGroupAdmin(l.ctx, in.GetConversationId(), in.GetOperatorId(), in.GetTargetUserId()); err != nil {
+	if err := convSvc.GrantGroupAdmin(l.ctx, in.GetConversationId(), service.Actor(in.GetOperatorId()), service.Target(in.GetTargetUserId())); err != nil {
 		return nil, errorx.ToGRPCError(err)
 	}
 	return &pb.GrantGroupAdminResp{}, nil

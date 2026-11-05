@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/pbconv"
+	"github.com/hellopoisonx/aim/app/logic/rpc/internal/service"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
@@ -35,7 +36,7 @@ func (l *TransferGroupOwnerLogic) TransferGroupOwner(in *pb.TransferGroupOwnerRe
 		return nil, errorx.NewCodeError(errorx.CodeBadInput, "target_user_id is required")
 	}
 
-	conv, err := convSvc.TransferGroupOwner(l.ctx, in.GetConversationId(), in.GetOperatorId(), in.GetTargetUserId())
+	conv, err := convSvc.TransferGroupOwner(l.ctx, in.GetConversationId(), service.Actor(in.GetOperatorId()), service.Target(in.GetTargetUserId()))
 	if err != nil {
 		return nil, errorx.ToGRPCError(err)
 	}

@@ -24,6 +24,7 @@ import (
 
 	casbinmodel "github.com/casbin/casbin/v3/model"
 	"github.com/hellopoisonx/aim/app/logic/rpc/model/orm"
+	sharedconversation "github.com/hellopoisonx/aim/app/shared/conversation"
 	"github.com/hellopoisonx/aim/app/shared/gormdb"
 	"github.com/hellopoisonx/aim/app/shared/pgtypes"
 	"github.com/stretchr/testify/require"
@@ -168,7 +169,7 @@ func TestIntegrationMessageJSONBColumns(t *testing.T) {
 
 	// Read back through the typed JSON column: a scan failure here would mean
 	// pgtypes.JSON lost its Scanner.
-	history, err := store.ListMessagesByConversation(ctx, conv.ID, time.Now().Add(time.Minute), 0, 10)
+	history, err := store.ListMessagesByConversation(ctx, conv.ID, sharedconversation.MessageCursor{CreatedAt: time.Now().Add(time.Minute)}, 10)
 	require.NoError(t, err)
 	require.Len(t, history, 1)
 	require.JSONEq(t, `{"text":"hello"}`, string(history[0].Content))
@@ -182,7 +183,7 @@ func TestIntegrationMessageJSONBColumns(t *testing.T) {
 	require.JSONEq(t, `{"text":"hello"}`, string(results[0].Content))
 }
 
-func TestIntegrationBotTokenTextArrayColumns(t *testing.T) {
+func TestIntegrationBotWebhookTextArrayColumns(t *testing.T) {
 	store := openTestStore(t)
 	ctx := context.Background()
 	truncate(t, store, "user_info", "bot_tokens", "bot_token_permissions", "bot_actions", "bot_webhooks")
@@ -190,16 +191,6 @@ func TestIntegrationBotTokenTextArrayColumns(t *testing.T) {
 	profile, err := store.CreateUserBotProfile(ctx, 900, "bot@example.com", "helper", "")
 	require.NoError(t, err)
 	require.EqualValues(t, 900, profile.ID)
-
-	token, err := store.CreateBotToken(ctx, 500, 900, "hash-500", "default", []string{"messages:send", "bot.admin"}, nil)
-	require.NoError(t, err)
-	require.ElementsMatch(t, []string{"messages:send", "bot.admin"}, token.Scopes)
-
-	// Round-trip through the text[] column.
-	loaded, err := store.ListBotTokensByBot(ctx, 900)
-	require.NoError(t, err)
-	require.Len(t, loaded, 1)
-	require.ElementsMatch(t, []string{"messages:send", "bot.admin"}, loaded[0].Scopes)
 
 	// Upsert keeps []string→text[] working on the ON CONFLICT path.
 	hook, err := store.UpsertBotWebhook(ctx, 900, "https://example.com/hook", "secret", []string{"message.created"}, true)

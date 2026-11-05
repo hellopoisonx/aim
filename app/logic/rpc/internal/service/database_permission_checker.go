@@ -14,11 +14,6 @@ import (
 
 const DefaultTemporaryConversationMessageLimit int64 = 10
 
-// temporaryConversationMessageLimit 保留为默认值别名，供现有测试使用。
-//
-//nolint:unused // package tests reference this constant when golangci-lint runs with tests enabled.
-const temporaryConversationMessageLimit = DefaultTemporaryConversationMessageLimit
-
 // PermissionQuerier is the DAO slice used by the permission checker.
 type PermissionQuerier interface {
 	GetConversation(ctx context.Context, id int64) (orm.Conversation, error)
