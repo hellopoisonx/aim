@@ -14,12 +14,10 @@ import (
 	sharedcache "github.com/hellopoisonx/aim/app/shared/cache"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 	"github.com/hellopoisonx/aim/app/shared/tools"
+	shareduser "github.com/hellopoisonx/aim/app/shared/user"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
-
-// UserTypeBot is the value stored in user_info.user_type for Bot identities.
-const UserTypeBot = "bot"
 
 // SystemOwnerUserID marks system-owned official bots in user_bots.owner_user_id.
 const SystemOwnerUserID int64 = 0
@@ -33,7 +31,7 @@ type BotIdentity struct {
 	Scopes     []string
 	Nickname   string
 	Avatar     string
-	UserStatus int16
+	UserStatus shareduser.Status
 }
 
 // BotWebhookConfig is the service-level view of bot_webhooks (no plaintext secret).
@@ -61,7 +59,7 @@ type UserBotInfo struct {
 	Email       string
 	Nickname    string
 	Avatar      string
-	Status      int16
+	Status      shareduser.Status
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 }
@@ -111,7 +109,7 @@ type BotManagementQuerier interface {
 	GetManagedUserBot(ctx context.Context, ownerUserID, botUserID int64) (dao.ManagedUserBot, error)
 	ListManagedUserBots(ctx context.Context, ownerUserID int64) ([]dao.ManagedUserBot, error)
 	UpdateManagedUserBotProfile(ctx context.Context, ownerUserID, botUserID int64, nickname, avatar string) (orm.UserInfo, error)
-	UpdateManagedUserBotStatus(ctx context.Context, ownerUserID, botUserID int64, status int16) (orm.UserInfo, error)
+	UpdateManagedUserBotStatus(ctx context.Context, ownerUserID, botUserID int64, status shareduser.Status) (orm.UserInfo, error)
 	SoftDeleteManagedUserBot(ctx context.Context, ownerUserID, botUserID int64) (int64, error)
 	RevokeAllBotTokensByBot(ctx context.Context, botUserID int64) (int64, error)
 	CreateBotToken(ctx context.Context, id, botUserID int64, tokenHash, name string, scopes []string, expiresAt *time.Time) (orm.BotToken, error)
@@ -184,7 +182,7 @@ func NewBotService(queries BotQuerier, management BotManagementQuerier, opts ...
 //   - row must exist with matching hash
 //   - revoked_at must be NULL
 //   - expires_at must be in the future (or NULL)
-//   - owner user_type must be "bot"
+//   - owner user_type must be bot
 //   - owner status must equal 1 (enabled)
 func (s *BotService) ValidateBotToken(ctx context.Context, plaintext string) (BotIdentity, error) {
 	parsed, err := bottoken.ParsePlaintext(plaintext)
@@ -209,11 +207,11 @@ func (s *BotService) ValidateBotToken(ctx context.Context, plaintext string) (Bo
 		return BotIdentity{}, errorx.NewCodeError(errorx.CodeBotTokenRevoked, "bot token expired")
 	}
 
-	if row.UserType != UserTypeBot {
+	if row.UserType != shareduser.TypeBot {
 		return BotIdentity{}, errorx.NewCodeError(errorx.CodeBotDisabled, "user is not a bot")
 	}
 
-	if row.UserStatus != 1 {
+	if row.UserStatus != shareduser.StatusEnabled {
 		return BotIdentity{}, errorx.NewCodeError(errorx.CodeBotDisabled, "bot is disabled")
 	}
 
@@ -266,7 +264,7 @@ func (s *BotService) GetBotProfile(ctx context.Context, botUserID int64) (orm.Us
 		return orm.UserInfo{}, err
 	}
 
-	if info.UserType != UserTypeBot {
+	if info.UserType != shareduser.TypeBot {
 		return orm.UserInfo{}, errorx.NewCodeError(errorx.CodeBotDisabled, "user is not a bot")
 	}
 
@@ -537,9 +535,9 @@ func (s *BotService) SetUserBotStatus(ctx context.Context, ownerUserID, botUserI
 		return UserBotInfo{}, err
 	}
 
-	status := int16(0)
+	status := shareduser.StatusDisabled
 	if enabled {
-		status = 1
+		status = shareduser.StatusEnabled
 	}
 
 	info, err := queries.UpdateManagedUserBotStatus(ctx, ownerUserID, botUserID, status)

@@ -25,8 +25,6 @@ func NewConversationEventConsumer(ctx context.Context, svcCtx *svc.ServiceContex
 func (c *ConversationEventConsumer) Consume(ctx context.Context, key string, value string) error {
 	var event events.ConversationEvent
 	if err := json.Unmarshal([]byte(value), &event); err != nil {
-		// A malformed payload never decodes on redelivery: dropping it keeps the
-		// partition moving instead of replaying the same poison message forever.
 		logx.WithContext(ctx).Errorf(
 			"dropping undecodable conversation event key=%s: %v payload=%q", key, err, value,
 		)
@@ -57,7 +55,7 @@ func (c *ConversationEventConsumer) Consume(ctx context.Context, key string, val
 			SenderInfo:       gatewaySystemSenderInfo(),
 		}
 
-		resp, err := pushMessageToNode(ctx, c.svcCtx.GatewayClient, nodeID, req)
+		resp, err := c.svcCtx.GatewayClient.PushMessageToNode(ctx, nodeID, req)
 		if err != nil {
 			return err
 		}

@@ -27,8 +27,6 @@ func (c *TypingConsumer) Consume(ctx context.Context, key string, value string) 
 
 	var event events.TypingEvent
 	if err := json.Unmarshal([]byte(value), &event); err != nil {
-		// A malformed payload never decodes on redelivery: dropping it keeps the
-		// partition moving instead of replaying the same poison message forever.
 		logx.WithContext(ctx).Errorf(
 			"dropping undecodable typing event key=%s: %v payload=%q", key, err, value,
 		)
@@ -56,7 +54,7 @@ func (c *TypingConsumer) Consume(ctx context.Context, key string, value string) 
 			Timestamp:      event.Timestamp,
 		}
 
-		if _, err := pushTypingToNode(ctx, c.svcCtx.GatewayClient, nodeID, req); err != nil {
+		if _, err := c.svcCtx.GatewayClient.PushTypingToNode(ctx, nodeID, req); err != nil {
 			return err
 		}
 

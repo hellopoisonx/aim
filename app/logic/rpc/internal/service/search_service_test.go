@@ -116,6 +116,16 @@ func TestSearchHonoursRequestedScope(t *testing.T) {
 	require.True(t, store.messagesQueried)
 }
 
+func TestSearchRejectsUnknownScope(t *testing.T) {
+	store := &fakeSearchStore{}
+	_, err := NewSearchService(store).Search(context.Background(), SearchParams{UserID: 1, Query: "alice", Scopes: []string{"user"}})
+
+	var codeErr *errorx.CodeError
+	require.ErrorAs(t, err, &codeErr)
+	require.Equal(t, errorx.CodeBadInput, codeErr.Code)
+	require.False(t, store.usersQueried, "an unknown scope must not search anything")
+}
+
 func TestSearchClampsLimit(t *testing.T) {
 	store := &fakeSearchStore{}
 	_, err := NewSearchService(store).Search(context.Background(), SearchParams{UserID: 1, Query: "alice", Scopes: []string{"users"}, ConversationID: 0, CursorCreatedAt: 0, CursorID: 0, Limit: 500})

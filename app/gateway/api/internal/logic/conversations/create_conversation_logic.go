@@ -35,14 +35,15 @@ func (l *CreateConversationLogic) CreateConversation(req *types.CreateConversati
 		return nil, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
 	}
 
-	if req.ConversationType != "direct" && req.ConversationType != "group" {
+	conversationType := sharedconversation.Type(req.ConversationType)
+	if conversationType != sharedconversation.TypeDirect && conversationType != sharedconversation.TypeGroup {
 		return nil, errorx.NewCodeError(errorx.CodeBadInput, "conversation_type must be 'direct' or 'group'")
 	}
 
 	name := strings.TrimSpace(req.Name)
 
 	memberIDs := req.MemberIds
-	if req.ConversationType == "direct" {
+	if conversationType == sharedconversation.TypeDirect {
 		if err := sharedconversation.RequireDirectPeer(memberIDs, identity.UserID); err != nil {
 			return nil, err
 		}
@@ -57,7 +58,7 @@ func (l *CreateConversationLogic) CreateConversation(req *types.CreateConversati
 	}
 
 	rpcResp, err := l.svcCtx.LogicConversationClient.CreateConversation(l.ctx, &conversationservice.CreateConversationReq{
-		ConversationType: req.ConversationType,
+		ConversationType: string(conversationType),
 		CreatorId:        identity.UserID,
 		MemberIds:        memberIDs,
 		Name:             name,

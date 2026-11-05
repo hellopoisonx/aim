@@ -137,6 +137,8 @@ WHERE file_id = ? AND owner_id = ? AND status = 'pending'`
 }
 
 // GetFile loads the file with its original/thumbnail objects and parse result.
+// userID scopes pending rows to their owner; an uploaded file is readable by id
+// for any caller, so owner-only lookups must re-check the returned OwnerID.
 func (s *Store) GetFile(ctx context.Context, fileID uuid.UUID, userID int64) (FileRow, error) {
 	const query = `
 SELECT f.file_id, f.owner_id, f.conversation_id, f.kind, f.original_name, f.mime, f.size_bytes,

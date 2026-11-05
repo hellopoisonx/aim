@@ -14,9 +14,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// newTestService builds a Service without a database: the validation and
-// presigning paths do not touch persistence, and GetFile reports ErrNotFound
-// when no store is configured.
+// newTestService builds a Service without a database: input validation runs
+// before the store guard, so validation tests need no persistence.
 func newTestService() *Service {
 	cfg := config.Config{}
 	cfg.Seaweed.Endpoint = "http://seaweed-s3:8333"
@@ -63,6 +62,7 @@ func TestInitUploadValidatesRequest(t *testing.T) {
 
 func TestInitUploadPresignsPutURL(t *testing.T) {
 	svc := newTestService()
+	svc.store = newStubStore(t, uuid.New(), sharedattachment.UploadStatusPending, "k/original")
 
 	resp, err := svc.InitUpload(context.Background(), InitUploadRequest{
 		OwnerID:        1,
@@ -91,21 +91,14 @@ func TestInitUploadPresignsPutURL(t *testing.T) {
 	require.Contains(t, resp.ObjectKey, "/2/"+resp.FileID+"/original")
 }
 
-func TestDownloadWithoutStoreReportsNotFound(t *testing.T) {
+func TestReadPathsRequireStore(t *testing.T) {
 	svc := newTestService()
 
 	_, err := svc.Download(context.Background(), 1, uuid.NewString())
-	require.ErrorIs(t, err, ErrNotFound)
+	requireCode(t, err, errorx.CodeInternal)
 
-	_, err = svc.Download(context.Background(), 1, "not-a-uuid")
-	require.Error(t, err)
-}
-
-func TestValidateReferenceRejectsUnknownFile(t *testing.T) {
-	svc := newTestService()
-
-	_, err := svc.ValidateReference(context.Background(), 1, 2, uuid.NewString(), sharedattachment.KindImage)
-	require.ErrorIs(t, err, ErrNotFound)
+	_, err = svc.ValidateReference(context.Background(), 1, 2, uuid.NewString(), sharedattachment.KindImage)
+	requireCode(t, err, errorx.CodeInternal)
 }
 
 func TestAllowedMimeMatchesKind(t *testing.T) {
@@ -118,6 +111,7 @@ func TestAllowedMimeMatchesKind(t *testing.T) {
 
 func TestInitUploadSignsURLWhenCredentialsConfigured(t *testing.T) {
 	svc := newTestService()
+	svc.store = newStubStore(t, uuid.New(), sharedattachment.UploadStatusPending, "k/original")
 	svc.signer.AccessKey = "access"
 	svc.signer.SecretKey = "secret"
 

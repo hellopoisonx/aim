@@ -1,11 +1,11 @@
 package middleware
 
 import (
-	"encoding/json"
 	"net/http"
 	"strconv"
 
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/authctx"
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/httperr"
 
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 	"github.com/hellopoisonx/aim/app/shared/quota"
@@ -59,25 +59,9 @@ func (m *UserRateLimitMiddleware) Handle(next http.HandlerFunc) http.HandlerFunc
 			return
 		}
 		if !allowed {
-			writeRateLimitError(w, errorx.NewCodeError(errorx.CodeRateLimit, "rate limit"))
+			httperr.Write(w, errorx.NewCodeError(errorx.CodeRateLimit, "rate limit"))
 			return
 		}
 		next(w, r)
 	}
-}
-
-// writeRateLimitError writes a JSON error response matching the project
-// envelope used by the other gateway middlewares ({code, msg}). The HTTP
-// status is 429 — the canonical mapping for errorx.CodeRateLimit (42900).
-// Shared by UserRateLimitMiddleware and BotRateLimitMiddleware.
-func writeRateLimitError(w http.ResponseWriter, codeErr *errorx.CodeError) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusTooManyRequests)
-	_ = json.NewEncoder(w).Encode(struct {
-		Code int    `json:"code"`
-		Msg  string `json:"msg"`
-	}{
-		Code: codeErr.Code,
-		Msg:  codeErr.Message,
-	})
 }

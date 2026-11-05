@@ -8,6 +8,8 @@ import (
 
 	sharedconversation "github.com/hellopoisonx/aim/app/shared/conversation"
 
+	shareduser "github.com/hellopoisonx/aim/app/shared/user"
+
 	"github.com/hellopoisonx/aim/app/shared/pgtypes"
 
 	"github.com/lib/pq"
@@ -69,14 +71,14 @@ func (Message) TableName() string { return "messages" }
 
 // UserInfo maps table user_info (003, 006).
 type UserInfo struct {
-	ID        int64     `gorm:"column:id;primaryKey" json:"id"`
-	Email     string    `gorm:"column:email;size:255;not null;uniqueIndex" json:"email"`
-	Status    int16     `gorm:"column:status;not null;default:1" json:"status"`
-	Nickname  string    `gorm:"column:nickname;size:255;not null" json:"nickname"`
-	Avatar    string    `gorm:"column:avatar;size:255;not null;default:'https://implement.me'" json:"avatar"`
-	UserType  string    `gorm:"column:user_type;size:16;not null;default:human" json:"user_type"`
-	CreatedAt time.Time `gorm:"column:created_at;not null" json:"created_at"`
-	UpdatedAt time.Time `gorm:"column:updated_at;not null" json:"updated_at"`
+	ID        int64             `gorm:"column:id;primaryKey" json:"id"`
+	Email     string            `gorm:"column:email;size:255;not null;uniqueIndex" json:"email"`
+	Status    shareduser.Status `gorm:"column:status;not null;default:1" json:"status"`
+	Nickname  string            `gorm:"column:nickname;size:255;not null" json:"nickname"`
+	Avatar    string            `gorm:"column:avatar;size:255;not null;default:'https://implement.me'" json:"avatar"`
+	UserType  shareduser.Type   `gorm:"column:user_type;size:16;not null;default:human" json:"user_type"`
+	CreatedAt time.Time         `gorm:"column:created_at;not null" json:"created_at"`
+	UpdatedAt time.Time         `gorm:"column:updated_at;not null" json:"updated_at"`
 }
 
 // TableName pins the physical table name (GORM default would be "user_infos").

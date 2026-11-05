@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -19,6 +20,16 @@ const (
 )
 
 var ErrSearchQueryEmpty = errorx.NewCodeError(CodeSearchQueryEmpty, "search query must not be empty")
+
+// Scope is one searchable category accepted in SearchParams.Scopes.
+type Scope string
+
+const (
+	ScopeUsers         Scope = "users"
+	ScopeFriends       Scope = "friends"
+	ScopeConversations Scope = "conversations"
+	ScopeMessages      Scope = "messages"
+)
 
 // SearchStore defines the DAO queries needed by the search service.
 type SearchStore interface {
@@ -140,12 +151,17 @@ func (s *SearchService) Search(ctx context.Context, params SearchParams) (*Searc
 	}
 	limit = normalizeLimit(limit)
 
-	hasUsers := hasScope(scopes, "users")
-	hasFriends := hasScope(scopes, "friends")
-	hasConversations := hasScope(scopes, "conversations")
-	hasMessages := hasScope(scopes, "messages")
+	categories, err := parseScopes(scopes)
+	if err != nil {
+		return nil, err
+	}
+
+	hasUsers := hasScope(categories, ScopeUsers)
+	hasFriends := hasScope(categories, ScopeFriends)
+	hasConversations := hasScope(categories, ScopeConversations)
+	hasMessages := hasScope(categories, ScopeMessages)
 	// Empty scopes means all.
-	allScopes := len(scopes) == 0 || (hasUsers && hasFriends && hasConversations && hasMessages)
+	allScopes := len(categories) == 0 || (hasUsers && hasFriends && hasConversations && hasMessages)
 	if allScopes {
 		hasUsers = true
 		hasFriends = true
@@ -193,9 +209,26 @@ func (s *SearchService) Search(ctx context.Context, params SearchParams) (*Searc
 	return results, nil
 }
 
-func hasScope(scopes []string, target string) bool {
+// parseScopes normalises the requested categories and rejects values outside
+// the closed set instead of silently searching nothing.
+func parseScopes(raw []string) ([]Scope, error) {
+	scopes := make([]Scope, 0, len(raw))
+	for _, r := range raw {
+		scope := Scope(strings.ToLower(strings.TrimSpace(r)))
+		switch scope {
+		case ScopeUsers, ScopeFriends, ScopeConversations, ScopeMessages:
+			scopes = append(scopes, scope)
+		default:
+			return nil, errorx.NewCodeError(errorx.CodeBadInput, fmt.Sprintf("unknown search scope %q", r))
+		}
+	}
+
+	return scopes, nil
+}
+
+func hasScope(scopes []Scope, target Scope) bool {
 	for _, s := range scopes {
-		if strings.EqualFold(s, target) {
+		if s == target {
 			return true
 		}
 	}

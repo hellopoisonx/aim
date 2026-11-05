@@ -10,6 +10,7 @@ import (
 	"github.com/hellopoisonx/aim/app/logic/rpc/model/dao"
 	"github.com/hellopoisonx/aim/app/logic/rpc/model/orm"
 	sharedconversation "github.com/hellopoisonx/aim/app/shared/conversation"
+	shareduser "github.com/hellopoisonx/aim/app/shared/user"
 )
 
 // The fake is assigned to service.ConversationStore by the tests that build the
@@ -254,10 +255,10 @@ func (f *ConversationStore) GetUserType(_ context.Context, id int64) (string, er
 		return "", f.UserTypeErr
 	}
 	if _, ok := f.BotUserIDs[id]; ok {
-		return "bot", nil
+		return string(shareduser.TypeBot), nil
 	}
 
-	return "human", nil
+	return string(shareduser.TypeHuman), nil
 }
 
 func (f *ConversationStore) GetConversationsByUserID(ctx context.Context, userID int64) ([]orm.Conversation, error) {
@@ -328,7 +329,7 @@ func (f *ConversationStore) GetDirectConversationByMembers(ctx context.Context, 
 	}
 	// Search for a conversation where both users are Members
 	for convID, conv := range f.Conversations {
-		if conv.ConversationType != "direct" || !conv.IsActive {
+		if conv.ConversationType != sharedconversation.TypeDirect || !conv.IsActive {
 			continue
 		}
 		memberSet := make(map[int64]bool)

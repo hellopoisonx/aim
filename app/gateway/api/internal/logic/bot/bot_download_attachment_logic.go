@@ -8,6 +8,7 @@ import (
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/conversationservice"
+	sharedattachment "github.com/hellopoisonx/aim/app/shared/attachment"
 	"github.com/hellopoisonx/aim/app/shared/botperm"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 
@@ -42,7 +43,7 @@ func (l *BotDownloadAttachmentLogic) BotDownloadAttachment(req *types.BotDownloa
 		return nil, errorx.NewCodeError(errorx.CodeBadInput, "id is required")
 	}
 
-	// 1. Get file metadata to learn the conversation_id.
+	// Get file metadata to learn the conversation_id.
 	fileInfo, err := l.svcCtx.AttachmentClient.GetFile(l.ctx, &attachmentpb.GetFileReq{
 		UserId: identity.BotUserID,
 		FileId: fileID,
@@ -51,7 +52,7 @@ func (l *BotDownloadAttachmentLogic) BotDownloadAttachment(req *types.BotDownloa
 		return nil, errorx.SanitizeGRPCError(l, "bot download attachment", err)
 	}
 
-	if fileInfo.GetStatus() != "uploaded" {
+	if fileInfo.GetStatus() != sharedattachment.UploadStatusUploaded {
 		return nil, errorx.NewCodeError(errorx.CodeNotFound, "attachment not available")
 	}
 
@@ -60,7 +61,7 @@ func (l *BotDownloadAttachmentLogic) BotDownloadAttachment(req *types.BotDownloa
 		return nil, errorx.NewCodeError(errorx.CodeNotFound, "attachment has no associated conversation")
 	}
 
-	// 2. Verify the bot is a member of the conversation that owns the attachment.
+	// Verify the bot is a member of the conversation that owns the attachment.
 
 	membersResp, err := l.svcCtx.LogicConversationClient.GetConversationMembers(l.ctx,
 		&conversationservice.GetConversationMembersReq{
@@ -74,7 +75,7 @@ func (l *BotDownloadAttachmentLogic) BotDownloadAttachment(req *types.BotDownloa
 		return nil, errorx.NewCodeError(errorx.CodeForbidden, "bot is not a member of this conversation")
 	}
 
-	// 3. Authorize a presigned download URL.
+	// Authorize a presigned download URL.
 	downloadResp, err := l.svcCtx.AttachmentClient.AuthorizeDownload(l.ctx, &attachmentpb.AuthorizeDownloadReq{
 		UserId: identity.BotUserID,
 		FileId: fileID,

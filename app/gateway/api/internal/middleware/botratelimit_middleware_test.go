@@ -1,12 +1,14 @@
 package middleware
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
 
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/botctx"
+	"github.com/hellopoisonx/aim/app/shared/errorx"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -31,8 +33,12 @@ func TestBotRateLimitMiddleware_RejectsOverBudget(t *testing.T) {
 		code, _ := fire(mkReq(100))
 		require.Equal(t, http.StatusOK, code)
 	}
-	code, _ := fire(mkReq(100))
+	code, body := fire(mkReq(100))
 	assert.Equal(t, http.StatusTooManyRequests, code)
+	assert.JSONEq(t,
+		fmt.Sprintf(`{"code":%d,"msg":"rate limit","body":null}`, errorx.CodeRateLimit),
+		string(body),
+		"rejection body must use the httperr envelope")
 	assert.Equal(t, 2, *calls)
 }
 

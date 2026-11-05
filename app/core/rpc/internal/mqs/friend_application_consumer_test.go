@@ -16,30 +16,11 @@ import (
 
 // recordingPusher captures friend-application pushes.
 type recordingPusher struct {
+	*fakeGatewayClient
 	pushes []*gwpb.PushFriendApplicationReq
 }
 
-func (p *recordingPusher) PushMessage(context.Context, *gwpb.PushMessageReq) (*gwpb.PushMessageResp, error) {
-	return &gwpb.PushMessageResp{}, nil
-}
-
-func (p *recordingPusher) PushPresence(context.Context, *gwpb.PushPresenceReq) (*gwpb.PushPresenceResp, error) {
-	return &gwpb.PushPresenceResp{}, nil
-}
-
-func (p *recordingPusher) PushTyping(context.Context, *gwpb.PushTypingReq) (*gwpb.PushTypingResp, error) {
-	return &gwpb.PushTypingResp{}, nil
-}
-
-func (p *recordingPusher) PushReadReceipt(context.Context, *gwpb.PushReadReceiptReq) (*gwpb.PushReadReceiptResp, error) {
-	return &gwpb.PushReadReceiptResp{}, nil
-}
-
-func (p *recordingPusher) PushNotification(context.Context, *gwpb.PushNotificationReq) (*gwpb.PushNotificationResp, error) {
-	return &gwpb.PushNotificationResp{}, nil
-}
-
-func (p *recordingPusher) PushFriendApplication(_ context.Context, req *gwpb.PushFriendApplicationReq) (*gwpb.PushFriendApplicationResp, error) {
+func (p *recordingPusher) PushFriendApplicationToNode(_ context.Context, _ string, req *gwpb.PushFriendApplicationReq) (*gwpb.PushFriendApplicationResp, error) {
 	p.pushes = append(p.pushes, req)
 	return &gwpb.PushFriendApplicationResp{Success: true}, nil
 }
@@ -71,7 +52,7 @@ func toAny(values []string) []any {
 }
 
 func TestFriendApplicationConsumerPushesToTargetNode(t *testing.T) {
-	pusher := &recordingPusher{}
+	pusher := &recordingPusher{fakeGatewayClient: newFakeGatewayClient()}
 	svcCtx := newFriendApplicationSvcCtx(t, pusher, "gw-a")
 
 	payload, err := json.Marshal(events.FriendApplicationEvent{
@@ -90,7 +71,7 @@ func TestFriendApplicationConsumerPushesToTargetNode(t *testing.T) {
 }
 
 func TestFriendApplicationConsumerDropsBadPayload(t *testing.T) {
-	pusher := &recordingPusher{}
+	pusher := &recordingPusher{fakeGatewayClient: newFakeGatewayClient()}
 	consumer := NewFriendApplicationConsumer(t.Context(), newFriendApplicationSvcCtx(t, pusher))
 
 	// A malformed payload must not wedge the partition.

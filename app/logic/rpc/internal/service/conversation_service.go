@@ -19,6 +19,7 @@ import (
 	"github.com/hellopoisonx/aim/app/shared/rocketmq"
 	"github.com/hellopoisonx/aim/app/shared/tools"
 	"github.com/hellopoisonx/aim/app/shared/tracing"
+	shareduser "github.com/hellopoisonx/aim/app/shared/user"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -334,15 +335,17 @@ func (s *ConversationService) requireAct(ctx context.Context, conversationID, us
 		return s.requireStoredRole(ctx, conversationID, userID, act)
 	}
 
-	userType, err := s.store.GetUserType(ctx, userID)
+	userType, err := s.userType(ctx, userID)
 	if err != nil {
-		if errors.Is(err, dao.ErrNotFound) {
-			return ErrNotMember
-		}
 		return err
 	}
 
-	allowed, err := s.authz.Authorize(ctx, rbac.Subject(userType, userID), rbac.Domain(conversationID), rbac.ObjectConversation, act)
+	subject, err := rbac.Subject(userType, userID)
+	if err != nil {
+		return err
+	}
+
+	allowed, err := s.authz.Authorize(ctx, subject, rbac.Domain(conversationID), rbac.ObjectConversation, act)
 	if err != nil {
 		return err
 	}
@@ -383,19 +386,27 @@ func (s *ConversationService) requireStoredRole(ctx context.Context, conversatio
 }
 
 func (s *ConversationService) isBot(ctx context.Context, userID int64) (bool, error) {
-	userType, err := s.store.GetUserType(ctx, userID)
+	userType, err := s.userType(ctx, userID)
 	if err != nil {
-		if errors.Is(err, dao.ErrNotFound) {
-			return false, ErrNotMember
-		}
 		return false, err
 	}
 
-	return userType == "bot", nil
+	return userType == shareduser.TypeBot, nil
 }
 
 func (s *ConversationService) rbacSubject(ctx context.Context, userID int64) (string, error) {
-	userType, err := s.store.GetUserType(ctx, userID)
+	userType, err := s.userType(ctx, userID)
+	if err != nil {
+		return "", err
+	}
+
+	return rbac.Subject(userType, userID)
+}
+
+// userType resolves a principal type, failing instead of defaulting when the
+// stored value is outside the closed set.
+func (s *ConversationService) userType(ctx context.Context, userID int64) (shareduser.Type, error) {
+	raw, err := s.store.GetUserType(ctx, userID)
 	if err != nil {
 		if errors.Is(err, dao.ErrNotFound) {
 			return "", ErrNotMember
@@ -403,7 +414,7 @@ func (s *ConversationService) rbacSubject(ctx context.Context, userID int64) (st
 		return "", err
 	}
 
-	return rbac.Subject(userType, userID), nil
+	return shareduser.ParseType(raw)
 }
 
 func (s *ConversationService) assignRole(ctx context.Context, conversationID, userID int64, role string) {

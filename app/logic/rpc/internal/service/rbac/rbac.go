@@ -21,6 +21,8 @@ import (
 	"github.com/casbin/casbin/v3"
 	casbinmodel "github.com/casbin/casbin/v3/model"
 	"github.com/casbin/casbin/v3/persist"
+
+	shareduser "github.com/hellopoisonx/aim/app/shared/user"
 )
 
 const rolePrefix = "role:"
@@ -89,12 +91,17 @@ type Authorizer interface {
 	HasRole(ctx context.Context, sub, dom, role string) (bool, error)
 }
 
-func Subject(userType string, userID int64) string {
-	prefix := "user:"
-	if userType == "bot" {
-		prefix = "bot:"
+// Subject maps a validated user type to its Casbin subject, rejecting values
+// outside the closed set instead of silently treating them as human.
+func Subject(userType shareduser.Type, userID int64) (string, error) {
+	switch userType {
+	case shareduser.TypeHuman:
+		return "user:" + strconv.FormatInt(userID, 10), nil
+	case shareduser.TypeBot:
+		return "bot:" + strconv.FormatInt(userID, 10), nil
 	}
-	return prefix + strconv.FormatInt(userID, 10)
+
+	return "", fmt.Errorf("rbac: unknown user type %q", userType)
 }
 
 func Domain(conversationID int64) string {

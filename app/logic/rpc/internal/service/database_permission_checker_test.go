@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/hellopoisonx/aim/app/logic/rpc/model/orm"
+	shareduser "github.com/hellopoisonx/aim/app/shared/user"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -289,7 +290,7 @@ func TestDatabasePermissionChecker_DirectBotConversationSkipsTemporaryLimit(t *t
 					},
 				},
 				messageCounts: map[int64]int64{200: temporaryConversationMessageLimit},
-				userTypes:     map[int64]string{9001: UserTypeBot},
+				userTypes:     map[int64]string{9001: string(shareduser.TypeBot)},
 			}
 			checker := NewDatabasePermissionChecker(fq)
 

@@ -8,6 +8,7 @@ import (
 	"strconv"
 
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/botctx"
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/httperr"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 	"github.com/hellopoisonx/aim/app/shared/quota"
 	"github.com/zeromicro/go-zero/core/logx"
@@ -56,7 +57,7 @@ func (m *BotRateLimitMiddleware) Handle(next http.HandlerFunc) http.HandlerFunc 
 			return
 		}
 		if !allowed {
-			writeRateLimitError(w, errorx.NewCodeError(errorx.CodeRateLimit, "rate limit"))
+			httperr.Write(w, errorx.NewCodeError(errorx.CodeRateLimit, "rate limit"))
 			return
 		}
 		next(w, r)

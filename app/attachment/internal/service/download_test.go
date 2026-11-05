@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"database/sql/driver"
-	"errors"
 	"io"
 	"testing"
 	"time"
@@ -31,9 +30,7 @@ type stubConn struct{ stub rowStub }
 
 func (c stubConn) Prepare(string) (driver.Stmt, error) { return stubStmt{}, nil }
 func (c stubConn) Close() error                        { return nil }
-func (c stubConn) Begin() (driver.Tx, error) {
-	return nil, errors.New("transactions are not supported")
-}
+func (c stubConn) Begin() (driver.Tx, error)           { return stubTx{}, nil }
 
 func (c stubConn) QueryContext(context.Context, string, []driver.NamedValue) (driver.Rows, error) {
 	return &stubRows{stub: c.stub}, nil
@@ -42,6 +39,11 @@ func (c stubConn) QueryContext(context.Context, string, []driver.NamedValue) (dr
 func (c stubConn) ExecContext(context.Context, string, []driver.NamedValue) (driver.Result, error) {
 	return driver.RowsAffected(0), nil
 }
+
+type stubTx struct{}
+
+func (stubTx) Commit() error   { return nil }
+func (stubTx) Rollback() error { return nil }
 
 type stubConnector struct{ stub rowStub }
 

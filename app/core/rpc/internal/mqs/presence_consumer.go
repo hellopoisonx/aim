@@ -28,8 +28,6 @@ func (c *PresenceConsumer) Consume(ctx context.Context, key string, value string
 
 	var event events.PresenceEvent
 	if err := json.Unmarshal([]byte(value), &event); err != nil {
-		// A malformed payload never decodes on redelivery: dropping it keeps the
-		// partition moving instead of replaying the same poison message forever.
 		logx.WithContext(ctx).Errorf(
 			"dropping undecodable presence event key=%s: %v payload=%q", key, err, value,
 		)
@@ -75,7 +73,7 @@ func (c *PresenceConsumer) Consume(ctx context.Context, key string, value string
 				TargetUserId: friendID,
 			}
 
-			if _, err := pushPresenceToNode(ctx, c.svcCtx.GatewayClient, nodeID, req); err != nil {
+			if _, err := c.svcCtx.GatewayClient.PushPresenceToNode(ctx, nodeID, req); err != nil {
 				logx.WithContext(ctx).Errorf("PushPresence to node %s for friend %d failed: %v", nodeID, friendID, err)
 				continue
 			}

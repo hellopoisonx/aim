@@ -31,12 +31,12 @@ func (l *RegisterLogic) Register(in *pb.RegisterReq) (*pb.RegisterResp, error) {
 	name := strings.TrimSpace(in.GetUsername())
 
 	if email == "" || in.GetPassword() == "" || name == "" || in.GetDeviceId() == "" {
-		return nil, errorx.NewCodeError(service.CodeInvalidArgument, "missing required auth fields")
+		return nil, errorx.NewCodeError(errorx.CodeBadInput, "missing required auth fields")
 	}
 
 	passwordHash, err := service.HashPassword(in.GetPassword())
 	if err != nil {
-		return nil, errorx.NewCodeError(service.CodeInternal, "hash password failed")
+		return nil, errorx.NewCodeError(errorx.CodeInternal, "hash password failed")
 	}
 
 	var user service.UserCredential
@@ -50,9 +50,9 @@ func (l *RegisterLogic) Register(in *pb.RegisterReq) (*pb.RegisterResp, error) {
 	}
 	if err != nil {
 		if service.IsDuplicateEmail(err) {
-			return nil, errorx.NewCodeError(service.CodeConflict, "email already registered")
+			return nil, errorx.NewCodeError(errorx.CodeConflict, "email already registered")
 		}
-		return nil, errorx.NewCodeError(service.CodeInternal, "create user failed")
+		return nil, errorx.NewCodeError(errorx.CodeInternal, "create user failed")
 	}
 
 	return &pb.RegisterResp{UserId: user.ID}, nil

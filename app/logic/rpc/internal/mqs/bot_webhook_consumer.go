@@ -40,6 +40,12 @@ const botWebhookHTTPTimeout = 5 * time.Second
 // recovery; we deliberately do not block the consumer on a single bot.
 const botWebhookMaxRetries = 5
 
+// botWebhookStore is the read surface the consumer needs from the DAO.
+type botWebhookStore interface {
+	ListActiveBotWebhooksForConversation(ctx context.Context, conversationID int64) ([]orm.BotWebhook, error)
+	GetUserType(ctx context.Context, id int64) (string, error)
+}
+
 // BotWebhookConsumer consumes the same `aim-message-transfer` topic as
 // the archive consumer but uses an independent consumer group, so its
 // offset is decoupled from message persistence.
@@ -52,11 +58,6 @@ const botWebhookMaxRetries = 5
 //     `sender_type` (human/bot/system) — bots can filter accordingly.
 //  4. Fans out HTTP POSTs in parallel with HMAC-SHA256 signatures and
 //     exponential backoff retries.
-type botWebhookStore interface {
-	ListActiveBotWebhooksForConversation(ctx context.Context, conversationID int64) ([]orm.BotWebhook, error)
-	GetUserType(ctx context.Context, id int64) (string, error)
-}
-
 type BotWebhookConsumer struct {
 	ctx        context.Context
 	store      botWebhookStore

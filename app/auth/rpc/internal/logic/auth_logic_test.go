@@ -184,7 +184,7 @@ func (s *memoryUserStore) CreateUser(_ context.Context, email, passwordHash, nam
 
 	// Simulate duplicate email detection
 	if _, exists := s.byEmail[email]; exists {
-		return authsvc.UserCredential{}, errorx.NewCodeError(authsvc.CodeConflict, "email already registered")
+		return authsvc.UserCredential{}, errorx.NewCodeError(errorx.CodeConflict, "email already registered")
 	}
 
 	user := authsvc.UserCredential{ID: s.nextID, Email: email, PasswordHash: passwordHash, Name: name, Status: authsvc.StatusNormal}
@@ -201,7 +201,7 @@ func (s *memoryUserStore) GetUserByEmail(_ context.Context, email string) (auths
 
 	user, ok := s.byEmail[email]
 	if !ok {
-		return authsvc.UserCredential{}, errorx.NewCodeError(authsvc.CodeUnauthorized, "not found")
+		return authsvc.UserCredential{}, errorx.NewCodeError(errorx.CodeAuth, "not found")
 	}
 
 	return user, nil
@@ -252,7 +252,7 @@ func (s *memorySessionStore) Rotate(ctx context.Context, token string) (int64, s
 
 	entry, ok := s.rt[token]
 	if !ok {
-		return 0, "", "", errorx.NewCodeError(authsvc.CodeUnauthorized, "invalid refresh token")
+		return 0, "", "", errorx.NewCodeError(errorx.CodeAuth, "invalid refresh token")
 	}
 
 	delete(s.rt, token)

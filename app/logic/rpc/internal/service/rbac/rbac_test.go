@@ -6,7 +6,25 @@ import (
 
 	casbinmodel "github.com/casbin/casbin/v3/model"
 	"github.com/casbin/casbin/v3/persist"
+
+	shareduser "github.com/hellopoisonx/aim/app/shared/user"
 )
+
+func testSubject(t *testing.T, userType shareduser.Type, id int64) string {
+	t.Helper()
+	sub, err := Subject(userType, id)
+	if err != nil {
+		t.Fatalf("subject: %v", err)
+	}
+
+	return sub
+}
+
+func TestSubjectRejectsUnknownType(t *testing.T) {
+	if _, err := Subject(shareduser.Type("robot"), 1); err == nil {
+		t.Fatal("unknown user type must not map to a subject")
+	}
+}
 
 type memoryAdapter struct {
 	rules [][]string // {ptype, sub, role, dom}
@@ -71,10 +89,10 @@ func TestAuthorizeMatrix(t *testing.T) {
 	enforcer := newTestEnforcer(t, nil)
 
 	conv := Domain(42)
-	owner := Subject("human", 1)
-	admin := Subject("human", 2)
-	member := Subject("human", 3)
-	stranger := Subject("human", 4)
+	owner := testSubject(t, shareduser.TypeHuman, 1)
+	admin := testSubject(t, shareduser.TypeHuman, 2)
+	member := testSubject(t, shareduser.TypeHuman, 3)
+	stranger := testSubject(t, shareduser.TypeHuman, 4)
 
 	for sub, role := range map[string]string{owner: RoleOwner, admin: RoleAdmin, member: RoleMember} {
 		if err := enforcer.AssignRole(ctx, sub, conv, role); err != nil {
@@ -115,7 +133,7 @@ func TestAuthorizeIsDomainScoped(t *testing.T) {
 	ctx := context.Background()
 	enforcer := newTestEnforcer(t, nil)
 
-	member := Subject("human", 7)
+	member := testSubject(t, shareduser.TypeHuman, 7)
 	if err := enforcer.AssignRole(ctx, member, Domain(1), RoleMember); err != nil {
 		t.Fatalf("assign: %v", err)
 	}
@@ -133,7 +151,7 @@ func TestBotSubjectUsesSameMatrix(t *testing.T) {
 	ctx := context.Background()
 	enforcer := newTestEnforcer(t, nil)
 
-	bot := Subject("bot", 9)
+	bot := testSubject(t, shareduser.TypeBot, 9)
 	if err := enforcer.AssignRole(ctx, bot, Domain(5), RoleAdmin); err != nil {
 		t.Fatalf("assign: %v", err)
 	}
@@ -161,7 +179,7 @@ func TestRoleMutationPersistsThroughAdapter(t *testing.T) {
 	enforcer := newTestEnforcer(t, adapter)
 
 	conv := Domain(11)
-	sub := Subject("human", 3)
+	sub := testSubject(t, shareduser.TypeHuman, 3)
 
 	if err := enforcer.AssignRole(ctx, sub, conv, RoleMember); err != nil {
 		t.Fatalf("assign member: %v", err)

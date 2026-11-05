@@ -500,8 +500,9 @@ func (m *Manager) ScanStaleConnections(now int64) []authctx.Identity {
 	return stale
 }
 
-// ScanExpiredGraces returns identities whose reconnect grace has expired.
-// Each entry is paired with whether the identity has any remaining active connections.
+// ScanExpiredGraces returns identities whose reconnect grace deadline has
+// passed. It reports only the deadline; callers decide whether the grace still
+// matters (HasPendingGrace) and what to publish.
 func (m *Manager) ScanExpiredGraces(now time.Time) []authctx.Identity {
 	m.pendingMu.Lock()
 	defer m.pendingMu.Unlock()

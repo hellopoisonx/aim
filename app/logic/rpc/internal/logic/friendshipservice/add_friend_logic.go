@@ -27,8 +27,9 @@ func NewAddFriendLogic(ctx context.Context, svcCtx *svc.ServiceContext) *AddFrie
 	}
 }
 
-// AddFriend sends a friend request or accepts an existing pending one.
-// Idempotent: if already friends (accepted or pending), returns the existing record.
+// AddFriend sends a friend request.
+// Idempotent: a pending or accepted record in the same direction is returned
+// unchanged; a request waiting in the reverse direction is left to AcceptFriend.
 func (l *AddFriendLogic) AddFriend(in *pb.AddFriendReq) (*pb.AddFriendResp, error) {
 	userID := in.GetUserId()
 	friendID := in.GetFriendId()

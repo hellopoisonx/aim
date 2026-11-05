@@ -28,8 +28,6 @@ func (c *ReadReceiptConsumer) Consume(ctx context.Context, key string, value str
 
 	var event events.ReadReceiptEvent
 	if err := json.Unmarshal([]byte(value), &event); err != nil {
-		// A malformed payload never decodes on redelivery: dropping it keeps the
-		// partition moving instead of replaying the same poison message forever.
 		logx.WithContext(ctx).Errorf(
 			"dropping undecodable read receipt event key=%s: %v payload=%q", key, err, value,
 		)
@@ -59,7 +57,7 @@ func (c *ReadReceiptConsumer) Consume(ctx context.Context, key string, value str
 			UpdatedAt:         event.UpdatedAt,
 		}
 
-		if _, err := pushReadReceiptToNode(ctx, c.svcCtx.GatewayClient, nodeID, req); err != nil {
+		if _, err := c.svcCtx.GatewayClient.PushReadReceiptToNode(ctx, nodeID, req); err != nil {
 			return err
 		}
 

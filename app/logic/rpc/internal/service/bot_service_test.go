@@ -10,6 +10,7 @@ import (
 	"github.com/hellopoisonx/aim/app/logic/rpc/model/orm"
 	"github.com/hellopoisonx/aim/app/shared/bottoken"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
+	shareduser "github.com/hellopoisonx/aim/app/shared/user"
 
 	"github.com/stretchr/testify/require"
 )
@@ -85,7 +86,6 @@ func (f *fakeBotQuerier) DeleteBotWebhook(_ context.Context, _ int64) (int64, er
 	return f.deleteRows, nil
 }
 
-
 func TestBotService_ValidateBotToken_Success(t *testing.T) {
 	tok, err := bottoken.Generate()
 	require.NoError(t, err)
@@ -97,7 +97,7 @@ func TestBotService_ValidateBotToken_Success(t *testing.T) {
 				BotUserID: 1001,
 				TokenHash: bottoken.Hash(tok),
 			},
-			UserType:   UserTypeBot,
+			UserType:   shareduser.TypeBot,
 			UserStatus: 1,
 			Nickname:   "alice-bot",
 			Avatar:     "https://example/a.png",
@@ -146,7 +146,7 @@ func TestBotService_ValidateBotToken_Revoked(t *testing.T) {
 				TokenHash: bottoken.Hash(tok),
 				RevokedAt: new(time.Now().Add(-time.Hour)),
 			},
-			UserType:   UserTypeBot,
+			UserType:   shareduser.TypeBot,
 			UserStatus: 1,
 		},
 	}
@@ -170,7 +170,7 @@ func TestBotService_ValidateBotToken_Expired(t *testing.T) {
 				TokenHash: bottoken.Hash(tok),
 				ExpiresAt: new(time.Now().Add(-time.Minute)),
 			},
-			UserType:   UserTypeBot,
+			UserType:   shareduser.TypeBot,
 			UserStatus: 1,
 		},
 	}
@@ -216,7 +216,7 @@ func TestBotService_ValidateBotToken_Disabled(t *testing.T) {
 				BotUserID: 1001,
 				TokenHash: bottoken.Hash(tok),
 			},
-			UserType:   UserTypeBot,
+			UserType:   shareduser.TypeBot,
 			UserStatus: 0,
 		},
 	}
@@ -231,7 +231,7 @@ func TestBotService_ValidateBotToken_Disabled(t *testing.T) {
 func TestBotService_GetBotProfile(t *testing.T) {
 	q := &fakeBotQuerier{
 		users: map[int64]orm.UserInfo{
-			1001: {ID: 1001, Email: "alice-bot@aim", Nickname: "alice-bot", Status: 1, UserType: UserTypeBot},
+			1001: {ID: 1001, Email: "alice-bot@aim", Nickname: "alice-bot", Status: 1, UserType: shareduser.TypeBot},
 		},
 	}
 	info, err := NewBotService(q, nil).GetBotProfile(context.Background(), 1001)

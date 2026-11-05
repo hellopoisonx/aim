@@ -48,8 +48,6 @@ func (c *DeliveryConsumer) Consume(ctx context.Context, key string, value string
 
 	var event events.TransferEvent
 	if err := json.Unmarshal([]byte(value), &event); err != nil {
-		// A malformed payload never decodes on redelivery: dropping it keeps the
-		// partition moving instead of replaying the same poison message forever.
 		logx.WithContext(ctx).Errorf(
 			"dropping undecodable delivery event key=%s: %v payload=%q", key, err, value,
 		)

@@ -31,8 +31,6 @@ func NewAttachmentParsedConsumer(ctx context.Context, svcCtx *svc.ServiceContext
 func (c *AttachmentParsedConsumer) Consume(ctx context.Context, key string, value string) error {
 	event, metaBytes, err := decodeAttachmentParsedEvent([]byte(value))
 	if err != nil {
-		// A malformed payload never decodes on redelivery: dropping it keeps the
-		// partition moving instead of replaying the same poison message forever.
 		logx.WithContext(ctx).Errorf(
 			"dropping undecodable attachment parsed event key=%s: %v payload=%q", key, err, value,
 		)
@@ -125,7 +123,7 @@ func (c *AttachmentParsedConsumer) Consume(ctx context.Context, key string, valu
 			SenderInfo:       gatewaySystemSenderInfo(),
 		}
 
-		resp, err := pushMessageToNode(ctx, c.svcCtx.GatewayClient, nodeID, req)
+		resp, err := c.svcCtx.GatewayClient.PushMessageToNode(ctx, nodeID, req)
 		if err != nil {
 			return err
 		}

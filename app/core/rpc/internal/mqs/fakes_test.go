@@ -65,6 +65,26 @@ func (f *fakeGatewayClient) PushFriendApplication(_ context.Context, _ *gwpb.Pus
 	return &gwpb.PushFriendApplicationResp{Success: true}, nil
 }
 
+func (f *fakeGatewayClient) PushMessageToNode(ctx context.Context, _ string, req *gwpb.PushMessageReq) (*gwpb.PushMessageResp, error) {
+	return f.PushMessage(ctx, req)
+}
+
+func (f *fakeGatewayClient) PushPresenceToNode(ctx context.Context, _ string, req *gwpb.PushPresenceReq) (*gwpb.PushPresenceResp, error) {
+	return f.PushPresence(ctx, req)
+}
+
+func (f *fakeGatewayClient) PushTypingToNode(ctx context.Context, _ string, req *gwpb.PushTypingReq) (*gwpb.PushTypingResp, error) {
+	return f.PushTyping(ctx, req)
+}
+
+func (f *fakeGatewayClient) PushReadReceiptToNode(ctx context.Context, _ string, req *gwpb.PushReadReceiptReq) (*gwpb.PushReadReceiptResp, error) {
+	return f.PushReadReceipt(ctx, req)
+}
+
+func (f *fakeGatewayClient) PushFriendApplicationToNode(ctx context.Context, _ string, req *gwpb.PushFriendApplicationReq) (*gwpb.PushFriendApplicationResp, error) {
+	return f.PushFriendApplication(ctx, req)
+}
+
 func newFakeGatewayClient() *fakeGatewayClient {
 	return &fakeGatewayClient{pushResp: &gwpb.PushMessageResp{Success: true}}
 }

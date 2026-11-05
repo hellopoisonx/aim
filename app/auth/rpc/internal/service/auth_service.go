@@ -21,11 +21,6 @@ import (
 const (
 	StatusDisabled = 0
 	StatusNormal   = 1
-
-	CodeInvalidArgument = 40000
-	CodeUnauthorized    = 40100
-	CodeConflict        = 40900
-	CodeInternal        = 50000
 )
 
 type UserStore interface {
@@ -159,7 +154,7 @@ func (s *RedisSessionStore) Rotate(ctx context.Context, refreshToken string) (in
 	value, err := s.client.Get(ctx, refreshKey(refreshToken)).Result()
 	if err != nil {
 		if errors.Is(err, redis.Nil) {
-			return 0, "", "", errorx.NewCodeError(CodeUnauthorized, "invalid refresh token")
+			return 0, "", "", errorx.NewCodeError(errorx.CodeAuth, "invalid refresh token")
 		}
 
 		return 0, "", "", err
@@ -260,12 +255,12 @@ func sessionValue(userID int64, deviceID string) string {
 func parseSessionValue(value string) (int64, string, error) {
 	userPart, deviceID, ok := strings.Cut(value, ":")
 	if !ok || deviceID == "" {
-		return 0, "", errorx.NewCodeError(CodeInternal, "invalid refresh session")
+		return 0, "", errorx.NewCodeError(errorx.CodeInternal, "invalid refresh session")
 	}
 
 	userID, err := strconv.ParseInt(userPart, 10, 64)
 	if err != nil || userID == 0 {
-		return 0, "", errorx.NewCodeError(CodeInternal, "invalid refresh session")
+		return 0, "", errorx.NewCodeError(errorx.CodeInternal, "invalid refresh session")
 	}
 
 	return userID, deviceID, nil

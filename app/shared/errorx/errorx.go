@@ -26,8 +26,9 @@ const (
 	codeErrorMetadata = "aim.biz_code"
 )
 
-// Bot OpenAPI error codes (40110-40130). They live in the 401xx range so the
-// responseEnvelope mapper drives a 401 HTTP status by default.
+// Bot OpenAPI error codes. They follow the RPC range convention, so the HTTP
+// status comes from the leading digits: 40010 is a 400, 40110-40112 are 401s
+// and 40310 is a 403.
 const (
 	// CodeBotTokenInvalid — `Authorization: Bot <token>` missing/malformed/unknown.
 	CodeBotTokenInvalid = 40110
@@ -275,11 +276,9 @@ func grpcCodeFromBizCode(code int) codes.Code {
 	}
 }
 
-// bizCodeFromGRPCCode maps a gRPC status code back to a biz code.
-// The returned biz code is a category-wide code (e.g., 40000, 40100);
-// the exact sub-category code from the server is not recoverable from
-// the gRPC status alone. If higher fidelity is needed in the future,
-// embed the exact biz code in gRPC status details.
+// bizCodeFromGRPCCode maps a gRPC status code to a category-wide biz code
+// (e.g. 40000, 40100). It is only the fallback: CodeError.GRPCStatus attaches
+// the exact biz code as an ErrorInfo detail, which FromGRPCError prefers.
 func bizCodeFromGRPCCode(c codes.Code) int {
 	switch c {
 	case codes.InvalidArgument:

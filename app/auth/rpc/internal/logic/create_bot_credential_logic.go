@@ -31,21 +31,21 @@ func NewCreateBotCredentialLogic(ctx context.Context, svcCtx *svc.ServiceContext
 func (l *CreateBotCredentialLogic) CreateBotCredential(in *pb.CreateBotCredentialReq) (*pb.CreateBotCredentialResp, error) {
 	nickname := strings.TrimSpace(in.GetNickname())
 	if nickname == "" {
-		return nil, errorx.NewCodeError(service.CodeInvalidArgument, "nickname is required")
+		return nil, errorx.NewCodeError(errorx.CodeBadInput, "nickname is required")
 	}
 
 	passwordHash, err := service.HashPassword(uuid.NewString() + uuid.NewString())
 	if err != nil {
-		return nil, errorx.NewCodeError(service.CodeInternal, "create bot credential failed")
+		return nil, errorx.NewCodeError(errorx.CodeInternal, "create bot credential failed")
 	}
 
 	credential, err := l.svcCtx.Users.CreateBotCredential(l.ctx, in.GetEmail(), passwordHash, nickname)
 	if err != nil {
 		if service.IsDuplicateEmail(err) {
-			return nil, errorx.NewCodeError(service.CodeConflict, "email already registered")
+			return nil, errorx.NewCodeError(errorx.CodeConflict, "email already registered")
 		}
 
-		return nil, errorx.NewCodeError(service.CodeInternal, "create bot credential failed")
+		return nil, errorx.NewCodeError(errorx.CodeInternal, "create bot credential failed")
 	}
 
 	return &pb.CreateBotCredentialResp{UserId: credential.ID, Email: credential.Email}, nil

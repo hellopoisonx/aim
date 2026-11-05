@@ -1,7 +1,7 @@
 package middleware
 
 import (
-	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -83,13 +83,10 @@ func TestUserRateLimitMiddleware_RejectsOverBudget(t *testing.T) {
 	code, body := fire(mkReq())
 	assert.Equal(t, http.StatusTooManyRequests, code)
 	assert.Equal(t, 2, *calls, "next handler should not be invoked on rejection")
-
-	var resp struct {
-		Code int    `json:"code"`
-		Msg  string `json:"msg"`
-	}
-	require.NoError(t, json.Unmarshal(body, &resp))
-	assert.Equal(t, errorx.CodeRateLimit, resp.Code)
+	assert.JSONEq(t,
+		fmt.Sprintf(`{"code":%d,"msg":"rate limit","body":null}`, errorx.CodeRateLimit),
+		string(body),
+		"rejection body must use the httperr envelope")
 }
 
 func TestUserRateLimitMiddleware_BucketIsolation(t *testing.T) {

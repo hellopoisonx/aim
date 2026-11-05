@@ -38,6 +38,15 @@ type Service struct {
 // attachmentProducerGroup is the broker-visible producer group of attachment.
 const attachmentProducerGroup = "aim-attachment-producer"
 
+// requireStore rejects every method that needs persistence when the service
+// booted without a datasource, instead of reporting per-method fallbacks.
+func (s *Service) requireStore() error {
+	if s.store == nil {
+		return errorx.NewCodeError(errorx.CodeInternal, "attachment storage is not configured")
+	}
+	return nil
+}
+
 const attachmentTracerName = "github.com/hellopoisonx/aim/app/attachment"
 
 type InitUploadRequest struct {

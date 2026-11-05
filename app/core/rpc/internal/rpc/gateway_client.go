@@ -23,6 +23,11 @@ type GatewayPusher interface {
 	PushReadReceipt(ctx context.Context, req *gwpb.PushReadReceiptReq) (*gwpb.PushReadReceiptResp, error)
 	PushNotification(ctx context.Context, req *gwpb.PushNotificationReq) (*gwpb.PushNotificationResp, error)
 	PushFriendApplication(ctx context.Context, req *gwpb.PushFriendApplicationReq) (*gwpb.PushFriendApplicationResp, error)
+	PushMessageToNode(ctx context.Context, nodeID string, req *gwpb.PushMessageReq) (*gwpb.PushMessageResp, error)
+	PushPresenceToNode(ctx context.Context, nodeID string, req *gwpb.PushPresenceReq) (*gwpb.PushPresenceResp, error)
+	PushTypingToNode(ctx context.Context, nodeID string, req *gwpb.PushTypingReq) (*gwpb.PushTypingResp, error)
+	PushReadReceiptToNode(ctx context.Context, nodeID string, req *gwpb.PushReadReceiptReq) (*gwpb.PushReadReceiptResp, error)
+	PushFriendApplicationToNode(ctx context.Context, nodeID string, req *gwpb.PushFriendApplicationReq) (*gwpb.PushFriendApplicationResp, error)
 }
 
 type GatewayClient struct {
@@ -93,6 +98,27 @@ func (c *GatewayClient) PushFriendApplication(ctx context.Context, req *gwpb.Pus
 	}
 
 	return c.client.PushFriendApplication(ctx, req)
+}
+
+// A GatewayClient owns one node, so the node-targeted calls are the plain ones.
+func (c *GatewayClient) PushMessageToNode(ctx context.Context, _ string, req *gwpb.PushMessageReq) (*gwpb.PushMessageResp, error) {
+	return c.PushMessage(ctx, req)
+}
+
+func (c *GatewayClient) PushPresenceToNode(ctx context.Context, _ string, req *gwpb.PushPresenceReq) (*gwpb.PushPresenceResp, error) {
+	return c.PushPresence(ctx, req)
+}
+
+func (c *GatewayClient) PushTypingToNode(ctx context.Context, _ string, req *gwpb.PushTypingReq) (*gwpb.PushTypingResp, error) {
+	return c.PushTyping(ctx, req)
+}
+
+func (c *GatewayClient) PushReadReceiptToNode(ctx context.Context, _ string, req *gwpb.PushReadReceiptReq) (*gwpb.PushReadReceiptResp, error) {
+	return c.PushReadReceipt(ctx, req)
+}
+
+func (c *GatewayClient) PushFriendApplicationToNode(ctx context.Context, _ string, req *gwpb.PushFriendApplicationReq) (*gwpb.PushFriendApplicationResp, error) {
+	return c.PushFriendApplication(ctx, req)
 }
 
 func (c *GatewayClient) Close() error {

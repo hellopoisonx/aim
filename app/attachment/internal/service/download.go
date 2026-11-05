@@ -19,8 +19,8 @@ func (s *Service) GetFile(ctx context.Context, userID int64, fileID string) (*Fi
 	if err != nil {
 		return nil, err
 	}
-	if s.store == nil {
-		return nil, ErrNotFound
+	if err := s.requireStore(); err != nil {
+		return nil, err
 	}
 	row, err := s.store.GetFile(ctx, id, userID)
 	if err != nil {

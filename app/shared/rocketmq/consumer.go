@@ -36,7 +36,9 @@ const (
 )
 
 // Handler consumes one message. Returning nil acknowledges the message;
-// returning an error leaves it unacknowledged for redelivery.
+// returning an error leaves it unacknowledged for redelivery. A payload that
+// cannot be decoded never becomes decodable on redelivery, so handlers ack it
+// (return nil) rather than stall the partition behind a poison message.
 type Handler func(ctx context.Context, key, value string) error
 
 // Delivery is one received message as the receive loop sees it. Ack reports the

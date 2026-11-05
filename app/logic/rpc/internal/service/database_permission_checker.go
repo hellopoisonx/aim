@@ -9,6 +9,7 @@ import (
 	"github.com/hellopoisonx/aim/app/logic/rpc/model/dao"
 	"github.com/hellopoisonx/aim/app/logic/rpc/model/orm"
 	sharedcache "github.com/hellopoisonx/aim/app/shared/cache"
+	shareduser "github.com/hellopoisonx/aim/app/shared/user"
 )
 
 const DefaultTemporaryConversationMessageLimit int64 = 10
@@ -71,7 +72,6 @@ func (c *DatabasePermissionChecker) WithAuthorizer(authz rbac.Authorizer) *Datab
 }
 
 func (c *DatabasePermissionChecker) CheckMessagePermission(ctx context.Context, check PermissionCheck) (PermissionDecision, error) {
-	// 1. Get conversation
 	conv, err := c.getConversation(ctx, check.ConversationID)
 	if err != nil {
 		if errors.Is(err, dao.ErrNotFound) {
@@ -85,7 +85,6 @@ func (c *DatabasePermissionChecker) CheckMessagePermission(ctx context.Context, 
 		return PermissionDecision{Allowed: false, Code: CodeNotFound, Reason: "conversation is not active"}, nil
 	}
 
-	// 2. Check rules based on conversation type
 	if conv.ConversationType == ConversationTypeGroup {
 		return c.checkGroupPermission(ctx, check)
 	}
@@ -156,7 +155,12 @@ func (c *DatabasePermissionChecker) authorizeSend(ctx context.Context, check Per
 		return false, err
 	}
 
-	return c.authz.Authorize(ctx, rbac.Subject(userType, check.SenderID), rbac.Domain(check.ConversationID), rbac.ObjectConversation, rbac.ActionMessageSend)
+	subject, err := rbac.Subject(userType, check.SenderID)
+	if err != nil {
+		return false, err
+	}
+
+	return c.authz.Authorize(ctx, subject, rbac.Domain(check.ConversationID), rbac.ObjectConversation, rbac.ActionMessageSend)
 }
 
 func (c *DatabasePermissionChecker) checkDirectPermission(ctx context.Context, check PermissionCheck) (PermissionDecision, error) {
@@ -239,7 +243,7 @@ func (c *DatabasePermissionChecker) directConversationHasBot(ctx context.Context
 			return false, err
 		}
 
-		if userType == UserTypeBot {
+		if userType == shareduser.TypeBot {
 			return true, nil
 		}
 	}
@@ -277,14 +281,23 @@ func (c *DatabasePermissionChecker) getFriendships(ctx context.Context, userID, 
 	})
 }
 
-func (c *DatabasePermissionChecker) getUserType(ctx context.Context, userID int64) (string, error) {
+func (c *DatabasePermissionChecker) getUserType(ctx context.Context, userID int64) (shareduser.Type, error) {
+	var (
+		raw string
+		err error
+	)
 	if c.userTypeCache == nil {
-		return c.queries.GetUserType(ctx, userID)
+		raw, err = c.queries.GetUserType(ctx, userID)
+	} else {
+		raw, err = c.userTypeCache.Take(ctx, sharedcache.UserTypeKey(userID), func() (string, error) {
+			return c.queries.GetUserType(ctx, userID)
+		})
+	}
+	if err != nil {
+		return "", err
 	}
 
-	return c.userTypeCache.Take(ctx, sharedcache.UserTypeKey(userID), func() (string, error) {
-		return c.queries.GetUserType(ctx, userID)
-	})
+	return shareduser.ParseType(raw)
 }
 
 func directConversationPeerID(members []orm.ConversationMember, senderID int64) (peerID int64, senderIsMember bool, ok bool) {

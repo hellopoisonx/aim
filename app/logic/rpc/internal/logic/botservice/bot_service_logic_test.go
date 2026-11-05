@@ -13,6 +13,7 @@ import (
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/bottoken"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
+	shareduser "github.com/hellopoisonx/aim/app/shared/user"
 
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/codes"
@@ -590,7 +591,7 @@ func TestBotServiceLogicMapsResponses(t *testing.T) {
 		c, q, _ := workingBotSvcCtx()
 		q.tokenRow = dao.BotTokenWithUser{
 			BotToken:   orm.BotToken{ID: 21, BotUserID: 7},
-			UserType:   service.UserTypeBot,
+			UserType:   shareduser.TypeBot,
 			UserStatus: 1,
 			Nickname:   "bot",
 			Avatar:     "a.png",
@@ -618,7 +619,7 @@ func TestBotServiceLogicMapsResponses(t *testing.T) {
 			Status:    1,
 			Nickname:  "bot",
 			Avatar:    "a.png",
-			UserType:  service.UserTypeBot,
+			UserType:  shareduser.TypeBot,
 			CreatedAt: created,
 			UpdatedAt: created,
 		}

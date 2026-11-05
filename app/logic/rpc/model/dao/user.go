@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/hellopoisonx/aim/app/logic/rpc/model/orm"
+	shareduser "github.com/hellopoisonx/aim/app/shared/user"
 )
 
 // UserSearchRow is a user_info row plus search ranking metadata.
@@ -16,14 +17,14 @@ type UserSearchRow struct {
 
 // CreateUserInfo inserts a human profile (status enabled, user_type human).
 func (s *Store) CreateUserInfo(ctx context.Context, id int64, email, nickname, avatar string) (orm.UserInfo, error) {
-	return s.createUserInfo(ctx, id, email, nickname, avatar, "human")
+	return s.createUserInfo(ctx, id, email, nickname, avatar, shareduser.TypeHuman)
 }
 
-func (s *Store) createUserInfo(ctx context.Context, id int64, email, nickname, avatar, userType string) (orm.UserInfo, error) {
+func (s *Store) createUserInfo(ctx context.Context, id int64, email, nickname, avatar string, userType shareduser.Type) (orm.UserInfo, error) {
 	info := orm.UserInfo{
 		ID:       id,
 		Email:    email,
-		Status:   1,
+		Status:   shareduser.StatusEnabled,
 		Nickname: nickname,
 		Avatar:   avatar,
 		UserType: userType,
@@ -136,12 +137,17 @@ LIMIT ?`
 	return rows, nil
 }
 
-// GetUserType returns the user_type marker for a user.
+// GetUserType returns the validated user_type marker for a user.
 func (s *Store) GetUserType(ctx context.Context, id int64) (string, error) {
 	var info orm.UserInfo
 	if err := s.db.WithContext(ctx).Select("user_type").Where("id = ?", id).First(&info).Error; err != nil {
 		return "", err
 	}
 
-	return info.UserType, nil
+	t, err := shareduser.ParseType(string(info.UserType))
+	if err != nil {
+		return "", err
+	}
+
+	return string(t), nil
 }

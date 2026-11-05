@@ -37,44 +37,45 @@ func (s *Service) InitUpload(ctx context.Context, req InitUploadRequest) (*InitU
 	if !allowedMime(req.Kind, req.Mime) {
 		return nil, errorx.NewCodeErrorf(errorx.CodeBadInput, "mime %q is not allowed for %s", req.Mime, req.Kind)
 	}
+	if err := s.requireStore(); err != nil {
+		return nil, err
+	}
 	fileID := uuid.New()
 	key := objectKey(req.ConversationID, fileID.String(), "original")
 	url, headers, err := s.signer.Presign(http.MethodPut, key, s.cfg.Seaweed.UploadTTL(), map[string]string{"content-type": req.Mime})
 	if err != nil {
 		return nil, err
 	}
-	if s.store != nil {
-		var sha256 *string
-		if req.SHA256 != "" {
-			sha256 = &req.SHA256
-		}
-		file := orm.AttachmentFile{
-			FileID:         fileID,
-			OwnerID:        req.OwnerID,
-			ConversationID: req.ConversationID,
-			Kind:           req.Kind,
-			OriginalName:   req.OriginalName,
-			Mime:           req.Mime,
-			SizeBytes:      req.Size,
-			Sha256:         sha256,
-			Status:         sharedattachment.UploadStatusPending,
-			ParseStatus:    sharedattachment.ParseStatusPending,
-		}
-		if err := s.store.CreateAttachmentFile(ctx, file); err != nil {
-			return nil, err
-		}
-		object := orm.AttachmentObject{
-			FileID:     fileID,
-			ObjectRole: "original",
-			Bucket:     s.cfg.Seaweed.Bucket,
-			ObjectKey:  key,
-			Mime:       req.Mime,
-			SizeBytes:  &req.Size,
-			Sha256:     sha256,
-		}
-		if err := s.store.CreateAttachmentObject(ctx, object); err != nil {
-			return nil, err
-		}
+	var sha256 *string
+	if req.SHA256 != "" {
+		sha256 = &req.SHA256
+	}
+	file := orm.AttachmentFile{
+		FileID:         fileID,
+		OwnerID:        req.OwnerID,
+		ConversationID: req.ConversationID,
+		Kind:           req.Kind,
+		OriginalName:   req.OriginalName,
+		Mime:           req.Mime,
+		SizeBytes:      req.Size,
+		Sha256:         sha256,
+		Status:         sharedattachment.UploadStatusPending,
+		ParseStatus:    sharedattachment.ParseStatusPending,
+	}
+	if err := s.store.CreateAttachmentFile(ctx, file); err != nil {
+		return nil, err
+	}
+	object := orm.AttachmentObject{
+		FileID:     fileID,
+		ObjectRole: "original",
+		Bucket:     s.cfg.Seaweed.Bucket,
+		ObjectKey:  key,
+		Mime:       req.Mime,
+		SizeBytes:  &req.Size,
+		Sha256:     sha256,
+	}
+	if err := s.store.CreateAttachmentObject(ctx, object); err != nil {
+		return nil, err
 	}
 	return &InitUploadResponse{FileID: fileID.String(), Bucket: s.cfg.Seaweed.Bucket, ObjectKey: key, UploadURL: url, UploadMethod: http.MethodPut, Headers: headers, ExpiresAt: time.Now().Add(s.cfg.Seaweed.UploadTTL()).UnixMilli()}, nil
 }
@@ -84,18 +85,19 @@ func (s *Service) CompleteUpload(ctx context.Context, userID int64, fileID strin
 	if err != nil {
 		return nil, err
 	}
-	if s.store != nil {
-		pending, err := s.getPendingOriginal(ctx, userID, id)
-		if err != nil {
-			return nil, err
-		}
-		if err := s.verifyObject(ctx, pending.ObjectKey, pending.Size); err != nil {
-			return nil, err
-		}
+	if err := s.requireStore(); err != nil {
+		return nil, err
+	}
+	pending, err := s.getPendingOriginal(ctx, userID, id)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.verifyObject(ctx, pending.ObjectKey, pending.Size); err != nil {
+		return nil, err
+	}
 
-		if err := s.markUploaded(ctx, userID, id, req.SHA256, pending); err != nil {
-			return nil, err
-		}
+	if err := s.markUploaded(ctx, userID, id, req.SHA256, pending); err != nil {
+		return nil, err
 	}
 	info, err := s.GetFile(ctx, userID, fileID)
 	if err != nil {

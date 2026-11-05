@@ -33,7 +33,6 @@ func NewFriendApplicationConsumer(ctx context.Context, svcCtx *svc.ServiceContex
 func (c *FriendApplicationConsumer) Consume(ctx context.Context, key string, value string) error {
 	var event events.FriendApplicationEvent
 	if err := json.Unmarshal([]byte(value), &event); err != nil {
-		// A malformed payload never decodes on redelivery.
 		logx.WithContext(ctx).Errorf(
 			"dropping undecodable friend application event key=%s: %v payload=%q", key, err, value,
 		)
@@ -59,7 +58,7 @@ func (c *FriendApplicationConsumer) Consume(ctx context.Context, key string, val
 	}
 
 	for _, nodeID := range gatewayNodes(ctx, c.svcCtx, event.TargetUserID) {
-		if _, err := pushFriendApplicationToNode(ctx, c.svcCtx.GatewayClient, nodeID, req); err != nil {
+		if _, err := c.svcCtx.GatewayClient.PushFriendApplicationToNode(ctx, nodeID, req); err != nil {
 			logx.WithContext(ctx).Errorf(
 				"friend application push to node %q for user %d failed: %v", nodeID, event.TargetUserID, err,
 			)
