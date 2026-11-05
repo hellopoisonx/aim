@@ -30,9 +30,9 @@ func (l *GetUserInfoByNicknameLogic) GetUserInfoByNickname(in *pb.GetUserInfoByN
 		return nil, errorx.NewCodeError(errorx.CodeBadInput, "nickname is required")
 	}
 
-	userSvc := l.svcCtx.UserInfoService
-	if userSvc == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "user service is not configured")
+	userSvc, err := requireUserService(l.svcCtx)
+	if err != nil {
+		return nil, err
 	}
 
 	info, err := userSvc.GetUserInfoByNickname(l.ctx, in.GetNickname())

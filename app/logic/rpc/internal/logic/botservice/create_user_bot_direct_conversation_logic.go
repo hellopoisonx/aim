@@ -5,6 +5,7 @@ import (
 
 	sharedconversation "github.com/hellopoisonx/aim/app/shared/conversation"
 
+	"github.com/hellopoisonx/aim/app/logic/rpc/internal/pbconv"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
@@ -48,14 +49,6 @@ func (l *CreateUserBotDirectConversationLogic) CreateUserBotDirectConversation(i
 	}
 
 	return &pb.CreateUserBotDirectConversationResp{
-		Conversation: &pb.ConversationResponse{
-			Id:               conv.ID,
-			ConversationType: string(conv.ConversationType),
-			IsActive:         conv.IsActive,
-			CreatedAt:        conv.CreatedAt.UnixMilli(),
-			Name:             conv.Name,
-			Avatar:           conv.Avatar,
-			CreatorId:        conv.CreatorID,
-		},
+		Conversation: pbconv.Conversation(conv, nil, conv.Name),
 	}, nil
 }

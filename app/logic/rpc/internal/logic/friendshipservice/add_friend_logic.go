@@ -33,12 +33,8 @@ func (l *AddFriendLogic) AddFriend(in *pb.AddFriendReq) (*pb.AddFriendResp, erro
 	userID := in.GetUserId()
 	friendID := in.GetFriendId()
 
-	if userID <= 0 || friendID <= 0 {
-		return nil, errorx.NewCodeError(errorx.CodeBadInput, "user_id and friend_id must be positive")
-	}
-
-	if userID == friendID {
-		return nil, errorx.ToGRPCError(service.ErrSelfAdd)
+	if err := requireFriendPair(userID, friendID); err != nil {
+		return nil, err
 	}
 
 	userSvc := l.svcCtx.UserInfoService
@@ -56,9 +52,9 @@ func (l *AddFriendLogic) AddFriend(in *pb.AddFriendReq) (*pb.AddFriendResp, erro
 		return nil, errorx.ToGRPCError(err)
 	}
 
-	store := l.svcCtx.FriendshipDAO
-	if store == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "database is not configured")
+	store, err := requireFriendshipStore(l.svcCtx)
+	if err != nil {
+		return nil, err
 	}
 
 	// Check if either direction has a blocked relationship.
@@ -82,13 +78,7 @@ func (l *AddFriendLogic) AddFriend(in *pb.AddFriendReq) (*pb.AddFriendResp, erro
 
 	if !errors.Is(err, dao.ErrNotFound) && (directRecord.Status == service.FriendshipStatusAccepted || directRecord.Status == service.FriendshipStatusPending) {
 		return &pb.AddFriendResp{
-			Friendship: &pb.FriendshipResponse{
-				UserId:    directRecord.UserID,
-				FriendId:  directRecord.FriendID,
-				Status:    directRecord.Status,
-				CreatedAt: directRecord.CreatedAt.UnixMilli(),
-				UpdatedAt: directRecord.UpdatedAt.UnixMilli(),
-			},
+			Friendship: friendshipToProto(directRecord),
 		}, nil
 	}
 
@@ -100,12 +90,6 @@ func (l *AddFriendLogic) AddFriend(in *pb.AddFriendReq) (*pb.AddFriendResp, erro
 	l.svcCtx.InvalidateFriendship(l.ctx, userID, friendID)
 
 	return &pb.AddFriendResp{
-		Friendship: &pb.FriendshipResponse{
-			UserId:    record.UserID,
-			FriendId:  record.FriendID,
-			Status:    record.Status,
-			CreatedAt: record.CreatedAt.UnixMilli(),
-			UpdatedAt: record.UpdatedAt.UnixMilli(),
-		},
+		Friendship: friendshipToProto(record),
 	}, nil
 }

@@ -3,6 +3,7 @@ package botservicelogic
 import (
 	"context"
 
+	"github.com/hellopoisonx/aim/app/logic/rpc/internal/pbconv"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
@@ -26,28 +27,17 @@ func NewGetBotProfileLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Get
 
 // GetBotProfile returns the bot's user_info snapshot for `/api/bot/v1/me`.
 func (l *GetBotProfileLogic) GetBotProfile(in *pb.GetBotProfileReq) (*pb.GetBotProfileResp, error) {
-	if l.svcCtx.BotService == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "bot service not configured")
+	botSvc, err := requireBot(l.svcCtx, in.GetBotUserId())
+	if err != nil {
+		return nil, err
 	}
 
-	if in.GetBotUserId() <= 0 {
-		return nil, errorx.NewCodeError(errorx.CodeBadInput, "bot_user_id is required")
-	}
-
-	info, err := l.svcCtx.BotService.GetBotProfile(l.ctx, in.GetBotUserId())
+	info, err := botSvc.GetBotProfile(l.ctx, in.GetBotUserId())
 	if err != nil {
 		return nil, errorx.ToGRPCError(err)
 	}
 
 	return &pb.GetBotProfileResp{
-		Profile: &pb.UserInfoResponse{
-			Id:        info.ID,
-			Email:     info.Email,
-			Status:    int32(info.Status),
-			Nickname:  info.Nickname,
-			Avatar:    info.Avatar,
-			CreatedAt: info.CreatedAt.UnixMilli(),
-			UpdatedAt: info.UpdatedAt.UnixMilli(),
-		},
+		Profile: pbconv.User(info),
 	}, nil
 }

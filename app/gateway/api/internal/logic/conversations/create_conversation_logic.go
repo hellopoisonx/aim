@@ -9,6 +9,7 @@ import (
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/conversationservice"
+	sharedconversation "github.com/hellopoisonx/aim/app/shared/conversation"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 
 	"github.com/zeromicro/go-zero/core/logx"
@@ -42,16 +43,8 @@ func (l *CreateConversationLogic) CreateConversation(req *types.CreateConversati
 
 	memberIDs := req.MemberIds
 	if req.ConversationType == "direct" {
-		if len(memberIDs) != 1 {
-			return nil, errorx.NewCodeError(errorx.CodeBadInput, "direct conversation member_ids must contain exactly one peer user id")
-		}
-
-		if memberIDs[0] <= 0 {
-			return nil, errorx.NewCodeError(errorx.CodeBadInput, "member_ids must contain positive user ids")
-		}
-
-		if memberIDs[0] == identity.UserID {
-			return nil, errorx.NewCodeError(errorx.CodeBadInput, "direct conversation peer must not be creator")
+		if err := sharedconversation.RequireDirectPeer(memberIDs, identity.UserID); err != nil {
+			return nil, err
 		}
 	} else {
 		if name == "" {

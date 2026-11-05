@@ -26,13 +26,9 @@ func NewGetUserInfoLogic(ctx context.Context, svcCtx *svc.ServiceContext) *GetUs
 
 // GetUserInfo retrieves a user profile by ID.
 func (l *GetUserInfoLogic) GetUserInfo(in *pb.GetUserInfoReq) (*pb.GetUserInfoResp, error) {
-	if in.GetId() <= 0 {
-		return nil, errorx.NewCodeError(errorx.CodeBadInput, "id is required and must be positive")
-	}
-
-	userSvc := l.svcCtx.UserInfoService
-	if userSvc == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "user service is not configured")
+	userSvc, err := requireUserOp(l.svcCtx, in.GetId())
+	if err != nil {
+		return nil, err
 	}
 
 	info, err := userSvc.GetUserInfo(l.ctx, in.GetId())

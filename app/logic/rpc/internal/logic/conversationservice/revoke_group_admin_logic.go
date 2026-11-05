@@ -25,20 +25,15 @@ func NewRevokeGroupAdminLogic(ctx context.Context, svcCtx *svc.ServiceContext) *
 }
 
 func (l *RevokeGroupAdminLogic) RevokeGroupAdmin(in *pb.RevokeGroupAdminReq) (*pb.RevokeGroupAdminResp, error) {
-	if in.GetConversationId() <= 0 {
-		return nil, errorx.NewCodeError(errorx.CodeBadInput, "conversation_id is required")
+	convSvc, err := requireGroupOp(l.svcCtx.ConversationService, in.GetConversationId(), in.GetOperatorId())
+	if err != nil {
+		return nil, err
 	}
-	if in.GetOperatorId() <= 0 {
-		return nil, errorx.NewCodeError(errorx.CodeBadInput, "operator_id is required")
-	}
+
 	if in.GetTargetUserId() <= 0 {
 		return nil, errorx.NewCodeError(errorx.CodeBadInput, "target_user_id is required")
 	}
 
-	convSvc := l.svcCtx.ConversationService
-	if convSvc == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "conversation service is not configured")
-	}
 	if err := convSvc.RevokeGroupAdmin(l.ctx, in.GetConversationId(), in.GetOperatorId(), in.GetTargetUserId()); err != nil {
 		return nil, errorx.ToGRPCError(err)
 	}

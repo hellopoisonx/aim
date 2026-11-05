@@ -39,9 +39,9 @@ func (l *SearchUserInfoByNicknameLogic) SearchUserInfoByNickname(in *pb.SearchUs
 		limit = 100
 	}
 
-	userSvc := l.svcCtx.UserInfoService
-	if userSvc == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "user service is not configured")
+	userSvc, err := requireUserService(l.svcCtx)
+	if err != nil {
+		return nil, err
 	}
 
 	infos, err := userSvc.SearchUserInfoByNickname(l.ctx, in.GetNickname(), limit)

@@ -26,21 +26,16 @@ func NewRemoveFriendTagLogic(ctx context.Context, svcCtx *svc.ServiceContext) *R
 }
 
 func (l *RemoveFriendTagLogic) RemoveFriendTag(in *pb.RemoveFriendTagReq) (*pb.RemoveFriendTagResp, error) {
-	if in.GetUserId() <= 0 {
-		return nil, errorx.NewCodeError(errorx.CodeBadInput, "user_id is required and must be positive")
+	tagSvc, err := requireTagOp(l.svcCtx, in.GetUserId(), in.GetTagId())
+	if err != nil {
+		return nil, err
 	}
+
 	if in.GetFriendId() <= 0 {
 		return nil, errorx.NewCodeError(errorx.CodeBadInput, "friend_id is required and must be positive")
 	}
-	if in.GetTagId() <= 0 {
-		return nil, errorx.NewCodeError(errorx.CodeBadInput, "tag_id is required and must be positive")
-	}
-	if l.svcCtx.FriendTagService == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "friend tag service not configured")
-	}
 
-	_, err := l.svcCtx.FriendTagService.RemoveTag(l.ctx, in.GetUserId(), in.GetFriendId(), in.GetTagId())
-	if err != nil {
+	if _, err := tagSvc.RemoveTag(l.ctx, in.GetUserId(), in.GetFriendId(), in.GetTagId()); err != nil {
 		return nil, errorx.ToGRPCError(err)
 	}
 
@@ -50,7 +45,7 @@ func (l *RemoveFriendTagLogic) RemoveFriendTag(in *pb.RemoveFriendTagReq) (*pb.R
 		Status:   service.FriendshipStatusAccepted,
 	}
 
-	tags, _ := l.svcCtx.FriendTagService.GetFriendTags(l.ctx, in.GetUserId(), in.GetFriendId())
+	tags, _ := tagSvc.GetFriendTags(l.ctx, in.GetUserId(), in.GetFriendId())
 	pbTags := make([]*pb.FriendTagResponse, 0, len(tags))
 	for _, tag := range tags {
 		pbTags = append(pbTags, friendTagToProto(tag))

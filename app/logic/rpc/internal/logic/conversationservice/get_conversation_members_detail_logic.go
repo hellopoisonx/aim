@@ -25,13 +25,9 @@ func NewGetConversationMembersDetailLogic(ctx context.Context, svcCtx *svc.Servi
 }
 
 func (l *GetConversationMembersDetailLogic) GetConversationMembersDetail(in *pb.GetConversationMembersDetailReq) (*pb.GetConversationMembersDetailResp, error) {
-	if in.GetConversationId() <= 0 {
-		return nil, errorx.NewCodeError(errorx.CodeBadInput, "conversation_id is required")
-	}
-
-	convSvc := l.svcCtx.ConversationService
-	if convSvc == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "conversation service is not configured")
+	convSvc, err := requireConversationOp(l.svcCtx.ConversationService, in.GetConversationId())
+	if err != nil {
+		return nil, err
 	}
 
 	details, err := convSvc.GetConversationMembersDetail(l.ctx, in.GetConversationId())

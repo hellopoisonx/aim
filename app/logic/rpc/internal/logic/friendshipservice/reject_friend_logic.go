@@ -2,11 +2,9 @@ package friendshipservicelogic
 
 import (
 	"context"
-	"errors"
 
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/service"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
-	"github.com/hellopoisonx/aim/app/logic/rpc/model/dao"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 
@@ -33,27 +31,20 @@ func (l *RejectFriendLogic) RejectFriend(in *pb.RejectFriendReq) (*pb.RejectFrie
 	userID := in.GetUserId()
 	friendID := in.GetFriendId()
 
-	if userID <= 0 || friendID <= 0 {
-		return nil, errorx.NewCodeError(errorx.CodeBadInput, "user_id and friend_id must be positive")
+	if err := requireFriendPair(userID, friendID); err != nil {
+		return nil, err
 	}
 
-	if userID == friendID {
-		return nil, errorx.ToGRPCError(service.ErrSelfAdd)
-	}
-
-	store := l.svcCtx.FriendshipDAO
-	if store == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "database is not configured")
+	store, err := requireFriendshipStore(l.svcCtx)
+	if err != nil {
+		return nil, err
 	}
 
 	// Verify that a pending request exists (friend_id→user_id, status="pending").
 	// friend_id is the requester, user_id is the rejecter.
-	pendingRecord, err := store.GetFriendshipByPair(l.ctx, friendID, userID)
+	pendingRecord, err := pendingFriendship(l.ctx, store, friendID, userID)
 	if err != nil {
-		if errors.Is(err, dao.ErrNotFound) {
-			return nil, errorx.ToGRPCError(service.ErrFriendNotFound)
-		}
-		return nil, errorx.ToGRPCError(err)
+		return nil, err
 	}
 
 	if pendingRecord.Status != service.FriendshipStatusPending {
@@ -68,12 +59,6 @@ func (l *RejectFriendLogic) RejectFriend(in *pb.RejectFriendReq) (*pb.RejectFrie
 	l.svcCtx.InvalidateFriendship(l.ctx, userID, friendID)
 
 	return &pb.RejectFriendResp{
-		Friendship: &pb.FriendshipResponse{
-			UserId:    blockedRecord.UserID,
-			FriendId:  blockedRecord.FriendID,
-			Status:    blockedRecord.Status,
-			CreatedAt: blockedRecord.CreatedAt.UnixMilli(),
-			UpdatedAt: blockedRecord.UpdatedAt.UnixMilli(),
-		},
+		Friendship: friendshipToProto(blockedRecord),
 	}, nil
 }

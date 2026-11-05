@@ -26,15 +26,12 @@ func NewDeleteBotWebhookLogic(ctx context.Context, svcCtx *svc.ServiceContext) *
 
 // DeleteBotWebhook removes the bot's webhook configuration entirely.
 func (l *DeleteBotWebhookLogic) DeleteBotWebhook(in *pb.DeleteBotWebhookReq) (*pb.DeleteBotWebhookResp, error) {
-	if l.svcCtx.BotService == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "bot service not configured")
+	botSvc, err := requireBot(l.svcCtx, in.GetBotUserId())
+	if err != nil {
+		return nil, err
 	}
 
-	if in.GetBotUserId() <= 0 {
-		return nil, errorx.NewCodeError(errorx.CodeBadInput, "bot_user_id is required")
-	}
-
-	deleted, err := l.svcCtx.BotService.DeleteBotWebhook(l.ctx, in.GetBotUserId())
+	deleted, err := botSvc.DeleteBotWebhook(l.ctx, in.GetBotUserId())
 	if err != nil {
 		return nil, errorx.NewCodeErrorf(errorx.CodeInternal, "delete bot webhook failed: %v", err)
 	}

@@ -25,14 +25,12 @@ func NewListFriendTagsLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Li
 }
 
 func (l *ListFriendTagsLogic) ListFriendTags(in *pb.ListFriendTagsReq) (*pb.ListFriendTagsResp, error) {
-	if in.GetUserId() <= 0 {
-		return nil, errorx.NewCodeError(errorx.CodeBadInput, "user_id is required and must be positive")
-	}
-	if l.svcCtx.FriendTagService == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "friend tag service not configured")
+	tagSvc, err := requireTagService(l.svcCtx, in.GetUserId())
+	if err != nil {
+		return nil, err
 	}
 
-	tags, err := l.svcCtx.FriendTagService.ListTags(l.ctx, in.GetUserId())
+	tags, err := tagSvc.ListTags(l.ctx, in.GetUserId())
 	if err != nil {
 		return nil, errorx.ToGRPCError(err)
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 
+	"github.com/hellopoisonx/aim/app/logic/rpc/internal/pbconv"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/service"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/logic/rpc/model/orm"
@@ -51,7 +52,7 @@ func (l *UnifiedSearchLogic) UnifiedSearch(in *pb.UnifiedSearchReq) (*pb.Unified
 	pbUsers := make([]*pb.SearchUserResult, 0, len(results.Users))
 	for _, u := range results.Users {
 		pbUsers = append(pbUsers, &pb.SearchUserResult{
-			User:    userInfoToProto(u.UserInfo),
+			User:    pbconv.User(u.UserInfo),
 			Snippet: u.Snippet,
 		})
 	}
@@ -70,7 +71,7 @@ func (l *UnifiedSearchLogic) UnifiedSearch(in *pb.UnifiedSearchReq) (*pb.Unified
 				FriendId: friendID,
 				Status:   service.FriendshipStatusAccepted,
 			},
-			User:    userInfoToProto(f.UserInfo),
+			User:    pbconv.User(f.UserInfo),
 			Snippet: f.Snippet,
 		})
 	}
@@ -108,18 +109,6 @@ func (l *UnifiedSearchLogic) UnifiedSearch(in *pb.UnifiedSearchReq) (*pb.Unified
 		NextCursorId:        results.NextCursorID,
 		HasMore:             results.HasMore,
 	}, nil
-}
-
-func userInfoToProto(info orm.UserInfo) *pb.UserInfoResponse {
-	return &pb.UserInfoResponse{
-		Id:        info.ID,
-		Email:     info.Email,
-		Status:    int32(info.Status),
-		Nickname:  info.Nickname,
-		Avatar:    info.Avatar,
-		CreatedAt: info.CreatedAt.UnixMilli(),
-		UpdatedAt: info.UpdatedAt.UnixMilli(),
-	}
 }
 
 func messageToProto(m orm.Message) *pb.MessageItem {

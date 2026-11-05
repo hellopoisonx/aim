@@ -25,17 +25,12 @@ func NewRenameFriendTagLogic(ctx context.Context, svcCtx *svc.ServiceContext) *R
 }
 
 func (l *RenameFriendTagLogic) RenameFriendTag(in *pb.RenameFriendTagReq) (*pb.RenameFriendTagResp, error) {
-	if in.GetUserId() <= 0 {
-		return nil, errorx.NewCodeError(errorx.CodeBadInput, "user_id is required and must be positive")
-	}
-	if in.GetTagId() <= 0 {
-		return nil, errorx.NewCodeError(errorx.CodeBadInput, "tag_id is required and must be positive")
-	}
-	if l.svcCtx.FriendTagService == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "friend tag service not configured")
+	tagSvc, err := requireTagOp(l.svcCtx, in.GetUserId(), in.GetTagId())
+	if err != nil {
+		return nil, err
 	}
 
-	tag, err := l.svcCtx.FriendTagService.RenameTag(l.ctx, in.GetUserId(), in.GetTagId(), in.GetName())
+	tag, err := tagSvc.RenameTag(l.ctx, in.GetUserId(), in.GetTagId(), in.GetName())
 	if err != nil {
 		return nil, errorx.ToGRPCError(err)
 	}

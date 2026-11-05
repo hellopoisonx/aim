@@ -32,25 +32,26 @@ func (l *ListFriendsLogic) ListFriends(in *pb.ListFriendsReq) (*pb.ListFriendsRe
 		return nil, errorx.NewCodeError(errorx.CodeBadInput, "user_id must be positive")
 	}
 
-	if l.svcCtx.FriendshipDAO == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "database is not configured")
+	store, err := requireFriendshipStore(l.svcCtx)
+	if err != nil {
+		return nil, err
 	}
+
 	var records []orm.Friendship
-	var err error
 
 	switch {
 	case in.GetTagId() > 0:
-		records, err = l.svcCtx.FriendshipDAO.ListFriendsByTagID(l.ctx, userID, in.GetTagId())
+		records, err = store.ListFriendsByTagID(l.ctx, userID, in.GetTagId())
 		if err != nil {
 			return nil, errorx.ToGRPCError(err)
 		}
 	case in.GetTagName() != "":
-		records, err = l.svcCtx.FriendshipDAO.ListFriendsByTagName(l.ctx, userID, in.GetTagName())
+		records, err = store.ListFriendsByTagName(l.ctx, userID, in.GetTagName())
 		if err != nil {
 			return nil, errorx.ToGRPCError(err)
 		}
 	default:
-		records, err = l.svcCtx.FriendshipDAO.ListFriends(l.ctx, userID)
+		records, err = store.ListFriends(l.ctx, userID)
 		if err != nil {
 			return nil, errorx.ToGRPCError(err)
 		}
@@ -69,14 +70,9 @@ func (l *ListFriendsLogic) ListFriends(in *pb.ListFriendsReq) (*pb.ListFriendsRe
 			}
 		}
 
-		friends = append(friends, &pb.FriendshipResponse{
-			UserId:    record.UserID,
-			FriendId:  friendID,
-			Status:    record.Status,
-			CreatedAt: record.CreatedAt.UnixMilli(),
-			UpdatedAt: record.UpdatedAt.UnixMilli(),
-			Tags:      pbTags,
-		})
+		friend := friendshipToProto(record)
+		friend.Tags = pbTags
+		friends = append(friends, friend)
 	}
 
 	return &pb.ListFriendsResp{Friends: friends}, nil

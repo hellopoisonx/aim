@@ -31,24 +31,19 @@ func (l *ListFriendApplicationsLogic) ListFriendApplications(in *pb.ListFriendAp
 		return nil, errorx.NewCodeError(errorx.CodeBadInput, "user_id must be positive")
 	}
 
-	if l.svcCtx.FriendshipDAO == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "database is not configured")
+	store, err := requireFriendshipStore(l.svcCtx)
+	if err != nil {
+		return nil, err
 	}
 
-	records, err := l.svcCtx.FriendshipDAO.ListPendingFriendApplications(l.ctx, userID)
+	records, err := store.ListPendingFriendApplications(l.ctx, userID)
 	if err != nil {
 		return nil, errorx.ToGRPCError(err)
 	}
 
 	applications := make([]*pb.FriendshipResponse, 0, len(records))
 	for _, record := range records {
-		applications = append(applications, &pb.FriendshipResponse{
-			UserId:    record.UserID,
-			FriendId:  record.FriendID,
-			Status:    record.Status,
-			CreatedAt: record.CreatedAt.UnixMilli(),
-			UpdatedAt: record.UpdatedAt.UnixMilli(),
-		})
+		applications = append(applications, friendshipToProto(record))
 	}
 
 	return &pb.ListFriendApplicationsResp{Applications: applications}, nil

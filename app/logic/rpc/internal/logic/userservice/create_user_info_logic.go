@@ -27,8 +27,9 @@ func NewCreateUserInfoLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Cr
 
 // CreateUserInfo creates a new user profile.
 func (l *CreateUserInfoLogic) CreateUserInfo(in *pb.CreateUserInfoReq) (*pb.CreateUserInfoResp, error) {
-	if in.GetId() <= 0 {
-		return nil, errorx.NewCodeError(errorx.CodeBadInput, "id is required and must be positive")
+	userSvc, err := requireUserOp(l.svcCtx, in.GetId())
+	if err != nil {
+		return nil, err
 	}
 
 	if in.GetEmail() == "" {
@@ -37,11 +38,6 @@ func (l *CreateUserInfoLogic) CreateUserInfo(in *pb.CreateUserInfoReq) (*pb.Crea
 
 	if in.GetNickname() == "" {
 		return nil, errorx.NewCodeError(errorx.CodeBadInput, "nickname is required")
-	}
-
-	userSvc := l.svcCtx.UserInfoService
-	if userSvc == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "user service is not configured")
 	}
 
 	info, err := userSvc.CreateUserInfo(l.ctx, in.GetId(), in.GetEmail(), in.GetNickname(), in.GetAvatar())

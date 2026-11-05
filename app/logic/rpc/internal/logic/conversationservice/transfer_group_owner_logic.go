@@ -3,6 +3,7 @@ package conversationservicelogic
 import (
 	"context"
 
+	"github.com/hellopoisonx/aim/app/logic/rpc/internal/pbconv"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
@@ -25,42 +26,26 @@ func NewTransferGroupOwnerLogic(ctx context.Context, svcCtx *svc.ServiceContext)
 }
 
 func (l *TransferGroupOwnerLogic) TransferGroupOwner(in *pb.TransferGroupOwnerReq) (*pb.TransferGroupOwnerResp, error) {
-	if in.GetConversationId() <= 0 {
-		return nil, errorx.NewCodeError(errorx.CodeBadInput, "conversation_id is required")
+	convSvc, err := requireGroupOp(l.svcCtx.ConversationService, in.GetConversationId(), in.GetOperatorId())
+	if err != nil {
+		return nil, err
 	}
-	if in.GetOperatorId() <= 0 {
-		return nil, errorx.NewCodeError(errorx.CodeBadInput, "operator_id is required")
-	}
+
 	if in.GetTargetUserId() <= 0 {
 		return nil, errorx.NewCodeError(errorx.CodeBadInput, "target_user_id is required")
 	}
 
-	convSvc := l.svcCtx.ConversationService
-	if convSvc == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "conversation service is not configured")
-	}
 	conv, err := convSvc.TransferGroupOwner(l.ctx, in.GetConversationId(), in.GetOperatorId(), in.GetTargetUserId())
 	if err != nil {
 		return nil, errorx.ToGRPCError(err)
 	}
 
-	members, err := convSvc.GetConversationMembers(l.ctx, conv.ID)
+	memberIDs, err := conversationMemberIDs(l.ctx, convSvc, conv.ID)
 	if err != nil {
-		return nil, errorx.ToGRPCError(err)
-	}
-	memberIDs := make([]int64, len(members))
-	for i, m := range members {
-		memberIDs[i] = m.UserID
+		return nil, err
 	}
 
-	return &pb.TransferGroupOwnerResp{Conversation: &pb.ConversationResponse{
-		Id:               conv.ID,
-		ConversationType: string(conv.ConversationType),
-		IsActive:         conv.IsActive,
-		CreatedAt:        conv.CreatedAt.UnixMilli(),
-		MemberIds:        memberIDs,
-		Name:             conv.Name,
-		Avatar:           conv.Avatar,
-		CreatorId:        conv.CreatorID,
-	}}, nil
+	return &pb.TransferGroupOwnerResp{
+		Conversation: pbconv.Conversation(conv, memberIDs, conv.Name),
+	}, nil
 }

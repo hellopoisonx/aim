@@ -30,9 +30,9 @@ func (l *GetUserInfoByEmailLogic) GetUserInfoByEmail(in *pb.GetUserInfoByEmailRe
 		return nil, errorx.NewCodeError(errorx.CodeBadInput, "email is required")
 	}
 
-	userSvc := l.svcCtx.UserInfoService
-	if userSvc == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "user service is not configured")
+	userSvc, err := requireUserService(l.svcCtx)
+	if err != nil {
+		return nil, err
 	}
 
 	info, err := userSvc.GetUserInfoByEmail(l.ctx, in.GetEmail())
