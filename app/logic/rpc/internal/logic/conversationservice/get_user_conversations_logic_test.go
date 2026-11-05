@@ -6,7 +6,6 @@ import (
 
 	sharedconversation "github.com/hellopoisonx/aim/app/shared/conversation"
 
-	"github.com/hellopoisonx/aim/app/logic/rpc/internal/service"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/servicefakes"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/logic/rpc/model/orm"
@@ -30,7 +29,7 @@ func TestGetUserConversationsLogic(t *testing.T) {
 	store.Conversations[convID3] = newConv(convID3, "direct")
 	store.Members[convID3] = newMember(convID3, 2, 4)
 
-	convSvc := service.NewConversationService(store, testSnowflake, nil, nil)
+	convSvc := newTestConversationService(store)
 	svcCtx := &svc.ServiceContext{
 		ConversationService: convSvc,
 	}

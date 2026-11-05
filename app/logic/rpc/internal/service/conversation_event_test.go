@@ -51,7 +51,7 @@ func (r plainTxRunner) WithTx(_ context.Context, fn func(tx ConversationStore) e
 
 func newGroupConversation(t *testing.T, store *servicefakes.ConversationStore, runner ConversationTxRunner) *ConversationService {
 	t.Helper()
-	svc := NewConversationService(store, testSnowflake, runner)
+	svc := newTestConversationService(t, store, runner)
 	_, err := svc.CreateConversation(context.Background(), sharedconversation.TypeGroup, 1, []int64{1, 2, 3}, "group", "")
 	require.NoError(t, err)
 	return svc
@@ -155,7 +155,7 @@ func (s *refetchFailStore) GetConversation(ctx context.Context, id int64) (orm.C
 
 func TestGroupMutation_RefetchErrorIsPropagated(t *testing.T) {
 	store := servicefakes.NewConversationStore()
-	svc := NewConversationService(store, testSnowflake, plainTxRunner{store: store})
+	svc := newTestConversationService(t, store, plainTxRunner{store: store})
 	_, err := svc.CreateConversation(context.Background(), sharedconversation.TypeGroup, 1, []int64{1, 2, 3}, "group", "")
 	require.NoError(t, err)
 	conversationID := firstConversationID(t, store)

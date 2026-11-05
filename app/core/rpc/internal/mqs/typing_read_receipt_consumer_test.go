@@ -15,7 +15,7 @@ func TestTypingConsumerSkipsOriginGatewayNode(t *testing.T) {
 	svcCtx.LogicConversationClient = &fakeConversationClient{memberIDs: []int64{42, 43}}
 
 	ctx := context.Background()
-	require.NoError(t, svcCtx.RedisClient.SAdd(ctx, userGatewayKeyPrefix+"43", "0", "1").Err())
+	require.NoError(t, svcCtx.RedisClient.SAdd(ctx, "aim:user_gateway:43", "0", "1").Err())
 
 	event := events.TypingEvent{
 		FromUserID:     42,
@@ -38,7 +38,7 @@ func TestReadReceiptConsumerSkipsOriginGatewayNode(t *testing.T) {
 	svcCtx.LogicConversationClient = &fakeConversationClient{memberIDs: []int64{42, 43}}
 
 	ctx := context.Background()
-	require.NoError(t, svcCtx.RedisClient.SAdd(ctx, userGatewayKeyPrefix+"43", "0", "1").Err())
+	require.NoError(t, svcCtx.RedisClient.SAdd(ctx, "aim:user_gateway:43", "0", "1").Err())
 
 	event := events.ReadReceiptEvent{
 		FromUserID:        42,

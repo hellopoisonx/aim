@@ -98,15 +98,5 @@ func Consumers(ctx context.Context, svcCtx *svc.ServiceContext) []service.Servic
 	conf := svcCtx.Config.PushConsumer
 	conf.Group = pushConsumerGroupPrefix + svcCtx.Config.GatewayNodeID
 
-	consumer, err := rocketmq.NewConsumerService(conf, NewPushConsumer(svcCtx).Consume)
-	if err != nil {
-		logx.WithContext(ctx).Errorf("failed to create push consumer: %v", err)
-		return nil
-	}
-	if consumer == nil {
-		return nil
-	}
-
-	logx.WithContext(ctx).Infof("push consumer registered: topic=%s group=%s", conf.Topic, conf.Group)
-	return []service.Service{consumer}
+	return rocketmq.RegisterConsumer(ctx, nil, "push", conf, NewPushConsumer(svcCtx).Consume)
 }

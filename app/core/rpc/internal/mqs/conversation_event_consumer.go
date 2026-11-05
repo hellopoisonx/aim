@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 
+	"github.com/hellopoisonx/aim/app/core/rpc/internal/push"
 	"github.com/hellopoisonx/aim/app/core/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/shared/events"
 	"github.com/hellopoisonx/aim/app/shared/tracing"
@@ -38,13 +39,13 @@ func (c *ConversationEventConsumer) Consume(ctx context.Context, key string, val
 	logx.WithContext(ctx).Infof("conversation event: conv=%d msg_id=%d type=%s targets=%d",
 		event.ConversationID, event.MessageID, event.MessageType, len(event.TargetUserIDs))
 
-	_, conversationType, err := conversationRecipients(ctx, c.svcCtx, event.ConversationID)
+	_, conversationType, err := push.ConversationRecipients(ctx, c.svcCtx, event.ConversationID)
 	if err != nil {
 		// The type only decorates the frame; a lookup failure must not drop the event.
 		logx.WithContext(ctx).Errorf("conversation type lookup conv=%d failed: %v", event.ConversationID, err)
 	}
 
-	err = pushToMemberNodes(ctx, c.svcCtx, event.TargetUserIDs, 0, "", func(targetUserID int64, nodeID string) error {
+	err = push.ToMemberNodes(ctx, c.svcCtx, event.TargetUserIDs, 0, "", func(targetUserID int64, nodeID string) error {
 		req := &gwpb.PushMessageReq{
 			MessageId:        event.MessageID,
 			ConversationId:   event.ConversationID,
@@ -55,7 +56,7 @@ func (c *ConversationEventConsumer) Consume(ctx context.Context, key string, val
 			SentAt:           event.Timestamp,
 			TargetUserId:     targetUserID,
 			IsSystem:         true,
-			SenderInfo:       gatewaySystemSenderInfo(),
+			SenderInfo:       push.SystemSenderInfo(),
 		}
 
 		resp, err := c.svcCtx.GatewayClient.PushMessageToNode(ctx, nodeID, req)

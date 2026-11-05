@@ -1,4 +1,4 @@
-package mqs
+package push
 
 import (
 	"context"
@@ -9,16 +9,19 @@ import (
 	gwpb "github.com/hellopoisonx/aim/shared/proto/gateway/pb"
 )
 
-func gatewaySystemSenderInfo() *gwpb.SenderInfo {
+// SystemSenderInfo is the sender block of a system-originated push.
+func SystemSenderInfo() *gwpb.SenderInfo {
 	return &gwpb.SenderInfo{
 		Name:  sharedconversation.SystemSenderName,
 		Email: sharedconversation.SystemSenderEmail,
 	}
 }
 
-func gatewaySenderInfoForUser(ctx context.Context, svcCtx *svc.ServiceContext, userID int64) (*gwpb.SenderInfo, error) {
+// SenderInfoForUser resolves the sender block for userID, falling back to an
+// empty block when no user client is configured.
+func SenderInfoForUser(ctx context.Context, svcCtx *svc.ServiceContext, userID int64) (*gwpb.SenderInfo, error) {
 	if userID == 0 {
-		return gatewaySystemSenderInfo(), nil
+		return SystemSenderInfo(), nil
 	}
 
 	if svcCtx.LogicUserClient == nil {

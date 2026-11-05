@@ -11,6 +11,7 @@ import (
 
 	rmq "github.com/apache/rocketmq-clients/golang/v5"
 	"github.com/zeromicro/go-zero/core/logx"
+	"github.com/zeromicro/go-zero/core/service"
 )
 
 const (
@@ -160,6 +161,24 @@ func NewConsumerService(conf ConsumerConf, handler Handler) (*ConsumerService, e
 	}
 
 	return newConsumerService(conf, concurrency, handler, consumer, open), nil
+}
+
+// RegisterConsumer appends the consumer service for conf to services, or
+// returns services unchanged when conf is absent or cannot be built. Every
+// service registry uses it so the "skip when not configured" protocol is
+// spelled once.
+func RegisterConsumer(ctx context.Context, services []service.Service, label string, conf ConsumerConf, handler Handler) []service.Service {
+	consumer, err := NewConsumerService(conf, handler)
+	if err != nil {
+		logx.WithContext(ctx).Errorf("failed to create %s consumer: %v", label, err)
+		return services
+	}
+	if consumer == nil {
+		return services
+	}
+
+	logx.WithContext(ctx).Infof("%s consumer registered: group=%s topic=%s", label, conf.Group, conf.Topic)
+	return append(services, consumer)
 }
 
 // newConsumerService wires the loop around an arbitrary client.

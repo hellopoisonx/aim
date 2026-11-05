@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 
+	"github.com/hellopoisonx/aim/app/core/rpc/internal/push"
 	"github.com/hellopoisonx/aim/app/core/rpc/internal/svc"
 	logicpb "github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/events"
@@ -63,7 +64,7 @@ func (c *PresenceConsumer) Consume(ctx context.Context, key string, value string
 			continue
 		}
 
-		nodeIDs := gatewayNodes(ctx, c.svcCtx, friendID)
+		nodeIDs := push.GatewayNodes(ctx, c.svcCtx, friendID)
 
 		for _, nodeID := range nodeIDs {
 			req := &gwpb.PushPresenceReq{

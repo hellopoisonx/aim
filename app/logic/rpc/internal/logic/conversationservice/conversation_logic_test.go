@@ -10,6 +10,7 @@ import (
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/servicefakes"
 
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/service"
+	"github.com/hellopoisonx/aim/app/logic/rpc/internal/service/rbac"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/logic/rpc/model/orm"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
@@ -40,11 +41,21 @@ func generateTestConversationID() int64 {
 	return id
 }
 
+// newTestConversationService wires the service to an in-memory authorizer, the
+// only authorization authority it consults.
+func newTestConversationService(store *servicefakes.ConversationStore) *service.ConversationService {
+	authz, err := rbac.New(nil)
+	if err != nil {
+		panic(err)
+	}
+
+	return service.NewConversationService(store, authz, testSnowflake, nil, nil)
+}
+
 func setupTestSvc() *svc.ServiceContext {
 	store := servicefakes.NewConversationStore()
-	convSvc := service.NewConversationService(store, testSnowflake, nil)
 
-	return &svc.ServiceContext{ConversationService: convSvc}
+	return &svc.ServiceContext{ConversationService: newTestConversationService(store)}
 }
 
 func TestCreateConversationLogic(t *testing.T) {
@@ -171,7 +182,7 @@ func TestGetConversationHistoryLogic(t *testing.T) {
 		{ID: 2, ConversationID: convID, SenderID: 2, MessageType: "text", Content: []byte(`"world"`), CreatedAt: newTS()},
 	}
 
-	convSvc := service.NewConversationService(store, testSnowflake, nil, nil)
+	convSvc := newTestConversationService(store)
 	svcCtx := &svc.ServiceContext{
 		ConversationService: convSvc,
 		UserInfoService: &fakeUserInfoService{users: map[int64]orm.UserInfo{
@@ -294,7 +305,7 @@ func TestGetConversationHistoryLogic_ReadDetails(t *testing.T) {
 		3: {ConversationID: convID, UserID: 3, LastReadMessageID: 10, UpdatedAt: newTS()},
 	}
 
-	convSvc := service.NewConversationService(store, testSnowflake, nil, nil)
+	convSvc := newTestConversationService(store)
 	svcCtx := &svc.ServiceContext{
 		ConversationService: convSvc,
 		UserInfoService: &fakeUserInfoService{users: map[int64]orm.UserInfo{
@@ -368,7 +379,7 @@ func TestGetConversationMembersLogic(t *testing.T) {
 		{ConversationID: convID, UserID: 2, JoinedAt: newTS()},
 	}
 
-	svcCtx := &svc.ServiceContext{ConversationService: service.NewConversationService(store, testSnowflake, nil, nil)}
+	svcCtx := &svc.ServiceContext{ConversationService: newTestConversationService(store)}
 	resp, err := NewGetConversationMembersLogic(context.Background(), svcCtx).GetConversationMembers(&pb.GetConversationMembersReq{ConversationId: convID})
 	require.NoError(t, err)
 	require.Equal(t, convID, resp.GetConversationId())
@@ -394,7 +405,7 @@ func TestUpdateReadReceiptLogic_HappyPath(t *testing.T) {
 		{ConversationID: convID, UserID: 22, JoinedAt: newTS()},
 	}
 
-	svcCtx := &svc.ServiceContext{ConversationService: service.NewConversationService(store, testSnowflake, nil, nil)}
+	svcCtx := &svc.ServiceContext{ConversationService: newTestConversationService(store)}
 
 	logic := NewUpdateReadReceiptLogic(context.Background(), svcCtx)
 	resp, err := logic.UpdateReadReceipt(&pb.UpdateReadReceiptReq{
@@ -421,7 +432,7 @@ func TestUpdateReadReceiptLogic_NotMemberRejected(t *testing.T) {
 		{ConversationID: convID, UserID: 11, JoinedAt: newTS()},
 	}
 
-	svcCtx := &svc.ServiceContext{ConversationService: service.NewConversationService(store, testSnowflake, nil, nil)}
+	svcCtx := &svc.ServiceContext{ConversationService: newTestConversationService(store)}
 
 	logic := NewUpdateReadReceiptLogic(context.Background(), svcCtx)
 	_, err := logic.UpdateReadReceipt(&pb.UpdateReadReceiptReq{
@@ -446,7 +457,7 @@ func TestListConversationReadStatesLogic_HappyPath(t *testing.T) {
 		{ConversationID: convID, UserID: 22, JoinedAt: newTS()},
 	}
 
-	svcCtx := &svc.ServiceContext{ConversationService: service.NewConversationService(store, testSnowflake, nil, nil)}
+	svcCtx := &svc.ServiceContext{ConversationService: newTestConversationService(store)}
 
 	// Seed two cursors.
 	_, err := NewUpdateReadReceiptLogic(context.Background(), svcCtx).UpdateReadReceipt(&pb.UpdateReadReceiptReq{

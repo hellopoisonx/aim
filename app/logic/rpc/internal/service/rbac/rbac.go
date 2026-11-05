@@ -22,22 +22,13 @@ import (
 	casbinmodel "github.com/casbin/casbin/v3/model"
 	"github.com/casbin/casbin/v3/persist"
 
+	sharedconversation "github.com/hellopoisonx/aim/app/shared/conversation"
 	shareduser "github.com/hellopoisonx/aim/app/shared/user"
 )
 
 const rolePrefix = "role:"
 
 const (
-	subjectOwner  = rolePrefix + "owner"
-	subjectAdmin  = rolePrefix + "admin"
-	subjectMember = rolePrefix + "member"
-)
-
-const (
-	RoleOwner  = "owner"
-	RoleAdmin  = "admin"
-	RoleMember = "member"
-
 	ObjectConversation = "conversation"
 	ActionGroupOwn     = "group.own"
 	ActionGroupManage  = "group.manage"
@@ -67,12 +58,12 @@ m = g(r.sub, p.sub, r.dom) && (p.dom == "*" || p.dom == r.dom) && r.obj == p.obj
 // staticRules is the permission matrix. The default is deny, so an admin
 // simply has no group.own rule.
 var staticRules = [][]string{
-	{subjectOwner, "*", ObjectConversation, ActionGroupOwn},
-	{subjectOwner, "*", ObjectConversation, ActionGroupManage},
-	{subjectAdmin, "*", ObjectConversation, ActionGroupManage},
-	{subjectOwner, "*", ObjectConversation, ActionMessageSend},
-	{subjectAdmin, "*", ObjectConversation, ActionMessageSend},
-	{subjectMember, "*", ObjectConversation, ActionMessageSend},
+	{RoleSubject(sharedconversation.RoleOwner), "*", ObjectConversation, ActionGroupOwn},
+	{RoleSubject(sharedconversation.RoleOwner), "*", ObjectConversation, ActionGroupManage},
+	{RoleSubject(sharedconversation.RoleAdmin), "*", ObjectConversation, ActionGroupManage},
+	{RoleSubject(sharedconversation.RoleOwner), "*", ObjectConversation, ActionMessageSend},
+	{RoleSubject(sharedconversation.RoleAdmin), "*", ObjectConversation, ActionMessageSend},
+	{RoleSubject(sharedconversation.RoleMember), "*", ObjectConversation, ActionMessageSend},
 }
 
 // Authorizer is the conversation permission surface used by the logic services.
@@ -80,15 +71,11 @@ type Authorizer interface {
 	// Authorize reports whether sub may perform act on obj in dom.
 	Authorize(ctx context.Context, sub, dom, obj, act string) (bool, error)
 	// AssignRole grants role to sub in dom.
-	AssignRole(ctx context.Context, sub, dom, role string) error
-	// Unassign removes every role of sub in dom.
-	Unassign(ctx context.Context, sub, dom string) error
-	// ChangeRole moves sub from one role to another in dom.
-	ChangeRole(ctx context.Context, sub, dom, fromRole, toRole string) error
+	AssignRole(ctx context.Context, sub, dom string, role sharedconversation.Role) error
 	// ClearConversation removes every assignment in dom.
 	ClearConversation(ctx context.Context, dom string) error
 	// HasRole reports whether sub holds role in dom.
-	HasRole(ctx context.Context, sub, dom, role string) (bool, error)
+	HasRole(ctx context.Context, sub, dom string, role sharedconversation.Role) (bool, error)
 }
 
 // Subject maps a validated user type to its Casbin subject, rejecting values
@@ -108,8 +95,8 @@ func Domain(conversationID int64) string {
 	return "conv:" + strconv.FormatInt(conversationID, 10)
 }
 
-func RoleSubject(role string) string {
-	return rolePrefix + role
+func RoleSubject(role sharedconversation.Role) string {
+	return rolePrefix + string(role)
 }
 
 // Enforcer is the Casbin-backed Authorizer.
@@ -161,7 +148,7 @@ func (a *Enforcer) Authorize(_ context.Context, sub, dom, obj, act string) (bool
 	return allowed, nil
 }
 
-func (a *Enforcer) AssignRole(_ context.Context, sub, dom, role string) error {
+func (a *Enforcer) AssignRole(_ context.Context, sub, dom string, role sharedconversation.Role) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
@@ -170,29 +157,6 @@ func (a *Enforcer) AssignRole(_ context.Context, sub, dom, role string) error {
 	}
 
 	return nil
-}
-
-func (a *Enforcer) Unassign(_ context.Context, sub, dom string) error {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-
-	// Field order of a g rule is sub, role, domain; an empty value matches any.
-	if _, err := a.enforcer.RemoveFilteredGroupingPolicy(0, sub, "", dom); err != nil {
-		return fmt.Errorf("rbac: unassign %s in %s: %w", sub, dom, err)
-	}
-
-	return nil
-}
-
-func (a *Enforcer) ChangeRole(ctx context.Context, sub, dom, fromRole, toRole string) error {
-	if fromRole == toRole {
-		return nil
-	}
-	if err := a.Unassign(ctx, sub, dom); err != nil {
-		return err
-	}
-
-	return a.AssignRole(ctx, sub, dom, toRole)
 }
 
 func (a *Enforcer) ClearConversation(_ context.Context, dom string) error {
@@ -206,7 +170,7 @@ func (a *Enforcer) ClearConversation(_ context.Context, dom string) error {
 	return nil
 }
 
-func (a *Enforcer) HasRole(_ context.Context, sub, dom, role string) (bool, error) {
+func (a *Enforcer) HasRole(_ context.Context, sub, dom string, role sharedconversation.Role) (bool, error) {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 

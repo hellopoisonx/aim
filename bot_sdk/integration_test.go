@@ -204,7 +204,7 @@ func newBotSDKIntegrationEnv(t *testing.T) *botSDKIntegrationEnv {
 				ID:             "msg-1",
 				ConversationID: integrationConversation,
 				SenderID:       integrationHumanUserID,
-				SenderInfo:     SenderInfo{Name: "human", Email: "human@example.test", DisplayName: "Human User"},
+				SenderInfo:     SenderInfo{Name: "human", Email: "human@example.test"},
 				MessageType:    "text",
 				Content:        "seed message",
 				ClientMsgID:    "human-seed-1",
@@ -217,7 +217,7 @@ func newBotSDKIntegrationEnv(t *testing.T) *botSDKIntegrationEnv {
 				LastReadMessageID: "msg-1",
 				UpdatedAt:         1700000000100,
 				Email:             "human@example.test",
-				DisplayName:       "Human User",
+				Name:              "Human User",
 			},
 		},
 	}
@@ -317,7 +317,7 @@ func (e *botSDKIntegrationEnv) handleSendMessage(w http.ResponseWriter, r *http.
 		ID:             messageID,
 		ConversationID: req.ConversationID,
 		SenderID:       integrationBotUserID,
-		SenderInfo:     SenderInfo{Name: "integration-bot", Email: "bot@example.test", DisplayName: "Integration Bot"},
+		SenderInfo:     SenderInfo{Name: "integration-bot", Email: "bot@example.test"},
 		MessageType:    req.MessageType,
 		Content:        req.Content,
 		ClientMsgID:    req.ClientMsgID,
@@ -390,7 +390,7 @@ func (e *botSDKIntegrationEnv) handleMarkRead(w http.ResponseWriter, r *http.Req
 		LastReadMessageID: req.LastReadMessageID,
 		UpdatedAt:         time.Now().UnixMilli(),
 		Email:             "bot@example.test",
-		DisplayName:       "Integration Bot",
+		Name:              "Integration Bot",
 	}
 	e.mu.Lock()
 	e.readStates[integrationBotUserID] = state
@@ -521,20 +521,20 @@ func splitConversationPath(relPath string) (conversationID string, suffix string
 func integrationMembers() []Member {
 	return []Member{
 		{
-			UserID:      integrationBotUserID,
-			Email:       "bot@example.test",
-			Avatar:      "https://cdn.example.test/bot.png",
-			Role:        "member",
-			JoinedAt:    1700000000000,
-			DisplayName: "Integration Bot",
+			UserID:   integrationBotUserID,
+			Email:    "bot@example.test",
+			Avatar:   "https://cdn.example.test/bot.png",
+			Role:     "member",
+			JoinedAt: 1700000000000,
+			Name:     "Integration Bot",
 		},
 		{
-			UserID:      integrationHumanUserID,
-			Email:       "human@example.test",
-			Avatar:      "https://cdn.example.test/human.png",
-			Role:        "member",
-			JoinedAt:    1700000000000,
-			DisplayName: "Human User",
+			UserID:   integrationHumanUserID,
+			Email:    "human@example.test",
+			Avatar:   "https://cdn.example.test/human.png",
+			Role:     "member",
+			JoinedAt: 1700000000000,
+			Name:     "Human User",
 		},
 	}
 }

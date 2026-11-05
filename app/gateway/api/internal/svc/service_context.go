@@ -361,12 +361,10 @@ func newEventProducer(c config.Config) *rocketmq.Producer {
 // StartEventProducer connects the shared producer. Publishing degrades to
 // errors until it succeeds, so a broker outage never blocks gateway startup.
 func (s *ServiceContext) StartEventProducer() {
-	if s == nil || s.EventProducer == nil {
+	if s == nil {
 		return
 	}
-	if err := s.EventProducer.Start(); err != nil {
-		logx.WithContext(context.Background()).Errorf("failed to start rocketmq producer: %v", err)
-	}
+	rocketmq.StartProducer(context.Background(), s.EventProducer, "rocketmq producer")
 }
 
 // newPresencePub creates a PresencePublisher, or nil when the producer or its
@@ -414,11 +412,7 @@ func (s *ServiceContext) Close() {
 		s.reaperCancel()
 	}
 
-	if s.EventProducer != nil {
-		if err := s.EventProducer.GracefulStop(); err != nil {
-			logx.WithContext(context.Background()).Errorf("failed to stop rocketmq producer: %v", err)
-		}
-	}
+	rocketmq.StopProducer(context.Background(), s.EventProducer, "rocketmq producer")
 
 	if s.RedisClient != nil {
 		if err := s.RedisClient.Close(); err != nil {

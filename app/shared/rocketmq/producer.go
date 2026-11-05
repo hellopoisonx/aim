@@ -132,6 +132,28 @@ func (p *Producer) GracefulStop() error {
 	return p.producer.GracefulStop()
 }
 
+// StartProducer connects p, logging a failure instead of returning it: a broker
+// outage must degrade publishing to errors rather than abort service startup. A
+// nil producer (RocketMQ not configured) is a no-op.
+func StartProducer(ctx context.Context, p *Producer, label string) {
+	if p == nil {
+		return
+	}
+	if err := p.Start(); err != nil {
+		logx.WithContext(ctx).Errorf("failed to start %s: %v", label, err)
+	}
+}
+
+// StopProducer flushes and disconnects p, logging a failure.
+func StopProducer(ctx context.Context, p *Producer, label string) {
+	if p == nil {
+		return
+	}
+	if err := p.GracefulStop(); err != nil {
+		logx.WithContext(ctx).Errorf("failed to stop %s: %v", label, err)
+	}
+}
+
 // Publish sends one message and waits for the broker acknowledgement.
 func (p *Producer) Publish(ctx context.Context, m Message) error {
 	if p == nil {

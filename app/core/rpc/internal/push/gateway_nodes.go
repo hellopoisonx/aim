@@ -1,4 +1,4 @@
-package mqs
+package push
 
 import (
 	"context"
@@ -13,7 +13,7 @@ import (
 // live connections for a user.
 const userGatewayKeyPrefix = "aim:user_gateway:"
 
-// gatewayNodes resolves the gateway node IDs that host userID's connections.
+// GatewayNodes resolves the gateway node IDs that host userID's connections.
 //
 // Resolution order:
 //  1. PresenceStore — the canonical presence directory (L1 cache + Redis set).
@@ -23,7 +23,7 @@ const userGatewayKeyPrefix = "aim:user_gateway:"
 //
 // Every consumer resolves nodes through this function so push fan-out behaves
 // identically across message, presence, typing, read-receipt and system events.
-func gatewayNodes(ctx context.Context, svcCtx *svc.ServiceContext, userID int64) []string {
+func GatewayNodes(ctx context.Context, svcCtx *svc.ServiceContext, userID int64) []string {
 	if svcCtx.PresenceStore != nil {
 		nodes, err := svcCtx.PresenceStore.GetUserGatewayNodes(ctx, userID)
 		if err == nil && len(nodes) > 0 {

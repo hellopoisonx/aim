@@ -20,6 +20,7 @@ import (
 	logicconfig "github.com/hellopoisonx/aim/app/logic/rpc/internal/config"
 	serverpkg "github.com/hellopoisonx/aim/app/logic/rpc/internal/server/conversationservice"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/service"
+	"github.com/hellopoisonx/aim/app/logic/rpc/internal/service/rbac"
 	logicsvc "github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/logic/rpc/model/dao"
 	"github.com/hellopoisonx/aim/app/logic/rpc/model/orm"
@@ -59,7 +60,9 @@ func mustSnowflake(t *testing.T) *snowflake.Snowflake {
 func startLogic(t *testing.T, store *dao.Store) logicpb.ConversationServiceClient {
 	t.Helper()
 
-	convSvc := service.NewConversationService(store, mustSnowflake(t), storeTxRunner{store: store})
+	authz, err := rbac.New(store)
+	require.NoError(t, err)
+	convSvc := service.NewConversationService(store, authz, mustSnowflake(t), storeTxRunner{store: store})
 	logicCtx := &logicsvc.ServiceContext{
 		Config:              logicconfig.Config{},
 		PermissionChecker:   service.DenyAllPermissionChecker{},

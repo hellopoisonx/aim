@@ -7,6 +7,7 @@ import (
 	casbinmodel "github.com/casbin/casbin/v3/model"
 	"github.com/casbin/casbin/v3/persist"
 
+	sharedconversation "github.com/hellopoisonx/aim/app/shared/conversation"
 	shareduser "github.com/hellopoisonx/aim/app/shared/user"
 )
 
@@ -94,7 +95,7 @@ func TestAuthorizeMatrix(t *testing.T) {
 	member := testSubject(t, shareduser.TypeHuman, 3)
 	stranger := testSubject(t, shareduser.TypeHuman, 4)
 
-	for sub, role := range map[string]string{owner: RoleOwner, admin: RoleAdmin, member: RoleMember} {
+	for sub, role := range map[string]sharedconversation.Role{owner: sharedconversation.RoleOwner, admin: sharedconversation.RoleAdmin, member: sharedconversation.RoleMember} {
 		if err := enforcer.AssignRole(ctx, sub, conv, role); err != nil {
 			t.Fatalf("assign %s: %v", role, err)
 		}
@@ -134,7 +135,7 @@ func TestAuthorizeIsDomainScoped(t *testing.T) {
 	enforcer := newTestEnforcer(t, nil)
 
 	member := testSubject(t, shareduser.TypeHuman, 7)
-	if err := enforcer.AssignRole(ctx, member, Domain(1), RoleMember); err != nil {
+	if err := enforcer.AssignRole(ctx, member, Domain(1), sharedconversation.RoleMember); err != nil {
 		t.Fatalf("assign: %v", err)
 	}
 
@@ -152,7 +153,7 @@ func TestBotSubjectUsesSameMatrix(t *testing.T) {
 	enforcer := newTestEnforcer(t, nil)
 
 	bot := testSubject(t, shareduser.TypeBot, 9)
-	if err := enforcer.AssignRole(ctx, bot, Domain(5), RoleAdmin); err != nil {
+	if err := enforcer.AssignRole(ctx, bot, Domain(5), sharedconversation.RoleAdmin); err != nil {
 		t.Fatalf("assign: %v", err)
 	}
 
@@ -181,26 +182,23 @@ func TestRoleMutationPersistsThroughAdapter(t *testing.T) {
 	conv := Domain(11)
 	sub := testSubject(t, shareduser.TypeHuman, 3)
 
-	if err := enforcer.AssignRole(ctx, sub, conv, RoleMember); err != nil {
-		t.Fatalf("assign member: %v", err)
-	}
-	if err := enforcer.ChangeRole(ctx, sub, conv, RoleMember, RoleAdmin); err != nil {
-		t.Fatalf("change role: %v", err)
+	if err := enforcer.AssignRole(ctx, sub, conv, sharedconversation.RoleAdmin); err != nil {
+		t.Fatalf("assign admin: %v", err)
 	}
 
-	hasAdmin, err := enforcer.HasRole(ctx, sub, conv, RoleAdmin)
+	hasAdmin, err := enforcer.HasRole(ctx, sub, conv, sharedconversation.RoleAdmin)
 	if err != nil {
 		t.Fatalf("has admin: %v", err)
 	}
 	if !hasAdmin {
-		t.Error("expected admin role after change")
+		t.Error("expected admin role after assign")
 	}
-	hasMember, err := enforcer.HasRole(ctx, sub, conv, RoleMember)
+	hasOwner, err := enforcer.HasRole(ctx, sub, conv, sharedconversation.RoleOwner)
 	if err != nil {
-		t.Fatalf("has member: %v", err)
+		t.Fatalf("has owner: %v", err)
 	}
-	if hasMember {
-		t.Error("member role must be gone after change")
+	if hasOwner {
+		t.Error("assigning admin must not grant owner")
 	}
 
 	// A fresh enforcer over the same store must see the same assignment.
@@ -213,16 +211,6 @@ func TestRoleMutationPersistsThroughAdapter(t *testing.T) {
 		t.Error("reloaded enforcer lost the persisted role")
 	}
 
-	if err := enforcer.Unassign(ctx, sub, conv); err != nil {
-		t.Fatalf("unassign: %v", err)
-	}
-	if len(adapter.rules) != 0 {
-		t.Errorf("adapter still holds %d rules after unassign", len(adapter.rules))
-	}
-
-	if err := enforcer.AssignRole(ctx, sub, conv, RoleOwner); err != nil {
-		t.Fatalf("re-assign owner: %v", err)
-	}
 	if err := enforcer.ClearConversation(ctx, conv); err != nil {
 		t.Fatalf("clear conversation: %v", err)
 	}

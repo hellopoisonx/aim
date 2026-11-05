@@ -33,12 +33,29 @@ import (
 
 const dataParsingTracerName = "github.com/hellopoisonx/aim/app/data_parsing"
 
+// attachmentStore is the subset of dao.Store the worker writes through.
+type attachmentStore interface {
+	UpsertAttachmentObject(ctx context.Context, object orm.AttachmentObject) error
+	UpsertAttachmentParseResult(ctx context.Context, result orm.AttachmentParseResult) error
+	SetParseStatus(ctx context.Context, fileID uuid.UUID, status string) (int64, error)
+	SetParseResultError(ctx context.Context, fileID uuid.UUID, message string) error
+}
+
+// publisher is the subset of *rocketmq.Producer the worker drives.
+type publisher interface {
+	Start() error
+	GracefulStop() error
+	Publish(ctx context.Context, m rocketmq.Message) error
+	SendTransactional(ctx context.Context, db *gorm.DB, m rocketmq.TransactionalMessage, localTx func(ctx context.Context, tx *gorm.DB) error) error
+}
+
 type Worker struct {
 	cfg      config.Config
 	db       *gorm.DB
-	store    *dao.Store
+	store    attachmentStore
+	newStore func(*gorm.DB) attachmentStore
 	parser   parser.Parser
-	producer *rocketmq.Producer
+	producer publisher
 }
 
 func New(ctx context.Context, cfg config.Config) (*Worker, error) {
@@ -46,15 +63,18 @@ func New(ctx context.Context, cfg config.Config) (*Worker, error) {
 	if err != nil {
 		return nil, err
 	}
-	var store *dao.Store
+	var store attachmentStore
+	newStore := func(db *gorm.DB) attachmentStore { return dao.New(db) }
 	if db != nil {
-		store = dao.New(db)
+		store = newStore(db)
 	}
 	producer, err := rocketmq.NewProducer(cfg.ParsedProducer)
 	if err != nil {
 		return nil, err
 	}
+	var pub publisher
 	if producer != nil {
+		pub = producer
 		// Parsed events are published with the parse-result writes, so the
 		// transaction check-back must resolve them from this database.
 		if db != nil {
@@ -66,7 +86,7 @@ func New(ctx context.Context, cfg config.Config) (*Worker, error) {
 			logx.WithContext(ctx).Errorf("failed to start rocketmq parsed producer: %v", err)
 		}
 	}
-	return &Worker{cfg: cfg, db: db, store: store, parser: parser.DefaultParser{}, producer: producer}, nil
+	return &Worker{cfg: cfg, db: db, store: store, newStore: newStore, parser: parser.DefaultParser{}, producer: pub}, nil
 }
 
 func (w *Worker) Close() {
@@ -75,11 +95,8 @@ func (w *Worker) Close() {
 			logx.WithContext(context.Background()).Errorf("failed to stop rocketmq parsed producer: %v", err)
 		}
 	}
-	if w.store == nil {
-		return
-	}
-	if db := w.store.DB(); db != nil {
-		if sqlDB, err := db.DB(); err == nil {
+	if w.db != nil {
+		if sqlDB, err := w.db.DB(); err == nil {
 			_ = sqlDB.Close()
 		}
 	}
@@ -177,7 +194,7 @@ func (w *Worker) Consume(ctx context.Context, key string, value string) (err err
 			Key:      fileID.String(),
 			Body:     body,
 		}, func(ctx context.Context, tx *gorm.DB) error {
-			return w.persistParseResult(ctx, tx, fileID, event.Bucket, thumbKey, res, meta)
+			return w.persistParseResult(ctx, w.newStore(tx), fileID, event.Bucket, thumbKey, res, meta)
 		})
 		if err != nil {
 			tracing.RecordSpanError(span, err)
@@ -186,18 +203,16 @@ func (w *Worker) Consume(ctx context.Context, key string, value string) (err err
 		return err
 	}
 
-	if err := w.persistParseResult(ctx, w.db, fileID, event.Bucket, thumbKey, res, meta); err != nil {
+	if err := w.persistParseResult(ctx, w.store, fileID, event.Bucket, thumbKey, res, meta); err != nil {
 		return w.fail(ctx, event, err)
 	}
 
 	return w.publish(ctx, parsed)
 }
 
-// persistParseResult writes the parse output on db, which is either a
+// persistParseResult writes the parse output on store, which is either a
 // transaction supplied by SendTransactional or the worker's own handle.
-func (w *Worker) persistParseResult(ctx context.Context, db *gorm.DB, fileID uuid.UUID, bucket, thumbKey string, res *parser.Result, meta []byte) error {
-	store := dao.New(db)
-
+func (w *Worker) persistParseResult(ctx context.Context, store attachmentStore, fileID uuid.UUID, bucket, thumbKey string, res *parser.Result, meta []byte) error {
 	if thumbKey != "" {
 		size := int64(len(res.Thumbnail))
 		thumbWidth := clampInt32(res.ThumbWidth)

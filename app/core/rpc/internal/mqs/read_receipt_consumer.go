@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 
+	"github.com/hellopoisonx/aim/app/core/rpc/internal/push"
 	"github.com/hellopoisonx/aim/app/core/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/shared/events"
 	"github.com/hellopoisonx/aim/app/shared/tracing"
@@ -42,7 +43,7 @@ func (c *ReadReceiptConsumer) Consume(ctx context.Context, key string, value str
 	logx.WithContext(ctx).Infof("read receipt event: from=%d conv=%d last_msg=%d",
 		event.FromUserID, event.ConversationID, event.LastReadMessageID)
 
-	memberIDs, _, err := conversationRecipients(ctx, c.svcCtx, event.ConversationID)
+	memberIDs, _, err := push.ConversationRecipients(ctx, c.svcCtx, event.ConversationID)
 	if err != nil {
 		logx.WithContext(ctx).Errorf("conversation member lookup conv=%d failed: %v", event.ConversationID, err)
 		return nil
@@ -52,7 +53,7 @@ func (c *ReadReceiptConsumer) Consume(ctx context.Context, key string, value str
 	}
 
 	// A failed node is not retried: the client re-syncs read state on reconnect.
-	_ = pushToMemberNodes(ctx, c.svcCtx, memberIDs, event.FromUserID, event.GatewayNodeID, func(memberID int64, nodeID string) error {
+	_ = push.ToMemberNodes(ctx, c.svcCtx, memberIDs, event.FromUserID, event.GatewayNodeID, func(memberID int64, nodeID string) error {
 		req := &gwpb.PushReadReceiptReq{
 			TargetUserId:      memberID,
 			ConversationId:    event.ConversationID,

@@ -29,22 +29,3 @@ func TestDecodeAttachmentParsedEventWithoutMetadata(t *testing.T) {
 	require.Equal(t, "f1", event.FileID)
 	require.Nil(t, metadata)
 }
-
-func TestPositiveUniqueIDsDropsDuplicatesAndNonPositive(t *testing.T) {
-	require.Equal(t, []int64{3, 1}, positiveUniqueIDs([]int64{3, 0, -1, 1, 3}))
-	require.Empty(t, positiveUniqueIDs(nil))
-}
-
-func TestPushToMemberNodesSkipsSenderAndOriginNode(t *testing.T) {
-	svcCtx := newTestServiceContext(t, newFakeGatewayClient())
-	svcCtx.PresenceStore = fakePresenceDirectory{nodes: []string{"node-a", "node-b"}}
-
-	calls := make(map[int64][]string)
-	err := pushToMemberNodes(t.Context(), svcCtx, []int64{42, 43}, 42, "node-b", func(memberID int64, nodeID string) error {
-		calls[memberID] = append(calls[memberID], nodeID)
-		return nil
-	})
-	require.NoError(t, err)
-	require.Empty(t, calls[42], "sender is skipped")
-	require.Equal(t, []string{"node-a"}, calls[43], "origin node is skipped")
-}

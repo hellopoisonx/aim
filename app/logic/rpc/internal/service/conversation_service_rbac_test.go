@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/service/rbac"
@@ -23,7 +24,7 @@ func newRBACFixture(t *testing.T) (*ConversationService, *servicefakes.Conversat
 	authz, err := rbac.New(nil)
 	require.NoError(t, err)
 
-	svc := NewConversationService(store, testSnowflake, plainTxRunner{store: store}, WithRBAC(authz))
+	svc := NewConversationService(store, authz, testSnowflake, plainTxRunner{store: store})
 
 	conv, err := svc.CreateConversation(ctx, sharedconversation.TypeGroup, 1, []int64{1, 2, 3}, "group", "")
 	require.NoError(t, err)
@@ -43,11 +44,11 @@ func TestConversationService_RBACRoleAssignmentsOnCreate(t *testing.T) {
 	_, _, authz, convID := newRBACFixture(t)
 	ctx := context.Background()
 
-	ownerRole, err := authz.HasRole(ctx, mustSubject(t, shareduser.TypeHuman, 1), rbac.Domain(convID), rbac.RoleOwner)
+	ownerRole, err := authz.HasRole(ctx, mustSubject(t, shareduser.TypeHuman, 1), rbac.Domain(convID), sharedconversation.RoleOwner)
 	require.NoError(t, err)
 	assert.True(t, ownerRole, "creator must be assigned the owner role")
 
-	memberRole, err := authz.HasRole(ctx, mustSubject(t, shareduser.TypeHuman, 2), rbac.Domain(convID), rbac.RoleMember)
+	memberRole, err := authz.HasRole(ctx, mustSubject(t, shareduser.TypeHuman, 2), rbac.Domain(convID), sharedconversation.RoleMember)
 	require.NoError(t, err)
 	assert.True(t, memberRole, "invited member must be assigned the member role")
 }
@@ -70,11 +71,11 @@ func TestConversationService_RBACRejectsMemberManagement(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, svc.GrantGroupAdmin(ctx, convID, 1, 2))
 
-	adminRole, err := svc.authz.HasRole(ctx, mustSubject(t, shareduser.TypeHuman, 2), rbac.Domain(convID), rbac.RoleAdmin)
+	adminRole, err := svc.authz.HasRole(ctx, mustSubject(t, shareduser.TypeHuman, 2), rbac.Domain(convID), sharedconversation.RoleAdmin)
 	require.NoError(t, err)
 	assert.True(t, adminRole)
 
-	memberRole, err := svc.authz.HasRole(ctx, mustSubject(t, shareduser.TypeHuman, 2), rbac.Domain(convID), rbac.RoleMember)
+	memberRole, err := svc.authz.HasRole(ctx, mustSubject(t, shareduser.TypeHuman, 2), rbac.Domain(convID), sharedconversation.RoleMember)
 	require.NoError(t, err)
 	assert.False(t, memberRole, "member role must be replaced by admin")
 }
@@ -106,7 +107,7 @@ func TestConversationService_TransferGroupOwnerRejectsBot(t *testing.T) {
 	require.ErrorAs(t, err, &codeErr)
 	assert.Equal(t, errorx.CodeBadInput, codeErr.Code)
 
-	ownerRole, err := authz.HasRole(ctx, mustSubject(t, shareduser.TypeHuman, 1), rbac.Domain(convID), rbac.RoleOwner)
+	ownerRole, err := authz.HasRole(ctx, mustSubject(t, shareduser.TypeHuman, 1), rbac.Domain(convID), sharedconversation.RoleOwner)
 	require.NoError(t, err)
 	assert.True(t, ownerRole)
 }
@@ -117,7 +118,7 @@ func TestConversationService_RemoveMemberRevokesRole(t *testing.T) {
 
 	require.NoError(t, svc.RemoveGroupMembers(ctx, convID, 1, "alice", []int64{3}))
 
-	hasRole, err := authz.HasRole(ctx, mustSubject(t, shareduser.TypeHuman, 3), rbac.Domain(convID), rbac.RoleMember)
+	hasRole, err := authz.HasRole(ctx, mustSubject(t, shareduser.TypeHuman, 3), rbac.Domain(convID), sharedconversation.RoleMember)
 	require.NoError(t, err)
 	assert.False(t, hasRole, "removed member must lose its role")
 
@@ -132,7 +133,7 @@ func TestConversationService_DismissClearsRoles(t *testing.T) {
 	require.NoError(t, svc.DismissGroup(ctx, convID, 1))
 
 	for _, userID := range []int64{1, 2, 3} {
-		role, err := authz.HasRole(ctx, mustSubject(t, shareduser.TypeHuman, userID), rbac.Domain(convID), rbac.RoleOwner)
+		role, err := authz.HasRole(ctx, mustSubject(t, shareduser.TypeHuman, userID), rbac.Domain(convID), sharedconversation.RoleOwner)
 		require.NoError(t, err)
 		assert.False(t, role, "user %d must have no role after dismissal", userID)
 	}
@@ -154,7 +155,39 @@ func TestConversationService_LostRolesFailClosedThenRebuild(t *testing.T) {
 	_, err = svc.UpdateGroupInfo(ctx, convID, 1, "alice", &name, nil)
 	require.NoError(t, err)
 
-	memberRole, err := authz.HasRole(ctx, mustSubject(t, shareduser.TypeHuman, 3), rbac.Domain(convID), rbac.RoleMember)
+	memberRole, err := authz.HasRole(ctx, mustSubject(t, shareduser.TypeHuman, 3), rbac.Domain(convID), sharedconversation.RoleMember)
 	require.NoError(t, err)
 	assert.True(t, memberRole, "post-commit rebuild restores every member's role")
+}
+
+// assignFailingAuthorizer delegates every read to a real enforcer but cannot
+// persist assignments, the failure the role rebuild has to report.
+type assignFailingAuthorizer struct {
+	rbac.Authorizer
+	err error
+}
+
+func (a assignFailingAuthorizer) AssignRole(context.Context, string, string, sharedconversation.Role) error {
+	return a.err
+}
+
+// A rebuild that cannot write rules must deny the conversation instead of
+// leaving the revoked role in force.
+func TestConversationService_RoleSyncFailureFailsClosed(t *testing.T) {
+	svc, _, authz, convID := newRBACFixture(t)
+	ctx := context.Background()
+
+	require.NoError(t, svc.GrantGroupAdmin(ctx, convID, 1, 3))
+	svc.authz = assignFailingAuthorizer{Authorizer: authz, err: errors.New("authorizer unavailable")}
+
+	require.Error(t, svc.RevokeGroupAdmin(ctx, convID, 1, 3))
+
+	dom := rbac.Domain(convID)
+	allowed, err := authz.Authorize(ctx, mustSubject(t, shareduser.TypeHuman, 3), dom, rbac.ObjectConversation, rbac.ActionGroupManage)
+	require.NoError(t, err)
+	assert.False(t, allowed, "a failed rebuild must not keep the revoked admin authorized")
+
+	ownerAllowed, err := authz.Authorize(ctx, mustSubject(t, shareduser.TypeHuman, 1), dom, rbac.ObjectConversation, rbac.ActionGroupManage)
+	require.NoError(t, err)
+	assert.False(t, ownerAllowed, "clear-then-assign leaves no rule when every write fails")
 }

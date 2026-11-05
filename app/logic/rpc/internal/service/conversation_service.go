@@ -30,10 +30,6 @@ const (
 	ConversationTypeDirect = sharedconversation.TypeDirect
 	ConversationTypeGroup  = sharedconversation.TypeGroup
 
-	RoleMember = sharedconversation.RoleMember
-	RoleAdmin  = sharedconversation.RoleAdmin
-	RoleOwner  = sharedconversation.RoleOwner
-
 	MessageTypeSystem = sharedconversation.MessageTypeSystem
 )
 
@@ -150,12 +146,6 @@ type ConversationService struct {
 
 type ConversationServiceOption func(*ConversationService)
 
-func WithRBAC(authz rbac.Authorizer) ConversationServiceOption {
-	return func(s *ConversationService) {
-		s.authz = authz
-	}
-}
-
 func WithConversationCaches(convCache *sharedcache.TypedCache[orm.Conversation], membersCache *sharedcache.TypedCache[[]orm.ConversationMember]) ConversationServiceOption {
 	return func(s *ConversationService) {
 		s.convCache = convCache
@@ -172,8 +162,8 @@ func WithTransactionalEvents(topic string) ConversationServiceOption {
 	}
 }
 
-func NewConversationService(store ConversationStore, idGen *snowflake.Snowflake, txRunner ConversationTxRunner, opts ...ConversationServiceOption) *ConversationService {
-	svc := &ConversationService{store: store, txRunner: txRunner, idGen: idGen}
+func NewConversationService(store ConversationStore, authz rbac.Authorizer, idGen *snowflake.Snowflake, txRunner ConversationTxRunner, opts ...ConversationServiceOption) *ConversationService {
+	svc := &ConversationService{store: store, txRunner: txRunner, idGen: idGen, authz: authz}
 	for _, opt := range opts {
 		if opt != nil {
 			opt(svc)
@@ -318,7 +308,7 @@ func (s *ConversationService) memberRole(ctx context.Context, conversationID, us
 	for _, m := range members {
 		if m.UserID == userID {
 			if m.Role == "" {
-				return RoleMember, nil
+				return sharedconversation.RoleMember, nil
 			}
 			return m.Role, nil
 		}
@@ -327,16 +317,7 @@ func (s *ConversationService) memberRole(ctx context.Context, conversationID, us
 }
 
 func (s *ConversationService) requireAct(ctx context.Context, conversationID, userID int64, act string) error {
-	if s.authz == nil {
-		return s.requireStoredRole(ctx, conversationID, userID, act)
-	}
-
-	userType, err := s.userType(ctx, userID)
-	if err != nil {
-		return err
-	}
-
-	subject, err := rbac.Subject(userType, userID)
+	subject, err := s.rbacSubject(ctx, userID)
 	if err != nil {
 		return err
 	}
@@ -354,31 +335,6 @@ func (s *ConversationService) requireAct(ctx context.Context, conversationID, us
 	}
 
 	return ErrNotAdmin
-}
-
-func (s *ConversationService) requireStoredRole(ctx context.Context, conversationID, userID int64, act string) error {
-	role, err := s.memberRole(ctx, conversationID, userID)
-	if err != nil {
-		return err
-	}
-
-	switch act {
-	case rbac.ActionGroupOwn:
-		if role == RoleOwner {
-			return nil
-		}
-		return ErrNotOwner
-	case rbac.ActionGroupManage:
-		if role == RoleOwner || role == RoleAdmin {
-			return nil
-		}
-		return ErrNotAdmin
-	default:
-		if role == RoleOwner || role == RoleAdmin || role == RoleMember {
-			return nil
-		}
-		return ErrNotMember
-	}
 }
 
 func (s *ConversationService) isBot(ctx context.Context, userID int64) (bool, error) {
@@ -428,12 +384,12 @@ const (
 // postCommit applies the effects that cannot join the write transaction, once
 // it has committed: cache invalidation followed by one authorizer rebuild.
 //
-// Failure policy: the committed write is authoritative, so these effects never
-// fail the call; a failure is logged once with the conversation id. Cache
-// entries self-heal on the next read through their TTL, and a failed rebuild
-// leaves the conversation's rules stale or incomplete only until the next
-// successful mutation, which rebuilds all of them from conversation_members.
-func (s *ConversationService) postCommit(ctx context.Context, conversationID int64, roles roleSync) {
+// Cache invalidation stays best effort: entries self-heal through their TTL. The
+// rebuild does not: it runs clear-then-assign so an interrupted rebuild denies
+// the roles it could not write instead of keeping a revoked one, and its error
+// goes to the caller. A conversation left without rules is rebuilt from
+// conversation_members by the next successful mutation.
+func (s *ConversationService) postCommit(ctx context.Context, conversationID int64, roles roleSync) error {
 	if s.convCache != nil {
 		_ = s.convCache.Del(ctx, sharedcache.ConversationKey(conversationID))
 	}
@@ -441,20 +397,19 @@ func (s *ConversationService) postCommit(ctx context.Context, conversationID int
 		_ = s.membersCache.Del(ctx, sharedcache.ConversationMembersKey(conversationID))
 	}
 
-	if s.authz == nil {
-		return
-	}
-
+	dom := rbac.Domain(conversationID)
 	if roles == rolesReset {
-		if err := s.authz.ClearConversation(ctx, rbac.Domain(conversationID)); err != nil {
-			logx.WithContext(ctx).Errorf("post-commit: clear rbac roles of conversation %d: %v", conversationID, err)
+		if err := s.authz.ClearConversation(ctx, dom); err != nil {
+			return fmt.Errorf("clear rbac roles of conversation %d: %w", conversationID, err)
 		}
-		return
+		return nil
 	}
 
 	if err := s.syncRoles(ctx, conversationID); err != nil {
-		logx.WithContext(ctx).Errorf("post-commit: sync rbac roles of conversation %d: %v", conversationID, err)
+		return fmt.Errorf("sync rbac roles of conversation %d: %w", conversationID, err)
 	}
+
+	return nil
 }
 
 // syncRoles replaces the conversation's assignments with the roles stored in
@@ -473,14 +428,14 @@ func (s *ConversationService) syncRoles(ctx context.Context, conversationID int6
 	for _, member := range members {
 		role := member.Role
 		if role == "" {
-			role = RoleMember
+			role = sharedconversation.RoleMember
 		}
 		subject, err := s.rbacSubject(ctx, member.UserID)
 		if err != nil {
 			firstErr = errors.Join(firstErr, err)
 			continue
 		}
-		if err := s.authz.AssignRole(ctx, subject, rbac.Domain(conversationID), string(role)); err != nil {
+		if err := s.authz.AssignRole(ctx, subject, rbac.Domain(conversationID), role); err != nil {
 			firstErr = errors.Join(firstErr, err)
 		}
 	}
@@ -568,9 +523,9 @@ func (s *ConversationService) CreateConversation(ctx context.Context, conversati
 	}
 
 	for _, memberID := range memberIDs {
-		role := RoleMember
+		role := sharedconversation.RoleMember
 		if memberID == creatorID {
-			role = RoleOwner
+			role = sharedconversation.RoleOwner
 		}
 		_, err := s.store.AddConversationMemberWithRole(ctx, conv.ID, memberID, role)
 		if err != nil {
@@ -578,7 +533,9 @@ func (s *ConversationService) CreateConversation(ctx context.Context, conversati
 		}
 	}
 
-	s.postCommit(ctx, conv.ID, rolesFromMembers)
+	if err := s.postCommit(ctx, conv.ID, rolesFromMembers); err != nil {
+		return orm.Conversation{}, err
+	}
 
 	return conv, nil
 }
@@ -731,18 +688,17 @@ func (s *ConversationService) AddGroupMembers(ctx context.Context, conversationI
 			if _, ok := existingSet[mid]; ok {
 				continue
 			}
-			if _, err := tx.AddConversationMemberWithRole(ctx, conversationID, mid, RoleMember); err != nil {
+			if _, err := tx.AddConversationMemberWithRole(ctx, conversationID, mid, sharedconversation.RoleMember); err != nil {
 				return err
 			}
 		}
 
 		return nil
 	})
-	if err != nil {
+
+	if err := s.postCommit(ctx, conversationID, rolesFromMembers); err != nil {
 		return orm.Conversation{}, err
 	}
-
-	s.postCommit(ctx, conversationID, rolesFromMembers)
 
 	return s.GetConversationByID(ctx, conversationID)
 }
@@ -771,10 +727,10 @@ func (s *ConversationService) RemoveGroupMembers(ctx context.Context, conversati
 		if err != nil {
 			return err
 		}
-		if role == RoleOwner || uid == operatorID {
+		if role == sharedconversation.RoleOwner || uid == operatorID {
 			return ErrNotOwner
 		}
-		if operatorRole == RoleAdmin && role != RoleMember {
+		if operatorRole == sharedconversation.RoleAdmin && role != sharedconversation.RoleMember {
 			return ErrNotAdmin
 		}
 	}
@@ -793,7 +749,9 @@ func (s *ConversationService) RemoveGroupMembers(ctx context.Context, conversati
 		return err
 	}
 
-	s.postCommit(ctx, conversationID, rolesFromMembers)
+	if err := s.postCommit(ctx, conversationID, rolesFromMembers); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -825,7 +783,9 @@ func (s *ConversationService) LeaveGroup(ctx context.Context, conversationID, us
 		return err
 	}
 
-	s.postCommit(ctx, conversationID, rolesFromMembers)
+	if err := s.postCommit(ctx, conversationID, rolesFromMembers); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -855,7 +815,9 @@ func (s *ConversationService) DismissGroup(ctx context.Context, conversationID, 
 		return err
 	}
 
-	s.postCommit(ctx, conversationID, rolesReset)
+	if err := s.postCommit(ctx, conversationID, rolesReset); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -911,7 +873,9 @@ func (s *ConversationService) UpdateGroupInfo(ctx context.Context, conversationI
 		return orm.Conversation{}, err
 	}
 
-	s.postCommit(ctx, conversationID, rolesFromMembers)
+	if err := s.postCommit(ctx, conversationID, rolesFromMembers); err != nil {
+		return orm.Conversation{}, err
+	}
 	return s.GetConversationByID(ctx, conversationID)
 }
 
@@ -933,23 +897,25 @@ func (s *ConversationService) GrantGroupAdmin(ctx context.Context, conversationI
 	if err != nil {
 		return err
 	}
-	if targetRole == RoleOwner {
+	if targetRole == sharedconversation.RoleOwner {
 		return ErrNotOwner
 	}
-	if targetRole == RoleAdmin {
-		return nil
+	if targetRole == sharedconversation.RoleAdmin {
+		return s.postCommit(ctx, conversationID, rolesFromMembers)
 	}
-	if targetRole != RoleMember {
+	if targetRole != sharedconversation.RoleMember {
 		return ErrNotMember
 	}
-	rows, err := s.store.UpdateConversationMemberRole(ctx, conversationID, int64(target), RoleAdmin)
+	rows, err := s.store.UpdateConversationMemberRole(ctx, conversationID, int64(target), sharedconversation.RoleAdmin)
 	if err != nil {
 		return err
 	}
 	if rows == 0 {
 		return ErrNotMember
 	}
-	s.postCommit(ctx, conversationID, rolesFromMembers)
+	if err := s.postCommit(ctx, conversationID, rolesFromMembers); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -971,23 +937,25 @@ func (s *ConversationService) RevokeGroupAdmin(ctx context.Context, conversation
 	if err != nil {
 		return err
 	}
-	if targetRole == RoleOwner {
+	if targetRole == sharedconversation.RoleOwner {
 		return ErrNotOwner
 	}
-	if targetRole == RoleMember {
-		return nil
+	if targetRole == sharedconversation.RoleMember {
+		return s.postCommit(ctx, conversationID, rolesFromMembers)
 	}
-	if targetRole != RoleAdmin {
+	if targetRole != sharedconversation.RoleAdmin {
 		return ErrNotMember
 	}
-	rows, err := s.store.UpdateConversationMemberRole(ctx, conversationID, int64(target), RoleMember)
+	rows, err := s.store.UpdateConversationMemberRole(ctx, conversationID, int64(target), sharedconversation.RoleMember)
 	if err != nil {
 		return err
 	}
 	if rows == 0 {
 		return ErrNotMember
 	}
-	s.postCommit(ctx, conversationID, rolesFromMembers)
+	if err := s.postCommit(ctx, conversationID, rolesFromMembers); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -1009,10 +977,10 @@ func (s *ConversationService) TransferGroupOwner(ctx context.Context, conversati
 	if err != nil {
 		return orm.Conversation{}, err
 	}
-	if targetRole == RoleOwner {
+	if targetRole == sharedconversation.RoleOwner {
 		return orm.Conversation{}, ErrNotOwner
 	}
-	if targetRole != RoleMember && targetRole != RoleAdmin {
+	if targetRole != sharedconversation.RoleMember && targetRole != sharedconversation.RoleAdmin {
 		return orm.Conversation{}, ErrNotMember
 	}
 
@@ -1025,12 +993,12 @@ func (s *ConversationService) TransferGroupOwner(ctx context.Context, conversati
 	}
 
 	err = s.withStore(ctx, func(store ConversationStore) error {
-		if rows, err := store.UpdateConversationMemberRole(ctx, conversationID, int64(actor), RoleAdmin); err != nil {
+		if rows, err := store.UpdateConversationMemberRole(ctx, conversationID, int64(actor), sharedconversation.RoleAdmin); err != nil {
 			return err
 		} else if rows == 0 {
 			return ErrNotMember
 		}
-		if rows, err := store.UpdateConversationMemberRole(ctx, conversationID, int64(target), RoleOwner); err != nil {
+		if rows, err := store.UpdateConversationMemberRole(ctx, conversationID, int64(target), sharedconversation.RoleOwner); err != nil {
 			return err
 		} else if rows == 0 {
 			return ErrNotMember
@@ -1040,7 +1008,9 @@ func (s *ConversationService) TransferGroupOwner(ctx context.Context, conversati
 	if err != nil {
 		return orm.Conversation{}, err
 	}
-	s.postCommit(ctx, conversationID, rolesFromMembers)
+	if err := s.postCommit(ctx, conversationID, rolesFromMembers); err != nil {
+		return orm.Conversation{}, err
+	}
 
 	return s.GetConversationByID(ctx, conversationID)
 }

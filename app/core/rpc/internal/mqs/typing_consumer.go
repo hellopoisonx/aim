@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 
+	"github.com/hellopoisonx/aim/app/core/rpc/internal/push"
 	"github.com/hellopoisonx/aim/app/core/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/shared/events"
 	"github.com/hellopoisonx/aim/app/shared/tracing"
@@ -40,7 +41,7 @@ func (c *TypingConsumer) Consume(ctx context.Context, key string, value string) 
 
 	logx.WithContext(ctx).Infof("typing event: from=%d conv=%d", event.FromUserID, event.ConversationID)
 
-	memberIDs, _, err := conversationRecipients(ctx, c.svcCtx, event.ConversationID)
+	memberIDs, _, err := push.ConversationRecipients(ctx, c.svcCtx, event.ConversationID)
 	if err != nil {
 		logx.WithContext(ctx).Errorf("conversation member lookup conv=%d failed: %v", event.ConversationID, err)
 		return nil
@@ -50,7 +51,7 @@ func (c *TypingConsumer) Consume(ctx context.Context, key string, value string) 
 	}
 
 	// Typing is transient: a failed node is not worth a retry.
-	_ = pushToMemberNodes(ctx, c.svcCtx, memberIDs, event.FromUserID, event.GatewayNodeID, func(memberID int64, nodeID string) error {
+	_ = push.ToMemberNodes(ctx, c.svcCtx, memberIDs, event.FromUserID, event.GatewayNodeID, func(memberID int64, nodeID string) error {
 		req := &gwpb.PushTypingReq{
 			TargetUserId:   memberID,
 			FromUserId:     event.FromUserID,

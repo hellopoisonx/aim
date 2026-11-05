@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hellopoisonx/aim/app/logic/rpc/internal/service/rbac"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/servicefakes"
 
 	sharedconversation "github.com/hellopoisonx/aim/app/shared/conversation"
@@ -28,13 +29,24 @@ var testSnowflake = func() *snowflake.Snowflake {
 	return s
 }()
 
+// newTestConversationService wires the service to a real in-memory authorizer,
+// which is the only authorization authority it consults.
+func newTestConversationService(t *testing.T, store ConversationStore, txRunner ConversationTxRunner, opts ...ConversationServiceOption) *ConversationService {
+	t.Helper()
+
+	authz, err := rbac.New(nil)
+	require.NoError(t, err)
+
+	return NewConversationService(store, authz, testSnowflake, txRunner, opts...)
+}
+
 // ---------------------------------------------------------------------------
 // CreateConversation tests
 // ---------------------------------------------------------------------------
 
 func TestConversationService_CreateConversation_ValidDirect(t *testing.T) {
 	store := servicefakes.NewConversationStore()
-	svc := NewConversationService(store, testSnowflake, nil, nil)
+	svc := newTestConversationService(t, store, nil)
 
 	// direct Conversations: member_ids must contain exactly the peer (creator is auto-added).
 	conv, err := svc.CreateConversation(context.Background(), sharedconversation.TypeDirect, 1, []int64{2}, "direct-1-2", "")
@@ -50,7 +62,7 @@ func TestConversationService_CreateConversation_ValidDirect(t *testing.T) {
 
 func TestConversationService_CreateConversation_ValidGroup(t *testing.T) {
 	store := servicefakes.NewConversationStore()
-	svc := NewConversationService(store, testSnowflake, nil, nil)
+	svc := newTestConversationService(t, store, nil)
 
 	conv, err := svc.CreateConversation(context.Background(), sharedconversation.TypeGroup, 1, []int64{1, 2, 3, 4}, "Group Chat", "")
 	require.NoError(t, err)
@@ -84,7 +96,7 @@ func TestConversationService_CreateConversation_InvalidType(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			store := servicefakes.NewConversationStore()
-			svc := NewConversationService(store, testSnowflake, nil, nil)
+			svc := newTestConversationService(t, store, nil)
 
 			_, err := svc.CreateConversation(context.Background(), sharedconversation.Type(tt.conversationType), 1, []int64{1, 2}, "conv", "")
 			require.Error(t, err)
@@ -106,7 +118,7 @@ func TestConversationService_CreateConversation_MissingGroupName(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			store := servicefakes.NewConversationStore()
-			svc := NewConversationService(store, testSnowflake, nil, nil)
+			svc := newTestConversationService(t, store, nil)
 
 			_, err := svc.CreateConversation(context.Background(), "group", 1, []int64{1, 2}, tt.convName, "")
 			require.Error(t, err)
@@ -117,7 +129,7 @@ func TestConversationService_CreateConversation_MissingGroupName(t *testing.T) {
 
 func TestConversationService_CreateConversation_DirectAllowsEmptyName(t *testing.T) {
 	store := servicefakes.NewConversationStore()
-	svc := NewConversationService(store, testSnowflake, nil, nil)
+	svc := newTestConversationService(t, store, nil)
 
 	// Direct conversation names are now computed by the logic RPC layer before calling the service.
 	// The service layer accepts whatever name is passed, including empty.
@@ -128,7 +140,7 @@ func TestConversationService_CreateConversation_DirectAllowsEmptyName(t *testing
 
 func TestConversationService_CreateConversation_EmptyMembers(t *testing.T) {
 	store := servicefakes.NewConversationStore()
-	svc := NewConversationService(store, testSnowflake, nil, nil)
+	svc := newTestConversationService(t, store, nil)
 
 	_, err := svc.CreateConversation(context.Background(), "group", 1, []int64{}, "Group", "")
 	require.Error(t, err)
@@ -161,7 +173,7 @@ func TestConversationService_CreateConversation_DirectInvalidMemberCount(t *test
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			store := servicefakes.NewConversationStore()
-			svc := NewConversationService(store, testSnowflake, nil, nil)
+			svc := newTestConversationService(t, store, nil)
 
 			_, err := svc.CreateConversation(context.Background(), "direct", 1, tt.memberIDs, "direct", "")
 			require.Error(t, err)
@@ -172,7 +184,7 @@ func TestConversationService_CreateConversation_DirectInvalidMemberCount(t *test
 
 func TestConversationService_CreateConversation_DirectWithCreatorNotInMembers(t *testing.T) {
 	store := servicefakes.NewConversationStore()
-	svc := NewConversationService(store, testSnowflake, nil, nil)
+	svc := newTestConversationService(t, store, nil)
 
 	// Creator (1) is not in the member list; the service should auto-add it.
 	conv, err := svc.CreateConversation(context.Background(), sharedconversation.TypeDirect, 1, []int64{2}, "direct-1-2", "")
@@ -204,7 +216,7 @@ func TestConversationService_CreateConversation_DirectWithCreatorNotInMembers(t 
 
 func TestConversationService_RoleGuards(t *testing.T) {
 	store := servicefakes.NewConversationStore()
-	svc := NewConversationService(store, testSnowflake, nil, nil)
+	svc := newTestConversationService(t, store, nil)
 	conv, err := svc.CreateConversation(context.Background(), "group", 1, []int64{1, 2, 3}, "Group", "")
 	require.NoError(t, err)
 
@@ -238,7 +250,7 @@ func testMemberRole(t *testing.T, store *servicefakes.ConversationStore, convers
 
 func TestConversationService_GrantAndRevokeGroupAdmin(t *testing.T) {
 	store := servicefakes.NewConversationStore()
-	svc := NewConversationService(store, testSnowflake, nil, nil)
+	svc := newTestConversationService(t, store, nil)
 	conv, err := svc.CreateConversation(context.Background(), "group", 1, []int64{1, 2, 3}, "Group", "")
 	require.NoError(t, err)
 
@@ -269,7 +281,7 @@ func TestConversationService_GrantAndRevokeGroupAdmin(t *testing.T) {
 
 func TestConversationService_AdminRemovePermissionMatrix(t *testing.T) {
 	store := servicefakes.NewConversationStore()
-	svc := NewConversationService(store, testSnowflake, nil, nil)
+	svc := newTestConversationService(t, store, nil)
 	conv, err := svc.CreateConversation(context.Background(), "group", 1, []int64{1, 2, 3, 4}, "Group", "")
 	require.NoError(t, err)
 	require.NoError(t, svc.GrantGroupAdmin(context.Background(), conv.ID, 1, 2))
@@ -287,7 +299,7 @@ func TestConversationService_AdminRemovePermissionMatrix(t *testing.T) {
 
 func TestConversationService_TransferGroupOwner(t *testing.T) {
 	store := servicefakes.NewConversationStore()
-	svc := NewConversationService(store, testSnowflake, nil, nil)
+	svc := newTestConversationService(t, store, nil)
 	conv, err := svc.CreateConversation(context.Background(), "group", 1, []int64{1, 2, 3}, "Group", "")
 	require.NoError(t, err)
 
@@ -308,7 +320,7 @@ func TestConversationService_TransferGroupOwner(t *testing.T) {
 
 func TestConversationService_OwnerOnlyRoleTargets(t *testing.T) {
 	store := servicefakes.NewConversationStore()
-	svc := NewConversationService(store, testSnowflake, nil, nil)
+	svc := newTestConversationService(t, store, nil)
 	conv, err := svc.CreateConversation(context.Background(), "group", 1, []int64{1, 2}, "Group", "")
 	require.NoError(t, err)
 
@@ -325,7 +337,7 @@ func TestConversationService_OwnerOnlyRoleTargets(t *testing.T) {
 func TestConversationService_CreateConversation_StoreError(t *testing.T) {
 	store := servicefakes.NewConversationStore()
 	store.CreateErr = errors.New("database connection error")
-	svc := NewConversationService(store, testSnowflake, nil, nil)
+	svc := newTestConversationService(t, store, nil)
 
 	_, err := svc.CreateConversation(context.Background(), "group", 1, []int64{1, 2}, "Group", "")
 	require.Error(t, err)
@@ -335,7 +347,7 @@ func TestConversationService_CreateConversation_StoreError(t *testing.T) {
 func TestConversationService_CreateConversation_AddMemberError(t *testing.T) {
 	store := servicefakes.NewConversationStore()
 	store.AddMemberErr = errors.New("failed to add member")
-	svc := NewConversationService(store, testSnowflake, nil, nil)
+	svc := newTestConversationService(t, store, nil)
 
 	_, err := svc.CreateConversation(context.Background(), "group", 1, []int64{1, 2, 3}, "Group", "")
 	require.Error(t, err)
@@ -344,7 +356,7 @@ func TestConversationService_CreateConversation_AddMemberError(t *testing.T) {
 
 func TestConversationService_CreateConversation_DirectDedup_Existing(t *testing.T) {
 	store := servicefakes.NewConversationStore()
-	svc := NewConversationService(store, testSnowflake, nil, nil)
+	svc := newTestConversationService(t, store, nil)
 
 	// First call: create a direct conversation between users 1 and 2
 	conv1, err := svc.CreateConversation(context.Background(), sharedconversation.TypeDirect, 1, []int64{2}, "direct-1-2", "")
@@ -362,7 +374,7 @@ func TestConversationService_CreateConversation_DirectDedup_Existing(t *testing.
 
 func TestConversationService_CreateConversation_DirectDedup_NewMembers(t *testing.T) {
 	store := servicefakes.NewConversationStore()
-	svc := NewConversationService(store, testSnowflake, nil, nil)
+	svc := newTestConversationService(t, store, nil)
 
 	// Create conversation between users 1 and 2
 	conv1, err := svc.CreateConversation(context.Background(), sharedconversation.TypeDirect, 1, []int64{2}, "direct-1-2", "")
@@ -379,7 +391,7 @@ func TestConversationService_CreateConversation_DirectDedup_NewMembers(t *testin
 func TestConversationService_CreateConversation_DirectDedup_StoreError(t *testing.T) {
 	store := servicefakes.NewConversationStore()
 	store.GetErr = errors.New("database connection error")
-	svc := NewConversationService(store, testSnowflake, nil, nil)
+	svc := newTestConversationService(t, store, nil)
 
 	_, err := svc.CreateConversation(context.Background(), sharedconversation.TypeDirect, 1, []int64{2}, "direct-1-2", "")
 	require.Error(t, err)
@@ -398,7 +410,7 @@ func TestConversationService_GetConversationByID_Found(t *testing.T) {
 		IsActive:         true,
 		CreatedAt:        time.Now(),
 	}
-	svc := NewConversationService(store, testSnowflake, nil, nil)
+	svc := newTestConversationService(t, store, nil)
 
 	conv, err := svc.GetConversationByID(context.Background(), 100)
 	require.NoError(t, err)
@@ -408,7 +420,7 @@ func TestConversationService_GetConversationByID_Found(t *testing.T) {
 
 func TestConversationService_GetConversationByID_NotFound(t *testing.T) {
 	store := servicefakes.NewConversationStore()
-	svc := NewConversationService(store, testSnowflake, nil, nil)
+	svc := newTestConversationService(t, store, nil)
 
 	_, err := svc.GetConversationByID(context.Background(), 999)
 	require.Error(t, err)
@@ -418,7 +430,7 @@ func TestConversationService_GetConversationByID_NotFound(t *testing.T) {
 func TestConversationService_GetConversationByID_StoreError(t *testing.T) {
 	store := servicefakes.NewConversationStore()
 	store.GetErr = errors.New("database connection error")
-	svc := NewConversationService(store, testSnowflake, nil, nil)
+	svc := newTestConversationService(t, store, nil)
 
 	_, err := svc.GetConversationByID(context.Background(), 100)
 	require.Error(t, err)
@@ -445,7 +457,7 @@ func TestConversationService_GetConversationHistory_WithCursor(t *testing.T) {
 		{ID: 2, ConversationID: 1, SenderID: 2, Content: []byte("msg2"), CreatedAt: now.Add(time.Second)},
 		{ID: 3, ConversationID: 1, SenderID: 1, Content: []byte("msg3"), CreatedAt: now.Add(2 * time.Second)},
 	}
-	svc := NewConversationService(store, testSnowflake, nil, nil)
+	svc := newTestConversationService(t, store, nil)
 
 	// Get messages with cursor at message ID 2
 	messages, err := svc.GetConversationHistory(context.Background(), 1, sharedconversation.MessageCursor{ID: 2}, 10)
@@ -467,7 +479,7 @@ func TestConversationService_GetConversationHistory_InitialPage(t *testing.T) {
 		{ID: 1, ConversationID: 1, SenderID: 1, Content: []byte("first"), CreatedAt: now},
 		{ID: 2, ConversationID: 1, SenderID: 2, Content: []byte("second"), CreatedAt: now.Add(time.Second)},
 	}
-	svc := NewConversationService(store, testSnowflake, nil, nil)
+	svc := newTestConversationService(t, store, nil)
 
 	// A zero cursor addresses the newest page.
 	messages, err := svc.GetConversationHistory(context.Background(), 1, sharedconversation.MessageCursor{}, 10)
@@ -477,7 +489,7 @@ func TestConversationService_GetConversationHistory_InitialPage(t *testing.T) {
 
 func TestConversationService_GetConversationHistory_ConversationNotFound(t *testing.T) {
 	store := servicefakes.NewConversationStore()
-	svc := NewConversationService(store, testSnowflake, nil, nil)
+	svc := newTestConversationService(t, store, nil)
 
 	_, err := svc.GetConversationHistory(context.Background(), 999, sharedconversation.MessageCursor{ID: 1}, 10)
 	require.Error(t, err)
@@ -493,7 +505,7 @@ func TestConversationService_GetConversationHistory_StoreError(t *testing.T) {
 		CreatedAt:        time.Now(),
 	}
 	store.ListMessagesErr = errors.New("database error")
-	svc := NewConversationService(store, testSnowflake, nil, nil)
+	svc := newTestConversationService(t, store, nil)
 
 	_, err := svc.GetConversationHistory(context.Background(), 1, sharedconversation.MessageCursor{ID: 1}, 10)
 	require.Error(t, err)
@@ -521,7 +533,7 @@ func TestConversationService_GetConversationHistory_LimitNormalization(t *testin
 		})
 	}
 	store.Messages[1] = msgs
-	svc := NewConversationService(store, testSnowflake, nil, nil)
+	svc := newTestConversationService(t, store, nil)
 
 	// When limit > 100, it should be capped at 100
 	messages, err := svc.GetConversationHistory(context.Background(), 1, sharedconversation.MessageCursor{}, 200)
@@ -541,7 +553,7 @@ func TestConversationService_GetConversationHistory_ZeroLimit(t *testing.T) {
 	store.Messages[1] = []orm.Message{
 		{ID: 1, ConversationID: 1, SenderID: 1, Content: []byte("msg"), CreatedAt: now},
 	}
-	svc := NewConversationService(store, testSnowflake, nil, nil)
+	svc := newTestConversationService(t, store, nil)
 
 	// When limit <= 0, it should default to 50
 	messages, err := svc.GetConversationHistory(context.Background(), 1, sharedconversation.MessageCursor{}, 0)
@@ -565,7 +577,7 @@ func TestConversationService_GetConversationMembers_Success(t *testing.T) {
 		{ConversationID: 1, UserID: 1, IsMuted: false, JoinedAt: time.Now()},
 		{ConversationID: 1, UserID: 2, IsMuted: false, JoinedAt: time.Now()},
 	}
-	svc := NewConversationService(store, testSnowflake, nil, nil)
+	svc := newTestConversationService(t, store, nil)
 
 	members, err := svc.GetConversationMembers(context.Background(), 1)
 	require.NoError(t, err)
@@ -574,7 +586,7 @@ func TestConversationService_GetConversationMembers_Success(t *testing.T) {
 
 func TestConversationService_GetConversationMembers_ConversationNotFound(t *testing.T) {
 	store := servicefakes.NewConversationStore()
-	svc := NewConversationService(store, testSnowflake, nil, nil)
+	svc := newTestConversationService(t, store, nil)
 
 	_, err := svc.GetConversationMembers(context.Background(), 999)
 	require.Error(t, err)
@@ -590,7 +602,7 @@ func TestConversationService_GetConversationMembers_StoreError(t *testing.T) {
 		CreatedAt:        time.Now(),
 	}
 	store.GetMembersErr = errors.New("database error")
-	svc := NewConversationService(store, testSnowflake, nil, nil)
+	svc := newTestConversationService(t, store, nil)
 
 	_, err := svc.GetConversationMembers(context.Background(), 1)
 	require.Error(t, err)
@@ -606,7 +618,7 @@ func TestConversationService_GetConversationMembers_EmptyMembers(t *testing.T) {
 		CreatedAt:        time.Now(),
 	}
 	// No members added
-	svc := NewConversationService(store, testSnowflake, nil, nil)
+	svc := newTestConversationService(t, store, nil)
 
 	members, err := svc.GetConversationMembers(context.Background(), 1)
 	require.NoError(t, err)
@@ -629,7 +641,7 @@ func TestConversationService_IsMember_True(t *testing.T) {
 		{ConversationID: 1, UserID: 1, IsMuted: false, JoinedAt: time.Now()},
 		{ConversationID: 1, UserID: 2, IsMuted: false, JoinedAt: time.Now()},
 	}
-	svc := NewConversationService(store, testSnowflake, nil, nil)
+	svc := newTestConversationService(t, store, nil)
 
 	isMember, err := svc.IsMember(context.Background(), 1, 1)
 	require.NoError(t, err)
@@ -647,7 +659,7 @@ func TestConversationService_IsMember_False(t *testing.T) {
 	store.Members[1] = []orm.ConversationMember{
 		{ConversationID: 1, UserID: 1, IsMuted: false, JoinedAt: time.Now()},
 	}
-	svc := NewConversationService(store, testSnowflake, nil, nil)
+	svc := newTestConversationService(t, store, nil)
 
 	isMember, err := svc.IsMember(context.Background(), 1, 999)
 	require.NoError(t, err)
@@ -656,7 +668,7 @@ func TestConversationService_IsMember_False(t *testing.T) {
 
 func TestConversationService_IsMember_ConversationNotFound(t *testing.T) {
 	store := servicefakes.NewConversationStore()
-	svc := NewConversationService(store, testSnowflake, nil, nil)
+	svc := newTestConversationService(t, store, nil)
 
 	_, err := svc.IsMember(context.Background(), 999, 1)
 	require.Error(t, err)
@@ -672,7 +684,7 @@ func TestConversationService_IsMember_StoreError(t *testing.T) {
 		CreatedAt:        time.Now(),
 	}
 	store.GetMembersErr = errors.New("database error")
-	svc := NewConversationService(store, testSnowflake, nil, nil)
+	svc := newTestConversationService(t, store, nil)
 
 	_, err := svc.IsMember(context.Background(), 1, 1)
 	require.Error(t, err)
@@ -812,7 +824,7 @@ func TestConversationService_CreateConversation_TableDriven(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			store := servicefakes.NewConversationStore()
-			svc := NewConversationService(store, testSnowflake, nil, nil)
+			svc := newTestConversationService(t, store, nil)
 
 			conv, err := svc.CreateConversation(context.Background(), sharedconversation.Type(tt.convType), tt.creatorID, tt.memberIDs, tt.convName, "")
 
@@ -845,7 +857,7 @@ func TestConversationService_GetConversationHistory_TableDriven(t *testing.T) {
 		{ID: 2, ConversationID: 1, SenderID: 2, Content: []byte("msg2"), CreatedAt: now.Add(time.Second)},
 		{ID: 3, ConversationID: 1, SenderID: 1, Content: []byte("msg3"), CreatedAt: now.Add(2 * time.Second)},
 	}
-	svc := NewConversationService(store, testSnowflake, nil, nil)
+	svc := newTestConversationService(t, store, nil)
 
 	tests := []struct {
 		name            string
@@ -922,7 +934,7 @@ func TestConversationService_IsMember_TableDriven(t *testing.T) {
 		{ConversationID: 1, UserID: 1, IsMuted: false, JoinedAt: time.Now()},
 		{ConversationID: 1, UserID: 2, IsMuted: false, JoinedAt: time.Now()},
 	}
-	svc := NewConversationService(store, testSnowflake, nil, nil)
+	svc := newTestConversationService(t, store, nil)
 
 	tests := []struct {
 		name           string
@@ -992,7 +1004,7 @@ func newReadReceiptFixture(t *testing.T) (*ConversationService, *servicefakes.Co
 		{ConversationID: 1, UserID: 11, IsMuted: false, JoinedAt: time.Now()},
 		{ConversationID: 1, UserID: 22, IsMuted: false, JoinedAt: time.Now()},
 	}
-	return NewConversationService(store, testSnowflake, nil, nil), store
+	return newTestConversationService(t, store, nil), store
 }
 
 func TestConversationService_UpdateReadReceipt_ValidUpserts(t *testing.T) {

@@ -18,10 +18,10 @@ import (
 	sharedcache "github.com/hellopoisonx/aim/app/shared/cache"
 	"github.com/hellopoisonx/aim/app/shared/gormdb"
 	"github.com/hellopoisonx/aim/app/shared/rocketmq"
+	sharedrpc "github.com/hellopoisonx/aim/app/shared/rpc"
 	"github.com/hellopoisonx/aim/app/shared/snowflake"
 
 	"github.com/zeromicro/go-zero/core/logx"
-	"github.com/zeromicro/go-zero/zrpc"
 	"gorm.io/gorm"
 )
 
@@ -147,9 +147,8 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	}
 
 	convOpts = append(convOpts, service.WithConversationCaches(svcCtx.ConvCache, svcCtx.ConvMembersCache))
-	convOpts = append(convOpts, service.WithRBAC(authz))
 	svcCtx.ConversationService = service.NewConversationService(
-		store, idGen,
+		store, authz, idGen,
 		conversationTxRunner{store: store, producer: svcCtx.EventProducer},
 		convOpts...,
 	)
@@ -184,13 +183,8 @@ func initMessageService(svcCtx *ServiceContext, c config.Config) {
 	svcCtx.TransferProducer = producer
 
 	var attachmentClient attachmentpb.AttachmentServiceClient
-	if c.AttachmentRpc.Etcd.Key != "" || len(c.AttachmentRpc.Endpoints) > 0 || c.AttachmentRpc.Target != "" {
-		client, err := zrpc.NewClient(c.AttachmentRpc)
-		if err != nil {
-			logx.WithContext(context.Background()).Errorf("failed to create RPC client for AttachmentRpc: %v", err)
-		} else {
-			attachmentClient = attachmentpb.NewAttachmentServiceClient(client.Conn())
-		}
+	if client := sharedrpc.DialOptional(context.Background(), "AttachmentRpc", c.AttachmentRpc); client != nil {
+		attachmentClient = attachmentpb.NewAttachmentServiceClient(client.Conn())
 	}
 
 	svcCtx.MessageService = service.NewMessageService(
@@ -208,12 +202,10 @@ func initMessageService(svcCtx *ServiceContext, c config.Config) {
 }
 
 func (s *ServiceContext) StartTransferProducer() {
-	if s == nil || s.TransferProducer == nil {
+	if s == nil {
 		return
 	}
-	if err := s.TransferProducer.Start(); err != nil {
-		logx.WithContext(context.Background()).Errorf("failed to start rocketmq transfer producer: %v", err)
-	}
+	rocketmq.StartProducer(context.Background(), s.TransferProducer, "rocketmq transfer producer")
 }
 
 // conversationTxRunner adapts *dao.Store.WithTx to the service-level
@@ -252,31 +244,25 @@ func (r botTxRunner) WithTx(ctx context.Context, fn func(tx service.BotManagemen
 
 // StartEventProducer connects the conversation event producer.
 func (s *ServiceContext) StartEventProducer() {
-	if s == nil || s.EventProducer == nil {
+	if s == nil {
 		return
 	}
-	if err := s.EventProducer.Start(); err != nil {
-		logx.WithContext(context.Background()).Errorf("failed to start rocketmq event producer: %v", err)
-	}
+	rocketmq.StartProducer(context.Background(), s.EventProducer, "rocketmq event producer")
 }
 
 // StopEventProducer flushes and disconnects the conversation event producer.
 func (s *ServiceContext) StopEventProducer() {
-	if s == nil || s.EventProducer == nil {
+	if s == nil {
 		return
 	}
-	if err := s.EventProducer.GracefulStop(); err != nil {
-		logx.WithContext(context.Background()).Errorf("failed to stop rocketmq event producer: %v", err)
-	}
+	rocketmq.StopProducer(context.Background(), s.EventProducer, "rocketmq event producer")
 }
 
 func (s *ServiceContext) StopTransferProducer() {
-	if s == nil || s.TransferProducer == nil {
+	if s == nil {
 		return
 	}
-	if err := s.TransferProducer.GracefulStop(); err != nil {
-		logx.WithContext(context.Background()).Errorf("failed to stop rocketmq transfer producer: %v", err)
-	}
+	rocketmq.StopProducer(context.Background(), s.TransferProducer, "rocketmq transfer producer")
 }
 
 func (s *ServiceContext) Close() {

@@ -7,6 +7,7 @@ import (
 
 	"github.com/hellopoisonx/aim/app/shared/events"
 
+	"github.com/hellopoisonx/aim/app/core/rpc/internal/push"
 	"github.com/hellopoisonx/aim/app/core/rpc/internal/svc"
 	sharedconversation "github.com/hellopoisonx/aim/app/shared/conversation"
 	"github.com/hellopoisonx/aim/app/shared/rocketmq"
@@ -73,7 +74,7 @@ func (c *DeliveryConsumer) Consume(ctx context.Context, key string, value string
 		return err
 	}
 
-	senderInfo, err := gatewaySenderInfoForUser(ctx, c.svcCtx, event.SenderID)
+	senderInfo, err := push.SenderInfoForUser(ctx, c.svcCtx, event.SenderID)
 	if err != nil {
 		span.RecordError(err)
 		return err
@@ -133,7 +134,7 @@ func (c *DeliveryConsumer) Consume(ctx context.Context, key string, value string
 }
 
 func (c *DeliveryConsumer) resolveConversation(ctx context.Context, event events.TransferEvent) ([]int64, string, error) {
-	memberIDs, conversationType, err := conversationRecipients(ctx, c.svcCtx, event.ConversationID)
+	memberIDs, conversationType, err := push.ConversationRecipients(ctx, c.svcCtx, event.ConversationID)
 	if err != nil {
 		return nil, "", err
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 
+	"github.com/hellopoisonx/aim/app/core/rpc/internal/push"
 	"github.com/hellopoisonx/aim/app/core/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/shared/events"
 	"github.com/hellopoisonx/aim/app/shared/tracing"
@@ -57,7 +58,7 @@ func (c *FriendApplicationConsumer) Consume(ctx context.Context, key string, val
 		UpdatedAt:    event.UpdatedAt,
 	}
 
-	for _, nodeID := range gatewayNodes(ctx, c.svcCtx, event.TargetUserID) {
+	for _, nodeID := range push.GatewayNodes(ctx, c.svcCtx, event.TargetUserID) {
 		if _, err := c.svcCtx.GatewayClient.PushFriendApplicationToNode(ctx, nodeID, req); err != nil {
 			logx.WithContext(ctx).Errorf(
 				"friend application push to node %q for user %d failed: %v", nodeID, event.TargetUserID, err,

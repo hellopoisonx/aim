@@ -11,6 +11,7 @@ import (
 	"github.com/hellopoisonx/aim/app/core/rpc/internal/rpc"
 	logicpb "github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/rocketmq"
+	sharedrpc "github.com/hellopoisonx/aim/app/shared/rpc"
 	"github.com/hellopoisonx/aim/app/shared/snowflake"
 
 	"github.com/redis/go-redis/v9"
@@ -37,20 +38,14 @@ type ServiceContext struct {
 // regardless: a broker outage surfaces as push publish errors instead of a
 // crash loop.
 func (s *ServiceContext) StartPushProducer() {
-	if s == nil || s.PushProducer == nil {
+	if s == nil {
 		return
 	}
-	if err := s.PushProducer.Start(); err != nil {
-		logx.WithContext(context.Background()).Errorf("failed to start rocketmq push producer: %v", err)
-	}
+	rocketmq.StartProducer(context.Background(), s.PushProducer, "rocketmq push producer")
 }
 
 func (s *ServiceContext) Close() {
-	if s.PushProducer != nil {
-		if err := s.PushProducer.GracefulStop(); err != nil {
-			logx.WithContext(context.Background()).Errorf("failed to stop rocketmq push producer: %v", err)
-		}
-	}
+	rocketmq.StopProducer(context.Background(), s.PushProducer, "rocketmq push producer")
 
 	if s.RedisClient != nil {
 		if err := s.RedisClient.Close(); err != nil {
@@ -95,7 +90,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 
 	// Logic RPC is required: every core consumer and push path resolves users
 	// and conversations through it, so a missing client is a boot failure.
-	if c.LogicRpc.Etcd.Key == "" && len(c.LogicRpc.Endpoints) == 0 && c.LogicRpc.Target == "" {
+	if !sharedrpc.Configured(c.LogicRpc) {
 		logx.Must(errors.New("core service requires LogicRpc: set Config.LogicRpc"))
 	}
 	logicClient, err := zrpc.NewClient(c.LogicRpc)
@@ -107,13 +102,8 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	logicUserClient := logicpb.NewUserServiceClient(logicClient.Conn())
 
 	var attachmentClient attachmentpb.AttachmentServiceClient
-	if c.AttachmentRpc.Etcd.Key != "" || len(c.AttachmentRpc.Endpoints) > 0 || c.AttachmentRpc.Target != "" {
-		client, err := zrpc.NewClient(c.AttachmentRpc)
-		if err != nil {
-			logx.WithContext(context.Background()).Errorf("failed to create RPC client for AttachmentRpc: %v", err)
-		} else {
-			attachmentClient = attachmentpb.NewAttachmentServiceClient(client.Conn())
-		}
+	if client := sharedrpc.DialOptional(context.Background(), "AttachmentRpc", c.AttachmentRpc); client != nil {
+		attachmentClient = attachmentpb.NewAttachmentServiceClient(client.Conn())
 	}
 
 	// Presence store (nil if not configured); it shares the owned RedisClient.

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 
 	attachmentpb "github.com/hellopoisonx/aim/app/attachment/rpc/pb"
+	"github.com/hellopoisonx/aim/app/core/rpc/internal/push"
 	"github.com/hellopoisonx/aim/app/core/rpc/internal/svc"
 	sharedattachment "github.com/hellopoisonx/aim/app/shared/attachment"
 	"github.com/hellopoisonx/aim/app/shared/events"
@@ -93,7 +94,7 @@ func (c *AttachmentParsedConsumer) Consume(ctx context.Context, key string, valu
 	}
 
 	// 获取会话成员列表。
-	targetUserIDs, conversationType, err := conversationRecipients(ctx, c.svcCtx, conversationID)
+	targetUserIDs, conversationType, err := push.ConversationRecipients(ctx, c.svcCtx, conversationID)
 	if err != nil {
 		span.RecordError(err)
 		return err
@@ -111,7 +112,7 @@ func (c *AttachmentParsedConsumer) Consume(ctx context.Context, key string, valu
 	}
 
 	// 推送到每个会话成员所在网关节点。
-	pushErr := pushToMemberNodes(ctx, c.svcCtx, targetUserIDs, 0, "", func(targetUserID int64, nodeID string) error {
+	pushErr := push.ToMemberNodes(ctx, c.svcCtx, targetUserIDs, 0, "", func(targetUserID int64, nodeID string) error {
 		req := &gwpb.PushMessageReq{
 			MessageId:        msgID,
 			ConversationId:   conversationID,
@@ -122,7 +123,7 @@ func (c *AttachmentParsedConsumer) Consume(ctx context.Context, key string, valu
 			SentAt:           event.ParsedAt,
 			TargetUserId:     targetUserID,
 			IsSystem:         true,
-			SenderInfo:       gatewaySystemSenderInfo(),
+			SenderInfo:       push.SystemSenderInfo(),
 		}
 
 		resp, err := c.svcCtx.GatewayClient.PushMessageToNode(ctx, nodeID, req)

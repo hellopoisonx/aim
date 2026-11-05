@@ -46,22 +46,18 @@ func (s *ServiceContext) Close() {
 
 // StartEventProducer connects the transactional user event producer.
 func (s *ServiceContext) StartEventProducer() {
-	if s == nil || s.EventProducer == nil {
+	if s == nil {
 		return
 	}
-	if err := s.EventProducer.Start(); err != nil {
-		logx.WithContext(context.Background()).Errorf("failed to start rocketmq user event producer: %v", err)
-	}
+	rocketmq.StartProducer(context.Background(), s.EventProducer, "rocketmq user event producer")
 }
 
 // StopEventProducer flushes and disconnects the transactional producer.
 func (s *ServiceContext) StopEventProducer() {
-	if s == nil || s.EventProducer == nil {
+	if s == nil {
 		return
 	}
-	if err := s.EventProducer.GracefulStop(); err != nil {
-		logx.WithContext(context.Background()).Errorf("failed to stop rocketmq user event producer: %v", err)
-	}
+	rocketmq.StopProducer(context.Background(), s.EventProducer, "rocketmq user event producer")
 }
 
 func NewServiceContext(c config.Config) *ServiceContext {
