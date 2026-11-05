@@ -115,13 +115,7 @@ func (h *WsHandler) handleReadReceipt(ctx context.Context, conn *websocket.Conn,
 			return h.writeErrorAck(ctx, conn, frame.GetSeq(), "", pb.AckStatus_ACK_STATUS_RETRYABLE, errorx.CodeInternal, "internal error")
 		}
 
-		status := pb.AckStatus_ACK_STATUS_RETRYABLE
-		switch codeErr.Code {
-		case errorx.CodeBadInput, errorx.CodeAuth, errorx.CodeForbidden, errorx.CodeNotFound, errorx.CodeConflict, errorx.CodeRateLimit:
-			status = pb.AckStatus_ACK_STATUS_REJECTED
-		}
-
-		return h.writeErrorAck(ctx, conn, frame.GetSeq(), "", status, codeErr.Code, codeErr.Message)
+		return h.writeErrorAck(ctx, conn, frame.GetSeq(), "", ackStatusForCode(codeErr.Code), codeErr.Code, codeErr.Message)
 	}
 
 	// Best-effort fan-out: publish the read receipt event for downstream consumers.
@@ -149,48 +143,18 @@ func (h *WsHandler) handleReadReceipt(ctx context.Context, conn *websocket.Conn,
 }
 
 func (h *WsHandler) fanOutTypingLocal(ctx context.Context, fromUserID, conversationID int64) {
-	if h == nil || h.srv == nil || h.srv.LogicConversationClient == nil || h.manager == nil {
-		return
-	}
-
-	members, err := h.localConversationMembers(ctx, conversationID)
-	if err != nil {
-		logx.WithContext(ctx).Debugf("local typing fan-out skipped for conv %d: %v", conversationID, err)
-		return
-	}
-
-	gateway := ws.NewGatewayServer(h.manager)
-	for _, memberID := range members {
-		if memberID <= 0 || memberID == fromUserID || len(h.manager.GetByUserID(memberID)) == 0 {
-			continue
-		}
-
+	h.forEachLocalMember(ctx, "typing", conversationID, fromUserID, func(ctx context.Context, gateway *ws.GatewayServer, memberID int64) {
 		_, _ = gateway.PushTyping(ctx, &gwpb.PushTypingReq{
 			TargetUserId:   memberID,
 			FromUserId:     fromUserID,
 			ConversationId: conversationID,
 			Timestamp:      time.Now().UnixMilli(),
 		})
-	}
+	})
 }
 
 func (h *WsHandler) fanOutReadReceiptLocal(ctx context.Context, fromUserID, conversationID, lastReadMessageID, updatedAt int64) {
-	if h == nil || h.srv == nil || h.srv.LogicConversationClient == nil || h.manager == nil {
-		return
-	}
-
-	members, err := h.localConversationMembers(ctx, conversationID)
-	if err != nil {
-		logx.WithContext(ctx).Debugf("local read receipt fan-out skipped for conv %d: %v", conversationID, err)
-		return
-	}
-
-	gateway := ws.NewGatewayServer(h.manager)
-	for _, memberID := range members {
-		if memberID <= 0 || memberID == fromUserID || len(h.manager.GetByUserID(memberID)) == 0 {
-			continue
-		}
-
+	h.forEachLocalMember(ctx, "read receipt", conversationID, fromUserID, func(ctx context.Context, gateway *ws.GatewayServer, memberID int64) {
 		_, _ = gateway.PushReadReceipt(ctx, &gwpb.PushReadReceiptReq{
 			TargetUserId:      memberID,
 			ConversationId:    conversationID,
@@ -198,6 +162,29 @@ func (h *WsHandler) fanOutReadReceiptLocal(ctx context.Context, fromUserID, conv
 			LastReadMessageId: lastReadMessageID,
 			UpdatedAt:         updatedAt,
 		})
+	})
+}
+
+// forEachLocalMember pushes to every conversation member holding a connection on
+// this node, skipping the sender.
+func (h *WsHandler) forEachLocalMember(ctx context.Context, label string, conversationID, fromUserID int64, push func(context.Context, *ws.GatewayServer, int64)) {
+	if h == nil || h.srv == nil || h.srv.LogicConversationClient == nil || h.manager == nil {
+		return
+	}
+
+	members, err := h.localConversationMembers(ctx, conversationID)
+	if err != nil {
+		logx.WithContext(ctx).Debugf("local %s fan-out skipped for conv %d: %v", label, conversationID, err)
+		return
+	}
+
+	gateway := h.srv.Gateway()
+	for _, memberID := range members {
+		if memberID <= 0 || memberID == fromUserID || len(h.manager.GetByUserID(memberID)) == 0 {
+			continue
+		}
+
+		push(ctx, gateway, memberID)
 	}
 }
 

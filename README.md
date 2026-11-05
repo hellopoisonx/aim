@@ -298,7 +298,7 @@ API 契约定义在 [`app/gateway/api/gateway.api`](app/gateway/api/gateway.api)
 ## 测试与代码质量
 
 ```bash
-go test ./...                       # 运行全部测试（52 个测试包，87 个测试文件）
+go test ./...                       # 运行全部测试（60 个测试包，103 个测试文件）
 go test -coverprofile=coverage.out ./...  # 覆盖率
 golangci-lint run                   # 代码检查
 goctl api validate                  # API 契约校验

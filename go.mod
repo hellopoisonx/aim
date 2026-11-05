@@ -5,6 +5,7 @@ go 1.26
 require (
 	github.com/alicebob/miniredis/v2 v2.38.0
 	github.com/apache/rocketmq-clients/golang/v5 v5.1.4
+	github.com/casbin/casbin/v3 v3.11.0
 	github.com/coder/websocket v1.8.14
 	github.com/golang-jwt/jwt/v4 v4.5.2
 	github.com/google/uuid v1.6.0
@@ -26,7 +27,6 @@ require (
 require (
 	contrib.go.opencensus.io/exporter/ocagent v0.7.0 // indirect
 	github.com/bmatcuk/doublestar/v4 v4.6.1 // indirect
-	github.com/casbin/casbin/v3 v3.11.0 // indirect
 	github.com/casbin/govaluate v1.3.0 // indirect
 	github.com/census-instrumentation/opencensus-proto v0.4.1 // indirect
 	github.com/dchest/siphash v1.2.3 // indirect
@@ -56,7 +56,6 @@ require (
 	github.com/coreos/go-semver v0.3.1 // indirect
 	github.com/coreos/go-systemd/v22 v22.5.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
-	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
 	github.com/emicklei/go-restful/v3 v3.12.2 // indirect
 	github.com/fatih/color v1.18.0 // indirect
 	github.com/fxamacker/cbor/v2 v2.9.0 // indirect

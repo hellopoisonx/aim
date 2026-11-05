@@ -447,6 +447,7 @@ func TestServeWSTypingPushesToLocalPeer(t *testing.T) {
 	serverCtx.LogicConversationClient = &mockConversationClient{memberIDs: []int64{42, 43}}
 
 	manager := wsmanager.NewManager()
+	serverCtx.WsManager = manager
 	handler := NewWsHandler(serverCtx, manager)
 	server := httptest.NewServer(http.HandlerFunc(handler.ServeWS))
 	t.Cleanup(server.Close)
@@ -492,6 +493,7 @@ func TestServeWSReadReceiptPushesToLocalPeer(t *testing.T) {
 	}
 
 	manager := wsmanager.NewManager()
+	serverCtx.WsManager = manager
 	handler := NewWsHandler(serverCtx, manager)
 	server := httptest.NewServer(http.HandlerFunc(handler.ServeWS))
 	t.Cleanup(server.Close)

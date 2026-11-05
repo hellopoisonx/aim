@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"flag"
-	"fmt"
 
 	"github.com/hellopoisonx/aim/app/attachment/internal/config"
 	"github.com/hellopoisonx/aim/app/attachment/internal/server"
@@ -12,10 +11,7 @@ import (
 	rpcutil "github.com/hellopoisonx/aim/app/shared/rpc"
 	"github.com/zeromicro/go-zero/core/conf"
 	"github.com/zeromicro/go-zero/core/logx"
-	zservice "github.com/zeromicro/go-zero/core/service"
-	"github.com/zeromicro/go-zero/zrpc"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/reflection"
 )
 
 var configFile = flag.String("f", "etc/attachment.yaml", "the config file")
@@ -32,18 +28,9 @@ func main() {
 	logx.Must(err)
 	defer svc.Close()
 
-	s := zrpc.MustNewServer(c.RpcServerConf, func(grpcServer *grpc.Server) {
+	rpcutil.Run(c.RpcServerConf, func(grpcServer *grpc.Server) {
 		pb.RegisterAttachmentServiceServer(grpcServer, server.NewAttachmentServiceServer(svc))
-
-		if c.Mode == zservice.DevMode || c.Mode == zservice.TestMode {
-			reflection.Register(grpcServer)
-		}
-	})
-	s.AddUnaryInterceptors(rpcutil.UnaryErrorInterceptor())
-	defer s.Stop()
-
-	fmt.Printf("Starting attachment rpc server at %s...\n", c.ListenOn)
-	s.Start()
+	}, nil)
 }
 
 func applyDefaults(c *config.Config) {

@@ -71,7 +71,6 @@ aim/
 ## 反模式
 
 - 不要编辑 `*.pb.go`、goctl 生成的 routes/types/server/client 文件，除非重新生成；DAO 查询只写在 `model/dao`。
-- 不要把内容审核拆成独立微服务；它是 `app/shared/moderation` 进程内共享库。
 - 不要用 PostgreSQL 做实时配额拦截；热路径使用 Redis 滑动窗口。
 - 不要假设 Redis/RedisBloom 返回类型固定；RESP2/RESP3 可能不同，必须类型分支并加回归测试。
 - 不要新增循环依赖；特别是 `app/logic` 不能导入 `app/core`。

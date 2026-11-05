@@ -120,15 +120,9 @@ func (h *WsHandler) ServeWS(w http.ResponseWriter, r *http.Request) {
 	// 7. Schedule token expiry timer
 	tokenExpiresAt := claims.ExpiresAt.Time
 	if tokenExpiresAt.After(time.Now()) {
-		duration := time.Until(tokenExpiresAt)
-
-		connEntry, err := h.manager.Get(identity)
-		if err == nil {
-			connEntry.ExpiresAt = tokenExpiresAt.Unix()
-			connEntry.ExpiryTimer = time.AfterFunc(duration, func() {
-				h.sendTokenExpired(ctx, conn, identity, tokenExpiresAt.Unix())
-			})
-		}
+		h.manager.ArmTokenExpiry(identity, tokenExpiresAt.Unix(), time.Until(tokenExpiresAt), func() {
+			h.sendTokenExpired(ctx, conn, identity, tokenExpiresAt.Unix())
+		})
 	} else {
 		// Token already expired before connection - send expired frame and close
 		h.sendTokenExpired(ctx, conn, identity, tokenExpiresAt.Unix())

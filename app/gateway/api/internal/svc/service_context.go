@@ -82,25 +82,6 @@ func (noopPublisher) PublishReadReceipt(ctx context.Context, fromUserID, convers
 
 // ── RocketMQ-based publishers ─────────────────────────────────────────────────
 
-// presenceEvent is the message for presence change.
-type presenceEvent struct {
-	tracing.TraceContextFields
-	UserID        int64  `json:"user_id"`
-	DeviceID      string `json:"device_id"`
-	Status        string `json:"status"`
-	UpdatedAt     int64  `json:"updated_at"`
-	GatewayNodeID string `json:"gateway_node_id"`
-}
-
-// typingEvent is the message for typing notification.
-type typingEvent struct {
-	tracing.TraceContextFields
-	FromUserID     int64  `json:"from_user_id"`
-	ConversationID int64  `json:"conversation_id"`
-	Timestamp      int64  `json:"timestamp"`
-	GatewayNodeID  string `json:"gateway_node_id"`
-}
-
 // rocketmqPresencePublisher implements PresencePublisher via RocketMQ.
 type rocketmqPresencePublisher struct {
 	producer *rocketmq.Producer
@@ -109,7 +90,7 @@ type rocketmqPresencePublisher struct {
 }
 
 func (p *rocketmqPresencePublisher) PublishPresence(ctx context.Context, userID int64, status string) error {
-	event := presenceEvent{
+	event := events.PresenceEvent{
 		TraceContextFields: tracing.InjectTraceContext(ctx),
 		UserID:             userID,
 		Status:             status,
@@ -160,7 +141,7 @@ type rocketmqTypingPublisher struct {
 }
 
 func (p *rocketmqTypingPublisher) PublishTyping(ctx context.Context, fromUserID, conversationID int64) error {
-	event := typingEvent{
+	event := events.TypingEvent{
 		TraceContextFields: tracing.InjectTraceContext(ctx),
 		FromUserID:         fromUserID,
 		ConversationID:     conversationID,
@@ -178,16 +159,6 @@ func (p *rocketmqTypingPublisher) PublishTyping(ctx context.Context, fromUserID,
 	})
 }
 
-// readReceiptEvent is the message for read receipt notification.
-type readReceiptEvent struct {
-	tracing.TraceContextFields
-	FromUserID        int64  `json:"from_user_id"`
-	ConversationID    int64  `json:"conversation_id"`
-	LastReadMessageID int64  `json:"last_read_message_id"`
-	UpdatedAt         int64  `json:"updated_at"`
-	GatewayNodeID     string `json:"gateway_node_id"`
-}
-
 // rocketmqReadReceiptPublisher implements ReadReceiptPublisher via RocketMQ. The
 // topic is FIFO, so conversation_id doubles as the message group.
 type rocketmqReadReceiptPublisher struct {
@@ -197,7 +168,7 @@ type rocketmqReadReceiptPublisher struct {
 }
 
 func (p *rocketmqReadReceiptPublisher) PublishReadReceipt(ctx context.Context, fromUserID, conversationID, lastReadMessageID, updatedAt int64) error {
-	event := readReceiptEvent{
+	event := events.ReadReceiptEvent{
 		TraceContextFields: tracing.InjectTraceContext(ctx),
 		FromUserID:         fromUserID,
 		ConversationID:     conversationID,
@@ -333,6 +304,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	logicBotClient := botservice.NewBotService(logicClient)
 
 	eventProducer := newEventProducer(c)
+	presenceTopic, typingTopic, readReceiptTopic := c.EventTopics()
 
 	return &ServiceContext{
 		Config:                  c,
@@ -354,9 +326,9 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		RedisClient:    redisClient,
 		EventProducer:  eventProducer,
 		FriendAppPub:   newFriendApplicationPub(eventProducer, c.RocketMQ.FriendApplicationTopic),
-		PresencePub:    newPresencePub(eventProducer, c.RocketMQ.PresenceTopic, c.GatewayNodeID, redisClient),
-		TypingPub:      newTypingPub(eventProducer, c.RocketMQ.TypingTopic, c.GatewayNodeID, redisClient),
-		ReadReceiptPub: newReadReceiptPub(eventProducer, c.RocketMQ.ReadReceiptTopic, c.GatewayNodeID, redisClient),
+		PresencePub:    newPresencePub(eventProducer, presenceTopic, c.GatewayNodeID, redisClient),
+		TypingPub:      newTypingPub(eventProducer, typingTopic, c.GatewayNodeID, redisClient),
+		ReadReceiptPub: newReadReceiptPub(eventProducer, readReceiptTopic, c.GatewayNodeID, redisClient),
 		WsManager:      wsManager,
 	}
 }
@@ -384,12 +356,15 @@ func newEventProducer(c config.Config) *rocketmq.Producer {
 	if c.RocketMQ.Endpoint == "" {
 		return nil
 	}
+
+	presenceTopic, typingTopic, readReceiptTopic := c.EventTopics()
+
 	producer, err := rocketmq.NewProducer(
 		rocketmq.EndpointConf{Endpoint: c.RocketMQ.Endpoint, AccessKey: c.RocketMQ.AccessKey, SecretKey: c.RocketMQ.SecretKey},
 		gatewayProducerGroup,
-		c.RocketMQ.PresenceTopic,
-		c.RocketMQ.TypingTopic,
-		c.RocketMQ.ReadReceiptTopic,
+		presenceTopic,
+		typingTopic,
+		readReceiptTopic,
 		c.RocketMQ.FriendApplicationTopic,
 	)
 	if err != nil {
@@ -398,8 +373,8 @@ func newEventProducer(c config.Config) *rocketmq.Producer {
 	}
 	logx.WithContext(context.Background()).Infof(
 		"event producer: rocketmq endpoint=%s presence=%s typing=%s read_receipt=%s friend_application=%s",
-		c.RocketMQ.Endpoint, c.RocketMQ.PresenceTopic, c.RocketMQ.TypingTopic,
-		c.RocketMQ.ReadReceiptTopic, c.RocketMQ.FriendApplicationTopic,
+		c.RocketMQ.Endpoint, presenceTopic, typingTopic,
+		readReceiptTopic, c.RocketMQ.FriendApplicationTopic,
 	)
 	return producer
 }

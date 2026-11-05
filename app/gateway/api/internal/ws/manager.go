@@ -232,16 +232,37 @@ func (m *Manager) RecordClientAck(identity authctx.Identity, ackSeq int64) bool 
 
 // RecordHeartbeat updates the LastSeen time for a connection and renews presence TTL.
 func (m *Manager) RecordHeartbeat(ctx context.Context, identity authctx.Identity) {
-	m.mu.RLock()
+	// LastSeen is read by the reaper's ScanStaleConnections under the same lock.
+	m.mu.Lock()
 	conn, exists := m.connections[identity]
-	m.mu.RUnlock()
+	if exists {
+		conn.LastSeen = time.Now().UnixMilli()
+	}
+	m.mu.Unlock()
 
 	if !exists {
 		return
 	}
 
-	conn.LastSeen = time.Now().UnixMilli()
 	m.RenewPresenceTTL(ctx, identity.UserID)
+}
+
+// ArmTokenExpiry records the token expiry on the live connection and arms the
+// timer that fires at it. It reports false when the identity is gone, so no
+// timer is left firing against a closed socket.
+func (m *Manager) ArmTokenExpiry(identity authctx.Identity, expiresAt int64, d time.Duration, fire func()) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	conn, exists := m.connections[identity]
+	if !exists {
+		return false
+	}
+
+	conn.ExpiresAt = expiresAt
+	conn.ExpiryTimer = time.AfterFunc(d, fire)
+
+	return true
 }
 
 // Unregister removes a connection by identity.

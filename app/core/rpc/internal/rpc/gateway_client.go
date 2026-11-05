@@ -2,7 +2,6 @@ package rpc
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
 	gwpb "github.com/hellopoisonx/aim/shared/proto/gateway/pb"
@@ -27,7 +26,6 @@ type GatewayPusher interface {
 }
 
 type GatewayClient struct {
-	target  string
 	conn    *grpc.ClientConn
 	client  gwpb.GatewayServiceClient
 	initErr error
@@ -39,7 +37,7 @@ func NewGatewayClient(target string) *GatewayClient {
 		grpc.WithUnaryInterceptor(traceUnaryClientInterceptor),
 	)
 
-	client := &GatewayClient{target: target, conn: conn, initErr: err}
+	client := &GatewayClient{conn: conn, initErr: err}
 	if err == nil {
 		client.client = gwpb.NewGatewayServiceClient(conn)
 	}
@@ -52,10 +50,6 @@ func (c *GatewayClient) PushMessage(ctx context.Context, req *gwpb.PushMessageRe
 		return nil, c.initErr
 	}
 
-	if c.client == nil {
-		return nil, fmt.Errorf("gateway client for %s is not initialized", c.target)
-	}
-
 	return c.client.PushMessage(ctx, req)
 }
 
@@ -63,9 +57,7 @@ func (c *GatewayClient) PushPresence(ctx context.Context, req *gwpb.PushPresence
 	if c.initErr != nil {
 		return nil, c.initErr
 	}
-	if c.client == nil {
-		return nil, fmt.Errorf("gateway client for %s is not initialized", c.target)
-	}
+
 	return c.client.PushPresence(ctx, req)
 }
 
@@ -73,19 +65,13 @@ func (c *GatewayClient) PushTyping(ctx context.Context, req *gwpb.PushTypingReq)
 	if c.initErr != nil {
 		return nil, c.initErr
 	}
-	if c.client == nil {
-		return nil, fmt.Errorf("gateway client for %s is not initialized", c.target)
-	}
+
 	return c.client.PushTyping(ctx, req)
 }
 
 func (c *GatewayClient) PushReadReceipt(ctx context.Context, req *gwpb.PushReadReceiptReq) (*gwpb.PushReadReceiptResp, error) {
 	if c.initErr != nil {
 		return nil, c.initErr
-	}
-
-	if c.client == nil {
-		return nil, fmt.Errorf("gateway client for %s is not initialized", c.target)
 	}
 
 	return c.client.PushReadReceipt(ctx, req)
@@ -96,10 +82,6 @@ func (c *GatewayClient) PushNotification(ctx context.Context, req *gwpb.PushNoti
 		return nil, c.initErr
 	}
 
-	if c.client == nil {
-		return nil, fmt.Errorf("gateway client for %s is not initialized", c.target)
-	}
-
 	return c.client.PushNotification(ctx, req)
 }
 
@@ -108,10 +90,6 @@ func (c *GatewayClient) PushNotification(ctx context.Context, req *gwpb.PushNoti
 func (c *GatewayClient) PushFriendApplication(ctx context.Context, req *gwpb.PushFriendApplicationReq) (*gwpb.PushFriendApplicationResp, error) {
 	if c.initErr != nil {
 		return nil, c.initErr
-	}
-
-	if c.client == nil {
-		return nil, fmt.Errorf("gateway client for %s is not initialized", c.target)
 	}
 
 	return c.client.PushFriendApplication(ctx, req)

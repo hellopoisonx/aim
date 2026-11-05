@@ -5,22 +5,13 @@ import (
 	"encoding/json"
 
 	"github.com/hellopoisonx/aim/app/core/rpc/internal/svc"
+	"github.com/hellopoisonx/aim/app/shared/events"
 	"github.com/hellopoisonx/aim/app/shared/tracing"
 	gwpb "github.com/hellopoisonx/aim/shared/proto/gateway/pb"
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
-// typingEvent is the broker message for typing notification (mirrors gateway svc.typingEvent).
-type typingEvent struct {
-	tracing.TraceContextFields
-
-	FromUserID     int64  `json:"from_user_id"`
-	ConversationID int64  `json:"conversation_id"`
-	Timestamp      int64  `json:"timestamp"`
-	GatewayNodeID  string `json:"gateway_node_id"`
-}
-
-// TypingConsumer consumes aim-typing-events and fans out to conversation members' gateway nodes.
+// TypingConsumer consumes events.TopicTyping and fans out to conversation members' gateway nodes.
 type TypingConsumer struct {
 	ctx    context.Context
 	svcCtx *svc.ServiceContext
@@ -34,10 +25,14 @@ func NewTypingConsumer(ctx context.Context, svcCtx *svc.ServiceContext) *TypingC
 func (c *TypingConsumer) Consume(ctx context.Context, key string, value string) error {
 	logx.WithContext(ctx).Infof("consuming typing event, key=%s", key)
 
-	var event typingEvent
+	var event events.TypingEvent
 	if err := json.Unmarshal([]byte(value), &event); err != nil {
-		logx.WithContext(ctx).Errorf("failed to unmarshal typing event: %v", err)
-		return err
+		// A malformed payload never decodes on redelivery: dropping it keeps the
+		// partition moving instead of replaying the same poison message forever.
+		logx.WithContext(ctx).Errorf(
+			"dropping undecodable typing event key=%s: %v payload=%q", key, err, value,
+		)
+		return nil
 	}
 
 	ctx = tracing.ExtractTraceContext(ctx, event.TraceContextFields)

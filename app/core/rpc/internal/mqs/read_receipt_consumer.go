@@ -5,24 +5,13 @@ import (
 	"encoding/json"
 
 	"github.com/hellopoisonx/aim/app/core/rpc/internal/svc"
+	"github.com/hellopoisonx/aim/app/shared/events"
 	"github.com/hellopoisonx/aim/app/shared/tracing"
 	gwpb "github.com/hellopoisonx/aim/shared/proto/gateway/pb"
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
-// readReceiptEvent mirrors the payload produced by the gateway when a
-// member advances their read cursor for a conversation.
-type readReceiptEvent struct {
-	tracing.TraceContextFields
-
-	FromUserID        int64  `json:"from_user_id"`
-	ConversationID    int64  `json:"conversation_id"`
-	LastReadMessageID int64  `json:"last_read_message_id"`
-	UpdatedAt         int64  `json:"updated_at"`
-	GatewayNodeID     string `json:"gateway_node_id"`
-}
-
-// ReadReceiptConsumer consumes aim-read-receipt-events and fans out to
+// ReadReceiptConsumer consumes events.TopicReadReceipt and fans out to
 // conversation members' gateway nodes via the GatewayService.PushReadReceipt RPC.
 type ReadReceiptConsumer struct {
 	ctx    context.Context
@@ -37,10 +26,14 @@ func NewReadReceiptConsumer(ctx context.Context, svcCtx *svc.ServiceContext) *Re
 func (c *ReadReceiptConsumer) Consume(ctx context.Context, key string, value string) error {
 	logx.WithContext(ctx).Infof("consuming read receipt event, key=%s", key)
 
-	var event readReceiptEvent
+	var event events.ReadReceiptEvent
 	if err := json.Unmarshal([]byte(value), &event); err != nil {
-		logx.WithContext(ctx).Errorf("failed to unmarshal read receipt event: %v", err)
-		return err
+		// A malformed payload never decodes on redelivery: dropping it keeps the
+		// partition moving instead of replaying the same poison message forever.
+		logx.WithContext(ctx).Errorf(
+			"dropping undecodable read receipt event key=%s: %v payload=%q", key, err, value,
+		)
+		return nil
 	}
 
 	ctx = tracing.ExtractTraceContext(ctx, event.TraceContextFields)
