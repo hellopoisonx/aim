@@ -18,6 +18,7 @@ import (
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/mqs"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/ws"
+	rpcutil "github.com/hellopoisonx/aim/app/shared/rpc"
 	gwpb "github.com/hellopoisonx/aim/shared/proto/gateway/pb"
 
 	"github.com/zeromicro/go-zero/core/conf"
@@ -65,6 +66,7 @@ func main() {
 	rpcServer := zrpc.MustNewServer(c.GatewayRpc, func(grpcServer *grpc.Server) {
 		gwpb.RegisterGatewayServiceServer(grpcServer, gatewayServer)
 	})
+	rpcServer.AddUnaryInterceptors(rpcutil.UnaryErrorInterceptor())
 	defer rpcServer.Stop()
 
 	// Notify connected clients to reconnect before shutdown so they can fail
