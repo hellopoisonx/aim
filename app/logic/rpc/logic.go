@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"flag"
-	"fmt"
 
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/config"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/mqs"
@@ -20,10 +19,7 @@ import (
 
 	"github.com/zeromicro/go-zero/core/conf"
 	"github.com/zeromicro/go-zero/core/proc"
-	"github.com/zeromicro/go-zero/core/service"
-	"github.com/zeromicro/go-zero/zrpc"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/reflection"
 )
 
 var configFile = flag.String("f", "etc/logic.yaml", "the config file")
@@ -42,27 +38,12 @@ func main() {
 	proc.AddWrapUpListener(ctx.StopEventProducer)
 	proc.AddWrapUpListener(ctx.StopTransferProducer)
 
-	s := zrpc.MustNewServer(c.RpcServerConf, func(grpcServer *grpc.Server) {
-		registerLogicServers(grpcServer, ctx, c.Mode)
-	})
-	s.AddUnaryInterceptors(rpcutil.UnaryErrorInterceptor())
-	defer s.Stop()
-
-	// Run the RocketMQ consumers alongside the RPC server via ServiceGroup
-	group := service.NewServiceGroup()
-	group.Add(s)
-
-	for _, svc := range mqs.Consumers(context.Background(), ctx) {
-		group.Add(svc)
-	}
-
-	defer group.Stop()
-
-	fmt.Printf("Starting rpc server at %s...\n", c.ListenOn)
-	group.Start()
+	rpcutil.Run(c.RpcServerConf, func(grpcServer *grpc.Server) {
+		registerLogicServers(grpcServer, ctx)
+	}, mqs.Consumers(context.Background(), ctx))
 }
 
-func registerLogicServers(grpcServer *grpc.Server, ctx *svc.ServiceContext, mode string) {
+func registerLogicServers(grpcServer *grpc.Server, ctx *svc.ServiceContext) {
 	pb.RegisterPermissionServiceServer(grpcServer, serverpermissionservice.NewPermissionServiceServer(ctx))
 	pb.RegisterUserServiceServer(grpcServer, serveruserservice.NewUserServiceServer(ctx))
 	pb.RegisterConversationServiceServer(grpcServer, serverconversationservice.NewConversationServiceServer(ctx))
@@ -70,8 +51,4 @@ func registerLogicServers(grpcServer *grpc.Server, ctx *svc.ServiceContext, mode
 	pb.RegisterSearchServiceServer(grpcServer, serversearchservice.NewSearchServiceServer(ctx))
 	pb.RegisterBotServiceServer(grpcServer, serverbotservice.NewBotServiceServer(ctx))
 	pb.RegisterMessageServiceServer(grpcServer, servermessageservice.NewMessageServiceServer(ctx))
-
-	if mode == service.DevMode || mode == service.TestMode {
-		reflection.Register(grpcServer)
-	}
 }

@@ -9,7 +9,7 @@ import (
 
 func TestRegisterLogicServersIncludesSearchService(t *testing.T) {
 	grpcServer := grpc.NewServer()
-	registerLogicServers(grpcServer, &svc.ServiceContext{}, "pro")
+	registerLogicServers(grpcServer, &svc.ServiceContext{})
 
 	services := grpcServer.GetServiceInfo()
 	for _, name := range []string{
@@ -19,6 +19,7 @@ func TestRegisterLogicServersIncludesSearchService(t *testing.T) {
 		"logic.FriendshipService",
 		"logic.SearchService",
 		"logic.BotService",
+		"logic.MessageService",
 	} {
 		if _, ok := services[name]; !ok {
 			t.Fatalf("expected %s to be registered, services=%v", name, services)
