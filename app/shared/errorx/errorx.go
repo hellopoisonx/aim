@@ -44,16 +44,21 @@ const (
 
 // Logic-service domain codes, kept in the shared catalog so the reserved
 // sub-blocks are visible from every service. The bot block above owns 40010,
-// 40110-40112 and 40310; conversation takes 40011, 40311-40315, 40410 and
-// 40910, friendship takes 40012, 40313-40314 and 40411, and the tag/search
-// codes keep their 4002x/4003x/4032x blocks in the logic service package.
+// 40110-40112 and 40310; conversation takes 40011, 40311-40312, 40315-40317,
+// 40410 and 40910, friendship takes 40012, 40313-40314 and 40411, and the
+// tag/search codes keep their 4002x/4003x/4032x blocks in the logic service
+// package.
 const (
 	CodeConversationNotGroup  = 40011
 	CodeConversationNotOwner  = 40311
 	CodeConversationNotAdmin  = 40312
 	CodeConversationNotMember = 40315
-	CodeConversationNotFound  = 40410
-	CodeConversationExists    = 40910
+	// CodeConversationOwnerTarget — the request named the group owner as its target.
+	CodeConversationOwnerTarget = 40316
+	// CodeConversationOwnerMustTransfer — the owner cannot leave; ownership must move first.
+	CodeConversationOwnerMustTransfer = 40317
+	CodeConversationNotFound          = 40410
+	CodeConversationExists            = 40910
 
 	CodeFriendshipSelfAdd    = 40012
 	CodeFriendshipBlocked    = 40313

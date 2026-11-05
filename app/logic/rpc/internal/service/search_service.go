@@ -13,7 +13,6 @@ import (
 
 const (
 	CodeSearchQueryEmpty = 40030
-	CodeSearchLimitRange = 40031
 
 	defaultSearchLimit = 20
 	maxSearchLimit     = 100
@@ -111,9 +110,6 @@ type SearchResults struct {
 	NextCursorID        int64
 	HasMore             bool
 }
-
-// UnifiedSearchFn defines the function type for search methods.
-type UnifiedSearchFn func(ctx context.Context, query string, limit int32) (*SearchResults, error)
 
 // SearchParams carries one search request.
 //

@@ -21,11 +21,11 @@ func RevokeGroupAdminHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
 		}
 
 		l := conversations.NewRevokeGroupAdminLogic(r.Context(), svcCtx)
-		err := l.RevokeGroupAdmin(&req)
+		resp, err := l.RevokeGroupAdmin(&req)
 		if err != nil {
 			httpx.ErrorCtx(r.Context(), w, err)
 		} else {
-			httpx.Ok(w)
+			httpx.OkJsonCtx(r.Context(), w, resp)
 		}
 	}
 }

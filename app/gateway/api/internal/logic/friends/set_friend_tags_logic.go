@@ -42,5 +42,5 @@ func (l *SetFriendTagsLogic) SetFriendTags(req *types.SetFriendTagsRequest) (res
 		return nil, errorx.SanitizeGRPCError(l, "set friend tags", err)
 	}
 
-	return &types.SetFriendTagsResponse{Friendship: friendshipToItem(l.ctx, l.svcCtx, rpcResp.GetFriendship())}, nil
+	return &types.SetFriendTagsResponse{Friendship: friendshipToItem(l.ctx, l.svcCtx, rpcResp.GetFriendship(), req.Id)}, nil
 }

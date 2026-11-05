@@ -59,7 +59,7 @@ message WsFrame {
 |---|---:|---|---|---|
 | `FRAME_TYPE_SEND_MESSAGE` | 1 | `SendMessagePayload` | 是 | 发送聊天消息，经 gateway 调 core `Transfer`。 |
 | `FRAME_TYPE_HEARTBEAT` | 2 | `HeartbeatPayload` | 是 | 心跳保活，续约 presence TTL。 |
-| `FRAME_TYPE_TYPING` | 3 | `TypingPayload` | 否 | 输入状态，best-effort 发布 RocketMQ 并本节点即时 fan-out。 |
+| `FRAME_TYPE_TYPING` | 3 | `TypingPayload` | 否 | 输入状态，校验会话成员后 best-effort 发布 RocketMQ 并本节点即时 fan-out。 |
 | `FRAME_TYPE_READ_RECEIPT` | 4 | `ReadReceiptPayload` | 是 | 已读回执，持久化已读游标并 fan-out。 |
 | `FRAME_TYPE_ACK` | 5 | `ClientAckPayload` | 否 | 客户端确认收到服务端推送。 |
 
@@ -143,9 +143,10 @@ message TypingPayload {
 }
 ```
 
-- gateway 收到后发布 `aim-typing-events`（key=`conversation_id`），并对本节点在线成员做即时 fan-out。
+- gateway 收到后先校验发送者是该会话成员；非成员收到 `SERVER_ACK`（`ACK_STATUS_REJECTED`，code `40300`），且不发布事件。
+- 校验通过后发布 `aim-typing-events`（key=`conversation_id`），并对本节点在线成员做即时 fan-out。
 - core 的 TypingConsumer 会跨节点查询会话成员并推送 `PushTypingPayload`。
-- 当前该帧不返回 `SERVER_ACK`。
+- 校验通过时不返回 `SERVER_ACK`，仅拒绝时返回。
 - 客户端建议：输入中事件按约 `2.5s` 节流发送；收到 `PUSH_TYPING` 后约 `4s` 未再次收到则清除 UI 状态。
 
 ### 4.4 已读回执：`ReadReceiptPayload`

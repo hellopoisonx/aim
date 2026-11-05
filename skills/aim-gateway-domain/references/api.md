@@ -125,7 +125,7 @@ Gateway 在 REST 入口与 WebSocket 入口均提供滑动窗口限流,基于 Re
 
 以上端点均通过 `LogicRpc` 调用 `ConversationService` 的对应 RPC（`AddGroupMembers`, `RemoveGroupMembers`, `GrantGroupAdmin`, `RevokeGroupAdmin`, `TransferGroupOwner`, `LeaveGroup`, `DismissGroup`, `UpdateGroupInfo`, `GetConversationMembersDetail`）。`user_id` 和 `operator_id` 从 JWT payload 提取。服务端在 logic 层统一执行角色校验：`owner / admin / member` 的权限边界以 `app/logic/rpc/internal/service/conversation_service.go` 为准，gateway 只负责传递身份与参数。
 
-**类型更新**：`ConversationItem`、`CreateConversationRequest`、`CreateConversationResponse` 新增 `name`、`avatar`、`creator_id` 字段。`CreateConversationRequest` 新增 `Name` 字段用于创建群聊时指定群名。
+**类型更新**：所有返回会话的端点（创建、加成员、更新群信息、转让群主、Bot 入群/直聊）统一返回 `types.ConversationItem`；RPC 无返回资源的变更端点（移出成员、授予/撤销管理员、退群、解散）统一返回 `{success: true}`。
 
 **PushMessage is_system**：`GatewayServer.PushMessage` 将 gRPC `PushMessageReq.is_system` 传递至 WebSocket `PushMessagePayload.is_system`，前端据此区分群变更系统消息和普通消息。
 

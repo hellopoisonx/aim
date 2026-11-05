@@ -38,7 +38,7 @@ func (l *CheckMessagePermissionLogic) CheckMessagePermission(in *pb.CheckMessage
 	if in.GetSenderId() <= 0 || in.GetConversationId() <= 0 {
 		return &pb.CheckMessagePermissionResp{
 			Allowed: false,
-			BizCode: service.CodeInvalidArgument,
+			BizCode: errorx.CodeBadInput,
 			Reason:  "sender_id and conversation_id are required",
 		}, nil
 	}
@@ -46,7 +46,7 @@ func (l *CheckMessagePermissionLogic) CheckMessagePermission(in *pb.CheckMessage
 	if len(in.GetMessageType()) > maxMessageTypeLength {
 		return &pb.CheckMessagePermissionResp{
 			Allowed: false,
-			BizCode: service.CodeInvalidArgument,
+			BizCode: errorx.CodeBadInput,
 			Reason:  "message_type is too long",
 		}, nil
 	}
@@ -54,7 +54,7 @@ func (l *CheckMessagePermissionLogic) CheckMessagePermission(in *pb.CheckMessage
 	if len(in.GetMentions()) > maxMentions {
 		return &pb.CheckMessagePermissionResp{
 			Allowed: false,
-			BizCode: service.CodeInvalidArgument,
+			BizCode: errorx.CodeBadInput,
 			Reason:  "mentions exceeds limit",
 		}, nil
 	}
@@ -63,7 +63,7 @@ func (l *CheckMessagePermissionLogic) CheckMessagePermission(in *pb.CheckMessage
 		if mention <= 0 {
 			return &pb.CheckMessagePermissionResp{
 				Allowed: false,
-				BizCode: service.CodeInvalidArgument,
+				BizCode: errorx.CodeBadInput,
 				Reason:  "mentions must contain positive user ids",
 			}, nil
 		}

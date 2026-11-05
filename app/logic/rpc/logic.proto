@@ -54,8 +54,8 @@ message UserInfoResponse {
   int32 status = 3;
   string nickname = 4;
   string avatar = 5;
-  int64 created_at = 6;  // unix timestamp
-  int64 updated_at = 7;  // unix timestamp
+  int64 created_at = 6;  // unix milliseconds, the unit every RPC and REST timestamp uses
+  int64 updated_at = 7;  // unix milliseconds
 }
 
 message CreateUserInfoReq {

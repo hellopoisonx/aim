@@ -27,21 +27,20 @@ func NewRemoveGroupMemberLogic(ctx context.Context, svcCtx *svc.ServiceContext) 
 	}
 }
 
-func (l *RemoveGroupMemberLogic) RemoveGroupMember(req *types.RemoveGroupMemberRequest) (err error) {
+func (l *RemoveGroupMemberLogic) RemoveGroupMember(req *types.RemoveGroupMemberRequest) (resp *types.MutationResult, err error) {
 	userID, err := authctx.RequireUserID(l.ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	_, err = l.svcCtx.LogicConversationClient.RemoveGroupMembers(l.ctx, &conversationservice.RemoveGroupMembersReq{
 		ConversationId: req.Id,
 		OperatorId:     userID,
-		OperatorName:   "",
 		MemberIds:      []int64{req.UserId},
 	})
 	if err != nil {
-		return errorx.SanitizeGRPCError(l, "remove group member", err)
+		return nil, errorx.SanitizeGRPCError(l, "remove group member", err)
 	}
 
-	return nil
+	return &types.MutationResult{Success: true}, nil
 }

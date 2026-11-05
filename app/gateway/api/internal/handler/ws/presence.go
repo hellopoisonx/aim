@@ -9,6 +9,7 @@ import (
 
 	"github.com/coder/websocket"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/fanout"
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/membership"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/ws"
 	logicpb "github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
@@ -22,7 +23,7 @@ import (
 // Typing and read-receipt frame handling with local fan-out.
 
 // handleTyping publishes a typing notice for fan-out by core.
-func (h *WsHandler) handleTyping(ctx context.Context, _ *websocket.Conn, frame *pb.WsFrame) error {
+func (h *WsHandler) handleTyping(ctx context.Context, conn *websocket.Conn, frame *pb.WsFrame) error {
 	tracer := otel.Tracer("github.com/hellopoisonx/aim/app/gateway/api")
 	ctx, span := tracer.Start(ctx, "ws.handle_typing")
 	defer span.End()
@@ -48,6 +49,22 @@ func (h *WsHandler) handleTyping(ctx context.Context, _ *websocket.Conn, frame *
 		attribute.Int64("ws.user_id", identity.UserID),
 		attribute.Int64("ws.conversation_id", typingPayload.GetConversationId()),
 	)
+
+	if h.srv.LogicConversationClient == nil {
+		return h.writeErrorAck(ctx, conn, frame.GetSeq(), "", pb.AckStatus_ACK_STATUS_RETRYABLE, errorx.CodeInternal, "logic unavailable")
+	}
+
+	memberCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+
+	if err := membership.RequireMember(memberCtx, logx.WithContext(ctx), h.srv.LogicConversationClient, typingPayload.GetConversationId(), identity.UserID, membership.ActorUser); err != nil {
+		var codeErr *errorx.CodeError
+		if !errors.As(err, &codeErr) {
+			return h.writeErrorAck(ctx, conn, frame.GetSeq(), "", pb.AckStatus_ACK_STATUS_RETRYABLE, errorx.CodeInternal, "internal error")
+		}
+
+		return h.writeErrorAck(ctx, conn, frame.GetSeq(), "", ackStatusForCode(codeErr.Code), codeErr.Code, codeErr.Message)
+	}
 
 	// Publish via TypingPublisher (non-blocking best-effort; typing is transient).
 	if h.srv.TypingPub != nil {

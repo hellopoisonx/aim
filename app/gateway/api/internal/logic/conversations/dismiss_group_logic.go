@@ -27,10 +27,10 @@ func NewDismissGroupLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Dism
 	}
 }
 
-func (l *DismissGroupLogic) DismissGroup(req *types.DismissGroupRequest) (err error) {
+func (l *DismissGroupLogic) DismissGroup(req *types.DismissGroupRequest) (resp *types.MutationResult, err error) {
 	userID, err := authctx.RequireUserID(l.ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	_, err = l.svcCtx.LogicConversationClient.DismissGroup(l.ctx, &conversationservice.DismissGroupReq{
@@ -38,8 +38,8 @@ func (l *DismissGroupLogic) DismissGroup(req *types.DismissGroupRequest) (err er
 		OperatorId:     userID,
 	})
 	if err != nil {
-		return errorx.SanitizeGRPCError(l, "dismiss group", err)
+		return nil, errorx.SanitizeGRPCError(l, "dismiss group", err)
 	}
 
-	return nil
+	return &types.MutationResult{Success: true}, nil
 }

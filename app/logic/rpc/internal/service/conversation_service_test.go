@@ -234,7 +234,22 @@ func TestConversationService_RoleGuards(t *testing.T) {
 	require.ErrorIs(t, err, ErrNotOwner)
 
 	err = svc.LeaveGroup(context.Background(), conv.ID, 1, "u1")
-	require.ErrorIs(t, err, ErrNotOwner)
+	require.ErrorIs(t, err, ErrOwnerMustTransfer)
+}
+
+func TestConversationService_LeaveGroupRejectsNonMember(t *testing.T) {
+	store := servicefakes.NewConversationStore()
+	svc := newTestConversationService(t, store, plainTxRunner{store: store})
+	conv, err := svc.CreateConversation(context.Background(), "group", 1, []int64{1, 2}, "Group", "")
+	require.NoError(t, err)
+
+	err = svc.LeaveGroup(context.Background(), conv.ID, 3, "outsider")
+	require.ErrorIs(t, err, ErrNotMember)
+	assert.Len(t, store.Members[conv.ID], 2)
+	assert.Empty(t, store.Messages[conv.ID], "a rejected leave must not write a system message")
+
+	require.NoError(t, svc.LeaveGroup(context.Background(), conv.ID, 2, "u2"))
+	assert.Len(t, store.Members[conv.ID], 1)
 }
 
 func testMemberRole(t *testing.T, store *servicefakes.ConversationStore, conversationID, userID int64) string {
@@ -288,13 +303,15 @@ func TestConversationService_AdminRemovePermissionMatrix(t *testing.T) {
 	require.NoError(t, svc.GrantGroupAdmin(context.Background(), conv.ID, 1, 3))
 
 	err = svc.RemoveGroupMembers(context.Background(), conv.ID, 2, "admin", []int64{1})
-	require.ErrorIs(t, err, ErrNotOwner)
+	require.ErrorIs(t, err, ErrOwnerTarget)
 
 	err = svc.RemoveGroupMembers(context.Background(), conv.ID, 2, "admin", []int64{3})
 	require.ErrorIs(t, err, ErrNotAdmin)
 
 	err = svc.RemoveGroupMembers(context.Background(), conv.ID, 2, "admin", []int64{2})
-	require.ErrorIs(t, err, ErrNotOwner)
+	var codeErr *errorx.CodeError
+	require.ErrorAs(t, err, &codeErr)
+	assert.Equal(t, errorx.CodeBadInput, codeErr.Code)
 }
 
 func TestConversationService_TransferGroupOwner(t *testing.T) {
@@ -710,6 +727,8 @@ func TestConversationDomainErrorsCarryBizCodes(t *testing.T) {
 		{"not group", ErrNotGroupConversation, errorx.CodeConversationNotGroup},
 		{"not owner", ErrNotOwner, errorx.CodeConversationNotOwner},
 		{"not admin", ErrNotAdmin, errorx.CodeConversationNotAdmin},
+		{"owner target", ErrOwnerTarget, errorx.CodeConversationOwnerTarget},
+		{"owner must transfer", ErrOwnerMustTransfer, errorx.CodeConversationOwnerMustTransfer},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

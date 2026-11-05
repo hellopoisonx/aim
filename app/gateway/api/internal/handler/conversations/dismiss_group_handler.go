@@ -21,11 +21,11 @@ func DismissGroupHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
 		}
 
 		l := conversations.NewDismissGroupLogic(r.Context(), svcCtx)
-		err := l.DismissGroup(&req)
+		resp, err := l.DismissGroup(&req)
 		if err != nil {
 			httpx.ErrorCtx(r.Context(), w, err)
 		} else {
-			httpx.Ok(w)
+			httpx.OkJsonCtx(r.Context(), w, resp)
 		}
 	}
 }

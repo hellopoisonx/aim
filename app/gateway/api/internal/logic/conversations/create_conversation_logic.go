@@ -30,7 +30,7 @@ func NewCreateConversationLogic(ctx context.Context, svcCtx *svc.ServiceContext)
 	}
 }
 
-func (l *CreateConversationLogic) CreateConversation(req *types.CreateConversationRequest) (resp *types.CreateConversationResponse, err error) {
+func (l *CreateConversationLogic) CreateConversation(req *types.CreateConversationRequest) (resp *types.ConversationItem, err error) {
 	userID, err := authctx.RequireUserID(l.ctx)
 	if err != nil {
 		return nil, err
@@ -74,7 +74,7 @@ func (l *CreateConversationLogic) CreateConversation(req *types.CreateConversati
 		return nil, errorx.NewCodeError(errorx.CodeInternal, "internal error")
 	}
 
-	item := types.CreateConversationResponse(pbconv.Conversation(conv))
+	item := pbconv.Conversation(conv)
 
 	return &item, nil
 }

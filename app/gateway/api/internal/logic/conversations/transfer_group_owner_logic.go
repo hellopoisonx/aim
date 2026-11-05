@@ -31,7 +31,7 @@ func NewTransferGroupOwnerLogic(ctx context.Context, svcCtx *svc.ServiceContext)
 	}
 }
 
-func (l *TransferGroupOwnerLogic) TransferGroupOwner(req *types.TransferGroupOwnerRequest) (resp *types.TransferGroupOwnerResponse, err error) {
+func (l *TransferGroupOwnerLogic) TransferGroupOwner(req *types.TransferGroupOwnerRequest) (resp *types.ConversationItem, err error) {
 	userID, err := authctx.RequireUserID(l.ctx)
 	if err != nil {
 		return nil, err
@@ -48,7 +48,7 @@ func (l *TransferGroupOwnerLogic) TransferGroupOwner(req *types.TransferGroupOwn
 	if conv == nil {
 		return nil, errorx.NewCodeError(errorx.CodeInternal, "internal error")
 	}
-	item := types.TransferGroupOwnerResponse(pbconv.Conversation(conv))
+	item := pbconv.Conversation(conv)
 
 	return &item, nil
 }

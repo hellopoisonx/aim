@@ -30,28 +30,6 @@ const (
 	WebhookEventMessageCreated           = "message.created"
 )
 
-// BuiltinActions mirrors the seed data in migration 009_bot_actions.sql.
-var BuiltinActions = []string{
-	ActionSelfRead,
-	ActionConversationList,
-	ActionConversationHistory,
-	ActionConversationMembersRead,
-	ActionMessageSend,
-	ActionReadReceiptWrite,
-	ActionReadReceiptRead,
-	ActionWebhookRead,
-	ActionWebhookWrite,
-	ActionWebhookDelete,
-	ActionWebhookSubscribeMessageCreated,
-	ActionAttachmentDownload,
-	ActionAll,
-	ActionBotAll,
-	ActionConversationAll,
-	ActionMessageAll,
-	ActionReadReceiptAll,
-	ActionWebhookSubscribeAll,
-}
-
 // NormalizeGrant trims whitespace. Actions are case-sensitive; callers should
 // store and compare the canonical lowercase action names defined here.
 func NormalizeGrant(grant string) string {

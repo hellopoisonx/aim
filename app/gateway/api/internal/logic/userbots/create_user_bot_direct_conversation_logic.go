@@ -24,7 +24,7 @@ func NewCreateUserBotDirectConversationLogic(ctx context.Context, svcCtx *svc.Se
 	return &CreateUserBotDirectConversationLogic{Logger: logx.WithContext(ctx), ctx: ctx, svcCtx: svcCtx}
 }
 
-func (l *CreateUserBotDirectConversationLogic) CreateUserBotDirectConversation(req *types.CreateUserBotDirectConversationRequest) (resp *types.CreateUserBotDirectConversationResponse, err error) {
+func (l *CreateUserBotDirectConversationLogic) CreateUserBotDirectConversation(req *types.CreateUserBotDirectConversationRequest) (resp *types.ConversationItem, err error) {
 	userID, err := authctx.RequireUserID(l.ctx)
 	if err != nil {
 		return nil, err
@@ -39,6 +39,6 @@ func (l *CreateUserBotDirectConversationLogic) CreateUserBotDirectConversation(r
 	if conv == nil {
 		return nil, errorx.NewCodeError(errorx.CodeInternal, "internal error")
 	}
-	item := types.CreateUserBotDirectConversationResponse(pbconv.Conversation(conv))
+	item := pbconv.Conversation(conv)
 	return &item, nil
 }

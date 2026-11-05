@@ -30,10 +30,10 @@ func NewRevokeGroupAdminLogic(ctx context.Context, svcCtx *svc.ServiceContext) *
 	}
 }
 
-func (l *RevokeGroupAdminLogic) RevokeGroupAdmin(req *types.RevokeGroupAdminRequest) error {
+func (l *RevokeGroupAdminLogic) RevokeGroupAdmin(req *types.RevokeGroupAdminRequest) (resp *types.MutationResult, err error) {
 	userID, err := authctx.RequireUserID(l.ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	_, err = l.svcCtx.LogicConversationClient.RevokeGroupAdmin(l.ctx, &conversationservice.RevokeGroupAdminReq{
 		ConversationId: req.Id,
@@ -41,7 +41,7 @@ func (l *RevokeGroupAdminLogic) RevokeGroupAdmin(req *types.RevokeGroupAdminRequ
 		TargetUserId:   req.UserId,
 	})
 	if err != nil {
-		return errorx.SanitizeGRPCError(l, "revoke group admin", err)
+		return nil, errorx.SanitizeGRPCError(l, "revoke group admin", err)
 	}
-	return nil
+	return &types.MutationResult{Success: true}, nil
 }

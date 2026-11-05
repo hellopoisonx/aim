@@ -27,7 +27,7 @@ func User(info orm.UserInfo) *pb.UserInfoResponse {
 		Status:    int32(info.Status),
 		Nickname:  info.Nickname,
 		Avatar:    info.Avatar,
-		CreatedAt: info.CreatedAt.Unix(),
-		UpdatedAt: info.UpdatedAt.Unix(),
+		CreatedAt: info.CreatedAt.UnixMilli(),
+		UpdatedAt: info.UpdatedAt.UnixMilli(),
 	}
 }

@@ -5,11 +5,6 @@ import (
 	"github.com/hellopoisonx/aim/app/shared/tracing"
 )
 
-const (
-	TopicAttachmentUploaded = "aim-attachment-uploaded"
-	TopicAttachmentParsed   = "aim-attachment-parsed"
-)
-
 // AttachmentUploadedEvent is published after AIM confirms a client-direct
 // SeaweedFS media upload and the attachment becomes eligible for parsing.
 type AttachmentUploadedEvent struct {

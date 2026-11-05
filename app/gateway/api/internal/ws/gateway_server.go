@@ -215,11 +215,19 @@ func (s *GatewayServer) pushTo(ctx context.Context, op string, connections []*Co
 	})
 }
 
+// deliveryError keeps the retry decision in one place: a delivery is a failure
+// only when every attempted write failed. Partial failures stay per-connection,
+// because retrying would duplicate frames on the devices that already received
+// the payload, and having no local connection is not a failure at all.
+func deliveryError(written int32, err error) error {
+	if written == 0 && err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // deliver is the single delivery path behind every GatewayService push RPC.
-// Having no local connection is not a failure (the user is simply not on this
-// node); a delivery where every attempted write failed is returned as an error
-// so the caller retries. Partial failures stay per-connection and are logged,
-// because retrying would duplicate frames on the devices that already got them.
 func (s *GatewayServer) deliver(ctx context.Context, op string, connections []*Connection, frameType wspb.FrameType, payload proto.Message, skip func(*Connection) bool) (int32, error) {
 	if len(connections) == 0 {
 		logx.WithContext(ctx).Debugf("%s: no local connections", op)
@@ -227,7 +235,7 @@ func (s *GatewayServer) deliver(ctx context.Context, op string, connections []*C
 	}
 
 	written, err := s.pushTo(ctx, op, connections, frameType, payload, skip)
-	if written == 0 && err != nil {
+	if err := deliveryError(written, err); err != nil {
 		return 0, err
 	}
 
@@ -258,31 +266,21 @@ func (s *GatewayServer) PushMessage(ctx context.Context, req *pb.PushMessageReq)
 }
 
 // DeliverLocal pushes a single-target message to the connections this node
-// holds for req.TargetUserId. A user with no local connection is not an error:
-// the node simply has nothing to deliver.
+// holds for req.TargetUserId, with the same retry policy as deliver.
 func (s *GatewayServer) DeliverLocal(ctx context.Context, req *pb.PushMessageReq) error {
-	connections := s.manager.GetByUserID(req.TargetUserId)
-	if len(connections) == 0 {
-		// No local connections for this user — consider it a success since the user is not on this node.
-		logx.WithContext(ctx).Debugf("PushMessage: no local connections for user_id=%d", req.TargetUserId)
-		return nil
-	}
-
 	// When core fans out a message back to the sender for multi-device sync, skip
 	// only the original source device; the user's other devices still get it.
-	_, err := s.pushTo(ctx, "PushMessage", connections, wspb.FrameType_FRAME_TYPE_PUSH_MESSAGE, pushMessagePayload(req), func(conn *Connection) bool {
-		return skipsSourceDevice(req, conn)
-	})
+	_, err := s.deliver(ctx, "PushMessage", s.manager.GetByUserID(req.TargetUserId),
+		wspb.FrameType_FRAME_TYPE_PUSH_MESSAGE, pushMessagePayload(req), func(conn *Connection) bool {
+			return skipsSourceDevice(req, conn)
+		})
 
 	return err
 }
 
 // DeliverLocalMembers fans one conversation event out to the members this node
-// holds connections for.
-//
-// Per-connection write failures are logged and skipped, but the last one is
-// returned like DeliverLocal so the broker retries the whole conversation event
-// instead of the group fan-out being silently unretried.
+// holds connections for, encoding the frame once for every member. It follows
+// deliver's retry policy.
 func (s *GatewayServer) DeliverLocalMembers(ctx context.Context, base *pb.PushMessageReq, memberIDs []int64) error {
 	payloadBytes, err := EncodePayload(pushMessagePayload(base))
 	if err != nil {
@@ -295,14 +293,17 @@ func (s *GatewayServer) DeliverLocalMembers(ctx context.Context, base *pb.PushMe
 		return conn.WriteEncodedFrame(ctx, frame)
 	}
 
+	var written int32
 	var writeErr error
 	for _, memberID := range memberIDs {
-		if _, err := writeEach(ctx, "PushMessage", s.manager.GetByUserID(memberID), skip, write); err != nil {
+		n, err := writeEach(ctx, "PushMessage", s.manager.GetByUserID(memberID), skip, write)
+		written += n
+		if err != nil {
 			writeErr = err
 		}
 	}
 
-	return writeErr
+	return deliveryError(written, writeErr)
 }
 
 func pushMessagePayload(req *pb.PushMessageReq) *wspb.PushMessagePayload {

@@ -3,6 +3,7 @@ package ws
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -858,4 +859,23 @@ func waitForManagerEmpty(manager *Manager, timeout time.Duration) {
 
 		time.Sleep(2 * time.Millisecond)
 	}
+}
+
+func TestDeliveryErrorOnlyWhenEveryWriteFailed(t *testing.T) {
+	t.Parallel()
+
+	writeErr := errors.New("write failed")
+
+	require.ErrorIs(t, deliveryError(0, writeErr), writeErr)
+	require.NoError(t, deliveryError(1, writeErr))
+	require.NoError(t, deliveryError(0, nil))
+}
+
+func TestDeliverLocalWithoutLocalConnectionsIsNotAnError(t *testing.T) {
+	t.Parallel()
+
+	server := NewGatewayServer(NewManager())
+
+	require.NoError(t, server.DeliverLocal(context.Background(), &pb.PushMessageReq{TargetUserId: 42}))
+	require.NoError(t, server.DeliverLocalMembers(context.Background(), &pb.PushMessageReq{ConversationId: 1}, []int64{42}))
 }

@@ -21,11 +21,11 @@ func RemoveGroupMemberHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
 		}
 
 		l := conversations.NewRemoveGroupMemberLogic(r.Context(), svcCtx)
-		err := l.RemoveGroupMember(&req)
+		resp, err := l.RemoveGroupMember(&req)
 		if err != nil {
 			httpx.ErrorCtx(r.Context(), w, err)
 		} else {
-			httpx.Ok(w)
+			httpx.OkJsonCtx(r.Context(), w, resp)
 		}
 	}
 }

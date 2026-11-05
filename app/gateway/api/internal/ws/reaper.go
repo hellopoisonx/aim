@@ -27,11 +27,6 @@ func NewPresenceReaper(manager *Manager, publishFn PresencePublishFn) *PresenceR
 	}
 }
 
-// SetTickInterval configures the scan interval.
-func (r *PresenceReaper) SetTickInterval(d time.Duration) {
-	r.tickInterval = d
-}
-
 // Run starts the reaper loop. It blocks until ctx is cancelled.
 func (r *PresenceReaper) Run(ctx context.Context) {
 	ticker := time.NewTicker(r.tickInterval)

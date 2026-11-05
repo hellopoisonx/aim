@@ -42,6 +42,8 @@ var (
 	ErrNotGroupConversation = errorx.NewCodeError(errorx.CodeConversationNotGroup, "not a group conversation")
 	ErrNotOwner             = errorx.NewCodeError(errorx.CodeConversationNotOwner, "not the group owner")
 	ErrNotAdmin             = errorx.NewCodeError(errorx.CodeConversationNotAdmin, "not a group admin")
+	ErrOwnerTarget          = errorx.NewCodeError(errorx.CodeConversationOwnerTarget, "target is the group owner")
+	ErrOwnerMustTransfer    = errorx.NewCodeError(errorx.CodeConversationOwnerMustTransfer, "the group owner cannot leave; transfer ownership first")
 )
 
 // Actor is the member performing an operation on another member.
@@ -727,8 +729,11 @@ func (s *ConversationService) RemoveGroupMembers(ctx context.Context, conversati
 		if err != nil {
 			return err
 		}
-		if role == sharedconversation.RoleOwner || uid == operatorID {
-			return ErrNotOwner
+		if uid == operatorID {
+			return errorx.NewCodeError(errorx.CodeBadInput, "cannot remove yourself; use leave group")
+		}
+		if role == sharedconversation.RoleOwner {
+			return ErrOwnerTarget
 		}
 		if operatorRole == sharedconversation.RoleAdmin && role != sharedconversation.RoleMember {
 			return ErrNotAdmin
@@ -765,8 +770,11 @@ func (s *ConversationService) LeaveGroup(ctx context.Context, conversationID, us
 	if conv.ConversationType != ConversationTypeGroup {
 		return ErrNotGroupConversation
 	}
+	if _, err := s.memberRole(ctx, conversationID, userID); err != nil {
+		return err
+	}
 	if userID == conv.CreatorID {
-		return ErrNotOwner
+		return ErrOwnerMustTransfer
 	}
 
 	// Recipients are everyone still in the group before the leave commits.
@@ -898,7 +906,7 @@ func (s *ConversationService) GrantGroupAdmin(ctx context.Context, conversationI
 		return err
 	}
 	if targetRole == sharedconversation.RoleOwner {
-		return ErrNotOwner
+		return ErrOwnerTarget
 	}
 	if targetRole == sharedconversation.RoleAdmin {
 		return s.postCommit(ctx, conversationID, rolesFromMembers)
@@ -938,7 +946,7 @@ func (s *ConversationService) RevokeGroupAdmin(ctx context.Context, conversation
 		return err
 	}
 	if targetRole == sharedconversation.RoleOwner {
-		return ErrNotOwner
+		return ErrOwnerTarget
 	}
 	if targetRole == sharedconversation.RoleMember {
 		return s.postCommit(ctx, conversationID, rolesFromMembers)
@@ -978,7 +986,7 @@ func (s *ConversationService) TransferGroupOwner(ctx context.Context, conversati
 		return orm.Conversation{}, err
 	}
 	if targetRole == sharedconversation.RoleOwner {
-		return orm.Conversation{}, ErrNotOwner
+		return orm.Conversation{}, ErrOwnerTarget
 	}
 	if targetRole != sharedconversation.RoleMember && targetRole != sharedconversation.RoleAdmin {
 		return orm.Conversation{}, ErrNotMember

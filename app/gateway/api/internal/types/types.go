@@ -24,31 +24,9 @@ type AddGroupMembersRequest struct {
 	MemberIds []int64 `json:"member_ids" validate:"required,min=1"`
 }
 
-type AddGroupMembersResponse struct {
-	ConversationId   int64   `json:"conversation_id"`
-	ConversationType string  `json:"conversation_type"`
-	IsActive         bool    `json:"is_active"`
-	CreatedAt        int64   `json:"created_at"`
-	MemberIds        []int64 `json:"member_ids"`
-	Name             string  `json:"name"`
-	Avatar           string  `json:"avatar"`
-	CreatorId        int64   `json:"creator_id"`
-}
-
 type AddUserBotToConversationRequest struct {
 	Id             int64 `path:"id" validate:"required"`
 	ConversationId int64 `path:"conversation_id" validate:"required"`
-}
-
-type AddUserBotToConversationResponse struct {
-	ConversationId   int64   `json:"conversation_id"`
-	ConversationType string  `json:"conversation_type"`
-	IsActive         bool    `json:"is_active"`
-	CreatedAt        int64   `json:"created_at"`
-	MemberIds        []int64 `json:"member_ids"`
-	Name             string  `json:"name"`
-	Avatar           string  `json:"avatar"`
-	CreatorId        int64   `json:"creator_id"`
 }
 
 type AttachmentFileInfo struct {
@@ -269,17 +247,6 @@ type CreateConversationRequest struct {
 	Avatar           string  `json:"avatar,optional"`
 }
 
-type CreateConversationResponse struct {
-	ConversationId   int64   `json:"conversation_id"`
-	ConversationType string  `json:"conversation_type"`
-	IsActive         bool    `json:"is_active"`
-	CreatedAt        int64   `json:"created_at"`
-	MemberIds        []int64 `json:"member_ids"`
-	Name             string  `json:"name"`
-	Avatar           string  `json:"avatar"`
-	CreatorId        int64   `json:"creator_id"`
-}
-
 type CreateFriendTagRequest struct {
 	Name string `json:"name" validate:"required"`
 }
@@ -296,17 +263,6 @@ type CreateGroupRequest struct {
 
 type CreateUserBotDirectConversationRequest struct {
 	Id int64 `path:"id" validate:"required"`
-}
-
-type CreateUserBotDirectConversationResponse struct {
-	ConversationId   int64   `json:"conversation_id"`
-	ConversationType string  `json:"conversation_type"`
-	IsActive         bool    `json:"is_active"`
-	CreatedAt        int64   `json:"created_at"`
-	MemberIds        []int64 `json:"member_ids"`
-	Name             string  `json:"name"`
-	Avatar           string  `json:"avatar"`
-	CreatorId        int64   `json:"creator_id"`
 }
 
 type CreateUserBotRequest struct {
@@ -565,6 +521,10 @@ type MessageReadDetailItem struct {
 	Avatar            string `json:"avatar"`
 }
 
+type MutationResult struct {
+	Success bool `json:"success"`
+}
+
 type PresenceItem struct {
 	UserId    int64  `json:"user_id"`
 	Status    string `json:"status"`
@@ -717,31 +677,10 @@ type TransferGroupOwnerRequest struct {
 	UserId int64 `json:"user_id" validate:"required"`
 }
 
-type TransferGroupOwnerResponse struct {
-	ConversationId   int64   `json:"conversation_id"`
-	ConversationType string  `json:"conversation_type"`
-	IsActive         bool    `json:"is_active"`
-	CreatedAt        int64   `json:"created_at"`
-	MemberIds        []int64 `json:"member_ids"`
-	Name             string  `json:"name"`
-	Avatar           string  `json:"avatar"`
-	CreatorId        int64   `json:"creator_id"`
-}
-
 type UpdateGroupInfoRequest struct {
 	Id     int64   `path:"id" validate:"required"`
 	Name   *string `json:"name,optional"`
 	Avatar *string `json:"avatar,optional"`
-}
-
-type UpdateGroupInfoResponse struct {
-	ConversationId   int64  `json:"conversation_id"`
-	ConversationType string `json:"conversation_type"`
-	IsActive         bool   `json:"is_active"`
-	Name             string `json:"name"`
-	Avatar           string `json:"avatar"`
-	CreatorId        int64  `json:"creator_id"`
-	CreatedAt        int64  `json:"created_at"`
 }
 
 type UpdateUserBotProfileRequest struct {
@@ -798,7 +737,7 @@ type UserInfo struct {
 }
 
 type UserListItem struct {
-	Id       string `json:"id"`
+	Id       int64  `json:"id"`
 	Nickname string `json:"nickname"`
 	Email    string `json:"email"`
 	Avatar   string `json:"avatar"`

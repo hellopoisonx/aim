@@ -480,6 +480,50 @@ func TestServeWSTypingPushesToLocalPeer(t *testing.T) {
 	require.Equal(t, int64(100), typing.GetConversationId())
 }
 
+func TestServeWSTypingRejectsNonMember(t *testing.T) {
+	t.Parallel()
+
+	serverCtx := newTestServiceContext(t)
+	serverCtx.LogicConversationClient = &mockConversationClient{memberIDs: []int64{43}}
+
+	manager := wsmanager.NewManager()
+	serverCtx.WsManager = manager
+	handler := NewWsHandler(serverCtx, manager)
+	server := httptest.NewServer(http.HandlerFunc(handler.ServeWS))
+	t.Cleanup(server.Close)
+
+	ctx := context.Background()
+	sender := dialUser(t, ctx, server.URL, 42, "desktop-a")
+	peer := dialUser(t, ctx, server.URL, 43, "desktop-b")
+	require.Eventually(t, func() bool {
+		return manager.CountByUser(42) == 1 && manager.CountByUser(43) == 1
+	}, time.Second, 10*time.Millisecond)
+
+	payload, err := wsmanager.EncodePayload(&pb.TypingPayload{ConversationId: 100})
+	require.NoError(t, err)
+
+	frame := wsmanager.BuildFrame(pb.FrameType_FRAME_TYPE_TYPING, 33, payload)
+	data, err := wsmanager.EncodeFrame(frame)
+	require.NoError(t, err)
+	require.NoError(t, sender.Write(ctx, websocket.MessageBinary, data))
+
+	ackFrame := readWSFrame(t, sender)
+	ackPayload, err := wsmanager.DecodePayload(ackFrame)
+	require.NoError(t, err)
+
+	ack, ok := ackPayload.(*pb.ServerAckPayload)
+	require.True(t, ok)
+	require.Equal(t, int64(33), ack.GetAckSeq())
+	require.Equal(t, pb.AckStatus_ACK_STATUS_REJECTED, ack.GetStatus())
+	require.Equal(t, int32(errorx.CodeForbidden), ack.GetCode())
+
+	peerCtx, cancel := context.WithTimeout(ctx, 300*time.Millisecond)
+	defer cancel()
+
+	_, _, err = peer.Read(peerCtx)
+	require.Error(t, err, "a non-member typing notice must not reach the group")
+}
+
 func TestServeWSReadReceiptPushesToLocalPeer(t *testing.T) {
 	t.Parallel()
 

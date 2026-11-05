@@ -42,5 +42,5 @@ func (l *RemoveFriendTagLogic) RemoveFriendTag(req *types.RemoveFriendTagRequest
 		return nil, errorx.SanitizeGRPCError(l, "remove friend tag", err)
 	}
 
-	return &types.RemoveFriendTagResponse{Friendship: friendshipToItem(l.ctx, l.svcCtx, rpcResp.GetFriendship())}, nil
+	return &types.RemoveFriendTagResponse{Friendship: friendshipToItem(l.ctx, l.svcCtx, rpcResp.GetFriendship(), req.Id)}, nil
 }

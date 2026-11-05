@@ -28,7 +28,7 @@ func NewAddGroupMembersLogic(ctx context.Context, svcCtx *svc.ServiceContext) *A
 	}
 }
 
-func (l *AddGroupMembersLogic) AddGroupMembers(req *types.AddGroupMembersRequest) (resp *types.AddGroupMembersResponse, err error) {
+func (l *AddGroupMembersLogic) AddGroupMembers(req *types.AddGroupMembersRequest) (resp *types.ConversationItem, err error) {
 	userID, err := authctx.RequireUserID(l.ctx)
 	if err != nil {
 		return nil, err
@@ -37,7 +37,6 @@ func (l *AddGroupMembersLogic) AddGroupMembers(req *types.AddGroupMembersRequest
 	rpcResp, err := l.svcCtx.LogicConversationClient.AddGroupMembers(l.ctx, &conversationservice.AddGroupMembersReq{
 		ConversationId: req.Id,
 		OperatorId:     userID,
-		OperatorName:   "",
 		MemberIds:      req.MemberIds,
 	})
 	if err != nil {
@@ -49,7 +48,7 @@ func (l *AddGroupMembersLogic) AddGroupMembers(req *types.AddGroupMembersRequest
 		return nil, errorx.NewCodeError(errorx.CodeInternal, "internal error")
 	}
 
-	item := types.AddGroupMembersResponse(pbconv.Conversation(conv))
+	item := pbconv.Conversation(conv)
 
 	return &item, nil
 }

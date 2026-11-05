@@ -24,14 +24,14 @@ func NewAddUserBotToConversationLogic(ctx context.Context, svcCtx *svc.ServiceCo
 	return &AddUserBotToConversationLogic{Logger: logx.WithContext(ctx), ctx: ctx, svcCtx: svcCtx}
 }
 
-func (l *AddUserBotToConversationLogic) AddUserBotToConversation(req *types.AddUserBotToConversationRequest) (resp *types.AddUserBotToConversationResponse, err error) {
+func (l *AddUserBotToConversationLogic) AddUserBotToConversation(req *types.AddUserBotToConversationRequest) (resp *types.ConversationItem, err error) {
 	userID, err := authctx.RequireUserID(l.ctx)
 	if err != nil {
 		return nil, err
 	}
 	rpcResp, err := l.svcCtx.LogicBotClient.AddUserBotToConversation(l.ctx, &botservice.AddUserBotToConversationReq{
 		OwnerUserId: userID, BotUserId: req.Id,
-		ConversationId: req.ConversationId, OperatorId: userID, OperatorName: "",
+		ConversationId: req.ConversationId, OperatorId: userID,
 	})
 	if err != nil {
 		return nil, errorx.SanitizeGRPCError(l, "add user bot to conversation", err)
@@ -40,6 +40,6 @@ func (l *AddUserBotToConversationLogic) AddUserBotToConversation(req *types.AddU
 	if conv == nil {
 		return nil, errorx.NewCodeError(errorx.CodeInternal, "internal error")
 	}
-	item := types.AddUserBotToConversationResponse(pbconv.Conversation(conv))
+	item := pbconv.Conversation(conv)
 	return &item, nil
 }

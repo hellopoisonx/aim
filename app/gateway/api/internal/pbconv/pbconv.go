@@ -74,7 +74,7 @@ func UserInfo(u *pb.UserInfoResponse) types.UserInfo {
 
 func UserListItem(u *pb.UserInfoResponse) types.UserListItem {
 	return types.UserListItem{
-		Id:       strconv.FormatInt(u.GetId(), 10),
+		Id:       u.GetId(),
 		Nickname: u.GetNickname(),
 		Email:    u.GetEmail(),
 		Avatar:   u.GetAvatar(),

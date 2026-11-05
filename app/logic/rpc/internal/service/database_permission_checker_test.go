@@ -7,7 +7,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hellopoisonx/aim/app/logic/rpc/internal/service/rbac"
 	"github.com/hellopoisonx/aim/app/logic/rpc/model/orm"
+	sharedconversation "github.com/hellopoisonx/aim/app/shared/conversation"
+	"github.com/hellopoisonx/aim/app/shared/errorx"
 	shareduser "github.com/hellopoisonx/aim/app/shared/user"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -42,6 +45,27 @@ func newPastTime() *time.Time {
 	return &t
 }
 
+// newPermissionChecker builds the production checker shape: Casbin is the
+// authorization decision, exactly as svc wires it.
+func newPermissionChecker(t *testing.T, queries PermissionQuerier, opts ...DatabasePermissionCheckerOption) *DatabasePermissionChecker {
+	t.Helper()
+
+	authz, err := rbac.New(nil)
+	require.NoError(t, err)
+
+	return NewDatabasePermissionChecker(queries, authz, opts...)
+}
+
+// grantGroupRole assigns role to a human member in conversationID, mirroring
+// the persisted role the service layer writes.
+func grantGroupRole(t *testing.T, checker *DatabasePermissionChecker, conversationID, userID int64, role sharedconversation.Role) {
+	t.Helper()
+
+	sub, err := rbac.Subject(shareduser.TypeHuman, userID)
+	require.NoError(t, err)
+	require.NoError(t, checker.authz.AssignRole(context.Background(), sub, rbac.Domain(conversationID), role))
+}
+
 func newFutureTime() *time.Time {
 	t := time.Now().Add(time.Hour)
 	return &t
@@ -59,7 +83,8 @@ func TestDatabasePermissionChecker_GroupMember(t *testing.T) {
 		},
 		friendships: map[string][]orm.Friendship{},
 	}
-	checker := NewDatabasePermissionChecker(fq)
+	checker := newPermissionChecker(t, fq)
+	grantGroupRole(t, checker, 1, 100, sharedconversation.RoleMember)
 
 	decision, err := checker.CheckMessagePermission(context.Background(), PermissionCheck{
 		SenderID:       100,
@@ -68,7 +93,7 @@ func TestDatabasePermissionChecker_GroupMember(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.True(t, decision.Allowed)
-	assert.Equal(t, CodeOK, decision.Code)
+	assert.Zero(t, decision.Code)
 }
 
 func TestDatabasePermissionChecker_GroupNotMember(t *testing.T) {
@@ -79,7 +104,7 @@ func TestDatabasePermissionChecker_GroupNotMember(t *testing.T) {
 		members:     map[string]orm.ConversationMember{},
 		friendships: map[string][]orm.Friendship{},
 	}
-	checker := NewDatabasePermissionChecker(fq)
+	checker := newPermissionChecker(t, fq)
 
 	decision, err := checker.CheckMessagePermission(context.Background(), PermissionCheck{
 		SenderID:       100,
@@ -88,7 +113,32 @@ func TestDatabasePermissionChecker_GroupNotMember(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.False(t, decision.Allowed)
-	assert.Equal(t, CodePermissionDenied, decision.Code)
+	assert.Equal(t, int32(errorx.CodeForbidden), decision.Code)
+	assert.Contains(t, decision.Reason, "not a member")
+}
+
+// A stale membership row without a role assignment is denied: the Casbin
+// policy is the decision, and the row only feeds the mute check.
+func TestDatabasePermissionChecker_GroupMemberWithoutRoleDenied(t *testing.T) {
+	fq := &fakeQuerier{
+		conversations: map[int64]orm.Conversation{
+			1: {ID: 1, ConversationType: "group", IsActive: true},
+		},
+		members: map[string]orm.ConversationMember{
+			convUserKey(1, 100): {ConversationID: 1, UserID: 100},
+		},
+		friendships: map[string][]orm.Friendship{},
+	}
+	checker := newPermissionChecker(t, fq)
+
+	decision, err := checker.CheckMessagePermission(context.Background(), PermissionCheck{
+		SenderID:       100,
+		ConversationID: 1,
+	})
+
+	require.NoError(t, err)
+	assert.False(t, decision.Allowed)
+	assert.Equal(t, int32(errorx.CodeForbidden), decision.Code)
 	assert.Contains(t, decision.Reason, "not a member")
 }
 
@@ -102,7 +152,8 @@ func TestDatabasePermissionChecker_GroupMuted(t *testing.T) {
 		},
 		friendships: map[string][]orm.Friendship{},
 	}
-	checker := NewDatabasePermissionChecker(fq)
+	checker := newPermissionChecker(t, fq)
+	grantGroupRole(t, checker, 1, 100, sharedconversation.RoleMember)
 
 	decision, err := checker.CheckMessagePermission(context.Background(), PermissionCheck{
 		SenderID:       100,
@@ -111,7 +162,7 @@ func TestDatabasePermissionChecker_GroupMuted(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.False(t, decision.Allowed)
-	assert.Equal(t, CodePermissionDenied, decision.Code)
+	assert.Equal(t, int32(errorx.CodeForbidden), decision.Code)
 	assert.Contains(t, decision.Reason, "muted")
 }
 
@@ -125,7 +176,8 @@ func TestDatabasePermissionChecker_GroupMuteExpired(t *testing.T) {
 		},
 		friendships: map[string][]orm.Friendship{},
 	}
-	checker := NewDatabasePermissionChecker(fq)
+	checker := newPermissionChecker(t, fq)
+	grantGroupRole(t, checker, 1, 100, sharedconversation.RoleMember)
 
 	decision, err := checker.CheckMessagePermission(context.Background(), PermissionCheck{
 		SenderID:       100,
@@ -134,7 +186,7 @@ func TestDatabasePermissionChecker_GroupMuteExpired(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.True(t, decision.Allowed)
-	assert.Equal(t, CodeOK, decision.Code)
+	assert.Zero(t, decision.Code)
 }
 
 func TestDatabasePermissionChecker_GroupMuteNotExpired(t *testing.T) {
@@ -147,7 +199,8 @@ func TestDatabasePermissionChecker_GroupMuteNotExpired(t *testing.T) {
 		},
 		friendships: map[string][]orm.Friendship{},
 	}
-	checker := NewDatabasePermissionChecker(fq)
+	checker := newPermissionChecker(t, fq)
+	grantGroupRole(t, checker, 1, 100, sharedconversation.RoleMember)
 
 	decision, err := checker.CheckMessagePermission(context.Background(), PermissionCheck{
 		SenderID:       100,
@@ -156,7 +209,7 @@ func TestDatabasePermissionChecker_GroupMuteNotExpired(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.False(t, decision.Allowed)
-	assert.Equal(t, CodePermissionDenied, decision.Code)
+	assert.Equal(t, int32(errorx.CodeForbidden), decision.Code)
 	assert.Contains(t, decision.Reason, "muted")
 }
 
@@ -172,7 +225,7 @@ func TestDatabasePermissionChecker_DirectFriend(t *testing.T) {
 			},
 		},
 	}
-	checker := NewDatabasePermissionChecker(fq)
+	checker := newPermissionChecker(t, fq)
 
 	decision, err := checker.CheckMessagePermission(context.Background(), PermissionCheck{
 		SenderID:       100,
@@ -181,7 +234,7 @@ func TestDatabasePermissionChecker_DirectFriend(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.True(t, decision.Allowed)
-	assert.Equal(t, CodeOK, decision.Code)
+	assert.Zero(t, decision.Code)
 }
 
 func TestDatabasePermissionChecker_DirectFriendUsesPeerMemberNotConversationID(t *testing.T) {
@@ -196,7 +249,7 @@ func TestDatabasePermissionChecker_DirectFriendUsesPeerMemberNotConversationID(t
 			},
 		},
 	}
-	checker := NewDatabasePermissionChecker(fq)
+	checker := newPermissionChecker(t, fq)
 
 	decision, err := checker.CheckMessagePermission(context.Background(), PermissionCheck{
 		SenderID:       100,
@@ -205,7 +258,7 @@ func TestDatabasePermissionChecker_DirectFriendUsesPeerMemberNotConversationID(t
 
 	require.NoError(t, err)
 	assert.True(t, decision.Allowed)
-	assert.Equal(t, CodeOK, decision.Code)
+	assert.Zero(t, decision.Code)
 }
 
 func TestDatabasePermissionChecker_DirectNotFriendUsesTemporaryConversation(t *testing.T) {
@@ -220,7 +273,7 @@ func TestDatabasePermissionChecker_DirectNotFriendUsesTemporaryConversation(t *t
 			},
 		},
 	}
-	checker := NewDatabasePermissionChecker(fq)
+	checker := newPermissionChecker(t, fq)
 
 	decision, err := checker.CheckMessagePermission(context.Background(), PermissionCheck{
 		SenderID:       100,
@@ -229,7 +282,7 @@ func TestDatabasePermissionChecker_DirectNotFriendUsesTemporaryConversation(t *t
 
 	require.NoError(t, err)
 	assert.True(t, decision.Allowed)
-	assert.Equal(t, CodeOK, decision.Code)
+	assert.Zero(t, decision.Code)
 	assert.Contains(t, decision.Reason, "temporary conversation")
 }
 
@@ -246,7 +299,7 @@ func TestDatabasePermissionChecker_DirectTemporaryConversationLimitReached(t *te
 		},
 		messageCounts: map[int64]int64{200: DefaultTemporaryConversationMessageLimit},
 	}
-	checker := NewDatabasePermissionChecker(fq)
+	checker := newPermissionChecker(t, fq)
 
 	decision, err := checker.CheckMessagePermission(context.Background(), PermissionCheck{
 		SenderID:       100,
@@ -255,7 +308,7 @@ func TestDatabasePermissionChecker_DirectTemporaryConversationLimitReached(t *te
 
 	require.NoError(t, err)
 	assert.False(t, decision.Allowed)
-	assert.Equal(t, CodePermissionDenied, decision.Code)
+	assert.Equal(t, int32(errorx.CodeForbidden), decision.Code)
 	assert.Contains(t, decision.Reason, "temporary conversation message limit reached")
 }
 
@@ -292,7 +345,7 @@ func TestDatabasePermissionChecker_DirectBotConversationSkipsTemporaryLimit(t *t
 				messageCounts: map[int64]int64{200: DefaultTemporaryConversationMessageLimit},
 				userTypes:     map[int64]string{9001: string(shareduser.TypeBot)},
 			}
-			checker := NewDatabasePermissionChecker(fq)
+			checker := newPermissionChecker(t, fq)
 
 			decision, err := checker.CheckMessagePermission(context.Background(), PermissionCheck{
 				SenderID:       tt.senderID,
@@ -301,7 +354,7 @@ func TestDatabasePermissionChecker_DirectBotConversationSkipsTemporaryLimit(t *t
 
 			require.NoError(t, err)
 			assert.True(t, decision.Allowed)
-			assert.Equal(t, CodeOK, decision.Code)
+			assert.Zero(t, decision.Code)
 			assert.Equal(t, "bot direct conversation", decision.Reason)
 		})
 	}
@@ -322,16 +375,16 @@ func TestDatabasePermissionChecker_DirectTemporaryConversationCustomLimit(t *tes
 	}
 
 	// limit=100 时汇总 50 条仍在限额内，应放行
-	checker := NewDatabasePermissionChecker(fq, WithPermissionMessageLimit(100))
+	checker := newPermissionChecker(t, fq, WithPermissionMessageLimit(100))
 	decision, err := checker.CheckMessagePermission(context.Background(), PermissionCheck{
 		SenderID: 100, ConversationID: 200,
 	})
 	require.NoError(t, err)
 	assert.True(t, decision.Allowed)
-	assert.Equal(t, CodeOK, decision.Code)
+	assert.Zero(t, decision.Code)
 
 	// limit=0 表示不限制（压测场景）
-	checkerUnlimited := NewDatabasePermissionChecker(fq, WithPermissionMessageLimit(0))
+	checkerUnlimited := newPermissionChecker(t, fq, WithPermissionMessageLimit(0))
 	decision, err = checkerUnlimited.CheckMessagePermission(context.Background(), PermissionCheck{
 		SenderID: 100, ConversationID: 200,
 	})
@@ -339,13 +392,13 @@ func TestDatabasePermissionChecker_DirectTemporaryConversationCustomLimit(t *tes
 	assert.True(t, decision.Allowed)
 
 	// limit=5 且计数 50，应拒绝
-	checkerStrict := NewDatabasePermissionChecker(fq, WithPermissionMessageLimit(5))
+	checkerStrict := newPermissionChecker(t, fq, WithPermissionMessageLimit(5))
 	decision, err = checkerStrict.CheckMessagePermission(context.Background(), PermissionCheck{
 		SenderID: 100, ConversationID: 200,
 	})
 	require.NoError(t, err)
 	assert.False(t, decision.Allowed)
-	assert.Equal(t, CodePermissionDenied, decision.Code)
+	assert.Equal(t, int32(errorx.CodeForbidden), decision.Code)
 }
 
 func TestDatabasePermissionChecker_DirectBlocked(t *testing.T) {
@@ -360,7 +413,7 @@ func TestDatabasePermissionChecker_DirectBlocked(t *testing.T) {
 			},
 		},
 	}
-	checker := NewDatabasePermissionChecker(fq)
+	checker := newPermissionChecker(t, fq)
 
 	decision, err := checker.CheckMessagePermission(context.Background(), PermissionCheck{
 		SenderID:       100,
@@ -369,7 +422,7 @@ func TestDatabasePermissionChecker_DirectBlocked(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.False(t, decision.Allowed)
-	assert.Equal(t, CodePermissionDenied, decision.Code)
+	assert.Equal(t, int32(errorx.CodeForbidden), decision.Code)
 	assert.Contains(t, decision.Reason, "blocked")
 }
 
@@ -379,7 +432,7 @@ func TestDatabasePermissionChecker_ConversationNotFound(t *testing.T) {
 		members:       map[string]orm.ConversationMember{},
 		friendships:   map[string][]orm.Friendship{},
 	}
-	checker := NewDatabasePermissionChecker(fq)
+	checker := newPermissionChecker(t, fq)
 
 	decision, err := checker.CheckMessagePermission(context.Background(), PermissionCheck{
 		SenderID:       100,
@@ -388,7 +441,7 @@ func TestDatabasePermissionChecker_ConversationNotFound(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.False(t, decision.Allowed)
-	assert.Equal(t, CodeNotFound, decision.Code)
+	assert.Equal(t, int32(errorx.CodeNotFound), decision.Code)
 	assert.Contains(t, decision.Reason, "not found")
 }
 
@@ -400,7 +453,7 @@ func TestDatabasePermissionChecker_ConversationInactive(t *testing.T) {
 		members:     map[string]orm.ConversationMember{},
 		friendships: map[string][]orm.Friendship{},
 	}
-	checker := NewDatabasePermissionChecker(fq)
+	checker := newPermissionChecker(t, fq)
 
 	decision, err := checker.CheckMessagePermission(context.Background(), PermissionCheck{
 		SenderID:       100,
@@ -409,7 +462,7 @@ func TestDatabasePermissionChecker_ConversationInactive(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.False(t, decision.Allowed)
-	assert.Equal(t, CodeNotFound, decision.Code)
+	assert.Equal(t, int32(errorx.CodeNotFound), decision.Code)
 	assert.Contains(t, decision.Reason, "not active")
 }
 
@@ -420,7 +473,7 @@ func TestDatabasePermissionChecker_DBError(t *testing.T) {
 		friendships:   map[string][]orm.Friendship{},
 		getConvErr:    errors.New("database connection error"),
 	}
-	checker := NewDatabasePermissionChecker(fq)
+	checker := newPermissionChecker(t, fq)
 
 	decision, err := checker.CheckMessagePermission(context.Background(), PermissionCheck{
 		SenderID:       100,
@@ -445,7 +498,7 @@ func TestDatabasePermissionChecker_DirectBidirectionalFriendship(t *testing.T) {
 			},
 		},
 	}
-	checker := NewDatabasePermissionChecker(fq)
+	checker := newPermissionChecker(t, fq)
 
 	decision, err := checker.CheckMessagePermission(context.Background(), PermissionCheck{
 		SenderID:       100,
@@ -454,7 +507,7 @@ func TestDatabasePermissionChecker_DirectBidirectionalFriendship(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.True(t, decision.Allowed)
-	assert.Equal(t, CodeOK, decision.Code)
+	assert.Zero(t, decision.Code)
 }
 
 func TestDatabasePermissionChecker_GroupMentionsFilteredToMembers(t *testing.T) {
@@ -469,7 +522,8 @@ func TestDatabasePermissionChecker_GroupMentionsFilteredToMembers(t *testing.T) 
 		},
 		friendships: map[string][]orm.Friendship{},
 	}
-	checker := NewDatabasePermissionChecker(fq)
+	checker := newPermissionChecker(t, fq)
+	grantGroupRole(t, checker, 1, 100, sharedconversation.RoleMember)
 
 	// Mention member 200, member 300, and non-member 999
 	decision, err := checker.CheckMessagePermission(context.Background(), PermissionCheck{
@@ -480,7 +534,7 @@ func TestDatabasePermissionChecker_GroupMentionsFilteredToMembers(t *testing.T) 
 
 	require.NoError(t, err)
 	assert.True(t, decision.Allowed)
-	assert.Equal(t, CodeOK, decision.Code)
+	assert.Zero(t, decision.Code)
 	// Only member IDs 200 and 300 should remain; 999 is filtered out
 	assert.Equal(t, []int64{200, 300}, decision.FilteredMentions)
 }
@@ -495,7 +549,8 @@ func TestDatabasePermissionChecker_GroupAllMentionsNonMember(t *testing.T) {
 		},
 		friendships: map[string][]orm.Friendship{},
 	}
-	checker := NewDatabasePermissionChecker(fq)
+	checker := newPermissionChecker(t, fq)
+	grantGroupRole(t, checker, 1, 100, sharedconversation.RoleMember)
 
 	// Mention only non-members
 	decision, err := checker.CheckMessagePermission(context.Background(), PermissionCheck{
@@ -506,7 +561,7 @@ func TestDatabasePermissionChecker_GroupAllMentionsNonMember(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.True(t, decision.Allowed)
-	assert.Equal(t, CodeOK, decision.Code)
+	assert.Zero(t, decision.Code)
 	// All mentions filtered out — message still allowed
 	assert.Empty(t, decision.FilteredMentions)
 }
@@ -521,7 +576,8 @@ func TestDatabasePermissionChecker_GroupNoMentions(t *testing.T) {
 		},
 		friendships: map[string][]orm.Friendship{},
 	}
-	checker := NewDatabasePermissionChecker(fq)
+	checker := newPermissionChecker(t, fq)
+	grantGroupRole(t, checker, 1, 100, sharedconversation.RoleMember)
 
 	decision, err := checker.CheckMessagePermission(context.Background(), PermissionCheck{
 		SenderID:       100,
@@ -545,7 +601,7 @@ func TestDatabasePermissionChecker_DirectMentionsFilteredToMembers(t *testing.T)
 			},
 		},
 	}
-	checker := NewDatabasePermissionChecker(fq)
+	checker := newPermissionChecker(t, fq)
 
 	// In a direct conversation, only the peer (200) is a valid mention; 999 is not a member
 	decision, err := checker.CheckMessagePermission(context.Background(), PermissionCheck{

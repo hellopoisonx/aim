@@ -119,14 +119,14 @@ func TestIngestMessageIsIdempotent(t *testing.T) {
 
 func TestIngestMessagePropagatesPermissionDenial(t *testing.T) {
 	svc, checker, _, publisher := newMessageFixture(t)
-	checker.decision = PermissionDecision{Allowed: false, Code: CodePermissionDenied, Reason: "sender is muted"}
+	checker.decision = PermissionDecision{Allowed: false, Code: errorx.CodeForbidden, Reason: "sender is muted"}
 
 	_, err := svc.IngestMessage(context.Background(), sampleInput())
 	require.Error(t, err)
 
 	var codeErr *errorx.CodeError
 	require.ErrorAs(t, err, &codeErr)
-	assert.Equal(t, int(CodePermissionDenied), codeErr.Code)
+	assert.Equal(t, int(errorx.CodeForbidden), codeErr.Code)
 	assert.Equal(t, "sender is muted", codeErr.Message)
 	assert.Empty(t, publisher.bodies)
 }

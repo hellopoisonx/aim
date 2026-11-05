@@ -33,7 +33,7 @@ func NewCreateGroupLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Creat
 	}
 }
 
-func (l *CreateGroupLogic) CreateGroup(req *types.CreateGroupRequest) (resp *types.CreateConversationResponse, err error) {
+func (l *CreateGroupLogic) CreateGroup(req *types.CreateGroupRequest) (resp *types.ConversationItem, err error) {
 	userID, err := authctx.RequireUserID(l.ctx)
 	if err != nil {
 		return nil, err
@@ -64,7 +64,7 @@ func (l *CreateGroupLogic) CreateGroup(req *types.CreateGroupRequest) (resp *typ
 		return nil, errorx.NewCodeError(errorx.CodeInternal, "internal error")
 	}
 
-	item := types.CreateConversationResponse(pbconv.Conversation(conv))
+	item := pbconv.Conversation(conv)
 
 	return &item, nil
 }

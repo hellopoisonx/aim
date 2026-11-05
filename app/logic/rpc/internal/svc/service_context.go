@@ -103,7 +103,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		logx.Must(fmt.Errorf("logic service: casbin authorizer: %w", err))
 	}
 	svcCtx.Authorizer = authz
-	svcCtx.PermissionChecker = service.NewDatabasePermissionChecker(store,
+	svcCtx.PermissionChecker = service.NewDatabasePermissionChecker(store, authz,
 		service.WithPermissionMessageLimit(limit),
 		service.WithPermissionCaches(service.DatabasePermissionCheckerCaches{
 			Conversation: svcCtx.ConvCache,
@@ -111,7 +111,6 @@ func NewServiceContext(c config.Config) *ServiceContext {
 			Friendship:   svcCtx.FriendshipCache,
 			UserType:     svcCtx.UserTypeCache,
 		}),
-		service.WithPermissionAuthorizer(authz),
 	)
 	svcCtx.UserInfoService = service.NewUserInfoService(store, service.WithUserInfoCache(svcCtx.UserCache), service.WithUserTypeCache(svcCtx.UserTypeCache))
 	svcCtx.BotService = service.NewBotService(store, store,

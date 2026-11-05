@@ -1142,7 +1142,8 @@ type = TYPING
 payload = TypingPayload{ conversation_id = <会话ID> }
 ```
 
-- 该帧不返回 `SERVER_ACK`
+- 发送者必须是该会话成员；非成员会收到 `SERVER_ACK`（`ACK_STATUS_REJECTED`，code `40300`），事件不会发布
+- 校验通过时不返回 `SERVER_ACK`
 - 服务端 best-effort 投递，客户端不依赖强一致到达
 
 **接收输入状态**：

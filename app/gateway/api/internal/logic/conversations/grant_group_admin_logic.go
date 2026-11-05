@@ -30,10 +30,10 @@ func NewGrantGroupAdminLogic(ctx context.Context, svcCtx *svc.ServiceContext) *G
 	}
 }
 
-func (l *GrantGroupAdminLogic) GrantGroupAdmin(req *types.GrantGroupAdminRequest) error {
+func (l *GrantGroupAdminLogic) GrantGroupAdmin(req *types.GrantGroupAdminRequest) (resp *types.MutationResult, err error) {
 	userID, err := authctx.RequireUserID(l.ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	_, err = l.svcCtx.LogicConversationClient.GrantGroupAdmin(l.ctx, &conversationservice.GrantGroupAdminReq{
 		ConversationId: req.Id,
@@ -41,7 +41,7 @@ func (l *GrantGroupAdminLogic) GrantGroupAdmin(req *types.GrantGroupAdminRequest
 		TargetUserId:   req.UserId,
 	})
 	if err != nil {
-		return errorx.SanitizeGRPCError(l, "grant group admin", err)
+		return nil, errorx.SanitizeGRPCError(l, "grant group admin", err)
 	}
-	return nil
+	return &types.MutationResult{Success: true}, nil
 }

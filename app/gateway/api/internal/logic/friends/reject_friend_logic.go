@@ -7,14 +7,10 @@ import (
 	"context"
 
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/authctx"
-	"github.com/hellopoisonx/aim/app/gateway/api/internal/pbconv"
-
-	"github.com/hellopoisonx/aim/app/gateway/api/internal/peerprofile"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/friendshipservice"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
-	"github.com/hellopoisonx/aim/app/shared/events"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -47,29 +43,10 @@ func (l *RejectFriendLogic) RejectFriend(req *types.RejectFriendRequest) (resp *
 		return nil, errorx.SanitizeGRPCError(l, "reject friend", err)
 	}
 
-	friendship := rpcResp.GetFriendship()
-	if friendship == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "internal error")
+	item, err := friendApplicationResult(l.ctx, l.svcCtx, l.Logger, "reject", req.Id, userID, rpcResp.GetFriendship())
+	if err != nil {
+		return nil, err
 	}
-
-	// Notify the requester on every gateway node holding their connections.
-	// The push is best-effort: the REST response below is already committed, so a
-	// broker hiccup must not turn a successful reject into an error.
-	if l.svcCtx.FriendAppPub != nil {
-		if err := l.svcCtx.FriendAppPub.PublishFriendApplication(l.ctx, events.FriendApplicationEvent{
-			TargetUserID: req.Id,
-			UserID:       userID,
-			FriendID:     req.Id,
-			Status:       friendship.GetStatus(),
-			CreatedAt:    friendship.GetCreatedAt(),
-			UpdatedAt:    friendship.GetUpdatedAt(),
-		}); err != nil {
-			l.Errorf("publish friend application after reject failed: %v", err)
-		}
-	}
-
-	item := pbconv.Friendship(friendship)
-	peerprofile.Enrich(l.ctx, l.svcCtx, req.Id, &item)
 
 	return &types.RejectFriendResponse{
 		Friendship: item,
