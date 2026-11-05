@@ -3,10 +3,12 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strconv"
 	"testing"
 
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/servicefakes"
+	"github.com/hellopoisonx/aim/app/logic/rpc/model/orm"
 	sharedconversation "github.com/hellopoisonx/aim/app/shared/conversation"
 	"github.com/hellopoisonx/aim/app/shared/events"
 	"github.com/hellopoisonx/aim/app/shared/rocketmq"
@@ -112,6 +114,63 @@ func TestUpdateGroupInfo_PublishesAvatarEvent(t *testing.T) {
 	require.NoError(t, json.Unmarshal(runner.messages[0].Body, &payload))
 	assert.Contains(t, payload.Content, "group_avatar_changed")
 	assert.ElementsMatch(t, []int64{1, 2, 3}, payload.TargetUserIDs)
+}
+
+func TestUpdateGroupInfo_RenameAndAvatarAnnounceRename(t *testing.T) {
+	store := servicefakes.NewConversationStore()
+	runner := &fakeEventTxRunner{store: store}
+	svc := newGroupConversation(t, store, runner)
+	svc.eventTopic = "aim-conversation-events"
+
+	conversationID := firstConversationID(t, store)
+	name := "renamed"
+	avatar := "https://example.test/b.png"
+	_, err := svc.UpdateGroupInfo(context.Background(), conversationID, 1, "owner", &name, &avatar)
+	require.NoError(t, err)
+
+	require.Len(t, runner.messages, 1)
+	var payload events.ConversationEvent
+	require.NoError(t, json.Unmarshal(runner.messages[0].Body, &payload))
+	assert.Contains(t, payload.Content, "group_renamed")
+	assert.NotContains(t, payload.Content, "group_avatar_changed")
+	assert.Equal(t, name, store.Conversations[conversationID].Name)
+	assert.Equal(t, avatar, store.Conversations[conversationID].Avatar)
+}
+
+// refetchFailStore fails the post-commit conversation lookup, which is the
+// third read of a group mutation (first check, member lookup, re-fetch).
+type refetchFailStore struct {
+	*servicefakes.ConversationStore
+	failAt int
+	gets   int
+}
+
+func (s *refetchFailStore) GetConversation(ctx context.Context, id int64) (orm.Conversation, error) {
+	s.gets++
+	if s.gets >= s.failAt {
+		return orm.Conversation{}, errors.New("refetch failed")
+	}
+	return s.ConversationStore.GetConversation(ctx, id)
+}
+
+func TestGroupMutation_RefetchErrorIsPropagated(t *testing.T) {
+	store := servicefakes.NewConversationStore()
+	svc := NewConversationService(store, testSnowflake, plainTxRunner{store: store})
+	_, err := svc.CreateConversation(context.Background(), sharedconversation.TypeGroup, 1, []int64{1, 2, 3}, "group", "")
+	require.NoError(t, err)
+	conversationID := firstConversationID(t, store)
+
+	refetchFail := &refetchFailStore{ConversationStore: store, failAt: 3}
+	svc.store = refetchFail
+
+	name := "renamed"
+	_, err = svc.UpdateGroupInfo(context.Background(), conversationID, 1, "owner", &name, nil)
+	require.ErrorContains(t, err, "refetch failed")
+
+	refetchFail.gets = 0
+	_, err = svc.AddGroupMembers(context.Background(), conversationID, 1, "owner", []int64{4})
+	require.ErrorContains(t, err, "refetch failed")
+	require.Equal(t, 3, refetchFail.gets)
 }
 
 func TestDismissGroup_PublishesBeforeDeactivation(t *testing.T) {

@@ -28,11 +28,12 @@ func NewCreateUserBotDirectConversationLogic(ctx context.Context, svcCtx *svc.Se
 }
 
 func (l *CreateUserBotDirectConversationLogic) CreateUserBotDirectConversation(in *pb.CreateUserBotDirectConversationReq) (*pb.CreateUserBotDirectConversationResp, error) {
-	if l.svcCtx.BotService == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "bot service not configured")
+	botSvc, err := requireBot(l.svcCtx, in.GetBotUserId())
+	if err != nil {
+		return nil, err
 	}
 	// Verify owner relationship and get bot profile info.
-	botInfo, err := l.svcCtx.BotService.GetUserBot(l.ctx, in.GetOwnerUserId(), in.GetBotUserId())
+	botInfo, err := botSvc.GetUserBot(l.ctx, in.GetOwnerUserId(), in.GetBotUserId())
 	if err != nil {
 		return nil, err
 	}

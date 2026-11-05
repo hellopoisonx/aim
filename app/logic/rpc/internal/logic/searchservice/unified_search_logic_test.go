@@ -272,7 +272,7 @@ func TestUnifiedSearchMapsResults(t *testing.T) {
 	require.Equal(t, []*pb.SearchUserResult{{
 		User: &pb.UserInfoResponse{
 			Id: 9, Email: "u@example.com", Status: 1, Nickname: "alice", Avatar: "a.png",
-			CreatedAt: created.UnixMilli(), UpdatedAt: created.UnixMilli(),
+			CreatedAt: created.Unix(), UpdatedAt: created.Unix(),
 		},
 		Snippet: "alice snippet",
 	}}, resp.GetUsers())
@@ -282,7 +282,7 @@ func TestUnifiedSearchMapsResults(t *testing.T) {
 			Friendship: &pb.FriendshipResponse{UserId: 3, FriendId: 4, Status: service.FriendshipStatusAccepted},
 			User: &pb.UserInfoResponse{
 				Id: 4, Nickname: "user-4",
-				CreatedAt: fakeUserCreated.UnixMilli(), UpdatedAt: fakeUserCreated.UnixMilli(),
+				CreatedAt: fakeUserCreated.Unix(), UpdatedAt: fakeUserCreated.Unix(),
 			},
 			Snippet: "friend snippet",
 		},
@@ -290,7 +290,7 @@ func TestUnifiedSearchMapsResults(t *testing.T) {
 			Friendship: &pb.FriendshipResponse{UserId: 3, FriendId: 8, Status: service.FriendshipStatusAccepted},
 			User: &pb.UserInfoResponse{
 				Id: 3, Nickname: "user-3",
-				CreatedAt: fakeUserCreated.UnixMilli(), UpdatedAt: fakeUserCreated.UnixMilli(),
+				CreatedAt: fakeUserCreated.Unix(), UpdatedAt: fakeUserCreated.Unix(),
 			},
 			Snippet: "reverse snippet",
 		},

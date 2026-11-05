@@ -3,6 +3,7 @@ package userservicelogic
 import (
 	"context"
 
+	"github.com/hellopoisonx/aim/app/logic/rpc/internal/pbconv"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
@@ -41,6 +42,6 @@ func (l *GetUserInfoByEmailLogic) GetUserInfoByEmail(in *pb.GetUserInfoByEmailRe
 	}
 
 	return &pb.GetUserInfoResp{
-		User: userInfoToResponse(info),
+		User: pbconv.User(info),
 	}, nil
 }

@@ -26,12 +26,13 @@ func NewAddUserBotToConversationLogic(ctx context.Context, svcCtx *svc.ServiceCo
 }
 
 func (l *AddUserBotToConversationLogic) AddUserBotToConversation(in *pb.AddUserBotToConversationReq) (*pb.AddUserBotToConversationResp, error) {
-	if l.svcCtx.BotService == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "bot service not configured")
+	botSvc, err := requireBot(l.svcCtx, in.GetBotUserId())
+	if err != nil {
+		return nil, err
 	}
 
 	// Verify owner relationship.
-	if _, err := l.svcCtx.BotService.GetUserBot(l.ctx, in.GetOwnerUserId(), in.GetBotUserId()); err != nil {
+	if _, err := botSvc.GetUserBot(l.ctx, in.GetOwnerUserId(), in.GetBotUserId()); err != nil {
 		return nil, err
 	}
 

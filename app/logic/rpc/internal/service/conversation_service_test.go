@@ -770,12 +770,12 @@ func TestConversationDomainErrorsCarryBizCodes(t *testing.T) {
 		err      error
 		wantCode int
 	}{
-		{"not found", ErrConversationNotFound, CodeConversationNotFound},
-		{"not member", ErrNotMember, CodeNotMember},
-		{"exists", ErrConversationExists, CodeConversationExists},
-		{"not group", ErrNotGroupConversation, CodeNotGroupConversation},
-		{"not owner", ErrNotOwner, CodeNotOwner},
-		{"not admin", ErrNotAdmin, CodeNotAdmin},
+		{"not found", ErrConversationNotFound, errorx.CodeConversationNotFound},
+		{"not member", ErrNotMember, errorx.CodeConversationNotMember},
+		{"exists", ErrConversationExists, errorx.CodeConversationExists},
+		{"not group", ErrNotGroupConversation, errorx.CodeConversationNotGroup},
+		{"not owner", ErrNotOwner, errorx.CodeConversationNotOwner},
+		{"not admin", ErrNotAdmin, errorx.CodeConversationNotAdmin},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

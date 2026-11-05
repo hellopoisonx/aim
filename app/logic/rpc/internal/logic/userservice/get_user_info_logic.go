@@ -3,6 +3,7 @@ package userservicelogic
 import (
 	"context"
 
+	"github.com/hellopoisonx/aim/app/logic/rpc/internal/pbconv"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
@@ -37,6 +38,6 @@ func (l *GetUserInfoLogic) GetUserInfo(in *pb.GetUserInfoReq) (*pb.GetUserInfoRe
 	}
 
 	return &pb.GetUserInfoResp{
-		User: userInfoToResponse(info),
+		User: pbconv.User(info),
 	}, nil
 }

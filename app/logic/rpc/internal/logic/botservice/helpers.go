@@ -9,12 +9,22 @@ import (
 
 // requireBot returns the bot service after validating the bot user id.
 func requireBot(c *svc.ServiceContext, botUserID int64) (*service.BotService, error) {
-	if c.BotService == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "bot service not configured")
+	botSvc, err := requireBotService(c)
+	if err != nil {
+		return nil, err
 	}
 
 	if botUserID <= 0 {
 		return nil, errorx.NewCodeError(errorx.CodeBadInput, "bot_user_id is required")
+	}
+
+	return botSvc, nil
+}
+
+// requireBotService returns the configured bot service without inspecting an id.
+func requireBotService(c *svc.ServiceContext) (*service.BotService, error) {
+	if c.BotService == nil {
+		return nil, errorx.NewCodeError(errorx.CodeInternal, "bot service not configured")
 	}
 
 	return c.BotService, nil

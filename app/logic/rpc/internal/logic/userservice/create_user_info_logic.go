@@ -3,8 +3,8 @@ package userservicelogic
 import (
 	"context"
 
+	"github.com/hellopoisonx/aim/app/logic/rpc/internal/pbconv"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
-	"github.com/hellopoisonx/aim/app/logic/rpc/model/orm"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 
@@ -46,18 +46,6 @@ func (l *CreateUserInfoLogic) CreateUserInfo(in *pb.CreateUserInfoReq) (*pb.Crea
 	}
 
 	return &pb.CreateUserInfoResp{
-		User: userInfoToResponse(info),
+		User: pbconv.User(info),
 	}, nil
-}
-
-func userInfoToResponse(info orm.UserInfo) *pb.UserInfoResponse {
-	return &pb.UserInfoResponse{
-		Id:        info.ID,
-		Email:     info.Email,
-		Status:    int32(info.Status),
-		Nickname:  info.Nickname,
-		Avatar:    info.Avatar,
-		CreatedAt: info.CreatedAt.Unix(),
-		UpdatedAt: info.UpdatedAt.Unix(),
-	}
 }

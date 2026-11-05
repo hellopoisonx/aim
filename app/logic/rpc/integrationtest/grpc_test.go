@@ -216,5 +216,5 @@ func TestConversationErrorsSurviveTheWire(t *testing.T) {
 
 	codeErr := errorx.FromGRPCError(err)
 	require.NotNil(t, codeErr)
-	require.Equal(t, service.CodeConversationNotFound, codeErr.Code)
+	require.Equal(t, errorx.CodeConversationNotFound, codeErr.Code)
 }

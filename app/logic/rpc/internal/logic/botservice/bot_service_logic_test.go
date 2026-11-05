@@ -631,8 +631,8 @@ func TestBotServiceLogicMapsResponses(t *testing.T) {
 			Status:    1,
 			Nickname:  "bot",
 			Avatar:    "a.png",
-			CreatedAt: created.UnixMilli(),
-			UpdatedAt: created.UnixMilli(),
+			CreatedAt: created.Unix(),
+			UpdatedAt: created.Unix(),
 		}, resp.GetProfile())
 	})
 

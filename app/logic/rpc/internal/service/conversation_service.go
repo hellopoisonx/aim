@@ -23,15 +23,6 @@ import (
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
-const (
-	CodeConversationNotFound = 40410
-	CodeNotMember            = 40310
-	CodeConversationExists   = 40910
-	CodeNotGroupConversation = 40011
-	CodeNotOwner             = 40311
-	CodeNotAdmin             = 40312
-)
-
 // Conversation vocabulary (types, member roles) lives in app/shared/conversation
 // so the DAO and the service agree on one set of literals.
 const (
@@ -48,12 +39,12 @@ const (
 // Domain errors carry their biz code directly so every RPC handler can return
 // them through errorx.ToGRPCError without a hand-written converter.
 var (
-	ErrConversationNotFound = errorx.NewCodeError(CodeConversationNotFound, "conversation not found")
-	ErrNotMember            = errorx.NewCodeError(CodeNotMember, "not a member of the conversation")
-	ErrConversationExists   = errorx.NewCodeError(CodeConversationExists, "conversation already exists")
-	ErrNotGroupConversation = errorx.NewCodeError(CodeNotGroupConversation, "not a group conversation")
-	ErrNotOwner             = errorx.NewCodeError(CodeNotOwner, "not the group owner")
-	ErrNotAdmin             = errorx.NewCodeError(CodeNotAdmin, "not a group admin")
+	ErrConversationNotFound = errorx.NewCodeError(errorx.CodeConversationNotFound, "conversation not found")
+	ErrNotMember            = errorx.NewCodeError(errorx.CodeConversationNotMember, "not a member of the conversation")
+	ErrConversationExists   = errorx.NewCodeError(errorx.CodeConversationExists, "conversation already exists")
+	ErrNotGroupConversation = errorx.NewCodeError(errorx.CodeConversationNotGroup, "not a group conversation")
+	ErrNotOwner             = errorx.NewCodeError(errorx.CodeConversationNotOwner, "not the group owner")
+	ErrNotAdmin             = errorx.NewCodeError(errorx.CodeConversationNotAdmin, "not a group admin")
 )
 
 type ConversationQuerier interface {
@@ -281,6 +272,39 @@ func (s *ConversationService) buildSystemMessage(event string, operatorID int64,
 	}
 	data, _ := json.Marshal(content)
 	return data
+}
+
+// insertSystemMessageTx writes the group system message and publishes its
+// conversation event in one transaction. contentTargetIDs are named in the
+// message body, notifyTargetIDs receive the event.
+func (s *ConversationService) insertSystemMessageTx(ctx context.Context, conversationID, operatorID int64, operatorName, event string, contentTargetIDs, notifyTargetIDs []int64, mutate func(ConversationStore) error) error {
+	messageID, err := s.idGen.NextID()
+	if err != nil {
+		return err
+	}
+
+	content := s.buildSystemMessage(event, operatorID, operatorName, contentTargetIDs)
+	return s.inTxWithEvent(ctx, events.ConversationEvent{
+		MessageID:      messageID,
+		ConversationID: conversationID,
+		SenderID:       0,
+		MessageType:    MessageTypeSystem,
+		Content:        string(content),
+		TargetUserIDs:  notifyTargetIDs,
+		Timestamp:      time.Now().UnixMilli(),
+	}, func(tx ConversationStore) error {
+		if err := mutate(tx); err != nil {
+			return err
+		}
+
+		return tx.InsertMessage(ctx, orm.Message{
+			ID:             messageID,
+			ConversationID: conversationID,
+			SenderID:       0,
+			MessageType:    MessageTypeSystem,
+			Content:        content,
+		})
+	})
 }
 
 func (s *ConversationService) memberRole(ctx context.Context, conversationID, userID int64) (sharedconversation.Role, error) {
@@ -686,22 +710,8 @@ func (s *ConversationService) AddGroupMembers(ctx context.Context, conversationI
 		targetUserIDs = append(targetUserIDs, mid)
 	}
 
-	messageID, err := s.idGen.NextID()
-	if err != nil {
-		return orm.Conversation{}, err
-	}
-
-	content := s.buildSystemMessage("member_joined", operatorID, operatorName, newMemberIDs)
 	addRoles := make([]int64, 0, len(newMemberIDs))
-	err = s.inTxWithEvent(ctx, events.ConversationEvent{
-		MessageID:      messageID,
-		ConversationID: conversationID,
-		SenderID:       0,
-		MessageType:    MessageTypeSystem,
-		Content:        string(content),
-		TargetUserIDs:  targetUserIDs,
-		Timestamp:      time.Now().UnixMilli(),
-	}, func(tx ConversationStore) error {
+	err = s.insertSystemMessageTx(ctx, conversationID, operatorID, operatorName, "member_joined", newMemberIDs, targetUserIDs, func(tx ConversationStore) error {
 		existingMembers, err := tx.GetConversationMembers(ctx, conversationID)
 		if err != nil {
 			return err
@@ -722,13 +732,7 @@ func (s *ConversationService) AddGroupMembers(ctx context.Context, conversationI
 			addRoles = append(addRoles, mid)
 		}
 
-		return tx.InsertMessage(ctx, orm.Message{
-			ID:             messageID,
-			ConversationID: conversationID,
-			SenderID:       0,
-			MessageType:    MessageTypeSystem,
-			Content:        content,
-		})
+		return nil
 	})
 	if err != nil {
 		return orm.Conversation{}, err
@@ -740,8 +744,7 @@ func (s *ConversationService) AddGroupMembers(ctx context.Context, conversationI
 		s.assignRole(ctx, conversationID, mid, string(RoleMember))
 	}
 
-	conv, _ = s.GetConversationByID(ctx, conversationID)
-	return conv, nil
+	return s.GetConversationByID(ctx, conversationID)
 }
 
 func (s *ConversationService) RemoveGroupMembers(ctx context.Context, conversationID, operatorID int64, operatorName string, removeMemberIDs []int64) error {
@@ -782,32 +785,9 @@ func (s *ConversationService) RemoveGroupMembers(ctx context.Context, conversati
 		return err
 	}
 
-	messageID, err := s.idGen.NextID()
-	if err != nil {
+	err = s.insertSystemMessageTx(ctx, conversationID, operatorID, operatorName, "member_removed", removeMemberIDs, memberUserIDs(members), func(tx ConversationStore) error {
+		_, err := tx.RemoveConversationMembers(ctx, conversationID, removeMemberIDs)
 		return err
-	}
-
-	content := s.buildSystemMessage("member_removed", operatorID, operatorName, removeMemberIDs)
-	err = s.inTxWithEvent(ctx, events.ConversationEvent{
-		MessageID:      messageID,
-		ConversationID: conversationID,
-		SenderID:       0,
-		MessageType:    MessageTypeSystem,
-		Content:        string(content),
-		TargetUserIDs:  memberUserIDs(members),
-		Timestamp:      time.Now().UnixMilli(),
-	}, func(tx ConversationStore) error {
-		if _, err := tx.RemoveConversationMembers(ctx, conversationID, removeMemberIDs); err != nil {
-			return err
-		}
-
-		return tx.InsertMessage(ctx, orm.Message{
-			ID:             messageID,
-			ConversationID: conversationID,
-			SenderID:       0,
-			MessageType:    MessageTypeSystem,
-			Content:        content,
-		})
 	})
 	if err != nil {
 		return err
@@ -841,32 +821,9 @@ func (s *ConversationService) LeaveGroup(ctx context.Context, conversationID, us
 		return err
 	}
 
-	messageID, err := s.idGen.NextID()
-	if err != nil {
+	err = s.insertSystemMessageTx(ctx, conversationID, userID, userName, "member_left", []int64{userID}, memberUserIDs(members), func(tx ConversationStore) error {
+		_, err := tx.RemoveConversationMembers(ctx, conversationID, []int64{userID})
 		return err
-	}
-
-	content := s.buildSystemMessage("member_left", userID, userName, []int64{userID})
-	err = s.inTxWithEvent(ctx, events.ConversationEvent{
-		MessageID:      messageID,
-		ConversationID: conversationID,
-		SenderID:       0,
-		MessageType:    MessageTypeSystem,
-		Content:        string(content),
-		TargetUserIDs:  memberUserIDs(members),
-		Timestamp:      time.Now().UnixMilli(),
-	}, func(tx ConversationStore) error {
-		if _, err := tx.RemoveConversationMembers(ctx, conversationID, []int64{userID}); err != nil {
-			return err
-		}
-
-		return tx.InsertMessage(ctx, orm.Message{
-			ID:             messageID,
-			ConversationID: conversationID,
-			SenderID:       0,
-			MessageType:    MessageTypeSystem,
-			Content:        content,
-		})
 	})
 	if err != nil {
 		return err
@@ -896,32 +853,8 @@ func (s *ConversationService) DismissGroup(ctx context.Context, conversationID, 
 		return err
 	}
 
-	messageID, err := s.idGen.NextID()
-	if err != nil {
-		return err
-	}
-
-	content := s.buildSystemMessage("group_dismissed", operatorID, "", nil)
-	err = s.inTxWithEvent(ctx, events.ConversationEvent{
-		MessageID:      messageID,
-		ConversationID: conversationID,
-		SenderID:       0,
-		MessageType:    MessageTypeSystem,
-		Content:        string(content),
-		TargetUserIDs:  memberUserIDs(members),
-		Timestamp:      time.Now().UnixMilli(),
-	}, func(tx ConversationStore) error {
-		if err := tx.DeactivateConversation(ctx, conversationID); err != nil {
-			return err
-		}
-
-		return tx.InsertMessage(ctx, orm.Message{
-			ID:             messageID,
-			ConversationID: conversationID,
-			SenderID:       0,
-			MessageType:    MessageTypeSystem,
-			Content:        content,
-		})
+	err = s.insertSystemMessageTx(ctx, conversationID, operatorID, "", "group_dismissed", nil, memberUserIDs(members), func(tx ConversationStore) error {
+		return tx.DeactivateConversation(ctx, conversationID)
 	})
 	if err != nil {
 		return err
@@ -965,9 +898,11 @@ func (s *ConversationService) UpdateGroupInfo(ctx context.Context, conversationI
 		return conv, nil
 	}
 
-	eventType := "group_renamed"
-	if avatar != nil {
-		eventType = "group_avatar_changed"
+	// A combined rename and avatar change is announced as the rename; the
+	// avatar travels in the conversation row the client refetches.
+	eventType := "group_avatar_changed"
+	if name != nil {
+		eventType = "group_renamed"
 	}
 
 	members, err := s.GetConversationMembers(ctx, conversationID)
@@ -975,40 +910,15 @@ func (s *ConversationService) UpdateGroupInfo(ctx context.Context, conversationI
 		return orm.Conversation{}, err
 	}
 
-	messageID, err := s.idGen.NextID()
-	if err != nil {
-		return orm.Conversation{}, err
-	}
-
-	content := s.buildSystemMessage(eventType, operatorID, operatorName, nil)
-	err = s.inTxWithEvent(ctx, events.ConversationEvent{
-		MessageID:      messageID,
-		ConversationID: conversationID,
-		SenderID:       0,
-		MessageType:    MessageTypeSystem,
-		Content:        string(content),
-		TargetUserIDs:  memberUserIDs(members),
-		Timestamp:      time.Now().UnixMilli(),
-	}, func(tx ConversationStore) error {
-		if err := tx.UpdateConversation(ctx, conversationID, name, avatar); err != nil {
-			return err
-		}
-
-		return tx.InsertMessage(ctx, orm.Message{
-			ID:             messageID,
-			ConversationID: conversationID,
-			SenderID:       0,
-			MessageType:    MessageTypeSystem,
-			Content:        content,
-		})
+	err = s.insertSystemMessageTx(ctx, conversationID, operatorID, operatorName, eventType, nil, memberUserIDs(members), func(tx ConversationStore) error {
+		return tx.UpdateConversation(ctx, conversationID, name, avatar)
 	})
 	if err != nil {
 		return orm.Conversation{}, err
 	}
 
 	s.invalidateConversation(ctx, conversationID)
-	conv, _ = s.GetConversationByID(ctx, conversationID)
-	return conv, nil
+	return s.GetConversationByID(ctx, conversationID)
 }
 
 func (s *ConversationService) GrantGroupAdmin(ctx context.Context, conversationID, operatorID, targetUserID int64) error {

@@ -5,7 +5,6 @@ import (
 
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
-	"github.com/hellopoisonx/aim/app/shared/errorx"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -25,11 +24,12 @@ func NewSetUserBotStatusLogic(ctx context.Context, svcCtx *svc.ServiceContext) *
 }
 
 func (l *SetUserBotStatusLogic) SetUserBotStatus(in *pb.SetUserBotStatusReq) (*pb.SetUserBotStatusResp, error) {
-	if l.svcCtx.BotService == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "bot service not configured")
+	botSvc, err := requireBot(l.svcCtx, in.GetBotUserId())
+	if err != nil {
+		return nil, err
 	}
 
-	bot, err := l.svcCtx.BotService.SetUserBotStatus(l.ctx,
+	bot, err := botSvc.SetUserBotStatus(l.ctx,
 		in.GetOwnerUserId(), in.GetBotUserId(), in.GetEnabled())
 	if err != nil {
 		return nil, err

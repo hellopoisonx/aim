@@ -124,7 +124,7 @@ func TestAddFriend_SelfAdd(t *testing.T) {
 
 	var codeErr *errorx.CodeError
 	require.ErrorAs(t, err, &codeErr)
-	assert.Equal(t, service.CodeSelfAdd, codeErr.Code)
+	assert.Equal(t, errorx.CodeFriendshipSelfAdd, codeErr.Code)
 }
 
 func TestAddFriend_InvalidIDs(t *testing.T) {
@@ -294,5 +294,5 @@ func TestAddFriend_BlockedRelationship(t *testing.T) {
 	var codeErr *errorx.CodeError
 	require.ErrorAs(t, err, &codeErr)
 	// The blocked relationship keeps its precise domain code.
-	assert.Equal(t, service.CodeBlocked, codeErr.Code)
+	assert.Equal(t, errorx.CodeFriendshipBlocked, codeErr.Code)
 }

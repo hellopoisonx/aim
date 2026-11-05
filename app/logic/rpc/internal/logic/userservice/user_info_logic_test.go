@@ -495,21 +495,6 @@ func TestSearchUserInfoByNickname(t *testing.T) {
 	}
 }
 
-func TestUserInfoToResponse(t *testing.T) {
-	info := orm.UserInfo{
-		ID:       1,
-		Email:    "test@example.com",
-		Status:   1,
-		Nickname: "Test User",
-		Avatar:   "https://avatar.example.com/1.png",
-	}
-
-	resp := userInfoToResponse(info)
-	require.Equal(t, int64(1), resp.Id)
-	require.Equal(t, "test@example.com", resp.Email)
-	require.Equal(t, "Test User", resp.Nickname)
-}
-
 func TestCreateUserInfo_InternalError(t *testing.T) {
 	svcCtx := newTestServiceContext(&fakeUserInfoService{err: errors.New("database error")})
 	_, err := NewCreateUserInfoLogic(context.Background(), svcCtx).CreateUserInfo(&pb.CreateUserInfoReq{

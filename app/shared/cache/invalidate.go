@@ -79,12 +79,14 @@ func (m *CacheManager) runInvalidationLoop() {
 
 		for _, stream := range streams {
 			for _, msg := range stream.Messages {
+				// Advance before decoding so a malformed entry is skipped
+				// instead of re-read forever.
+				lastID = msg.ID
 				payload, err := parseInvalidationFields(msg.Values)
 				if err != nil {
 					continue
 				}
 
-				lastID = msg.ID
 				m.deleteLocal(payload.Cache, payload.Keys)
 			}
 		}

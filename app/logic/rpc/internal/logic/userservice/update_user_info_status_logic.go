@@ -4,6 +4,7 @@ import (
 	"context"
 	"math"
 
+	"github.com/hellopoisonx/aim/app/logic/rpc/internal/pbconv"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
@@ -42,6 +43,6 @@ func (l *UpdateUserInfoStatusLogic) UpdateUserInfoStatus(in *pb.UpdateUserInfoSt
 	}
 
 	return &pb.UpdateUserInfoStatusResp{
-		User: userInfoToResponse(info),
+		User: pbconv.User(info),
 	}, nil
 }

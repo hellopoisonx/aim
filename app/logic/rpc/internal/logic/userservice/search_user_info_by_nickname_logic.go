@@ -3,6 +3,7 @@ package userservicelogic
 import (
 	"context"
 
+	"github.com/hellopoisonx/aim/app/logic/rpc/internal/pbconv"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
@@ -51,7 +52,7 @@ func (l *SearchUserInfoByNicknameLogic) SearchUserInfoByNickname(in *pb.SearchUs
 
 	users := make([]*pb.UserInfoResponse, 0, len(infos))
 	for _, info := range infos {
-		users = append(users, userInfoToResponse(info))
+		users = append(users, pbconv.User(info))
 	}
 
 	return &pb.SearchUserInfoByNicknameResp{
