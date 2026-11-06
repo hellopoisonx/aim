@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"sync"
 	"sync/atomic"
 
@@ -106,10 +107,8 @@ func NewProducer(conf ProducerConf, opts ...ProducerOption) (*Producer, error) {
 			opt(p)
 		}
 	}
-	for _, topic := range p.topics {
-		if topic == "" {
-			return nil, errors.New("rocketmq: producer topic is required")
-		}
+	if slices.Contains(p.topics, "") {
+		return nil, errors.New("rocketmq: producer topic is required")
 	}
 	configureLogger()
 

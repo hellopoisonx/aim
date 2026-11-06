@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -223,12 +224,7 @@ func parseScopes(raw []string) ([]Scope, error) {
 }
 
 func hasScope(scopes []Scope, target Scope) bool {
-	for _, s := range scopes {
-		if s == target {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(scopes, target)
 }
 
 func (s *SearchService) searchUsers(ctx context.Context, query string, limit int32) ([]SearchUserResult, error) {
