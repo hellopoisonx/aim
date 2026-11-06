@@ -5,7 +5,6 @@ import (
 
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
-	"github.com/hellopoisonx/aim/app/shared/errorx"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -25,18 +24,14 @@ func NewGetConversationMembersDetailLogic(ctx context.Context, svcCtx *svc.Servi
 }
 
 func (l *GetConversationMembersDetailLogic) GetConversationMembersDetail(in *pb.GetConversationMembersDetailReq) (*pb.GetConversationMembersDetailResp, error) {
-	if in.GetConversationId() <= 0 {
-		return nil, errorx.NewCodeError(errorx.CodeBadInput, "conversation_id is required")
-	}
-
-	convSvc := l.svcCtx.ConversationService
-	if convSvc == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "conversation service is not configured")
+	convSvc, err := requireConversationOp(l.svcCtx.ConversationService, in.GetConversationId())
+	if err != nil {
+		return nil, err
 	}
 
 	details, err := convSvc.GetConversationMembersDetail(l.ctx, in.GetConversationId())
 	if err != nil {
-		return nil, errorx.ToGRPCError(err)
+		return nil, err
 	}
 
 	pbMembers := make([]*pb.MemberDetailItem, 0, len(details))

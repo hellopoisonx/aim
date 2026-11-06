@@ -2,6 +2,8 @@ package svc
 
 import (
 	"context"
+	"errors"
+	"fmt"
 
 	attachmentpb "github.com/hellopoisonx/aim/app/attachment/rpc/pb"
 	"github.com/hellopoisonx/aim/app/core/rpc/internal/cache"
@@ -9,7 +11,8 @@ import (
 	"github.com/hellopoisonx/aim/app/core/rpc/internal/rpc"
 	logicpb "github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/rocketmq"
-	"github.com/hellopoisonx/aim/app/shared/tools"
+	sharedrpc "github.com/hellopoisonx/aim/app/shared/rpc"
+	"github.com/hellopoisonx/aim/app/shared/snowflake"
 
 	"github.com/redis/go-redis/v9"
 	"github.com/zeromicro/go-zero/core/logx"
@@ -19,11 +22,10 @@ import (
 type ServiceContext struct {
 	Config      config.Config
 	RedisClient *redis.Client
-	Snowflake   *tools.Snowflake
-	// TransferProducer publishes transfer events to the FIFO delivery topic.
+	Snowflake   *snowflake.Snowflake
+	// PushProducer publishes gateway push events to the FIFO push topic.
 	// Nil when RocketMQ is not configured.
-	TransferProducer        *rocketmq.Producer
-	LogicPermissionClient   logicpb.PermissionServiceClient
+	PushProducer            *rocketmq.Producer
 	LogicConversationClient logicpb.ConversationServiceClient
 	LogicFriendshipClient   logicpb.FriendshipServiceClient
 	LogicUserClient         logicpb.UserServiceClient
@@ -32,27 +34,18 @@ type ServiceContext struct {
 	AttachmentClient        attachmentpb.AttachmentServiceClient
 }
 
-// transferProducerGroup is the broker-visible producer group of core.
-const transferProducerGroup = "aim-core-transfer"
-
-// StartTransferProducer connects the transfer producer. The RPC server starts
-// regardless: a broker outage surfaces as transfer publish errors instead of a
+// StartPushProducer connects the push producer. The RPC server starts
+// regardless: a broker outage surfaces as push publish errors instead of a
 // crash loop.
-func (s *ServiceContext) StartTransferProducer() {
-	if s == nil || s.TransferProducer == nil {
+func (s *ServiceContext) StartPushProducer() {
+	if s == nil {
 		return
 	}
-	if err := s.TransferProducer.Start(); err != nil {
-		logx.WithContext(context.Background()).Errorf("failed to start rocketmq transfer producer: %v", err)
-	}
+	rocketmq.StartProducer(context.Background(), s.PushProducer, "rocketmq push producer")
 }
 
 func (s *ServiceContext) Close() {
-	if s.TransferProducer != nil {
-		if err := s.TransferProducer.GracefulStop(); err != nil {
-			logx.WithContext(context.Background()).Errorf("failed to stop rocketmq transfer producer: %v", err)
-		}
-	}
+	rocketmq.StopProducer(context.Background(), s.PushProducer, "rocketmq push producer")
 
 	if s.RedisClient != nil {
 		if err := s.RedisClient.Close(); err != nil {
@@ -60,8 +53,8 @@ func (s *ServiceContext) Close() {
 		}
 	}
 
-	if closer, ok := s.GatewayClient.(interface{ Close() error }); ok {
-		if err := closer.Close(); err != nil {
+	if s.GatewayClient != nil {
+		if err := s.GatewayClient.Close(); err != nil {
 			logx.WithContext(context.Background()).Errorf("failed to close gateway client: %v", err)
 		}
 	}
@@ -80,57 +73,43 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		logx.WithContext(context.Background()).Infof("Redis connected at %s", c.CacheRedis.Addr)
 	}
 
-	// Snowflake ID generator (fatal - without it, Transfer can't generate message IDs)
-	sf, err := tools.NewSnowflake(c.SnowflakeMachineID)
+	sf, err := snowflake.NewSnowflake(c.SnowflakeMachineID)
 	logx.Must(err)
 
-	// Transfer producer (nil if not configured)
-	var transferProducer *rocketmq.Producer
+	var pushProducer *rocketmq.Producer
 
-	if c.TransferProducerConf.IsConfigured() {
-		producer, err := rocketmq.NewProducer(c.TransferProducerConf.EndpointConf, transferProducerGroup, c.TransferProducerConf.Topic)
+	if c.PushProducerConf.IsConfigured() {
+		producer, err := rocketmq.NewProducer(c.PushProducerConf)
 		if err != nil {
-			logx.WithContext(context.Background()).Errorf("failed to create transfer producer: %v", err)
+			logx.WithContext(context.Background()).Errorf("failed to create push producer: %v", err)
 		} else {
-			transferProducer = producer
-			logx.WithContext(context.Background()).Infof("initializing rocketmq transfer producer: endpoint=%s topic=%s", c.TransferProducerConf.Endpoint, c.TransferProducerConf.Topic)
+			pushProducer = producer
+			logx.WithContext(context.Background()).Infof("initializing rocketmq push producer: endpoint=%s topic=%s", c.PushProducerConf.Endpoint, c.PushProducerConf.Topic)
 		}
 	}
 
-	// Logic RPC client (if configured)
-	var logicClient logicpb.PermissionServiceClient
-	var logicConversationClient logicpb.ConversationServiceClient
-
-	var logicFriendshipClient logicpb.FriendshipServiceClient
-	var logicUserClient logicpb.UserServiceClient
-
-	if c.LogicRpc.Etcd.Key != "" || len(c.LogicRpc.Endpoints) > 0 || c.LogicRpc.Target != "" {
-		client, err := zrpc.NewClient(c.LogicRpc)
-		if err != nil {
-			logx.WithContext(context.Background()).Errorf("failed to create RPC client for LogicRpc: %v", err)
-		} else {
-			logicClient = logicpb.NewPermissionServiceClient(client.Conn())
-			logicConversationClient = logicpb.NewConversationServiceClient(client.Conn())
-			logicFriendshipClient = logicpb.NewFriendshipServiceClient(client.Conn())
-			logicUserClient = logicpb.NewUserServiceClient(client.Conn())
-		}
+	// Logic RPC is required: every core consumer and push path resolves users
+	// and conversations through it, so a missing client is a boot failure.
+	if !sharedrpc.Configured(c.LogicRpc) {
+		logx.Must(errors.New("core service requires LogicRpc: set Config.LogicRpc"))
 	}
+	logicClient, err := zrpc.NewClient(c.LogicRpc)
+	if err != nil {
+		logx.Must(fmt.Errorf("core service: logic rpc client: %w", err))
+	}
+	logicConversationClient := logicpb.NewConversationServiceClient(logicClient.Conn())
+	logicFriendshipClient := logicpb.NewFriendshipServiceClient(logicClient.Conn())
+	logicUserClient := logicpb.NewUserServiceClient(logicClient.Conn())
 
 	var attachmentClient attachmentpb.AttachmentServiceClient
-	if c.AttachmentRpc.Etcd.Key != "" || len(c.AttachmentRpc.Endpoints) > 0 || c.AttachmentRpc.Target != "" {
-		client, err := zrpc.NewClient(c.AttachmentRpc)
-		if err != nil {
-			logx.WithContext(context.Background()).Errorf("failed to create RPC client for AttachmentRpc: %v", err)
-		} else {
-			attachmentClient = attachmentpb.NewAttachmentServiceClient(client.Conn())
-		}
+	if client := sharedrpc.DialOptional(context.Background(), "AttachmentRpc", c.AttachmentRpc); client != nil {
+		attachmentClient = attachmentpb.NewAttachmentServiceClient(client.Conn())
 	}
 
-	// Presence store (nil if not configured)
+	// Presence store (nil if not configured); it shares the owned RedisClient.
 	var presenceStore cache.PresenceDirectory
 	if c.Presence.TTLSeconds > 0 {
-		rds := redis.NewClient(&redis.Options{Addr: c.CacheRedis.Addr, Password: c.CacheRedis.Password})
-		if store, err := cache.NewCachedPresenceStore(rds, c.Presence.TTLSeconds); err != nil {
+		if store, err := cache.NewCachedPresenceStore(redisClient, c.Presence.TTLSeconds); err != nil {
 			logx.WithContext(context.Background()).Errorf("failed to create cached presence store: %v", err)
 		} else {
 			presenceStore = store
@@ -163,8 +142,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		Config:                  c,
 		RedisClient:             redisClient,
 		Snowflake:               sf,
-		TransferProducer:        transferProducer,
-		LogicPermissionClient:   logicClient,
+		PushProducer:            pushProducer,
 		LogicConversationClient: logicConversationClient,
 		LogicFriendshipClient:   logicFriendshipClient,
 		LogicUserClient:         logicUserClient,

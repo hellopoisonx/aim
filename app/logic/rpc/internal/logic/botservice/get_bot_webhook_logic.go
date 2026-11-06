@@ -27,15 +27,12 @@ func NewGetBotWebhookLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Get
 // GetBotWebhook returns the bot's webhook configuration without the
 // plaintext signing secret.
 func (l *GetBotWebhookLogic) GetBotWebhook(in *pb.GetBotWebhookReq) (*pb.GetBotWebhookResp, error) {
-	if l.svcCtx.BotService == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "bot service not configured")
+	botSvc, err := requireBot(l.svcCtx, in.GetBotUserId())
+	if err != nil {
+		return nil, err
 	}
 
-	if in.GetBotUserId() <= 0 {
-		return nil, errorx.NewCodeError(errorx.CodeBadInput, "bot_user_id is required")
-	}
-
-	cfg, found, err := l.svcCtx.BotService.GetBotWebhook(l.ctx, in.GetBotUserId())
+	cfg, found, err := botSvc.GetBotWebhook(l.ctx, in.GetBotUserId())
 	if err != nil {
 		return nil, errorx.NewCodeErrorf(errorx.CodeInternal, "get bot webhook failed: %v", err)
 	}

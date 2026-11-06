@@ -3,35 +3,52 @@ package mqs
 import (
 	"context"
 	"encoding/json"
-	"fmt"
+	"strconv"
 
 	"github.com/hellopoisonx/aim/app/shared/events"
 
+	"github.com/hellopoisonx/aim/app/core/rpc/internal/push"
 	"github.com/hellopoisonx/aim/app/core/rpc/internal/svc"
-	logicpb "github.com/hellopoisonx/aim/app/logic/rpc/pb"
+	sharedconversation "github.com/hellopoisonx/aim/app/shared/conversation"
+	"github.com/hellopoisonx/aim/app/shared/rocketmq"
 	"github.com/hellopoisonx/aim/app/shared/tracing"
-	gwpb "github.com/hellopoisonx/aim/shared/proto/gateway/pb"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
+type pushProducer interface {
+	Publish(ctx context.Context, message rocketmq.Message) error
+}
+
 type DeliveryConsumer struct {
 	ctx    context.Context
 	svcCtx *svc.ServiceContext
+	push   pushProducer
+	topic  string
 }
 
 func NewDeliveryConsumer(ctx context.Context, svcCtx *svc.ServiceContext) *DeliveryConsumer {
-	return &DeliveryConsumer{ctx: ctx, svcCtx: svcCtx}
+	consumer := &DeliveryConsumer{
+		ctx:    ctx,
+		svcCtx: svcCtx,
+		topic:  svcCtx.Config.PushProducerConf.Topic,
+	}
+	// Leave the interface field unset when RocketMQ is disabled: Consume then logs
+	// the drop instead of publishing into a nil producer.
+	if svcCtx.PushProducer != nil {
+		consumer.push = svcCtx.PushProducer
+	}
+
+	return consumer
 }
 
-// Consume implements the rocketmq handler interface.
+// Consume resolves the conversation members and publishes the push events the
+// gateway nodes consume.
 func (c *DeliveryConsumer) Consume(ctx context.Context, key string, value string) error {
 	logx.WithContext(ctx).Infof("consuming delivery event, key=%s", key)
 
 	var event events.TransferEvent
 	if err := json.Unmarshal([]byte(value), &event); err != nil {
-		// A malformed payload never decodes on redelivery: dropping it keeps the
-		// partition moving instead of replaying the same poison message forever.
 		logx.WithContext(ctx).Errorf(
 			"dropping undecodable delivery event key=%s: %v payload=%q", key, err, value,
 		)
@@ -46,114 +63,85 @@ func (c *DeliveryConsumer) Consume(ctx context.Context, key string, value string
 	logx.WithContext(ctx).Infof("delivery event: msg_id=%d sender=%d conv=%d type=%s",
 		event.MessageID, event.SenderID, event.ConversationID, event.MessageType)
 
-	targetUserIDs, conversationType, err := c.resolveConversation(ctx, event)
+	if c.push == nil {
+		logx.WithContext(ctx).Errorf("dropping delivery event %d: push producer is not configured", event.MessageID)
+		return nil
+	}
+
+	memberIDs, conversationType, err := c.resolveConversation(ctx, event)
 	if err != nil {
 		span.RecordError(err)
 		return err
 	}
 
-	senderInfo, err := gatewaySenderInfoForUser(ctx, c.svcCtx, event.SenderID)
+	senderInfo, err := push.SenderInfoForUser(ctx, c.svcCtx, event.SenderID)
 	if err != nil {
 		span.RecordError(err)
 		return err
 	}
 
-	for _, targetUserID := range targetUserIDs {
-		nodeIDs := c.userGatewayNodes(ctx, targetUserID)
-		if len(nodeIDs) == 0 {
-			// User offline on every gateway: skip — the message is acknowledged and downstream
-			// catch-up should rely on history fetch.
-			logx.WithContext(ctx).Debugf("no gateway nodes for user %d, skipping message push", targetUserID)
-			continue
+	base := events.PushEvent{
+		TraceContextFields: tracing.InjectTraceContext(ctx),
+		MessageID:          event.MessageID,
+		ConversationID:     event.ConversationID,
+		ConversationType:   conversationType,
+		MessageType:        event.MessageType,
+		Content:            event.Content,
+		SenderID:           event.SenderID,
+		SentAt:             event.Timestamp,
+		ClientMsgID:        event.ClientMsgID,
+		Mentions:           event.Mentions,
+		SenderInfo: &events.SenderInfo{
+			Name:  senderInfo.GetName(),
+			Email: senderInfo.GetEmail(),
+		},
+		SourceDeviceID: event.DeviceID,
+	}
+
+	outbound := make([]events.PushEvent, 0, len(memberIDs))
+	if conversationType == string(sharedconversation.TypeDirect) {
+		for _, targetUserID := range memberIDs {
+			push := base
+			push.TargetUserID = targetUserID
+			outbound = append(outbound, push)
+		}
+	} else {
+		push := base
+		push.MemberIDs = memberIDs
+		outbound = append(outbound, push)
+	}
+
+	conversationKey := strconv.FormatInt(event.ConversationID, 10)
+	for _, push := range outbound {
+		body, err := json.Marshal(push)
+		if err != nil {
+			span.RecordError(err)
+			return err
 		}
 
-		for _, nodeID := range nodeIDs {
-			req := &gwpb.PushMessageReq{
-				MessageId:        event.MessageID,
-				ConversationId:   event.ConversationID,
-				ConversationType: conversationType,
-				MessageType:      event.MessageType,
-				Content:          event.Content,
-				SenderId:         event.SenderID,
-				SentAt:           event.Timestamp,
-				ClientMsgId:      event.ClientMsgID,
-				Mentions:         event.Mentions,
-				TargetUserId:     targetUserID,
-				SenderInfo:       senderInfo,
-				SourceDeviceId:   event.DeviceID,
-			}
-
-			resp, err := pushMessageToNode(ctx, c.svcCtx.GatewayClient, nodeID, req)
-			if err != nil {
-				span.RecordError(err)
-				logx.WithContext(ctx).Errorf("failed to push message to user %d on node %s: %v", targetUserID, nodeID, err)
-				return err
-			}
-
-			logx.WithContext(ctx).Infof("message pushed to user %d on node %s, success=%v", targetUserID, nodeID, resp.Success)
+		if err := c.push.Publish(ctx, rocketmq.Message{
+			Topic:       c.topic,
+			Key:         conversationKey,
+			ShardingKey: conversationKey,
+			Body:        body,
+		}); err != nil {
+			span.RecordError(err)
+			return err
 		}
 	}
 
 	return nil
 }
 
-// userGatewayNodes returns the gateway node IDs for a user, falling back to a
-// single empty node ID so single-gateway dev setups still receive pushes.
-func (c *DeliveryConsumer) userGatewayNodes(ctx context.Context, userID int64) []string {
-	if c.svcCtx.PresenceStore != nil {
-		nodes, err := c.svcCtx.PresenceStore.GetUserGatewayNodes(ctx, userID)
-		if err == nil && len(nodes) > 0 {
-			return nodes
-		}
-	}
-
-	if c.svcCtx.RedisClient != nil {
-		key := fmt.Sprintf("%s%d", userGatewayKeyPrefix, userID)
-		nodes, err := c.svcCtx.RedisClient.SMembers(ctx, key).Result()
-		if err == nil && len(nodes) > 0 {
-			return nodes
-		}
-	}
-
-	// Single-gateway/no-presence fallback.
-	return []string{""}
-}
-
-// resolveConversation looks up the full recipient list and conversation type via logic.
-// The sender is intentionally included so the sender's other devices can receive
-// the message for multi-device sync; gateway skips only the original source device.
-// Falls back to delivering only to the sender when logic is unreachable so that
-// single-instance dev setups still echo messages back to the originator.
 func (c *DeliveryConsumer) resolveConversation(ctx context.Context, event events.TransferEvent) ([]int64, string, error) {
-	if c.svcCtx.LogicConversationClient == nil {
-		return []int64{event.SenderID}, "", nil
-	}
-
-	resp, err := c.svcCtx.LogicConversationClient.GetConversationMembers(ctx, &logicpb.GetConversationMembersReq{
-		ConversationId: event.ConversationID,
-	})
+	memberIDs, conversationType, err := push.ConversationRecipients(ctx, c.svcCtx, event.ConversationID)
 	if err != nil {
 		return nil, "", err
 	}
 
-	conversationType := resp.GetConversationType()
-	memberIDs := resp.GetMemberIds()
 	if len(memberIDs) == 0 {
 		return []int64{event.SenderID}, conversationType, nil
 	}
 
-	seen := make(map[int64]struct{}, len(memberIDs))
-	targets := make([]int64, 0, len(memberIDs))
-	for _, memberID := range memberIDs {
-		if memberID <= 0 {
-			continue
-		}
-		if _, ok := seen[memberID]; ok {
-			continue
-		}
-		seen[memberID] = struct{}{}
-		targets = append(targets, memberID)
-	}
-
-	return targets, conversationType, nil
+	return memberIDs, conversationType, nil
 }

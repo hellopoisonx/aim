@@ -24,12 +24,12 @@ func NewDeleteUserBotLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Del
 }
 
 func (l *DeleteUserBotLogic) DeleteUserBot(req *types.DeleteUserBotRequest) (resp *types.DeleteUserBotResponse, err error) {
-	identity, ok := authctx.IdentityFromContext(l.ctx)
-	if !ok {
-		return nil, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
+	userID, err := authctx.RequireUserID(l.ctx)
+	if err != nil {
+		return nil, err
 	}
 	rpcResp, err := l.svcCtx.LogicBotClient.DeleteUserBot(l.ctx, &botservice.DeleteUserBotReq{
-		OwnerUserId: identity.UserID, BotUserId: req.Id,
+		OwnerUserId: userID, BotUserId: req.Id,
 	})
 	if err != nil {
 		return nil, errorx.SanitizeGRPCError(l, "delete user bot", err)

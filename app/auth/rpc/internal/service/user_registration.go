@@ -9,7 +9,7 @@ import (
 	"github.com/hellopoisonx/aim/app/auth/rpc/model/dao"
 	"github.com/hellopoisonx/aim/app/shared/events"
 	"github.com/hellopoisonx/aim/app/shared/rocketmq"
-	"github.com/hellopoisonx/aim/app/shared/tools"
+	"github.com/hellopoisonx/aim/app/shared/snowflake"
 	"github.com/hellopoisonx/aim/app/shared/tracing"
 	"gorm.io/gorm"
 )
@@ -34,7 +34,7 @@ type TransactionalSender interface {
 // registration is one domain operation.
 type UserRegistrar struct {
 	db     *gorm.DB
-	idGen  *tools.Snowflake
+	idGen  *snowflake.Snowflake
 	sender TransactionalSender
 	topic  string
 }
@@ -42,7 +42,7 @@ type UserRegistrar struct {
 // NewUserRegistrar builds a registrar. All dependencies are required; the
 // service context only constructs one when transactional publishing is
 // configured.
-func NewUserRegistrar(db *gorm.DB, idGen *tools.Snowflake, sender TransactionalSender, topic string) *UserRegistrar {
+func NewUserRegistrar(db *gorm.DB, idGen *snowflake.Snowflake, sender TransactionalSender, topic string) *UserRegistrar {
 	if db == nil || idGen == nil || sender == nil || topic == "" {
 		return nil
 	}

@@ -2,9 +2,6 @@ package mqs
 
 import (
 	"context"
-	"crypto/hmac"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -15,6 +12,7 @@ import (
 	"time"
 
 	"github.com/hellopoisonx/aim/app/logic/rpc/model/orm"
+	"github.com/hellopoisonx/aim/app/shared/botwebhook"
 	"github.com/hellopoisonx/aim/app/shared/events"
 
 	"github.com/stretchr/testify/require"
@@ -36,19 +34,6 @@ func TestBackoff_NeverExceedsCap(t *testing.T) {
 	}
 }
 
-func TestSignHMAC_DeterministicAndStandardCompatible(t *testing.T) {
-	body := []byte(`{"hello":"world"}`)
-	key := "secret"
-
-	got := signHMAC(body, key)
-
-	mac := hmac.New(sha256.New, []byte(key))
-	mac.Write(body)
-	want := hex.EncodeToString(mac.Sum(nil))
-
-	require.Equal(t, want, got)
-}
-
 func TestNewEventID_HasExpectedShape(t *testing.T) {
 	id, err := newEventID()
 	require.NoError(t, err)
@@ -65,7 +50,7 @@ func TestNewEventID_HasExpectedShape(t *testing.T) {
 
 func TestPostOnce_DeliversWithSignatureHeaders(t *testing.T) {
 	body := []byte(`{"event_id":"x"}`)
-	signature := signHMAC(body, "abc")
+	signature := botwebhook.Sign("abc", body)
 
 	var (
 		mu       sync.Mutex
@@ -99,7 +84,7 @@ func TestPostOnce_DeliversWithSignatureHeaders(t *testing.T) {
 	defer mu.Unlock()
 	require.Equal(t, http.MethodPost, received.method)
 	require.Equal(t, "evt-1", received.eventID)
-	require.Equal(t, "sha256="+signature, received.signature)
+	require.Equal(t, botwebhook.SignaturePrefix+signature, received.signature)
 	require.Equal(t, "message.created", received.eventType)
 	require.Equal(t, body, received.body)
 }
@@ -134,7 +119,7 @@ func TestBuildPayload_ContainsAllFields(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, eventID)
 
-	var got botWebhookPayload
+	var got botwebhook.WebhookEvent
 	require.NoError(t, json.Unmarshal(body, &got))
 	require.Equal(t, eventID, got.EventID)
 	require.Equal(t, botWebhookEventType, got.Type)

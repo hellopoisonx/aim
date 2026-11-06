@@ -7,6 +7,7 @@ import (
 	"context"
 
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/authctx"
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/pbconv"
 
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
@@ -30,14 +31,14 @@ func NewTransferGroupOwnerLogic(ctx context.Context, svcCtx *svc.ServiceContext)
 	}
 }
 
-func (l *TransferGroupOwnerLogic) TransferGroupOwner(req *types.TransferGroupOwnerRequest) (resp *types.TransferGroupOwnerResponse, err error) {
-	identity, ok := authctx.IdentityFromContext(l.ctx)
-	if !ok {
-		return nil, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
+func (l *TransferGroupOwnerLogic) TransferGroupOwner(req *types.TransferGroupOwnerRequest) (resp *types.ConversationItem, err error) {
+	userID, err := authctx.RequireUserID(l.ctx)
+	if err != nil {
+		return nil, err
 	}
 	rpcResp, err := l.svcCtx.LogicConversationClient.TransferGroupOwner(l.ctx, &conversationservice.TransferGroupOwnerReq{
 		ConversationId: req.Id,
-		OperatorId:     identity.UserID,
+		OperatorId:     userID,
 		TargetUserId:   req.UserId,
 	})
 	if err != nil {
@@ -47,18 +48,7 @@ func (l *TransferGroupOwnerLogic) TransferGroupOwner(req *types.TransferGroupOwn
 	if conv == nil {
 		return nil, errorx.NewCodeError(errorx.CodeInternal, "internal error")
 	}
-	memberIDs := conv.GetMemberIds()
-	if memberIDs == nil {
-		memberIDs = []int64{}
-	}
-	return &types.TransferGroupOwnerResponse{
-		ConversationId:   conv.GetId(),
-		ConversationType: conv.GetConversationType(),
-		IsActive:         conv.GetIsActive(),
-		CreatedAt:        conv.GetCreatedAt(),
-		MemberIds:        memberIDs,
-		Name:             conv.GetName(),
-		Avatar:           conv.GetAvatar(),
-		CreatorId:        conv.GetCreatorId(),
-	}, nil
+	item := pbconv.Conversation(conv)
+
+	return &item, nil
 }

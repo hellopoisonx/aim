@@ -82,6 +82,31 @@ func TestTypedCacheDelInvalidatesRemoteL1ViaStream(t *testing.T) {
 	}, 2*time.Second, 20*time.Millisecond)
 }
 
+func TestInvalidationLoopAdvancesPastMalformedEntries(t *testing.T) {
+	mr, rds := newTestRedis(t)
+	defer mr.Close()
+
+	stream := fmt.Sprintf("test:cache:invalidate:%d", time.Now().UnixNano())
+	ctx := context.Background()
+	require.NoError(t, rds.XAdd(ctx, &redis.XAddArgs{Stream: stream, Values: map[string]any{"keys": "[]"}}).Err())
+	require.NoError(t, rds.XAdd(ctx, &redis.XAddArgs{Stream: stream, Values: map[string]any{"cache": "test_malformed", "keys": "not-json"}}).Err())
+
+	managerA := NewCacheManager(rds, stream)
+	defer managerA.Close()
+	managerB := NewCacheManager(rds, stream)
+	defer managerB.Close()
+
+	cacheA := MustTyped[string](managerA, "test_malformed", time.Minute, time.Minute, 10)
+	cacheB := MustTyped[string](managerB, "test_malformed", time.Minute, time.Minute, 10)
+
+	require.NoError(t, cacheB.Set(ctx, "k", "value"))
+	require.NoError(t, cacheA.Del(ctx, "k"))
+	require.Eventually(t, func() bool {
+		_, ok := cacheB.l1.Get("k")
+		return !ok
+	}, 2*time.Second, 20*time.Millisecond)
+}
+
 func TestConfigWithDefaults(t *testing.T) {
 	conf := Config{}.WithDefaults()
 	require.Equal(t, defaultL1Capacity, conf.L1Capacity)

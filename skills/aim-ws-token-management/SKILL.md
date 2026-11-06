@@ -23,5 +23,6 @@ description: WebSocket 连接 Token 生命周期管理。覆盖 Token 过期导�
 
 ## 最近变更
 
-- 2026-05-22: 修复 `shared/jwt` 的 `Manager`：新增 `accessTTL` 字段和 `NewManagerWithTTL()` 构造函数，`GenerateAccessToken()` 使用 `m.accessTTL` 替代硬编码常量。修复 `auth/rpc` 的 `JWTIssuer`：存储并传递配置 TTL 到 `NewManagerWithTTL()`。详见 `references/token-pipeline.md`。
+- 2026-11-05: `shared/jwt` 构造器改为函数式选项：`NewManager(secretKey, opts...)` + `WithAccessTTL(ttl)`，删除 `NewManagerWithTTL()`；`JWTIssuer.Issue()` 相应改为 `sharedjwt.NewManager(i.secret, sharedjwt.WithAccessTTL(i.ttl))`。
+- 2026-05-22: 修复 `shared/jwt` 的 `Manager`：`Manager` 持有 `accessTTL` 字段（原由 `NewManagerWithTTL()` 构造，2026-11-05 改为 `WithAccessTTL` 选项），`GenerateAccessToken()` 使用 `m.accessTTL` 替代硬编码常量。修复 `auth/rpc` 的 `JWTIssuer`：存储并传递配置 TTL。详见 `references/token-pipeline.md`。
 - 2026-05-22: `WSClient` 新增 `_rest_client` 引用和 `_try_refresh_token()` 方法：`reconnect()` 重连前自动检测 Token 过期并通过 REST API 刷新。benchmark 数据流扩展：`user_creds`/`conv_pairs` 元组增加 `refresh_token`/`expires_at`/`device_id`，确保 `WSClient` 拥有完整 token 信息用于刷新。`WsMessageScenario` 和 `MixedScenario` 同步注入 `RESTClient`。压测配置 `dev-tool/etc/auth.yaml` 的 `AccessTTL` 从 `5m` 增大到 `30m`。

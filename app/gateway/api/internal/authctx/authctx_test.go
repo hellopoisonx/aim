@@ -20,19 +20,3 @@ func TestIdentityAbsent(t *testing.T) {
 	_, ok := IdentityFromContext(context.Background())
 	require.False(t, ok)
 }
-
-func TestAuthorizationRoundTrip(t *testing.T) {
-	ctx := WithAuthorization(context.Background(), "Bearer token")
-	require.Equal(t, "Bearer token", Authorization(ctx))
-	require.Empty(t, Authorization(context.Background()))
-}
-
-func TestNestedContextsKeepBothValues(t *testing.T) {
-	ctx := WithAuthorization(context.Background(), "Bearer token")
-	ctx = WithIdentity(ctx, Identity{UserID: 7})
-
-	identity, ok := IdentityFromContext(ctx)
-	require.True(t, ok)
-	require.Equal(t, int64(7), identity.UserID)
-	require.Equal(t, "Bearer token", Authorization(ctx))
-}

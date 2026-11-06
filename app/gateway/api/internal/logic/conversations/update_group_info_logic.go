@@ -6,6 +6,7 @@ import (
 
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/authctx"
 
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/pbconv"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/conversationservice"
@@ -28,10 +29,10 @@ func NewUpdateGroupInfoLogic(ctx context.Context, svcCtx *svc.ServiceContext) *U
 	}
 }
 
-func (l *UpdateGroupInfoLogic) UpdateGroupInfo(req *types.UpdateGroupInfoRequest) (resp *types.UpdateGroupInfoResponse, err error) {
-	identity, ok := authctx.IdentityFromContext(l.ctx)
-	if !ok {
-		return nil, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
+func (l *UpdateGroupInfoLogic) UpdateGroupInfo(req *types.UpdateGroupInfoRequest) (resp *types.ConversationItem, err error) {
+	userID, err := authctx.RequireUserID(l.ctx)
+	if err != nil {
+		return nil, err
 	}
 
 	var name, avatar *string
@@ -50,8 +51,7 @@ func (l *UpdateGroupInfoLogic) UpdateGroupInfo(req *types.UpdateGroupInfoRequest
 
 	rpcResp, err := l.svcCtx.LogicConversationClient.UpdateGroupInfo(l.ctx, &conversationservice.UpdateGroupInfoReq{
 		ConversationId: req.Id,
-		OperatorId:     identity.UserID,
-		OperatorName:   "",
+		OperatorId:     userID,
 		Name:           name,
 		Avatar:         avatar,
 	})
@@ -64,13 +64,7 @@ func (l *UpdateGroupInfoLogic) UpdateGroupInfo(req *types.UpdateGroupInfoRequest
 		return nil, errorx.NewCodeError(errorx.CodeInternal, "internal error")
 	}
 
-	return &types.UpdateGroupInfoResponse{
-		ConversationId:   conv.GetId(),
-		ConversationType: conv.GetConversationType(),
-		IsActive:         conv.GetIsActive(),
-		Name:             conv.GetName(),
-		Avatar:           conv.GetAvatar(),
-		CreatorId:        conv.GetCreatorId(),
-		CreatedAt:        conv.GetCreatedAt(),
-	}, nil
+	item := pbconv.Conversation(conv)
+
+	return &item, nil
 }

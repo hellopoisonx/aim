@@ -6,6 +6,7 @@ import (
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/authctx"
 
 	"github.com/hellopoisonx/aim/app/auth/rpc/authservice"
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/pbconv"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/botservice"
@@ -29,9 +30,9 @@ func NewCreateUserBotLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Cre
 }
 
 func (l *CreateUserBotLogic) CreateUserBot(req *types.CreateUserBotRequest) (resp *types.CreateUserBotResponse, err error) {
-	identity, ok := authctx.IdentityFromContext(l.ctx)
-	if !ok {
-		return nil, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
+	userID, err := authctx.RequireUserID(l.ctx)
+	if err != nil {
+		return nil, err
 	}
 
 	credentialResp, err := l.svcCtx.AuthClient.CreateBotCredential(l.ctx, &authservice.CreateBotCredentialReq{
@@ -43,7 +44,7 @@ func (l *CreateUserBotLogic) CreateUserBot(req *types.CreateUserBotRequest) (res
 	}
 
 	botResp, err := l.svcCtx.LogicBotClient.CreateUserBot(l.ctx, &botservice.CreateUserBotReq{
-		OwnerUserId: identity.UserID,
+		OwnerUserId: userID,
 		BotUserId:   credentialResp.UserId,
 		Email:       credentialResp.Email,
 		Nickname:    req.Nickname,
@@ -53,5 +54,5 @@ func (l *CreateUserBotLogic) CreateUserBot(req *types.CreateUserBotRequest) (res
 		return nil, errorx.SanitizeGRPCError(l, "create user bot", err)
 	}
 
-	return &types.CreateUserBotResponse{Bot: userBotToType(botResp.GetBot())}, nil
+	return &types.CreateUserBotResponse{Bot: pbconv.UserBot(botResp.GetBot())}, nil
 }

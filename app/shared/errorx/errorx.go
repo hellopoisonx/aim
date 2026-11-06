@@ -26,8 +26,9 @@ const (
 	codeErrorMetadata = "aim.biz_code"
 )
 
-// Bot OpenAPI error codes (40110-40130). They live in the 401xx range so the
-// responseEnvelope mapper drives a 401 HTTP status by default.
+// Bot OpenAPI error codes. They follow the RPC range convention, so the HTTP
+// status comes from the leading digits: 40010 is a 400, 40110-40112 are 401s
+// and 40310 is a 403.
 const (
 	// CodeBotTokenInvalid — `Authorization: Bot <token>` missing/malformed/unknown.
 	CodeBotTokenInvalid = 40110
@@ -39,6 +40,30 @@ const (
 	CodeBotScopeDenied = 40310
 	// CodeBotWebhookInvalid — webhook URL or events list failed validation.
 	CodeBotWebhookInvalid = 40010
+)
+
+// Logic-service domain codes, kept in the shared catalog so the reserved
+// sub-blocks are visible from every service. The bot block above owns 40010,
+// 40110-40112 and 40310; conversation takes 40011, 40311-40312, 40315-40317,
+// 40410 and 40910, friendship takes 40012, 40313-40314 and 40411, and the
+// tag/search codes keep their 4002x/4003x/4032x blocks in the logic service
+// package.
+const (
+	CodeConversationNotGroup  = 40011
+	CodeConversationNotOwner  = 40311
+	CodeConversationNotAdmin  = 40312
+	CodeConversationNotMember = 40315
+	// CodeConversationOwnerTarget — the request named the group owner as its target.
+	CodeConversationOwnerTarget = 40316
+	// CodeConversationOwnerMustTransfer — the owner cannot leave; ownership must move first.
+	CodeConversationOwnerMustTransfer = 40317
+	CodeConversationNotFound          = 40410
+	CodeConversationExists            = 40910
+
+	CodeFriendshipSelfAdd    = 40012
+	CodeFriendshipBlocked    = 40313
+	CodeFriendshipNotPending = 40314
+	CodeFriendshipNotFound   = 40411
 )
 
 // RPC-level error code ranges (service-side).
@@ -256,11 +281,9 @@ func grpcCodeFromBizCode(code int) codes.Code {
 	}
 }
 
-// bizCodeFromGRPCCode maps a gRPC status code back to a biz code.
-// The returned biz code is a category-wide code (e.g., 40000, 40100);
-// the exact sub-category code from the server is not recoverable from
-// the gRPC status alone. If higher fidelity is needed in the future,
-// embed the exact biz code in gRPC status details.
+// bizCodeFromGRPCCode maps a gRPC status code to a category-wide biz code
+// (e.g. 40000, 40100). It is only the fallback: CodeError.GRPCStatus attaches
+// the exact biz code as an ErrorInfo detail, which FromGRPCError prefers.
 func bizCodeFromGRPCCode(c codes.Code) int {
 	switch c {
 	case codes.InvalidArgument:

@@ -14,8 +14,6 @@ const (
 	CodeTagNotFound    = 40420
 	CodeTagNameEmpty   = 40020
 	CodeTagNameTooLong = 40021
-	CodeTagNameExists  = 40920
-	CodeTagNotOwned    = 40320
 	CodeNotFriend      = 40321
 )
 
@@ -25,8 +23,6 @@ var (
 	ErrTagNotFound    = errorx.NewCodeError(CodeTagNotFound, "tag not found")
 	ErrTagNameEmpty   = errorx.NewCodeError(CodeTagNameEmpty, "tag name must not be empty after trimming")
 	ErrTagNameTooLong = errorx.NewCodeError(CodeTagNameTooLong, "tag name exceeds maximum length")
-	ErrTagNameExists  = errorx.NewCodeError(CodeTagNameExists, "tag name already exists")
-	ErrTagNotOwned    = errorx.NewCodeError(CodeTagNotOwned, "tag does not belong to the user")
 	ErrNotFriend      = errorx.NewCodeError(CodeNotFriend, "not an accepted friend")
 )
 
@@ -143,8 +139,9 @@ func (s *FriendshipTagService) SetTags(ctx context.Context, userID, friendID int
 	return s.store.ReplaceFriendTags(ctx, userID, friendID, tagIDs)
 }
 
-// RemoveTag removes a single tag from a friend.
-func (s *FriendshipTagService) RemoveTag(ctx context.Context, userID, friendID, tagID int64) (bool, error) {
+// UntagFriend detaches one tag from one friend, leaving the tag and every
+// other friend's assignment intact.
+func (s *FriendshipTagService) UntagFriend(ctx context.Context, userID, friendID, tagID int64) (bool, error) {
 	if err := s.ensureAcceptedFriend(ctx, userID, friendID); err != nil {
 		return false, err
 	}

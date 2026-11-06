@@ -10,19 +10,19 @@ import (
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/authctx"
 
 	"github.com/coder/websocket"
-	corepb "github.com/hellopoisonx/aim/app/core/rpc/pb"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/ws"
+	logicpb "github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 	pb "github.com/hellopoisonx/aim/shared/proto/ws/pb"
 	"github.com/zeromicro/go-zero/core/logx"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // Message-frame handling and SERVER_ACK construction.
 
-// handleSendMessage forwards a send message to core.Transfer and ACKs the result.
 func (h *WsHandler) handleSendMessage(ctx context.Context, conn *websocket.Conn, frame *pb.WsFrame) error {
 	tracer := otel.Tracer("github.com/hellopoisonx/aim/app/gateway/api")
 	ctx, span := tracer.Start(ctx, "ws.handle_send_message")
@@ -44,10 +44,7 @@ func (h *WsHandler) handleSendMessage(ctx context.Context, conn *websocket.Conn,
 	// Extract identity from context
 	identity, ok := authctx.IdentityFromContext(ctx)
 	if !ok {
-		codeErr := errorx.NewCodeError(errorx.CodeAuth, "no identity in context")
-		span.RecordError(codeErr)
-		span.SetStatus(codes.Error, codeErr.Message)
-		return h.writeErrorAck(ctx, conn, frame.GetSeq(), sendPayload.GetClientMsgId(), pb.AckStatus_ACK_STATUS_REJECTED, codeErr.Code, codeErr.Message)
+		return h.writeAuthErrorAck(ctx, conn, span, frame, sendPayload.GetClientMsgId())
 	}
 
 	// Per-(device_id, user_id) sliding-window rate limit. Mirrors the REST
@@ -80,13 +77,11 @@ func (h *WsHandler) handleSendMessage(ctx context.Context, conn *websocket.Conn,
 		attribute.String("ws.message_type", sendPayload.GetMessageType()),
 	)
 
-	// Check if CoreClient is available (nil in test mode)
-	if h.srv.CoreClient == nil {
-		return h.writeErrorAck(ctx, conn, frame.GetSeq(), sendPayload.GetClientMsgId(), pb.AckStatus_ACK_STATUS_RETRYABLE, errorx.CodeInternal, "core unavailable")
+	if h.srv.MessageClient == nil {
+		return h.writeErrorAck(ctx, conn, frame.GetSeq(), sendPayload.GetClientMsgId(), pb.AckStatus_ACK_STATUS_RETRYABLE, errorx.CodeInternal, "logic unavailable")
 	}
 
-	// Build TransferReq from the SendMessagePayload
-	req := &corepb.TransferReq{
+	req := &logicpb.IngestMessageReq{
 		SenderId:       identity.UserID,
 		DeviceId:       identity.DeviceID,
 		ConversationId: sendPayload.GetConversationId(),
@@ -96,14 +91,13 @@ func (h *WsHandler) handleSendMessage(ctx context.Context, conn *websocket.Conn,
 		Mentions:       sendPayload.GetMentions(),
 	}
 
-	// Call core.Transfer with a timeout
-	transferCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	ingestCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
 
-	resp, err := h.srv.CoreClient.Transfer(transferCtx, req)
+	resp, err := h.srv.MessageClient.IngestMessage(ingestCtx, req)
 
 	// Map result to SERVER_ACK
-	return h.writeFrame(ctx, conn, mapTransferToAck(frame.GetSeq(), sendPayload.GetClientMsgId(), 0, resp, err))
+	return h.writeFrame(ctx, conn, mapIngestToAck(frame.GetSeq(), sendPayload.GetClientMsgId(), 0, resp, err))
 }
 
 // writeErrorAck writes a SERVER_ACK with error info. Returns nil if conn is nil (test mode).
@@ -130,6 +124,15 @@ func (h *WsHandler) writeErrorAck(ctx context.Context, conn *websocket.Conn, ack
 	return h.writeFrame(ctx, conn, ackFrame)
 }
 
+// writeAuthErrorAck rejects a frame whose context carries no identity.
+func (h *WsHandler) writeAuthErrorAck(ctx context.Context, conn *websocket.Conn, span trace.Span, frame *pb.WsFrame, clientMsgID string) error {
+	codeErr := errorx.NewCodeError(errorx.CodeAuth, "no identity in context")
+	span.RecordError(codeErr)
+	span.SetStatus(codes.Error, codeErr.Message)
+
+	return h.writeErrorAck(ctx, conn, frame.GetSeq(), clientMsgID, pb.AckStatus_ACK_STATUS_REJECTED, codeErr.Code, codeErr.Message)
+}
+
 func int32Code(code int) int32 {
 	if code < math.MinInt32 || code > math.MaxInt32 {
 		return int32(errorx.CodeInternal)
@@ -138,15 +141,13 @@ func int32Code(code int) int32 {
 	return int32(code) //nolint:gosec // bounded above before conversion.
 }
 
-// mapTransferToAck maps the Transfer response/error to a SERVER_ACK frame.
-//
 // ACK mapping is decided by biz-code category (code/100), so sub-codes such as
 // 40010 or 40110 are classified exactly like their parent category:
 //   - nil error (success): ACK_STATUS_ACCEPTED, code=0, message_id from resp
 //   - 400xx/401xx/403xx/404xx/409xx/429xx: ACK_STATUS_REJECTED (client fault,
 //     retrying the same frame cannot succeed)
 //   - 5xxxx and infrastructure/unknown codes: ACK_STATUS_RETRYABLE
-func mapTransferToAck(ackSeq int64, clientMsgID string, seq int64, resp *corepb.TransferResp, err error) *pb.WsFrame {
+func mapIngestToAck(ackSeq int64, clientMsgID string, seq int64, resp *logicpb.IngestMessageResp, err error) *pb.WsFrame {
 	if err == nil {
 		// Success
 		ackFrame, _ := ws.NewServerAckFrame(ws.ServerAck{

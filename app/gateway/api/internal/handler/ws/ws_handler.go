@@ -37,7 +37,6 @@ func NewWsHandler(srv *svc.ServiceContext, manager *ws.Manager) *WsHandler {
 
 // ServeWS upgrades the HTTP connection to WebSocket and handles the session.
 func (h *WsHandler) ServeWS(w http.ResponseWriter, r *http.Request) {
-	// 1. Extract and validate JWT
 	authHeader := r.Header.Get("Authorization")
 
 	claims, err := wsauth.ExtractAndValidate(authHeader, h.srv.Config.Auth.AccessSecret)
@@ -47,8 +46,6 @@ func (h *WsHandler) ServeWS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 2. Upgrade to WebSocket
-	_ = h.srv.Config.WebSocket
 	ctx := r.Context()
 
 	// Configure WebSocket options
@@ -65,7 +62,6 @@ func (h *WsHandler) ServeWS(w http.ResponseWriter, r *http.Request) {
 
 	conn.SetReadLimit(h.srv.Config.WebSocket.MaxMsgSize)
 
-	// 3. Create per-connection context with cancellation.
 	// Detach it from the short-lived HTTP upgrade span: the WebSocket connection
 	// can stay open for a long time, while per-frame spans and downstream RPC/broker
 	// spans complete quickly. Keeping the upgrade span as their parent can make
@@ -73,7 +69,6 @@ func (h *WsHandler) ServeWS(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithCancel(sharedtracing.DetachSpanContext(r.Context()))
 	defer cancel()
 
-	// 4. Register connection
 	identity := authctx.Identity{
 		UserID:   claims.UserID,
 		DeviceID: claims.DeviceID,
@@ -91,7 +86,7 @@ func (h *WsHandler) ServeWS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 5. Ensure unregister on disconnect (armed before any early return below)
+	// Unregister is armed before any early return below.
 	defer func() {
 		// The connection context is already cancelled when the socket closes, so
 		// cleanup gets a detached context; otherwise the Redis presence write and
@@ -110,32 +105,23 @@ func (h *WsHandler) ServeWS(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
-	// 6. Publish presence event if user just came online.
 	if presResult != nil && presResult.Switched && h.srv.PresencePub != nil {
 		if err := h.srv.PresencePub.PublishPresence(ctx, identity.UserID, presResult.Status); err != nil {
 			logx.WithContext(ctx).Errorf("failed to publish presence event on register: %v", err)
 		}
 	}
 
-	// 7. Schedule token expiry timer
 	tokenExpiresAt := claims.ExpiresAt.Time
 	if tokenExpiresAt.After(time.Now()) {
-		duration := time.Until(tokenExpiresAt)
-
-		connEntry, err := h.manager.Get(identity)
-		if err == nil {
-			connEntry.ExpiresAt = tokenExpiresAt.Unix()
-			connEntry.ExpiryTimer = time.AfterFunc(duration, func() {
-				h.sendTokenExpired(ctx, conn, identity, tokenExpiresAt.Unix())
-			})
-		}
+		h.manager.ArmTokenExpiry(identity, tokenExpiresAt.Unix(), time.Until(tokenExpiresAt), func() {
+			h.sendTokenExpired(ctx, conn, identity, tokenExpiresAt.Unix())
+		})
 	} else {
 		// Token already expired before connection - send expired frame and close
 		h.sendTokenExpired(ctx, conn, identity, tokenExpiresAt.Unix())
 		return
 	}
 
-	// 8. Read loop with config limits
 	for {
 		_, data, err := conn.Read(ctx)
 		if err != nil {

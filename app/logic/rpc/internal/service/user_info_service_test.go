@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/hellopoisonx/aim/app/shared/errorx"
+	shareduser "github.com/hellopoisonx/aim/app/shared/user"
 
 	"github.com/hellopoisonx/aim/app/logic/rpc/model/dao"
 	"github.com/hellopoisonx/aim/app/logic/rpc/model/orm"
@@ -106,7 +107,7 @@ func (f *fakeUserInfoQuerier) UpdateUserInfoStatus(ctx context.Context, id int64
 		return orm.UserInfo{}, dao.ErrNotFound
 	}
 
-	user.Status = status
+	user.Status = shareduser.Status(status)
 
 	return user, nil
 }
@@ -296,7 +297,7 @@ func TestUserInfoService_UpdateUserInfoStatus(t *testing.T) {
 
 	info, err := svc.UpdateUserInfoStatus(context.Background(), 1, 2)
 	require.NoError(t, err)
-	assert.Equal(t, int16(2), info.Status)
+	assert.Equal(t, shareduser.Status(2), info.Status)
 }
 
 func TestUserInfoService_UpdateUserInfoStatus_NotFound(t *testing.T) {

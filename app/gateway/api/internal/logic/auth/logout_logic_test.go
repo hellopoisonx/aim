@@ -8,7 +8,7 @@ import (
 	"github.com/hellopoisonx/aim/app/auth/rpc/authservice"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/authctx"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/config"
-	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc/svctest"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 )
@@ -20,7 +20,7 @@ func TestLogoutUsesContextIdentity(t *testing.T) {
 
 	ctx := authctx.WithIdentity(context.Background(), authctx.Identity{UserID: 42, DeviceID: "desktop-1"})
 
-	resp, err := NewLogoutLogic(ctx, svc.NewServiceContextWithAuth(c, authClient)).Logout()
+	resp, err := NewLogoutLogic(ctx, svctest.WithAuth(c, authClient)).Logout()
 	require.NoError(t, err)
 	require.True(t, resp.Success)
 	require.Equal(t, int64(42), authClient.logoutUserID)
@@ -32,14 +32,14 @@ func TestLogoutSanitizesRPCError(t *testing.T) {
 
 	ctx := authctx.WithIdentity(context.Background(), authctx.Identity{UserID: 42, DeviceID: "desktop-1"})
 
-	_, err := NewLogoutLogic(ctx, svc.NewServiceContextWithAuth(c, &recordingAuthClient{err: errors.New("redis password leaked")})).Logout()
+	_, err := NewLogoutLogic(ctx, svctest.WithAuth(c, &recordingAuthClient{err: errors.New("redis password leaked")})).Logout()
 	requireInternalError(t, err)
 }
 
 func TestLogoutRejectsMissingIdentity(t *testing.T) {
 	var c config.Config
 
-	_, err := NewLogoutLogic(context.Background(), svc.NewServiceContextWithAuth(c, &recordingAuthClient{})).Logout()
+	_, err := NewLogoutLogic(context.Background(), svctest.WithAuth(c, &recordingAuthClient{})).Logout()
 	require.Error(t, err)
 }
 

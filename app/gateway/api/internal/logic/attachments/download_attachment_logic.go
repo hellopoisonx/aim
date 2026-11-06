@@ -3,6 +3,8 @@ package attachments
 import (
 	"context"
 
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/authctx"
+
 	attachmentpb "github.com/hellopoisonx/aim/app/attachment/rpc/pb"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/membership"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
@@ -27,7 +29,7 @@ func NewDownloadAttachmentLogic(ctx context.Context, svcCtx *svc.ServiceContext)
 }
 
 func (l *DownloadAttachmentLogic) DownloadAttachment(req *types.DownloadAttachmentRequest) (resp *types.DownloadAttachmentResponse, err error) {
-	userID, err := currentUserID(l.ctx)
+	userID, err := authctx.RequireUserID(l.ctx)
 	if err != nil {
 		return nil, err
 	}

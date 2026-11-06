@@ -28,13 +28,13 @@ func NewRemoveFriendTagLogic(ctx context.Context, svcCtx *svc.ServiceContext) *R
 }
 
 func (l *RemoveFriendTagLogic) RemoveFriendTag(req *types.RemoveFriendTagRequest) (resp *types.RemoveFriendTagResponse, err error) {
-	identity, ok := authctx.IdentityFromContext(l.ctx)
-	if !ok {
-		return nil, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
+	userID, err := authctx.RequireUserID(l.ctx)
+	if err != nil {
+		return nil, err
 	}
 
 	rpcResp, err := l.svcCtx.LogicFriendshipClient.RemoveFriendTag(l.ctx, &friendshipservice.RemoveFriendTagReq{
-		UserId:   identity.UserID,
+		UserId:   userID,
 		FriendId: req.Id,
 		TagId:    req.TagId,
 	})
@@ -42,21 +42,5 @@ func (l *RemoveFriendTagLogic) RemoveFriendTag(req *types.RemoveFriendTagRequest
 		return nil, errorx.SanitizeGRPCError(l, "remove friend tag", err)
 	}
 
-	f := rpcResp.GetFriendship()
-	tags := make([]types.FriendTagItem, 0, len(f.GetTags()))
-	for _, t := range f.GetTags() {
-		tags = append(tags, friendTagToType(t))
-	}
-
-	item := types.FriendshipItem{
-		UserId:    f.GetUserId(),
-		FriendId:  f.GetFriendId(),
-		Status:    f.GetStatus(),
-		CreatedAt: f.GetCreatedAt(),
-		UpdatedAt: f.GetUpdatedAt(),
-		Tags:      tags,
-	}
-	enrichPeerInfo(l.ctx, l.svcCtx, f.GetFriendId(), &item)
-
-	return &types.RemoveFriendTagResponse{Friendship: item}, nil
+	return &types.RemoveFriendTagResponse{Friendship: friendshipToItem(l.ctx, l.svcCtx, rpcResp.GetFriendship(), req.Id)}, nil
 }

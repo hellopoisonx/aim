@@ -9,7 +9,7 @@ import (
 	"github.com/hellopoisonx/aim/app/auth/rpc/model/dao"
 	"github.com/hellopoisonx/aim/app/auth/rpc/model/orm"
 	"github.com/hellopoisonx/aim/app/shared/jwt"
-	"github.com/hellopoisonx/aim/app/shared/tools"
+	"github.com/hellopoisonx/aim/app/shared/snowflake"
 	"github.com/stretchr/testify/require"
 )
 
@@ -47,9 +47,9 @@ func TestParseSessionValueRejectsInvalidData(t *testing.T) {
 
 func TestDAOUserStore(t *testing.T) {
 	fake := &fakeUserDAO{user: orm.UserCredential{ID: 11, Email: "ada@example.com", PasswordHash: "hash", Name: "Ada", Status: StatusNormal}}
-	ids, err := tools.NewSnowflake(1)
+	ids, err := snowflake.NewSnowflake(1)
 	require.NoError(t, err)
-	store := NewDAOUserStoreWithIDGenerator(fake, ids)
+	store := NewDAOUserStore(fake, ids)
 
 	created, err := store.CreateUser(context.Background(), "ada@example.com", "hash", "Ada")
 	require.NoError(t, err)
@@ -68,9 +68,9 @@ func TestDAOUserStore(t *testing.T) {
 
 func TestDAOUserStorePropagatesQueryErrors(t *testing.T) {
 	fake := &fakeUserDAO{err: errQuery}
-	ids, err := tools.NewSnowflake(1)
+	ids, err := snowflake.NewSnowflake(1)
 	require.NoError(t, err)
-	store := NewDAOUserStoreWithIDGenerator(fake, ids)
+	store := NewDAOUserStore(fake, ids)
 
 	_, err = store.CreateUser(context.Background(), "ada@example.com", "hash", "Ada")
 	require.ErrorIs(t, err, errQuery)

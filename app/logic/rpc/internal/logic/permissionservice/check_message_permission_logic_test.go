@@ -8,7 +8,9 @@ import (
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/config"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/service"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
+	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc/svctest"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
+	"github.com/hellopoisonx/aim/app/shared/errorx"
 
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/codes"
@@ -27,18 +29,18 @@ func TestCheckMessagePermission(t *testing.T) {
 	}{
 		{
 			name:    "allowed by relationship policy",
-			checker: fixedPermissionChecker{decision: service.PermissionDecision{Allowed: true, Code: service.CodeOK}},
+			checker: fixedPermissionChecker{decision: service.PermissionDecision{Allowed: true}},
 			req: &pb.CheckMessagePermissionReq{
 				SenderId:       10,
 				ConversationId: 20,
 				MessageType:    "text",
 				Mentions:       []int64{30, 40},
 			},
-			wantResp: &pb.CheckMessagePermissionResp{Allowed: true, BizCode: service.CodeOK, FilteredMentions: []int64{30, 40}},
+			wantResp: &pb.CheckMessagePermissionResp{Allowed: true, BizCode: 0, FilteredMentions: []int64{30, 40}},
 		},
 		{
 			name:    "message type too long",
-			checker: fixedPermissionChecker{decision: service.PermissionDecision{Allowed: true, Code: service.CodeOK}},
+			checker: fixedPermissionChecker{decision: service.PermissionDecision{Allowed: true}},
 			req: &pb.CheckMessagePermissionReq{
 				SenderId:       10,
 				ConversationId: 20,
@@ -46,13 +48,13 @@ func TestCheckMessagePermission(t *testing.T) {
 			},
 			wantResp: &pb.CheckMessagePermissionResp{
 				Allowed: false,
-				BizCode: service.CodeInvalidArgument,
+				BizCode: errorx.CodeBadInput,
 				Reason:  "message_type is too long",
 			},
 		},
 		{
 			name:    "too many mentions",
-			checker: fixedPermissionChecker{decision: service.PermissionDecision{Allowed: true, Code: service.CodeOK}},
+			checker: fixedPermissionChecker{decision: service.PermissionDecision{Allowed: true}},
 			req: &pb.CheckMessagePermissionReq{
 				SenderId:       10,
 				ConversationId: 20,
@@ -64,13 +66,13 @@ func TestCheckMessagePermission(t *testing.T) {
 			},
 			wantResp: &pb.CheckMessagePermissionResp{
 				Allowed: false,
-				BizCode: service.CodeInvalidArgument,
+				BizCode: errorx.CodeBadInput,
 				Reason:  "mentions exceeds limit",
 			},
 		},
 		{
 			name:    "invalid mention id",
-			checker: fixedPermissionChecker{decision: service.PermissionDecision{Allowed: true, Code: service.CodeOK}},
+			checker: fixedPermissionChecker{decision: service.PermissionDecision{Allowed: true}},
 			req: &pb.CheckMessagePermissionReq{
 				SenderId:       10,
 				ConversationId: 20,
@@ -79,7 +81,7 @@ func TestCheckMessagePermission(t *testing.T) {
 			},
 			wantResp: &pb.CheckMessagePermissionResp{
 				Allowed: false,
-				BizCode: service.CodeInvalidArgument,
+				BizCode: errorx.CodeBadInput,
 				Reason:  "mentions must contain positive user ids",
 			},
 		},
@@ -87,7 +89,7 @@ func TestCheckMessagePermission(t *testing.T) {
 			name: "denied by relationship policy",
 			checker: fixedPermissionChecker{decision: service.PermissionDecision{
 				Allowed: false,
-				Code:    service.CodePermissionDenied,
+				Code:    errorx.CodeForbidden,
 				Reason:  "sender is muted",
 			}},
 			req: &pb.CheckMessagePermissionReq{
@@ -95,13 +97,13 @@ func TestCheckMessagePermission(t *testing.T) {
 				ConversationId: 20,
 				MessageType:    "text",
 			},
-			wantResp: &pb.CheckMessagePermissionResp{Allowed: false, BizCode: service.CodePermissionDenied, Reason: "sender is muted"},
+			wantResp: &pb.CheckMessagePermissionResp{Allowed: false, BizCode: errorx.CodeForbidden, Reason: "sender is muted"},
 		},
 		{
 			name: "conversation not found",
 			checker: fixedPermissionChecker{decision: service.PermissionDecision{
 				Allowed: false,
-				Code:    service.CodeNotFound,
+				Code:    errorx.CodeNotFound,
 				Reason:  "conversation not found",
 			}},
 			req: &pb.CheckMessagePermissionReq{
@@ -109,18 +111,18 @@ func TestCheckMessagePermission(t *testing.T) {
 				ConversationId: 20,
 				MessageType:    "text",
 			},
-			wantResp: &pb.CheckMessagePermissionResp{Allowed: false, BizCode: service.CodeNotFound, Reason: "conversation not found"},
+			wantResp: &pb.CheckMessagePermissionResp{Allowed: false, BizCode: errorx.CodeNotFound, Reason: "conversation not found"},
 		},
 		{
 			name:    "missing sender id",
-			checker: fixedPermissionChecker{decision: service.PermissionDecision{Allowed: true, Code: service.CodeOK}},
+			checker: fixedPermissionChecker{decision: service.PermissionDecision{Allowed: true}},
 			req: &pb.CheckMessagePermissionReq{
 				ConversationId: 20,
 				MessageType:    "text",
 			},
 			wantResp: &pb.CheckMessagePermissionResp{
 				Allowed: false,
-				BizCode: service.CodeInvalidArgument,
+				BizCode: errorx.CodeBadInput,
 				Reason:  "sender_id and conversation_id are required",
 			},
 		},
@@ -147,7 +149,7 @@ func TestCheckMessagePermission(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			svcCtx := svc.NewServiceContextWithPermissionChecker(config.Config{}, tt.checker)
+			svcCtx := svctest.WithPermissionChecker(config.Config{}, tt.checker)
 
 			got, err := NewCheckMessagePermissionLogic(ctx, svcCtx).CheckMessagePermission(tt.req)
 			if tt.wantCode != codes.OK {
@@ -163,8 +165,8 @@ func TestCheckMessagePermission(t *testing.T) {
 	}
 }
 
-func TestDefaultServiceContextDeniesMessagePermission(t *testing.T) {
-	svcCtx := svc.NewServiceContext(config.Config{})
+func TestDenyAllPermissionCheckerDeniesMessagePermission(t *testing.T) {
+	svcCtx := &svc.ServiceContext{PermissionChecker: service.DenyAllPermissionChecker{}}
 	got, err := NewCheckMessagePermissionLogic(context.Background(), svcCtx).CheckMessagePermission(&pb.CheckMessagePermissionReq{
 		SenderId:       10,
 		ConversationId: 20,
@@ -173,7 +175,7 @@ func TestDefaultServiceContextDeniesMessagePermission(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, &pb.CheckMessagePermissionResp{
 		Allowed: false,
-		BizCode: service.CodePermissionDenied,
+		BizCode: errorx.CodeForbidden,
 		Reason:  "permission checker is not configured",
 	}, got)
 }

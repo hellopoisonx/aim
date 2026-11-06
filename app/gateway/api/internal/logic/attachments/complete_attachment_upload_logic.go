@@ -3,7 +3,10 @@ package attachments
 import (
 	"context"
 
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/authctx"
+
 	attachmentpb "github.com/hellopoisonx/aim/app/attachment/rpc/pb"
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/pbconv"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
 
@@ -25,7 +28,7 @@ func NewCompleteAttachmentUploadLogic(ctx context.Context, svcCtx *svc.ServiceCo
 }
 
 func (l *CompleteAttachmentUploadLogic) CompleteAttachmentUpload(req *types.CompleteAttachmentUploadRequest) (resp *types.AttachmentFileInfo, err error) {
-	userID, err := currentUserID(l.ctx)
+	userID, err := authctx.RequireUserID(l.ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -39,5 +42,5 @@ func (l *CompleteAttachmentUploadLogic) CompleteAttachmentUpload(req *types.Comp
 		return nil, err
 	}
 
-	return fileInfoFromPB(info), nil
+	return pbconv.AttachmentFileInfo(info), nil
 }

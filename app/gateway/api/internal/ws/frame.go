@@ -81,7 +81,7 @@ func DecodePayload(frame *pb.WsFrame) (proto.Message, error) {
 }
 
 // decodeInto unmarshals the frame payload into target.
-func decodeInto[T proto.Message](frame *pb.WsFrame, target T) (proto.Message, error) {
+func decodeInto(frame *pb.WsFrame, target proto.Message) (proto.Message, error) {
 	if err := proto.Unmarshal(frame.GetPayload(), target); err != nil {
 		return nil, fmt.Errorf("decode %s: %w", frame.GetType(), err)
 	}

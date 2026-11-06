@@ -3,10 +3,12 @@ package conversationservicelogic
 import (
 	"context"
 	"encoding/json"
+	"time"
 
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/service"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
+	sharedconversation "github.com/hellopoisonx/aim/app/shared/conversation"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 
 	"github.com/zeromicro/go-zero/core/logx"
@@ -37,20 +39,16 @@ func (l *GetConversationHistoryLogic) GetConversationHistory(in *pb.GetConversat
 		return nil, errorx.NewCodeError(errorx.CodeInternal, "conversation service is not configured")
 	}
 
-	limit := in.GetLimit()
-	if limit <= 0 {
-		limit = 50
-	}
-	if limit > 100 {
-		limit = 100
+	limit := service.NormalizeHistoryLimit(in.GetLimit())
+
+	cursor := sharedconversation.MessageCursor{ID: in.GetCursorId()}
+	if createdAt := in.GetCursorCreatedAt(); createdAt > 0 {
+		cursor.CreatedAt = time.UnixMilli(createdAt)
 	}
 
-	cursorCreatedAt := in.GetCursorCreatedAt()
-	cursorID := in.GetCursorId()
-
-	messages, err := convSvc.GetConversationHistory(l.ctx, in.GetConversationId(), cursorCreatedAt, cursorID, limit)
+	messages, err := convSvc.GetConversationHistory(l.ctx, in.GetConversationId(), cursor, limit)
 	if err != nil {
-		return nil, errorx.ToGRPCError(err)
+		return nil, err
 	}
 
 	senderInfoCache := make(map[int64]*pb.SenderInfo)
@@ -97,7 +95,7 @@ func (l *GetConversationHistoryLogic) GetConversationHistory(in *pb.GetConversat
 
 	readStates, err := convSvc.ListConversationReadStates(l.ctx, in.GetConversationId())
 	if err != nil {
-		return nil, errorx.ToGRPCError(err)
+		return nil, err
 	}
 
 	pbReadStates := make([]*pb.ReadStateItem, len(readStates))
@@ -113,7 +111,7 @@ func (l *GetConversationHistoryLogic) GetConversationHistory(in *pb.GetConversat
 
 	members, err := convSvc.GetConversationMembersDetail(l.ctx, in.GetConversationId())
 	if err != nil {
-		return nil, errorx.ToGRPCError(err)
+		return nil, err
 	}
 
 	// Enrich read states and read details with member name snapshots.

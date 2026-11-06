@@ -6,6 +6,7 @@ import (
 
 	sharedconversation "github.com/hellopoisonx/aim/app/shared/conversation"
 
+	"github.com/hellopoisonx/aim/app/logic/rpc/internal/pbconv"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
@@ -40,16 +41,8 @@ func (l *CreateConversationLogic) CreateConversation(in *pb.CreateConversationRe
 	var name string
 	var displayName string // the name to return to the caller
 	if sharedconversation.Type(in.GetConversationType()) == sharedconversation.TypeDirect {
-		if len(memberIDs) != 1 {
-			return nil, errorx.NewCodeError(errorx.CodeBadInput, "direct conversation member_ids must contain exactly one peer user id")
-		}
-
-		if memberIDs[0] <= 0 {
-			return nil, errorx.NewCodeError(errorx.CodeBadInput, "member_ids must contain positive user ids")
-		}
-
-		if memberIDs[0] == in.GetCreatorId() {
-			return nil, errorx.NewCodeError(errorx.CodeBadInput, "direct conversation peer must not be creator")
+		if err := sharedconversation.RequireDirectPeer(memberIDs, in.GetCreatorId()); err != nil {
+			return nil, err
 		}
 
 		// For direct conversations, name is not required from the caller.
@@ -59,11 +52,11 @@ func (l *CreateConversationLogic) CreateConversation(in *pb.CreateConversationRe
 		if l.svcCtx.UserInfoService != nil {
 			creatorInfo, err := l.svcCtx.UserInfoService.GetUserInfo(l.ctx, in.GetCreatorId())
 			if err != nil {
-				return nil, errorx.ToGRPCError(err)
+				return nil, err
 			}
 			peerInfo, err := l.svcCtx.UserInfoService.GetUserInfo(l.ctx, peerID)
 			if err != nil {
-				return nil, errorx.ToGRPCError(err)
+				return nil, err
 			}
 			name = creatorInfo.Nickname + " | " + peerInfo.Nickname
 			displayName = peerInfo.Nickname
@@ -79,40 +72,27 @@ func (l *CreateConversationLogic) CreateConversation(in *pb.CreateConversationRe
 		}
 	}
 
-	convSvc := l.svcCtx.ConversationService
-	if convSvc == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "conversation service is not configured")
+	convSvc, err := requireConversationService(l.svcCtx.ConversationService)
+	if err != nil {
+		return nil, err
 	}
 
 	conv, err := convSvc.CreateConversation(l.ctx, sharedconversation.Type(in.GetConversationType()), in.GetCreatorId(), memberIDs, name, in.GetAvatar())
 	if err != nil {
-		return nil, errorx.ToGRPCError(err)
+		return nil, err
 	}
 
-	members, err := convSvc.GetConversationMembers(l.ctx, conv.ID)
+	respMemberIDs, err := conversationMemberIDs(l.ctx, convSvc, conv.ID)
 	if err != nil {
-		return nil, errorx.ToGRPCError(err)
-	}
-
-	respMemberIDs := make([]int64, len(members))
-	for i, m := range members {
-		respMemberIDs[i] = m.UserID
+		return nil, err
 	}
 
 	respName := conv.Name
 	if sharedconversation.Type(in.GetConversationType()) == sharedconversation.TypeDirect && displayName != "" {
 		respName = displayName
 	}
+
 	return &pb.CreateConversationResp{
-		Conversation: &pb.ConversationResponse{
-			Id:               conv.ID,
-			ConversationType: string(conv.ConversationType),
-			IsActive:         conv.IsActive,
-			CreatedAt:        conv.CreatedAt.UnixMilli(),
-			MemberIds:        respMemberIDs,
-			Name:             respName,
-			Avatar:           conv.Avatar,
-			CreatorId:        conv.CreatorID,
-		},
+		Conversation: pbconv.Conversation(conv, respMemberIDs, respName),
 	}, nil
 }

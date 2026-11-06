@@ -17,8 +17,8 @@ description: aim 的 Bot OpenAPI 域。覆盖第三方 Bot 接入、token 鉴权
 ## 设计原则（V0）
 
 - **Bot = 特殊用户**：Bot 拥有真实 `user_id`、`user_info` 资料、`conversation_members`
-  身份；与人类用户共用主消息链路（core.Transfer → RocketMQ FIFO `aim-message-transfer`
-  → WebSocket 推送 + DB 归档）。
+  身份；与人类用户共用主消息链路（logic `MessageService.IngestMessage` → RocketMQ FIFO
+  `aim-message-transfer` → `aim-gateway-push` WebSocket 推送 + DB 归档）。
 - **Token 哈希存储**：plaintext 仅在 provision 时输出一次，服务端只持有 SHA-256
   哈希，撤销靠 `revoked_at` 时间戳。
 - **运维 provision**：V0 不暴露用户侧 Bot 创建 / 安装 REST；脚本一次性写入两个 DB。
@@ -86,8 +86,8 @@ description: aim 的 Bot OpenAPI 域。覆盖第三方 Bot 接入、token 鉴权
 
 - 不要在 gateway 直接读 `bot_tokens` 表 —— 一律通过 logic 的 `BotService`，
   方便后续把校验逻辑（包括 action、群成员、群内权限）集中到 logic 层。
-- 不要为 Bot 增设独立的消息热路径 —— 复用 `core.Transfer`，配额、限流、
-  幂等性沿用现有机制；只是 `device_id` 固定为 `bot-api` 以便区分。
+- 不要为 Bot 增设独立的消息热路径 —— 复用 `logic.MessageService.IngestMessage`，
+  幂等、授权沿用现有机制；只是 `device_id` 固定为 `bot-api` 以便区分。
 - 不要在 webhook 投递路径里阻塞归档 consumer —— 这两个消费者已经是不同的
   consumer group，单 Bot 故障不应回流到 archive。
 - Webhook 失败不要把错误返回给 kq —— 当前实现内部重试 5 次后吞掉，offset 前进，

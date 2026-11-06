@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/hellopoisonx/aim/app/shared/events"
 	"github.com/stretchr/testify/require"
 )
 
@@ -14,9 +15,9 @@ func TestTypingConsumerSkipsOriginGatewayNode(t *testing.T) {
 	svcCtx.LogicConversationClient = &fakeConversationClient{memberIDs: []int64{42, 43}}
 
 	ctx := context.Background()
-	require.NoError(t, svcCtx.RedisClient.SAdd(ctx, userGatewayKeyPrefix+"43", "0", "1").Err())
+	require.NoError(t, svcCtx.RedisClient.SAdd(ctx, "aim:user_gateway:43", "0", "1").Err())
 
-	event := typingEvent{
+	event := events.TypingEvent{
 		FromUserID:     42,
 		ConversationID: 100,
 		Timestamp:      123,
@@ -37,9 +38,9 @@ func TestReadReceiptConsumerSkipsOriginGatewayNode(t *testing.T) {
 	svcCtx.LogicConversationClient = &fakeConversationClient{memberIDs: []int64{42, 43}}
 
 	ctx := context.Background()
-	require.NoError(t, svcCtx.RedisClient.SAdd(ctx, userGatewayKeyPrefix+"43", "0", "1").Err())
+	require.NoError(t, svcCtx.RedisClient.SAdd(ctx, "aim:user_gateway:43", "0", "1").Err())
 
-	event := readReceiptEvent{
+	event := events.ReadReceiptEvent{
 		FromUserID:        42,
 		ConversationID:    100,
 		LastReadMessageID: 99,
@@ -53,4 +54,11 @@ func TestReadReceiptConsumerSkipsOriginGatewayNode(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, fakeGw.readReceiptPushes, 1)
 	require.Equal(t, int64(43), fakeGw.readReceiptPushes[0].GetTargetUserId())
+}
+
+func TestConsumersDropUndecodablePayload(t *testing.T) {
+	svcCtx := newTestServiceContext(t, newFakeGatewayClient())
+
+	require.NoError(t, NewTypingConsumer(context.Background(), svcCtx).Consume(context.Background(), "100", "{"))
+	require.NoError(t, NewReadReceiptConsumer(context.Background(), svcCtx).Consume(context.Background(), "100", "{"))
 }

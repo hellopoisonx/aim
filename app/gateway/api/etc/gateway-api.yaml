@@ -16,11 +16,6 @@ AuthRpc:
     Hosts:
       - etcd:2379
     Key: auth.rpc
-CoreRpc:
-  Etcd:
-    Hosts:
-      - etcd:2379
-    Key: core.rpc
 LogicRpc:
   Etcd:
     Hosts:
@@ -48,6 +43,14 @@ RocketMQ:
   TypingTopic: aim-typing-events
   ReadReceiptTopic: aim-read-receipt-events
   FriendApplicationTopic: aim-friend-application-events
+  PushTopic: aim-gateway-push
+# 聊天消息推送订阅：消费组按节点派生（aim-gateway-push-<node id>），
+# 因此每个网关节点都收到全部推送事件，只投递本地连接。
+PushConsumer:
+  Name: gateway-push-consumer
+  Endpoint: rocketmq-proxy:8081
+  Topic: aim-gateway-push
+  Concurrency: 1
 AttachmentRpc:
   Etcd:
     Hosts:

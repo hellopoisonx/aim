@@ -5,7 +5,6 @@ import (
 
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
-	"github.com/hellopoisonx/aim/app/shared/errorx"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -26,29 +25,19 @@ func NewListFriendApplicationsLogic(ctx context.Context, svcCtx *svc.ServiceCont
 
 // ListFriendApplications lists pending friend applications received by the user.
 func (l *ListFriendApplicationsLogic) ListFriendApplications(in *pb.ListFriendApplicationsReq) (*pb.ListFriendApplicationsResp, error) {
-	userID := in.GetUserId()
-	if userID <= 0 {
-		return nil, errorx.NewCodeError(errorx.CodeBadInput, "user_id must be positive")
-	}
-
-	if l.svcCtx.FriendshipDAO == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "database is not configured")
-	}
-
-	records, err := l.svcCtx.FriendshipDAO.ListPendingFriendApplications(l.ctx, userID)
+	friendshipSvc, err := requireFriendshipService(l.svcCtx)
 	if err != nil {
-		return nil, errorx.ToGRPCError(err)
+		return nil, err
+	}
+
+	records, err := friendshipSvc.ListPendingApplications(l.ctx, in.GetUserId())
+	if err != nil {
+		return nil, err
 	}
 
 	applications := make([]*pb.FriendshipResponse, 0, len(records))
 	for _, record := range records {
-		applications = append(applications, &pb.FriendshipResponse{
-			UserId:    record.UserID,
-			FriendId:  record.FriendID,
-			Status:    record.Status,
-			CreatedAt: record.CreatedAt.UnixMilli(),
-			UpdatedAt: record.UpdatedAt.UnixMilli(),
-		})
+		applications = append(applications, friendshipToProto(record))
 	}
 
 	return &pb.ListFriendApplicationsResp{Applications: applications}, nil

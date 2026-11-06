@@ -15,8 +15,10 @@ import (
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/handler"
 	wshandler "github.com/hellopoisonx/aim/app/gateway/api/internal/handler/ws"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/httperr"
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/mqs"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/ws"
+	rpcutil "github.com/hellopoisonx/aim/app/shared/rpc"
 	gwpb "github.com/hellopoisonx/aim/shared/proto/gateway/pb"
 
 	"github.com/zeromicro/go-zero/core/conf"
@@ -64,6 +66,7 @@ func main() {
 	rpcServer := zrpc.MustNewServer(c.GatewayRpc, func(grpcServer *grpc.Server) {
 		gwpb.RegisterGatewayServiceServer(grpcServer, gatewayServer)
 	})
+	rpcServer.AddUnaryInterceptors(rpcutil.UnaryErrorInterceptor())
 	defer rpcServer.Stop()
 
 	// Notify connected clients to reconnect before shutdown so they can fail
@@ -84,6 +87,11 @@ func main() {
 	group.Add(restServer)
 
 	group.Add(rpcServer)
+
+	for _, consumer := range mqs.Consumers(context.Background(), ctx) {
+		group.Add(consumer)
+	}
+
 	defer group.Stop()
 
 	fmt.Printf("Starting REST server at %s:%d and GatewayService RPC server at %s...\n", c.Host, c.Port, c.GatewayRpc.ListenOn)

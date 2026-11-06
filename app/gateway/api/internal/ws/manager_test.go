@@ -226,7 +226,7 @@ func TestManagerCloseAll(t *testing.T) {
 func TestMarkTokenExpiredCreatesGrace(t *testing.T) {
 	t.Parallel()
 
-	mgr := ws.NewManagerWithPresence(nil, "node-1", 60)
+	mgr := ws.NewManager(ws.WithPresence(nil, "node-1", 60))
 	mgr.SetReconnectGrace(30 * time.Second)
 
 	identity := authctx.Identity{UserID: 1, DeviceID: "device-1"}
@@ -252,7 +252,7 @@ func TestMarkTokenExpiredCreatesGrace(t *testing.T) {
 func TestCancelPendingOfflineOnReregister(t *testing.T) {
 	t.Parallel()
 
-	mgr := ws.NewManagerWithPresence(nil, "node-1", 60)
+	mgr := ws.NewManager(ws.WithPresence(nil, "node-1", 60))
 	mgr.SetReconnectGrace(30 * time.Second)
 
 	identity := authctx.Identity{UserID: 1, DeviceID: "device-1"}
@@ -280,7 +280,7 @@ func TestCancelPendingOfflineOnReregister(t *testing.T) {
 func TestNormalUnregisterStillPublishesOffline(t *testing.T) {
 	t.Parallel()
 
-	mgr := ws.NewManagerWithPresence(nil, "node-1", 60)
+	mgr := ws.NewManager(ws.WithPresence(nil, "node-1", 60))
 	mgr.SetReconnectGrace(30 * time.Second)
 
 	identity := authctx.Identity{UserID: 1, DeviceID: "device-1"}
@@ -305,7 +305,7 @@ func TestNormalUnregisterStillPublishesOffline(t *testing.T) {
 func TestScanStaleConnections(t *testing.T) {
 	t.Parallel()
 
-	mgr := ws.NewManagerWithPresence(nil, "node-1", 60)
+	mgr := ws.NewManager(ws.WithPresence(nil, "node-1", 60))
 	mgr.SetHeartbeatTimeout(10 * time.Second)
 
 	identity := authctx.Identity{UserID: 1, DeviceID: "device-1"}
@@ -329,7 +329,7 @@ func TestScanStaleConnections(t *testing.T) {
 func TestRecordHeartbeatPreventsStale(t *testing.T) {
 	t.Parallel()
 
-	mgr := ws.NewManagerWithPresence(nil, "node-1", 60)
+	mgr := ws.NewManager(ws.WithPresence(nil, "node-1", 60))
 	mgr.SetHeartbeatTimeout(10 * time.Second)
 
 	identity := authctx.Identity{UserID: 1, DeviceID: "device-1"}
@@ -374,7 +374,7 @@ func TestScanStaleConnectionsNoTimeout(t *testing.T) {
 func TestScanExpiredGraces(t *testing.T) {
 	t.Parallel()
 
-	mgr := ws.NewManagerWithPresence(nil, "node-1", 60)
+	mgr := ws.NewManager(ws.WithPresence(nil, "node-1", 60))
 	mgr.SetReconnectGrace(100 * time.Millisecond)
 
 	identity := authctx.Identity{UserID: 1, DeviceID: "device-1"}
@@ -407,7 +407,7 @@ func TestScanExpiredGraces(t *testing.T) {
 func TestForceOfflineForExpiredGrace(t *testing.T) {
 	t.Parallel()
 
-	mgr := ws.NewManagerWithPresence(nil, "node-1", 60)
+	mgr := ws.NewManager(ws.WithPresence(nil, "node-1", 60))
 	mgr.SetReconnectGrace(30 * time.Second)
 
 	identity := authctx.Identity{UserID: 1, DeviceID: "device-1"}
@@ -424,7 +424,7 @@ func TestForceOfflineForExpiredGrace(t *testing.T) {
 func TestMultiDeviceOnlineOffline(t *testing.T) {
 	t.Parallel()
 
-	mgr := ws.NewManagerWithPresence(nil, "node-1", 60)
+	mgr := ws.NewManager(ws.WithPresence(nil, "node-1", 60))
 	mgr.SetReconnectGrace(30 * time.Second)
 
 	identity1 := authctx.Identity{UserID: 1, DeviceID: "device-1"}
@@ -456,7 +456,7 @@ func TestMultiDeviceOnlineOffline(t *testing.T) {
 func TestMultiDeviceTokenExpiredDoesNotOffline(t *testing.T) {
 	t.Parallel()
 
-	mgr := ws.NewManagerWithPresence(nil, "node-1", 60)
+	mgr := ws.NewManager(ws.WithPresence(nil, "node-1", 60))
 	mgr.SetReconnectGrace(30 * time.Second)
 
 	identity1 := authctx.Identity{UserID: 1, DeviceID: "device-1"}

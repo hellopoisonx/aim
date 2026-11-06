@@ -136,8 +136,7 @@ func TestUserCreatedConsumer_Consume_InvalidJSON(t *testing.T) {
 	consumer := NewUserCreatedConsumer(context.Background(), svcCtx)
 
 	err := consumer.Consume(context.Background(), "12345", "invalid json{")
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "invalid character")
+	require.NoError(t, err)
 }
 
 func TestUserCreatedConsumer_Consume_ServiceError(t *testing.T) {

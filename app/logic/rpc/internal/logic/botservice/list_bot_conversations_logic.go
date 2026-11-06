@@ -26,15 +26,12 @@ func NewListBotConversationsLogic(ctx context.Context, svcCtx *svc.ServiceContex
 
 // ListBotConversations returns every conversation the bot is a member of.
 func (l *ListBotConversationsLogic) ListBotConversations(in *pb.ListBotConversationsReq) (*pb.ListBotConversationsResp, error) {
-	if l.svcCtx.BotService == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "bot service not configured")
+	botSvc, err := requireBot(l.svcCtx, in.GetBotUserId())
+	if err != nil {
+		return nil, err
 	}
 
-	if in.GetBotUserId() <= 0 {
-		return nil, errorx.NewCodeError(errorx.CodeBadInput, "bot_user_id is required")
-	}
-
-	items, err := l.svcCtx.BotService.ListBotConversations(l.ctx, in.GetBotUserId())
+	items, err := botSvc.ListBotConversations(l.ctx, in.GetBotUserId())
 	if err != nil {
 		return nil, errorx.NewCodeErrorf(errorx.CodeInternal, "list bot conversations failed: %v", err)
 	}

@@ -128,7 +128,6 @@ func TestNilProducerIsNoop(t *testing.T) {
 	assert.NoError(t, producer.Publish(context.Background(), Message{Topic: "aim-typing-events"}))
 	assert.NoError(t, producer.Start())
 	assert.NoError(t, producer.GracefulStop())
-	assert.Nil(t, producer.WithJournalChecker(nil))
 }
 
 func TestSendTransactionalCommitsAfterLocalTransaction(t *testing.T) {
@@ -137,6 +136,7 @@ func TestSendTransactionalCommitsAfterLocalTransaction(t *testing.T) {
 
 	var journals []EventJournal
 	producer.journalTx = journalStub(&journals, nil)
+	producer.journals.Store(&gorm.DB{})
 
 	ran := false
 	err := producer.SendTransactional(context.Background(), &gorm.DB{}, TransactionalMessage{
@@ -170,6 +170,7 @@ func TestSendTransactionalRollsBackWhenLocalTransactionFails(t *testing.T) {
 	localErr := errors.New("insert credential failed")
 	var journals []EventJournal
 	producer.journalTx = journalStub(&journals, nil)
+	producer.journals.Store(&gorm.DB{})
 
 	err := producer.SendTransactional(context.Background(), &gorm.DB{}, TransactionalMessage{
 		Topic:    "aim-user-events",
@@ -191,6 +192,7 @@ func TestSendTransactionalSkipsLocalTransactionWhenHalfMessageFails(t *testing.T
 
 	var journals []EventJournal
 	producer.journalTx = journalStub(&journals, nil)
+	producer.journals.Store(&gorm.DB{})
 
 	ran := false
 	err := producer.SendTransactional(context.Background(), &gorm.DB{}, TransactionalMessage{
@@ -220,6 +222,18 @@ func TestSendTransactionalRejectsIncompleteMessages(t *testing.T) {
 	require.Error(t, nilProducer.SendTransactional(context.Background(), &gorm.DB{}, TransactionalMessage{Topic: "t", EventUID: "x"}, noop))
 }
 
+func TestSendTransactionalRequiresJournalChecker(t *testing.T) {
+	sender := &fakeSender{}
+	producer := &Producer{group: "test-group", producer: sender}
+
+	err := producer.SendTransactional(context.Background(), &gorm.DB{}, TransactionalMessage{
+		Topic:    "aim-attachment-parsed",
+		EventUID: "attachment.parsed:file-1",
+	}, func(context.Context, *gorm.DB) error { return nil })
+	require.ErrorContains(t, err, "journal checker")
+	assert.Empty(t, sender.sentTx, "no half message may be sent without check-back")
+}
+
 func TestResolveWithoutJournalDatabaseIsUnknown(t *testing.T) {
 	producer := newTestProducer(&fakeSender{})
 	assert.Equal(t, rmq.UNKNOWN, producer.resolve("aim-user-events", []string{"user.created:1"}))
@@ -230,4 +244,66 @@ func TestResolveWithoutKeysIsUnknown(t *testing.T) {
 	producer.journals.Store(&gorm.DB{})
 
 	assert.Equal(t, rmq.UNKNOWN, producer.resolve("aim-user-events", nil))
+}
+
+func TestNewProducerAbsentConfigReturnsNil(t *testing.T) {
+	producer, err := NewProducer(ProducerConf{})
+	require.NoError(t, err)
+	require.Nil(t, producer)
+}
+
+func TestNewProducerValidation(t *testing.T) {
+	endpoint := EndpointConf{Endpoint: "rocketmq-proxy:8081"}
+	cases := []struct {
+		name    string
+		conf    ProducerConf
+		opts    []ProducerOption
+		wantErr string
+	}{
+		{name: "group", conf: ProducerConf{EndpointConf: endpoint, Topic: "aim-user-events"}, wantErr: "producer group is required"},
+		{name: "topic", conf: ProducerConf{EndpointConf: endpoint, Group: "aim-auth-producer"}, wantErr: "producer topic is required"},
+		{name: "empty extra topic", conf: ProducerConf{EndpointConf: endpoint, Group: "aim-auth-producer", Topic: "aim-user-events"}, opts: []ProducerOption{WithExtraTopics("")}, wantErr: "producer topic is required"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := NewProducer(tc.conf, tc.opts...)
+
+			require.ErrorContains(t, err, tc.wantErr)
+		})
+	}
+}
+
+// Options are resolved by NewProducer, so a constructed producer already carries
+// the journal handle and the extra topics instead of needing a later mutator call.
+func TestNewProducerAppliesOptions(t *testing.T) {
+	db := &gorm.DB{}
+	producer, err := NewProducer(
+		ProducerConf{
+			EndpointConf: EndpointConf{Endpoint: "rocketmq-proxy:8081"},
+			Group:        "aim-gateway-producer",
+			Topic:        "aim-presence-events",
+		},
+		WithExtraTopics("aim-typing-events", "aim-read-receipt-events"),
+		WithJournalChecker(db),
+	)
+	require.NoError(t, err)
+	require.NotNil(t, producer)
+
+	assert.Equal(t, []string{"aim-presence-events", "aim-typing-events", "aim-read-receipt-events"}, producer.topics)
+	assert.Same(t, db, producer.journals.Load())
+}
+
+// A config that passes IsConfigured must be constructible: the readiness gate
+// and NewProducer agree on which fields are required.
+func TestProducerConfIsConfiguredMatchesConstructorRequirement(t *testing.T) {
+	conf := ProducerConf{
+		EndpointConf: EndpointConf{Endpoint: "rocketmq-proxy:8081"},
+		Group:        "aim-auth-producer",
+		Topic:        "aim-user-events",
+	}
+	assert.True(t, conf.IsConfigured())
+
+	conf.Topic = ""
+	assert.False(t, conf.IsConfigured())
 }

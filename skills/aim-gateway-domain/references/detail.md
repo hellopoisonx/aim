@@ -141,28 +141,37 @@ Proto 定义：`shared/proto/gateway/gateway.proto`，生成的 pb 代码在 `sh
 - 内部实现：查找 `user_id` 对应的本地 WebSocket 连接，写入 `FRAME_TYPE_PUSH_FRIEND_APPLICATION` 帧
 - 调用方：aim-logic/FriendshipService 在好友申请创建后通过 gRPC 调用
 
-## 已实现 CoreRpc 客户端
+## 消息写入：IngestMessage 客户端
 
-实现位置：`app/gateway/api/internal/svc/service_context.go`（gateway API 进程内的 gRPC client，调用 aim-core）。
+实现位置：`app/gateway/api/internal/svc/service_context.go` 的 `MessageClient messageservice.MessageService`，复用 `LogicRpc` 的 zrpc 连接（`app/logic/rpc/client/messageservice`）。`CoreRpc` 与 `CoreClient` 已删除。
 
-### CoreRpc 配置
+### 配置
 
-配置定义：`app/gateway/api/internal/config/config.go` 的 `CoreRpc zrpc.RpcClientConf` 字段。Docker Compose 部署使用 `deploy/config/<env>/gateway-api.yaml`（容器内 `/app/etc/gateway-api.yaml`），本地 `go run` / 单服务调试使用 `app/gateway/api/etc/gateway-api.yaml`。
+`app/gateway/api/internal/config/config.go` 不再有 `CoreRpc`；消息写入走 `LogicRpc`。Docker Compose 部署使用 `deploy/config/<env>/gateway-api.yaml`（容器内 `/app/etc/gateway-api.yaml`）。
 
-目标地址通过 etcd 服务发现自动获取（target 形如 `etcd://<hosts>/core.rpc`），`gateway-api.yaml` 的 `CoreRpc.Etcd: { Hosts, Key: core.rpc }` 块配置注册中心地址与发现 key。
-
-### Transfer 调用流程
+### IngestMessage 调用流程
 
 1. WebSocket 收到 `FRAME_TYPE_SEND_MESSAGE`（SendMessagePayload）
 2. JWT 验签通过后，提取 `sender_id` / `device_id`
-3. 调用 `core.Transfer(TransferReq)` gRPC
-4. 根据返回结果映射到 `ServerAckPayload` 回传给客户端
+3. 调用 `logic.MessageService.IngestMessage(IngestMessageReq)` gRPC（3s 超时）
+4. 根据返回结果映射到 `ServerAckPayload` 回传给客户端（`mapIngestToAck`）
+
+Bot OpenAPI（`bot_send_message_logic.go`）走同一个 RPC，`device_id` 固定为 `bot-api`。
+
+## 推送订阅：PushConsumer
+
+`app/gateway/api/internal/mqs/push_consumer.go` 消费 `aim-gateway-push`：
+
+- `TargetUserId != 0`（单聊写扩散）：`GatewayServer.DeliverLocal` 投递给该用户在本节点的所有连接，跳过源设备。
+- `MemberIDs` 非空（群聊读扩散）：`GatewayServer.DeliverLocalMembers` 只编码一次 payload，然后按成员找本节点连接逐个入队，同一节点上的多个成员共享同一份消息数据。
+- 两者同时为空或同时非空视为脏数据：记日志后 Ack 丢弃。
+- 消费组每个节点独立（`aim-gateway-push-<GatewayNodeID>`），因此 topic 广播到所有节点，各节点只投递本地连接；`rocketmq-init` 的 `autoCreateSubscriptionGroup=true` 负责动态建组。
 
 ## ACK 映射表
 
 `core.Transfer` gRPC 返回结果映射到 `FRAME_TYPE_SERVER_ACK`（ServerAckPayload）：
 
-| Core gRPC 结果 | WS AckStatus | WS code | 客户端行为 |
+| IngestMessage gRPC 结果 | WS AckStatus | WS code | 客户端行为 |
 | --- | --- | --- | --- |
 | Transfer 成功 | `ACK_STATUS_ACCEPTED` | `0` | 标记消息已发送/已接受 |
 | 重复 client_msg_id（已有 message_id） | `ACK_STATUS_ACCEPTED` | `0` | 使用返回的已有 message_id |

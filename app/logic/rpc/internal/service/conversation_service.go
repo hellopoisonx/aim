@@ -9,25 +9,19 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hellopoisonx/aim/app/logic/rpc/internal/service/rbac"
 	"github.com/hellopoisonx/aim/app/logic/rpc/model/dao"
 	"github.com/hellopoisonx/aim/app/logic/rpc/model/orm"
 	sharedcache "github.com/hellopoisonx/aim/app/shared/cache"
 	sharedconversation "github.com/hellopoisonx/aim/app/shared/conversation"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
+	"github.com/hellopoisonx/aim/app/shared/events"
 	"github.com/hellopoisonx/aim/app/shared/rocketmq"
-	"github.com/hellopoisonx/aim/app/shared/tools"
+	"github.com/hellopoisonx/aim/app/shared/snowflake"
 	"github.com/hellopoisonx/aim/app/shared/tracing"
+	shareduser "github.com/hellopoisonx/aim/app/shared/user"
 
 	"github.com/zeromicro/go-zero/core/logx"
-)
-
-const (
-	CodeConversationNotFound = 40410
-	CodeNotMember            = 40310
-	CodeConversationExists   = 40910
-	CodeNotGroupConversation = 40011
-	CodeNotOwner             = 40311
-	CodeNotAdmin             = 40312
 )
 
 // Conversation vocabulary (types, member roles) lives in app/shared/conversation
@@ -36,41 +30,44 @@ const (
 	ConversationTypeDirect = sharedconversation.TypeDirect
 	ConversationTypeGroup  = sharedconversation.TypeGroup
 
-	RoleMember = sharedconversation.RoleMember
-	RoleAdmin  = sharedconversation.RoleAdmin
-	RoleOwner  = sharedconversation.RoleOwner
-
 	MessageTypeSystem = sharedconversation.MessageTypeSystem
 )
 
-// Domain errors carry their biz code directly so every RPC handler can return
-// them through errorx.ToGRPCError without a hand-written converter.
+// Domain errors carry their biz code directly, so RPC handlers return them as-is
+// and the error interceptor preserves the code without a hand-written converter.
 var (
-	ErrConversationNotFound = errorx.NewCodeError(CodeConversationNotFound, "conversation not found")
-	ErrNotMember            = errorx.NewCodeError(CodeNotMember, "not a member of the conversation")
-	ErrConversationExists   = errorx.NewCodeError(CodeConversationExists, "conversation already exists")
-	ErrNotGroupConversation = errorx.NewCodeError(CodeNotGroupConversation, "not a group conversation")
-	ErrNotOwner             = errorx.NewCodeError(CodeNotOwner, "not the group owner")
-	ErrNotAdmin             = errorx.NewCodeError(CodeNotAdmin, "not a group admin")
+	ErrConversationNotFound = errorx.NewCodeError(errorx.CodeConversationNotFound, "conversation not found")
+	ErrNotMember            = errorx.NewCodeError(errorx.CodeConversationNotMember, "not a member of the conversation")
+	ErrConversationExists   = errorx.NewCodeError(errorx.CodeConversationExists, "conversation already exists")
+	ErrNotGroupConversation = errorx.NewCodeError(errorx.CodeConversationNotGroup, "not a group conversation")
+	ErrNotOwner             = errorx.NewCodeError(errorx.CodeConversationNotOwner, "not the group owner")
+	ErrNotAdmin             = errorx.NewCodeError(errorx.CodeConversationNotAdmin, "not a group admin")
+	ErrOwnerTarget          = errorx.NewCodeError(errorx.CodeConversationOwnerTarget, "target is the group owner")
+	ErrOwnerMustTransfer    = errorx.NewCodeError(errorx.CodeConversationOwnerMustTransfer, "the group owner cannot leave; transfer ownership first")
 )
+
+// Actor is the member performing an operation on another member.
+type Actor int64
+
+// Target is the member an operation performed by an Actor applies to.
+type Target int64
 
 type ConversationQuerier interface {
 	CreateConversation(ctx context.Context, conversationType sharedconversation.Type, creatorID int64, memberIDs []int64, name string, avatar string) (orm.Conversation, error)
 	GetConversationByID(ctx context.Context, id int64) (orm.Conversation, error)
-	GetConversationHistory(ctx context.Context, conversationID int64, cursorCreatedAt int64, cursorID int64, limit int32) ([]orm.Message, error)
-	GetConversationHistoryInitial(ctx context.Context, conversationID int64, limit int32) ([]orm.Message, error)
+	GetConversationHistory(ctx context.Context, conversationID int64, cursor sharedconversation.MessageCursor, limit int32) ([]orm.Message, error)
 	GetConversationMembers(ctx context.Context, conversationID int64) ([]orm.ConversationMember, error)
 	GetUserConversations(ctx context.Context, userID int64) ([]orm.Conversation, error)
-	AddGroupMembers(ctx context.Context, conversationID, operatorID int64, operatorName string, newMemberIDs []int64) (orm.Conversation, error)
-	RemoveGroupMembers(ctx context.Context, conversationID, operatorID int64, operatorName string, removeMemberIDs []int64) error
-	LeaveGroup(ctx context.Context, conversationID, userID int64, userName string) error
+	AddGroupMembers(ctx context.Context, conversationID, operatorID int64, newMemberIDs []int64) (orm.Conversation, error)
+	RemoveGroupMembers(ctx context.Context, conversationID, operatorID int64, removeMemberIDs []int64) error
+	LeaveGroup(ctx context.Context, conversationID, userID int64) error
 	DismissGroup(ctx context.Context, conversationID, operatorID int64) error
-	UpdateGroupInfo(ctx context.Context, conversationID, operatorID int64, operatorName string, name, avatar *string) (orm.Conversation, error)
-	GrantGroupAdmin(ctx context.Context, conversationID, operatorID, targetUserID int64) error
-	RevokeGroupAdmin(ctx context.Context, conversationID, operatorID, targetUserID int64) error
-	TransferGroupOwner(ctx context.Context, conversationID, operatorID, targetUserID int64) (orm.Conversation, error)
+	UpdateGroupInfo(ctx context.Context, conversationID, operatorID int64, name, avatar *string) (orm.Conversation, error)
+	GrantGroupAdmin(ctx context.Context, conversationID int64, actor Actor, target Target) error
+	RevokeGroupAdmin(ctx context.Context, conversationID int64, actor Actor, target Target) error
+	TransferGroupOwner(ctx context.Context, conversationID int64, actor Actor, target Target) (orm.Conversation, error)
 	GetConversationMembersDetail(ctx context.Context, conversationID int64) ([]MemberDetail, error)
-	UpdateReadReceipt(ctx context.Context, conversationID, userID, lastReadMessageID int64) (ReadState, error)
+	UpdateReadReceipt(ctx context.Context, conversationID int64, actor Actor, lastReadMessageID int64) (ReadState, error)
 	ListConversationReadStates(ctx context.Context, conversationID int64) ([]ReadState, error)
 }
 
@@ -98,8 +95,7 @@ type ConversationStore interface {
 	AddConversationMemberWithRole(ctx context.Context, conversationID, userID int64, role sharedconversation.Role) (int64, error)
 	GetConversationMembers(ctx context.Context, conversationID int64) ([]orm.ConversationMember, error)
 	GetConversationsByUserID(ctx context.Context, userID int64) ([]orm.Conversation, error)
-	ListMessagesByConversation(ctx context.Context, conversationID int64, cursorCreatedAt time.Time, cursorID int64, limit int32) ([]orm.Message, error)
-	ListMessagesByConversationInitial(ctx context.Context, conversationID int64, limit int32) ([]orm.Message, error)
+	ListMessagesByConversation(ctx context.Context, conversationID int64, cursor sharedconversation.MessageCursor, limit int32) ([]orm.Message, error)
 	CountMessagesByConversation(ctx context.Context, conversationID int64) (int64, error)
 	GetDirectConversationByMembers(ctx context.Context, userID, peerID int64) (orm.Conversation, error)
 	RemoveConversationMembers(ctx context.Context, conversationID int64, userIDs []int64) (int64, error)
@@ -113,6 +109,9 @@ type ConversationStore interface {
 	InsertMessage(ctx context.Context, message orm.Message) error
 	UpsertConversationReadState(ctx context.Context, conversationID, userID, lastReadMessageID int64) (orm.ConversationReadState, error)
 	ListConversationReadStates(ctx context.Context, conversationID int64) ([]orm.ConversationReadState, error)
+	// GetUserType resolves the principal type (human/bot) that prefixes an RBAC
+	// subject.
+	GetUserType(ctx context.Context, id int64) (string, error)
 }
 
 // ConversationTxRunner starts a transaction whose callback receives a store
@@ -130,31 +129,20 @@ type TransactionalConversationTxRunner interface {
 }
 
 type systemMessageContent struct {
-	Event        string  `json:"event"`
-	OperatorID   int64   `json:"operator_id"`
-	OperatorName string  `json:"operator_name"`
-	TargetIDs    []int64 `json:"target_ids"`
-	TargetNames  []int64 `json:"target_names"`
-}
-
-type conversationEventPayload struct {
-	tracing.TraceContextFields
-	MessageID      int64   `json:"message_id"`
-	ConversationID int64   `json:"conversation_id"`
-	SenderID       int64   `json:"sender_id"`
-	MessageType    string  `json:"message_type"`
-	Content        string  `json:"content"`
-	TargetUserIDs  []int64 `json:"target_user_ids"`
-	Timestamp      int64   `json:"timestamp"`
+	Event       string  `json:"event"`
+	OperatorID  int64   `json:"operator_id"`
+	TargetIDs   []int64 `json:"target_ids"`
+	TargetNames []int64 `json:"target_names"`
 }
 
 type ConversationService struct {
 	store        ConversationStore
 	txRunner     ConversationTxRunner
-	idGen        *tools.Snowflake
+	idGen        *snowflake.Snowflake
 	eventTopic   string
 	convCache    *sharedcache.TypedCache[orm.Conversation]
 	membersCache *sharedcache.TypedCache[[]orm.ConversationMember]
+	authz        rbac.Authorizer
 }
 
 type ConversationServiceOption func(*ConversationService)
@@ -175,8 +163,8 @@ func WithTransactionalEvents(topic string) ConversationServiceOption {
 	}
 }
 
-func NewConversationService(store ConversationStore, idGen *tools.Snowflake, txRunner ConversationTxRunner, opts ...ConversationServiceOption) *ConversationService {
-	svc := &ConversationService{store: store, txRunner: txRunner, idGen: idGen}
+func NewConversationService(store ConversationStore, authz rbac.Authorizer, idGen *snowflake.Snowflake, txRunner ConversationTxRunner, opts ...ConversationServiceOption) *ConversationService {
+	svc := &ConversationService{store: store, txRunner: txRunner, idGen: idGen, authz: authz}
 	for _, opt := range opts {
 		if opt != nil {
 			opt(svc)
@@ -192,13 +180,22 @@ func (s *ConversationService) InTx(ctx context.Context, fn func(tx ConversationS
 	return s.txRunner.WithTx(ctx, fn)
 }
 
+// withStore runs fn in a transaction when one is configured, otherwise against
+// the plain store, so callers write the mutation once.
+func (s *ConversationService) withStore(ctx context.Context, fn func(store ConversationStore) error) error {
+	if s.txRunner == nil {
+		return fn(s.store)
+	}
+	return s.txRunner.WithTx(ctx, fn)
+}
+
 // inTxWithEvent runs fn inside a database transaction and publishes payload as
 // a transactional event in the same commit. Without a transactional runner it
 // degrades to a plain transaction and no event is published.
 //
 // The payload must therefore be complete before the transaction starts: the
 // half message body is fixed at send time.
-func (s *ConversationService) inTxWithEvent(ctx context.Context, payload conversationEventPayload, fn func(tx ConversationStore) error) error {
+func (s *ConversationService) inTxWithEvent(ctx context.Context, payload events.ConversationEvent, fn func(tx ConversationStore) error) error {
 	runner, ok := s.txRunner.(TransactionalConversationTxRunner)
 	if !ok || s.eventTopic == "" {
 		return s.InTx(ctx, fn)
@@ -254,32 +251,47 @@ func (s *ConversationService) getConversationMemberRows(ctx context.Context, con
 	})
 }
 
-func (s *ConversationService) invalidateConversation(ctx context.Context, conversationID int64) {
-	if s.convCache != nil {
-		_ = s.convCache.Del(ctx, sharedcache.ConversationKey(conversationID))
-	}
-}
-
-func (s *ConversationService) invalidateConversationMembers(ctx context.Context, conversationID int64) {
-	if s.membersCache != nil {
-		_ = s.membersCache.Del(ctx, sharedcache.ConversationMembersKey(conversationID))
-	}
-}
-
-func (s *ConversationService) invalidateConversationAll(ctx context.Context, conversationID int64) {
-	s.invalidateConversation(ctx, conversationID)
-	s.invalidateConversationMembers(ctx, conversationID)
-}
-
-func (s *ConversationService) buildSystemMessage(event string, operatorID int64, operatorName string, targetIDs []int64) []byte {
+func (s *ConversationService) buildSystemMessage(event string, operatorID int64, targetIDs []int64) []byte {
 	content := systemMessageContent{
-		Event:        event,
-		OperatorID:   operatorID,
-		OperatorName: operatorName,
-		TargetIDs:    targetIDs,
+		Event:      event,
+		OperatorID: operatorID,
+		TargetIDs:  targetIDs,
 	}
 	data, _ := json.Marshal(content)
 	return data
+}
+
+// insertSystemMessageTx writes the group system message and publishes its
+// conversation event in one transaction. contentTargetIDs are named in the
+// message body, notifyTargetIDs receive the event.
+func (s *ConversationService) insertSystemMessageTx(ctx context.Context, conversationID, operatorID int64, event string, contentTargetIDs, notifyTargetIDs []int64, mutate func(ConversationStore) error) error {
+	messageID, err := s.idGen.NextID()
+	if err != nil {
+		return err
+	}
+
+	content := s.buildSystemMessage(event, operatorID, contentTargetIDs)
+	return s.inTxWithEvent(ctx, events.ConversationEvent{
+		MessageID:      messageID,
+		ConversationID: conversationID,
+		SenderID:       0,
+		MessageType:    MessageTypeSystem,
+		Content:        string(content),
+		TargetUserIDs:  notifyTargetIDs,
+		Timestamp:      time.Now().UnixMilli(),
+	}, func(tx ConversationStore) error {
+		if err := mutate(tx); err != nil {
+			return err
+		}
+
+		return tx.InsertMessage(ctx, orm.Message{
+			ID:             messageID,
+			ConversationID: conversationID,
+			SenderID:       0,
+			MessageType:    MessageTypeSystem,
+			Content:        content,
+		})
+	})
 }
 
 func (s *ConversationService) memberRole(ctx context.Context, conversationID, userID int64) (sharedconversation.Role, error) {
@@ -296,7 +308,7 @@ func (s *ConversationService) memberRole(ctx context.Context, conversationID, us
 	for _, m := range members {
 		if m.UserID == userID {
 			if m.Role == "" {
-				return RoleMember, nil
+				return sharedconversation.RoleMember, nil
 			}
 			return m.Role, nil
 		}
@@ -304,20 +316,131 @@ func (s *ConversationService) memberRole(ctx context.Context, conversationID, us
 	return "", ErrNotMember
 }
 
-func (s *ConversationService) isOwner(ctx context.Context, conversationID, userID int64) (bool, error) {
-	role, err := s.memberRole(ctx, conversationID, userID)
+func (s *ConversationService) requireAct(ctx context.Context, conversationID, userID int64, act string) error {
+	subject, err := s.rbacSubject(ctx, userID)
 	if err != nil {
-		return false, err
+		return err
 	}
-	return role == RoleOwner, nil
+
+	allowed, err := s.authz.Authorize(ctx, subject, rbac.Domain(conversationID), rbac.ObjectConversation, act)
+	if err != nil {
+		return err
+	}
+	if allowed {
+		return nil
+	}
+
+	if act == rbac.ActionGroupOwn {
+		return ErrNotOwner
+	}
+
+	return ErrNotAdmin
 }
 
-func (s *ConversationService) isAdminOrOwner(ctx context.Context, conversationID, userID int64) (bool, error) {
-	role, err := s.memberRole(ctx, conversationID, userID)
+func (s *ConversationService) isBot(ctx context.Context, userID int64) (bool, error) {
+	userType, err := s.userType(ctx, userID)
 	if err != nil {
 		return false, err
 	}
-	return role == RoleOwner || role == RoleAdmin, nil
+
+	return userType == shareduser.TypeBot, nil
+}
+
+func (s *ConversationService) rbacSubject(ctx context.Context, userID int64) (string, error) {
+	userType, err := s.userType(ctx, userID)
+	if err != nil {
+		return "", err
+	}
+
+	return rbac.Subject(userType, userID)
+}
+
+// userType resolves a principal type, failing instead of defaulting when the
+// stored value is outside the closed set.
+func (s *ConversationService) userType(ctx context.Context, userID int64) (shareduser.Type, error) {
+	raw, err := s.store.GetUserType(ctx, userID)
+	if err != nil {
+		if errors.Is(err, dao.ErrNotFound) {
+			return "", ErrNotMember
+		}
+		return "", err
+	}
+
+	return shareduser.ParseType(raw)
+}
+
+// roleSync selects how the post-commit step treats the conversation's RBAC
+// rules.
+type roleSync int
+
+const (
+	// rolesFromMembers rebuilds every assignment from conversation_members.
+	rolesFromMembers roleSync = iota
+	// rolesReset drops every assignment, for a conversation that no longer
+	// grants anything.
+	rolesReset
+)
+
+// postCommit applies the effects that cannot join the write transaction, once
+// it has committed: cache invalidation followed by one authorizer rebuild.
+//
+// Cache invalidation stays best effort: entries self-heal through their TTL. The
+// rebuild does not: it runs clear-then-assign so an interrupted rebuild denies
+// the roles it could not write instead of keeping a revoked one, and its error
+// goes to the caller. A conversation left without rules is rebuilt from
+// conversation_members by the next successful mutation.
+func (s *ConversationService) postCommit(ctx context.Context, conversationID int64, roles roleSync) error {
+	if s.convCache != nil {
+		_ = s.convCache.Del(ctx, sharedcache.ConversationKey(conversationID))
+	}
+	if s.membersCache != nil {
+		_ = s.membersCache.Del(ctx, sharedcache.ConversationMembersKey(conversationID))
+	}
+
+	dom := rbac.Domain(conversationID)
+	if roles == rolesReset {
+		if err := s.authz.ClearConversation(ctx, dom); err != nil {
+			return fmt.Errorf("clear rbac roles of conversation %d: %w", conversationID, err)
+		}
+		return nil
+	}
+
+	if err := s.syncRoles(ctx, conversationID); err != nil {
+		return fmt.Errorf("sync rbac roles of conversation %d: %w", conversationID, err)
+	}
+
+	return nil
+}
+
+// syncRoles replaces the conversation's assignments with the roles stored in
+// conversation_members, the source of truth for who holds which role.
+func (s *ConversationService) syncRoles(ctx context.Context, conversationID int64) error {
+	members, err := s.store.GetConversationMembers(ctx, conversationID)
+	if err != nil {
+		return err
+	}
+
+	if err := s.authz.ClearConversation(ctx, rbac.Domain(conversationID)); err != nil {
+		return err
+	}
+
+	var firstErr error
+	for _, member := range members {
+		role := member.Role
+		if role == "" {
+			role = sharedconversation.RoleMember
+		}
+		subject, err := s.rbacSubject(ctx, member.UserID)
+		if err != nil {
+			firstErr = errors.Join(firstErr, err)
+			continue
+		}
+		if err := s.authz.AssignRole(ctx, subject, rbac.Domain(conversationID), role); err != nil {
+			firstErr = errors.Join(firstErr, err)
+		}
+	}
+
+	return firstErr
 }
 
 func (s *ConversationService) CreateConversation(ctx context.Context, conversationType sharedconversation.Type, creatorID int64, memberIDs []int64, name string, avatar string) (orm.Conversation, error) {
@@ -400,9 +523,9 @@ func (s *ConversationService) CreateConversation(ctx context.Context, conversati
 	}
 
 	for _, memberID := range memberIDs {
-		role := RoleMember
+		role := sharedconversation.RoleMember
 		if memberID == creatorID {
-			role = RoleOwner
+			role = sharedconversation.RoleOwner
 		}
 		_, err := s.store.AddConversationMemberWithRole(ctx, conv.ID, memberID, role)
 		if err != nil {
@@ -410,7 +533,9 @@ func (s *ConversationService) CreateConversation(ctx context.Context, conversati
 		}
 	}
 
-	s.invalidateConversationAll(ctx, conv.ID)
+	if err := s.postCommit(ctx, conv.ID, rolesFromMembers); err != nil {
+		return orm.Conversation{}, err
+	}
 
 	return conv, nil
 }
@@ -427,35 +552,25 @@ func (s *ConversationService) GetConversationByID(ctx context.Context, id int64)
 	return row, nil
 }
 
-func (s *ConversationService) GetConversationHistory(ctx context.Context, conversationID int64, cursorCreatedAt int64, cursorID int64, limit int32) ([]orm.Message, error) {
-	if limit <= 0 || limit > 100 {
-		limit = 50
-	}
+const (
+	defaultConversationHistoryLimit int32 = 50
+	maxConversationHistoryLimit     int32 = 100
+)
 
-	if cursorCreatedAt == 0 && cursorID == 0 {
-		return s.GetConversationHistoryInitial(ctx, conversationID, limit)
+// NormalizeHistoryLimit resolves a caller-supplied page size to the one policy
+// every history entry point uses: default 50, capped at 100.
+func NormalizeHistoryLimit(limit int32) int32 {
+	if limit <= 0 {
+		return defaultConversationHistoryLimit
 	}
-
-	_, err := s.getConversationRow(ctx, conversationID)
-	if err != nil {
-		if errors.Is(err, dao.ErrNotFound) {
-			return nil, ErrConversationNotFound
-		}
-		return nil, err
+	if limit > maxConversationHistoryLimit {
+		return maxConversationHistoryLimit
 	}
-
-	messages, err := s.store.ListMessagesByConversation(ctx, conversationID, time.UnixMilli(cursorCreatedAt), cursorID, limit)
-	if err != nil {
-		return nil, err
-	}
-
-	return messages, nil
+	return limit
 }
 
-func (s *ConversationService) GetConversationHistoryInitial(ctx context.Context, conversationID int64, limit int32) ([]orm.Message, error) {
-	if limit <= 0 || limit > 100 {
-		limit = 50
-	}
+func (s *ConversationService) GetConversationHistory(ctx context.Context, conversationID int64, cursor sharedconversation.MessageCursor, limit int32) ([]orm.Message, error) {
+	limit = NormalizeHistoryLimit(limit)
 
 	_, err := s.getConversationRow(ctx, conversationID)
 	if err != nil {
@@ -465,7 +580,7 @@ func (s *ConversationService) GetConversationHistoryInitial(ctx context.Context,
 		return nil, err
 	}
 
-	messages, err := s.store.ListMessagesByConversationInitial(ctx, conversationID, limit)
+	messages, err := s.store.ListMessagesByConversation(ctx, conversationID, cursor, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -518,7 +633,7 @@ func (s *ConversationService) GetUserConversations(ctx context.Context, userID i
 	return rows, nil
 }
 
-func (s *ConversationService) AddGroupMembers(ctx context.Context, conversationID, operatorID int64, operatorName string, newMemberIDs []int64) (orm.Conversation, error) {
+func (s *ConversationService) AddGroupMembers(ctx context.Context, conversationID, operatorID int64, newMemberIDs []int64) (orm.Conversation, error) {
 	conv, err := s.GetConversationByID(ctx, conversationID)
 	if err != nil {
 		return orm.Conversation{}, err
@@ -527,12 +642,8 @@ func (s *ConversationService) AddGroupMembers(ctx context.Context, conversationI
 	if conv.ConversationType != ConversationTypeGroup {
 		return orm.Conversation{}, ErrNotGroupConversation
 	}
-	ok, err := s.isAdminOrOwner(ctx, conversationID, operatorID)
-	if err != nil {
+	if err := s.requireAct(ctx, conversationID, operatorID, rbac.ActionGroupManage); err != nil {
 		return orm.Conversation{}, err
-	}
-	if !ok {
-		return orm.Conversation{}, ErrNotAdmin
 	}
 
 	for _, mid := range newMemberIDs {
@@ -562,21 +673,7 @@ func (s *ConversationService) AddGroupMembers(ctx context.Context, conversationI
 		targetUserIDs = append(targetUserIDs, mid)
 	}
 
-	messageID, err := s.idGen.NextID()
-	if err != nil {
-		return orm.Conversation{}, err
-	}
-
-	content := s.buildSystemMessage("member_joined", operatorID, operatorName, newMemberIDs)
-	err = s.inTxWithEvent(ctx, conversationEventPayload{
-		MessageID:      messageID,
-		ConversationID: conversationID,
-		SenderID:       0,
-		MessageType:    MessageTypeSystem,
-		Content:        string(content),
-		TargetUserIDs:  targetUserIDs,
-		Timestamp:      time.Now().UnixMilli(),
-	}, func(tx ConversationStore) error {
+	err = s.insertSystemMessageTx(ctx, conversationID, operatorID, "member_joined", newMemberIDs, targetUserIDs, func(tx ConversationStore) error {
 		existingMembers, err := tx.GetConversationMembers(ctx, conversationID)
 		if err != nil {
 			return err
@@ -591,29 +688,25 @@ func (s *ConversationService) AddGroupMembers(ctx context.Context, conversationI
 			if _, ok := existingSet[mid]; ok {
 				continue
 			}
-			if _, err := tx.AddConversationMemberWithRole(ctx, conversationID, mid, RoleMember); err != nil {
+			if _, err := tx.AddConversationMemberWithRole(ctx, conversationID, mid, sharedconversation.RoleMember); err != nil {
 				return err
 			}
 		}
 
-		return tx.InsertMessage(ctx, orm.Message{
-			ID:             messageID,
-			ConversationID: conversationID,
-			SenderID:       0,
-			MessageType:    MessageTypeSystem,
-			Content:        content,
-		})
+		return nil
 	})
 	if err != nil {
 		return orm.Conversation{}, err
 	}
 
-	s.invalidateConversationMembers(ctx, conversationID)
-	conv, _ = s.GetConversationByID(ctx, conversationID)
-	return conv, nil
+	if err := s.postCommit(ctx, conversationID, rolesFromMembers); err != nil {
+		return orm.Conversation{}, err
+	}
+
+	return s.GetConversationByID(ctx, conversationID)
 }
 
-func (s *ConversationService) RemoveGroupMembers(ctx context.Context, conversationID, operatorID int64, operatorName string, removeMemberIDs []int64) error {
+func (s *ConversationService) RemoveGroupMembers(ctx context.Context, conversationID, operatorID int64, removeMemberIDs []int64) error {
 	conv, err := s.GetConversationByID(ctx, conversationID)
 	if err != nil {
 		return err
@@ -622,12 +715,12 @@ func (s *ConversationService) RemoveGroupMembers(ctx context.Context, conversati
 	if conv.ConversationType != ConversationTypeGroup {
 		return ErrNotGroupConversation
 	}
+	if err := s.requireAct(ctx, conversationID, operatorID, rbac.ActionGroupManage); err != nil {
+		return err
+	}
 	operatorRole, err := s.memberRole(ctx, conversationID, operatorID)
 	if err != nil {
 		return err
-	}
-	if operatorRole != RoleOwner && operatorRole != RoleAdmin {
-		return ErrNotAdmin
 	}
 	for _, uid := range removeMemberIDs {
 		if uid <= 0 {
@@ -637,10 +730,13 @@ func (s *ConversationService) RemoveGroupMembers(ctx context.Context, conversati
 		if err != nil {
 			return err
 		}
-		if role == RoleOwner || uid == operatorID {
-			return ErrNotOwner
+		if uid == operatorID {
+			return errorx.NewCodeError(errorx.CodeBadInput, "cannot remove yourself; use leave group")
 		}
-		if operatorRole == RoleAdmin && role != RoleMember {
+		if role == sharedconversation.RoleOwner {
+			return ErrOwnerTarget
+		}
+		if operatorRole == sharedconversation.RoleAdmin && role != sharedconversation.RoleMember {
 			return ErrNotAdmin
 		}
 	}
@@ -651,42 +747,22 @@ func (s *ConversationService) RemoveGroupMembers(ctx context.Context, conversati
 		return err
 	}
 
-	messageID, err := s.idGen.NextID()
-	if err != nil {
+	err = s.insertSystemMessageTx(ctx, conversationID, operatorID, "member_removed", removeMemberIDs, memberUserIDs(members), func(tx ConversationStore) error {
+		_, err := tx.RemoveConversationMembers(ctx, conversationID, removeMemberIDs)
 		return err
-	}
-
-	content := s.buildSystemMessage("member_removed", operatorID, operatorName, removeMemberIDs)
-	err = s.inTxWithEvent(ctx, conversationEventPayload{
-		MessageID:      messageID,
-		ConversationID: conversationID,
-		SenderID:       0,
-		MessageType:    MessageTypeSystem,
-		Content:        string(content),
-		TargetUserIDs:  memberUserIDs(members),
-		Timestamp:      time.Now().UnixMilli(),
-	}, func(tx ConversationStore) error {
-		if _, err := tx.RemoveConversationMembers(ctx, conversationID, removeMemberIDs); err != nil {
-			return err
-		}
-
-		return tx.InsertMessage(ctx, orm.Message{
-			ID:             messageID,
-			ConversationID: conversationID,
-			SenderID:       0,
-			MessageType:    MessageTypeSystem,
-			Content:        content,
-		})
 	})
 	if err != nil {
 		return err
 	}
 
-	s.invalidateConversationMembers(ctx, conversationID)
+	if err := s.postCommit(ctx, conversationID, rolesFromMembers); err != nil {
+		return err
+	}
+
 	return nil
 }
 
-func (s *ConversationService) LeaveGroup(ctx context.Context, conversationID, userID int64, userName string) error {
+func (s *ConversationService) LeaveGroup(ctx context.Context, conversationID, userID int64) error {
 	conv, err := s.GetConversationByID(ctx, conversationID)
 	if err != nil {
 		return err
@@ -695,8 +771,11 @@ func (s *ConversationService) LeaveGroup(ctx context.Context, conversationID, us
 	if conv.ConversationType != ConversationTypeGroup {
 		return ErrNotGroupConversation
 	}
+	if _, err := s.memberRole(ctx, conversationID, userID); err != nil {
+		return err
+	}
 	if userID == conv.CreatorID {
-		return ErrNotOwner
+		return ErrOwnerMustTransfer
 	}
 
 	// Recipients are everyone still in the group before the leave commits.
@@ -705,38 +784,17 @@ func (s *ConversationService) LeaveGroup(ctx context.Context, conversationID, us
 		return err
 	}
 
-	messageID, err := s.idGen.NextID()
-	if err != nil {
+	err = s.insertSystemMessageTx(ctx, conversationID, userID, "member_left", []int64{userID}, memberUserIDs(members), func(tx ConversationStore) error {
+		_, err := tx.RemoveConversationMembers(ctx, conversationID, []int64{userID})
 		return err
-	}
-
-	content := s.buildSystemMessage("member_left", userID, userName, []int64{userID})
-	err = s.inTxWithEvent(ctx, conversationEventPayload{
-		MessageID:      messageID,
-		ConversationID: conversationID,
-		SenderID:       0,
-		MessageType:    MessageTypeSystem,
-		Content:        string(content),
-		TargetUserIDs:  memberUserIDs(members),
-		Timestamp:      time.Now().UnixMilli(),
-	}, func(tx ConversationStore) error {
-		if _, err := tx.RemoveConversationMembers(ctx, conversationID, []int64{userID}); err != nil {
-			return err
-		}
-
-		return tx.InsertMessage(ctx, orm.Message{
-			ID:             messageID,
-			ConversationID: conversationID,
-			SenderID:       0,
-			MessageType:    MessageTypeSystem,
-			Content:        content,
-		})
 	})
 	if err != nil {
 		return err
 	}
 
-	s.invalidateConversationMembers(ctx, conversationID)
+	if err := s.postCommit(ctx, conversationID, rolesFromMembers); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -749,8 +807,8 @@ func (s *ConversationService) DismissGroup(ctx context.Context, conversationID, 
 	if conv.ConversationType != ConversationTypeGroup {
 		return ErrNotGroupConversation
 	}
-	if operatorID != conv.CreatorID {
-		return ErrNotOwner
+	if err := s.requireAct(ctx, conversationID, operatorID, rbac.ActionGroupOwn); err != nil {
+		return err
 	}
 
 	// Everyone in the group is notified before it is deactivated.
@@ -759,42 +817,20 @@ func (s *ConversationService) DismissGroup(ctx context.Context, conversationID, 
 		return err
 	}
 
-	messageID, err := s.idGen.NextID()
-	if err != nil {
-		return err
-	}
-
-	content := s.buildSystemMessage("group_dismissed", operatorID, "", nil)
-	err = s.inTxWithEvent(ctx, conversationEventPayload{
-		MessageID:      messageID,
-		ConversationID: conversationID,
-		SenderID:       0,
-		MessageType:    MessageTypeSystem,
-		Content:        string(content),
-		TargetUserIDs:  memberUserIDs(members),
-		Timestamp:      time.Now().UnixMilli(),
-	}, func(tx ConversationStore) error {
-		if err := tx.DeactivateConversation(ctx, conversationID); err != nil {
-			return err
-		}
-
-		return tx.InsertMessage(ctx, orm.Message{
-			ID:             messageID,
-			ConversationID: conversationID,
-			SenderID:       0,
-			MessageType:    MessageTypeSystem,
-			Content:        content,
-		})
+	err = s.insertSystemMessageTx(ctx, conversationID, operatorID, "group_dismissed", nil, memberUserIDs(members), func(tx ConversationStore) error {
+		return tx.DeactivateConversation(ctx, conversationID)
 	})
 	if err != nil {
 		return err
 	}
 
-	s.invalidateConversationAll(ctx, conversationID)
+	if err := s.postCommit(ctx, conversationID, rolesReset); err != nil {
+		return err
+	}
 	return nil
 }
 
-func (s *ConversationService) UpdateGroupInfo(ctx context.Context, conversationID, operatorID int64, operatorName string, name, avatar *string) (orm.Conversation, error) {
+func (s *ConversationService) UpdateGroupInfo(ctx context.Context, conversationID, operatorID int64, name, avatar *string) (orm.Conversation, error) {
 	conv, err := s.GetConversationByID(ctx, conversationID)
 	if err != nil {
 		return orm.Conversation{}, err
@@ -803,12 +839,8 @@ func (s *ConversationService) UpdateGroupInfo(ctx context.Context, conversationI
 	if conv.ConversationType != ConversationTypeGroup {
 		return orm.Conversation{}, ErrNotGroupConversation
 	}
-	ok, err := s.isAdminOrOwner(ctx, conversationID, operatorID)
-	if err != nil {
+	if err := s.requireAct(ctx, conversationID, operatorID, rbac.ActionGroupManage); err != nil {
 		return orm.Conversation{}, err
-	}
-	if !ok {
-		return orm.Conversation{}, ErrNotAdmin
 	}
 
 	if name != nil {
@@ -831,9 +863,11 @@ func (s *ConversationService) UpdateGroupInfo(ctx context.Context, conversationI
 		return conv, nil
 	}
 
-	eventType := "group_renamed"
-	if avatar != nil {
-		eventType = "group_avatar_changed"
+	// A combined rename and avatar change is announced as the rename; the
+	// avatar travels in the conversation row the client refetches.
+	eventType := "group_avatar_changed"
+	if name != nil {
+		eventType = "group_renamed"
 	}
 
 	members, err := s.GetConversationMembers(ctx, conversationID)
@@ -841,43 +875,20 @@ func (s *ConversationService) UpdateGroupInfo(ctx context.Context, conversationI
 		return orm.Conversation{}, err
 	}
 
-	messageID, err := s.idGen.NextID()
-	if err != nil {
-		return orm.Conversation{}, err
-	}
-
-	content := s.buildSystemMessage(eventType, operatorID, operatorName, nil)
-	err = s.inTxWithEvent(ctx, conversationEventPayload{
-		MessageID:      messageID,
-		ConversationID: conversationID,
-		SenderID:       0,
-		MessageType:    MessageTypeSystem,
-		Content:        string(content),
-		TargetUserIDs:  memberUserIDs(members),
-		Timestamp:      time.Now().UnixMilli(),
-	}, func(tx ConversationStore) error {
-		if err := tx.UpdateConversation(ctx, conversationID, name, avatar); err != nil {
-			return err
-		}
-
-		return tx.InsertMessage(ctx, orm.Message{
-			ID:             messageID,
-			ConversationID: conversationID,
-			SenderID:       0,
-			MessageType:    MessageTypeSystem,
-			Content:        content,
-		})
+	err = s.insertSystemMessageTx(ctx, conversationID, operatorID, eventType, nil, memberUserIDs(members), func(tx ConversationStore) error {
+		return tx.UpdateConversation(ctx, conversationID, name, avatar)
 	})
 	if err != nil {
 		return orm.Conversation{}, err
 	}
 
-	s.invalidateConversation(ctx, conversationID)
-	conv, _ = s.GetConversationByID(ctx, conversationID)
-	return conv, nil
+	if err := s.postCommit(ctx, conversationID, rolesFromMembers); err != nil {
+		return orm.Conversation{}, err
+	}
+	return s.GetConversationByID(ctx, conversationID)
 }
 
-func (s *ConversationService) GrantGroupAdmin(ctx context.Context, conversationID, operatorID, targetUserID int64) error {
+func (s *ConversationService) GrantGroupAdmin(ctx context.Context, conversationID int64, actor Actor, target Target) error {
 	conv, err := s.GetConversationByID(ctx, conversationID)
 	if err != nil {
 		return err
@@ -885,41 +896,39 @@ func (s *ConversationService) GrantGroupAdmin(ctx context.Context, conversationI
 	if conv.ConversationType != ConversationTypeGroup {
 		return ErrNotGroupConversation
 	}
-	ok, err := s.isOwner(ctx, conversationID, operatorID)
-	if err != nil {
+	if err := s.requireAct(ctx, conversationID, int64(actor), rbac.ActionGroupOwn); err != nil {
 		return err
 	}
-	if !ok {
-		return ErrNotOwner
-	}
-	if targetUserID == operatorID {
+	if int64(target) == int64(actor) {
 		return errorx.NewCodeError(errorx.CodeBadInput, "owner cannot grant admin to self")
 	}
-	targetRole, err := s.memberRole(ctx, conversationID, targetUserID)
+	targetRole, err := s.memberRole(ctx, conversationID, int64(target))
 	if err != nil {
 		return err
 	}
-	if targetRole == RoleOwner {
-		return ErrNotOwner
+	if targetRole == sharedconversation.RoleOwner {
+		return ErrOwnerTarget
 	}
-	if targetRole == RoleAdmin {
-		return nil
+	if targetRole == sharedconversation.RoleAdmin {
+		return s.postCommit(ctx, conversationID, rolesFromMembers)
 	}
-	if targetRole != RoleMember {
+	if targetRole != sharedconversation.RoleMember {
 		return ErrNotMember
 	}
-	rows, err := s.store.UpdateConversationMemberRole(ctx, conversationID, targetUserID, RoleAdmin)
+	rows, err := s.store.UpdateConversationMemberRole(ctx, conversationID, int64(target), sharedconversation.RoleAdmin)
 	if err != nil {
 		return err
 	}
 	if rows == 0 {
 		return ErrNotMember
 	}
-	s.invalidateConversationMembers(ctx, conversationID)
+	if err := s.postCommit(ctx, conversationID, rolesFromMembers); err != nil {
+		return err
+	}
 	return nil
 }
 
-func (s *ConversationService) RevokeGroupAdmin(ctx context.Context, conversationID, operatorID, targetUserID int64) error {
+func (s *ConversationService) RevokeGroupAdmin(ctx context.Context, conversationID int64, actor Actor, target Target) error {
 	conv, err := s.GetConversationByID(ctx, conversationID)
 	if err != nil {
 		return err
@@ -927,41 +936,39 @@ func (s *ConversationService) RevokeGroupAdmin(ctx context.Context, conversation
 	if conv.ConversationType != ConversationTypeGroup {
 		return ErrNotGroupConversation
 	}
-	ok, err := s.isOwner(ctx, conversationID, operatorID)
-	if err != nil {
+	if err := s.requireAct(ctx, conversationID, int64(actor), rbac.ActionGroupOwn); err != nil {
 		return err
 	}
-	if !ok {
-		return ErrNotOwner
-	}
-	if targetUserID == operatorID {
+	if int64(target) == int64(actor) {
 		return errorx.NewCodeError(errorx.CodeBadInput, "owner cannot revoke self")
 	}
-	targetRole, err := s.memberRole(ctx, conversationID, targetUserID)
+	targetRole, err := s.memberRole(ctx, conversationID, int64(target))
 	if err != nil {
 		return err
 	}
-	if targetRole == RoleOwner {
-		return ErrNotOwner
+	if targetRole == sharedconversation.RoleOwner {
+		return ErrOwnerTarget
 	}
-	if targetRole == RoleMember {
-		return nil
+	if targetRole == sharedconversation.RoleMember {
+		return s.postCommit(ctx, conversationID, rolesFromMembers)
 	}
-	if targetRole != RoleAdmin {
+	if targetRole != sharedconversation.RoleAdmin {
 		return ErrNotMember
 	}
-	rows, err := s.store.UpdateConversationMemberRole(ctx, conversationID, targetUserID, RoleMember)
+	rows, err := s.store.UpdateConversationMemberRole(ctx, conversationID, int64(target), sharedconversation.RoleMember)
 	if err != nil {
 		return err
 	}
 	if rows == 0 {
 		return ErrNotMember
 	}
-	s.invalidateConversationMembers(ctx, conversationID)
+	if err := s.postCommit(ctx, conversationID, rolesFromMembers); err != nil {
+		return err
+	}
 	return nil
 }
 
-func (s *ConversationService) TransferGroupOwner(ctx context.Context, conversationID, operatorID, targetUserID int64) (orm.Conversation, error) {
+func (s *ConversationService) TransferGroupOwner(ctx context.Context, conversationID int64, actor Actor, target Target) (orm.Conversation, error) {
 	conv, err := s.GetConversationByID(ctx, conversationID)
 	if err != nil {
 		return orm.Conversation{}, err
@@ -969,58 +976,50 @@ func (s *ConversationService) TransferGroupOwner(ctx context.Context, conversati
 	if conv.ConversationType != ConversationTypeGroup {
 		return orm.Conversation{}, ErrNotGroupConversation
 	}
-	ok, err := s.isOwner(ctx, conversationID, operatorID)
-	if err != nil {
+	if err := s.requireAct(ctx, conversationID, int64(actor), rbac.ActionGroupOwn); err != nil {
 		return orm.Conversation{}, err
 	}
-	if !ok {
-		return orm.Conversation{}, ErrNotOwner
-	}
-	if targetUserID == operatorID {
+	if int64(target) == int64(actor) {
 		return orm.Conversation{}, errorx.NewCodeError(errorx.CodeBadInput, "new owner must be a different member")
 	}
-	targetRole, err := s.memberRole(ctx, conversationID, targetUserID)
+	targetRole, err := s.memberRole(ctx, conversationID, int64(target))
 	if err != nil {
 		return orm.Conversation{}, err
 	}
-	if targetRole == RoleOwner {
-		return orm.Conversation{}, ErrNotOwner
+	if targetRole == sharedconversation.RoleOwner {
+		return orm.Conversation{}, ErrOwnerTarget
 	}
-	if targetRole != RoleMember && targetRole != RoleAdmin {
+	if targetRole != sharedconversation.RoleMember && targetRole != sharedconversation.RoleAdmin {
 		return orm.Conversation{}, ErrNotMember
 	}
 
-	if s.txRunner != nil {
-		err = s.InTx(ctx, func(tx ConversationStore) error {
-			if rows, err := tx.UpdateConversationMemberRole(ctx, conversationID, operatorID, RoleAdmin); err != nil {
-				return err
-			} else if rows == 0 {
-				return ErrNotMember
-			}
-			if rows, err := tx.UpdateConversationMemberRole(ctx, conversationID, targetUserID, RoleOwner); err != nil {
-				return err
-			} else if rows == 0 {
-				return ErrNotMember
-			}
-			return tx.UpdateConversationCreator(ctx, conversationID, targetUserID)
-		})
-	} else {
-		if rows, err := s.store.UpdateConversationMemberRole(ctx, conversationID, operatorID, RoleAdmin); err != nil {
-			return orm.Conversation{}, err
-		} else if rows == 0 {
-			return orm.Conversation{}, ErrNotMember
-		}
-		if rows, err := s.store.UpdateConversationMemberRole(ctx, conversationID, targetUserID, RoleOwner); err != nil {
-			return orm.Conversation{}, err
-		} else if rows == 0 {
-			return orm.Conversation{}, ErrNotMember
-		}
-		err = s.store.UpdateConversationCreator(ctx, conversationID, targetUserID)
-	}
+	isBot, err := s.isBot(ctx, int64(target))
 	if err != nil {
 		return orm.Conversation{}, err
 	}
-	s.invalidateConversationAll(ctx, conversationID)
+	if isBot {
+		return orm.Conversation{}, errorx.NewCodeError(errorx.CodeBadInput, "bot cannot be group owner")
+	}
+
+	err = s.withStore(ctx, func(store ConversationStore) error {
+		if rows, err := store.UpdateConversationMemberRole(ctx, conversationID, int64(actor), sharedconversation.RoleAdmin); err != nil {
+			return err
+		} else if rows == 0 {
+			return ErrNotMember
+		}
+		if rows, err := store.UpdateConversationMemberRole(ctx, conversationID, int64(target), sharedconversation.RoleOwner); err != nil {
+			return err
+		} else if rows == 0 {
+			return ErrNotMember
+		}
+		return store.UpdateConversationCreator(ctx, conversationID, int64(target))
+	})
+	if err != nil {
+		return orm.Conversation{}, err
+	}
+	if err := s.postCommit(ctx, conversationID, rolesFromMembers); err != nil {
+		return orm.Conversation{}, err
+	}
 
 	return s.GetConversationByID(ctx, conversationID)
 }
@@ -1051,11 +1050,11 @@ func (s *ConversationService) GetConversationMembersDetail(ctx context.Context, 
 	return details, nil
 }
 
-func (s *ConversationService) UpdateReadReceipt(ctx context.Context, conversationID, userID, lastReadMessageID int64) (ReadState, error) {
+func (s *ConversationService) UpdateReadReceipt(ctx context.Context, conversationID int64, actor Actor, lastReadMessageID int64) (ReadState, error) {
 	if conversationID <= 0 {
 		return ReadState{}, errorx.NewCodeError(errorx.CodeBadInput, "conversation_id is required and must be positive")
 	}
-	if userID <= 0 {
+	if actor <= 0 {
 		return ReadState{}, errorx.NewCodeError(errorx.CodeBadInput, "user_id is required and must be positive")
 	}
 	if lastReadMessageID <= 0 {
@@ -1066,7 +1065,7 @@ func (s *ConversationService) UpdateReadReceipt(ctx context.Context, conversatio
 		return ReadState{}, err
 	}
 
-	isMember, err := s.IsMember(ctx, conversationID, userID)
+	isMember, err := s.IsMember(ctx, conversationID, int64(actor))
 	if err != nil {
 		return ReadState{}, err
 	}
@@ -1074,7 +1073,7 @@ func (s *ConversationService) UpdateReadReceipt(ctx context.Context, conversatio
 		return ReadState{}, ErrNotMember
 	}
 
-	row, err := s.store.UpsertConversationReadState(ctx, conversationID, userID, lastReadMessageID)
+	row, err := s.store.UpsertConversationReadState(ctx, conversationID, int64(actor), lastReadMessageID)
 	if err != nil {
 		return ReadState{}, err
 	}

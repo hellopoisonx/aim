@@ -15,6 +15,7 @@ description: aim 的逻辑域。对应 `logic` 模块。
 - `references/api.md`
 
 ## 最近变更
+- 2026-11-05: 授权统一到 Casbin，并接收消息写入口。新增 `app/logic/rpc/internal/service/rbac`（Casbin v3；`persist.Adapter` 由 `model/dao` 的 GORM 实现，只持久化 g 规则，p 规则每次启动内存注入）+ 迁移 `016_casbin_rule.sql`（按 `conversation_members` 回填）。身份模型 `user:<id>` / `bot:<id>`，域 `conv:<id>`，动作 `group.own|group.manage|message.send`；bot 可 admin 但永不 owner（`TransferGroupOwner` 拒绝 bot 目标）。`ConversationService` 的角色判断改为 `requireAct`（nil authorizer 时回退成员 role），群管理写操作同步 g 规则；`DatabasePermissionChecker.checkGroupPermission` 的成员判定改为 Casbin `message.send`。新增 `MessageService.IngestMessage`（`internal/service/message_service.go`）承接原 core Transfer：校验→Redis 幂等→进程内权限→附件校验→Snowflake→发布 `aim-message-transfer`；checker 未配置时 `CodeInternal` fail-closed。新增配置 `TransferProducerConf`（group `aim-logic-transfer`）与 `AttachmentRpc`。
 
 - 2026-11-01: 迁移到 RocketMQ 事务消息。`ConversationEventProducerConf` 改为 `rocketmq.ProducerConf`；群管理 5 个方法改为「先算 `target_user_ids` 并发送 half message → 同一本地事务写业务行 + `event_journal`（`event_uid = conversation.event:<message_id>`）→ commit」，`WithOutbox` 换成 `WithTransactionalEvents`，`ConversationTxRunner` 增加可选的 `TransactionalConversationTxRunner.WithEventTx`。`aim-conversation-events` 为 TRANSACTION 类型（不再保序，聊天顺序由 `aim-message-transfer` FIFO 承担）；删除 `OutboxPoller` 与 `outbox_records`（migration `015_event_journal.sql`）。
 - 2026-10-29: 数据访问从 sqlc 迁移到 GORM DAO。`app/logic/rpc/model/dao` 按聚合提供用户、会话、消息、好友/标签、Bot、已读游标方法；服务与消费者只依赖 DAO/ORM 类型，事务统一走 `WithTx`（群管理事件走 `WithEventTx` 事务消息）。sqlc 生成代码、`queries/`、`sqlc.yaml` 已删除。

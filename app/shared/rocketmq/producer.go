@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"sync"
 	"sync/atomic"
 
@@ -53,53 +54,75 @@ type Message struct {
 
 // Producer wraps the SDK producer with AIM's message shape.
 //
-// A nil *Producer is safe to use: Start, GracefulStop and Publish become no-ops
-// so services can wire an optional producer unconditionally.
+// A nil *Producer means RocketMQ is not configured. Start, GracefulStop and
+// Publish are no-ops on it (the work is droppable); SendTransactional returns an
+// error because silently reporting a committed transaction would lose an event.
 type Producer struct {
 	producer messageSender
 	group    string
+	// topics is the publish set registered at construction.
+	topics []string
 	// journals is the event_journal handle used by transaction check-back.
 	journals atomic.Pointer[gorm.DB]
 	// journalTx runs the local transaction of a transactional publish.
 	journalTx journalTx
 }
 
-// NewProducer builds a producer for the given topics.
-//
-// Journal-backed transaction check-back is enabled separately by
-// [Producer.WithJournalChecker]; the checker closure is installed up front so
-// enabling it after construction works.
-func NewProducer(cfg EndpointConf, group string, topics ...string) (*Producer, error) {
-	if cfg.Endpoint == "" {
-		return nil, errors.New("rocketmq: endpoint is required")
-	}
-	if group == "" {
-		return nil, errors.New("rocketmq: producer group is required")
-	}
-	configureLogger()
+// ProducerOption customises producer construction.
+type ProducerOption func(*Producer)
 
-	p := &Producer{group: group, journalTx: gormJournalTx}
-	checker := &rmq.TransactionChecker{Check: p.checkTransaction}
-	producer, err := rmq.NewProducer(&rmq.Config{
-		Endpoint:      cfg.Endpoint,
-		ConsumerGroup: group,
-		Credentials:   cfg.sessionCredentials(),
-	}, rmq.WithTopics(topics...), rmq.WithTransactionChecker(checker))
-	if err != nil {
-		return nil, fmt.Errorf("rocketmq: create producer %s: %w", group, err)
-	}
-	p.producer = producer
-	return p, nil
+// WithExtraTopics registers topics published through the same producer besides
+// conf.Topic (the gateway's event producer spans four).
+func WithExtraTopics(topics ...string) ProducerOption {
+	return func(p *Producer) { p.topics = append(p.topics, topics...) }
 }
 
 // WithJournalChecker enables transaction check-back against db's event_journal
-// table. Call it before Start.
-func (p *Producer) WithJournalChecker(db *gorm.DB) *Producer {
-	if p == nil {
-		return p
+// table; a nil db leaves check-back disabled.
+func WithJournalChecker(db *gorm.DB) ProducerOption {
+	return func(p *Producer) {
+		if db != nil {
+			p.journals.Store(db)
+		}
 	}
-	p.journals.Store(db)
-	return p
+}
+
+// NewProducer builds a producer for conf.Topic plus any topics registered by
+// [WithExtraTopics], with transaction check-back and other options applied
+// before the SDK producer is created.
+//
+// An absent endpoint means RocketMQ is disabled for this component and yields
+// (nil, nil); a partially configured producer is a configuration error.
+func NewProducer(conf ProducerConf, opts ...ProducerOption) (*Producer, error) {
+	if conf.Endpoint == "" {
+		return nil, nil
+	}
+	if conf.Group == "" {
+		return nil, errors.New("rocketmq: producer group is required")
+	}
+
+	p := &Producer{group: conf.Group, journalTx: gormJournalTx, topics: []string{conf.Topic}}
+	for _, opt := range opts {
+		if opt != nil {
+			opt(p)
+		}
+	}
+	if slices.Contains(p.topics, "") {
+		return nil, errors.New("rocketmq: producer topic is required")
+	}
+	configureLogger()
+
+	checker := &rmq.TransactionChecker{Check: p.checkTransaction}
+	producer, err := rmq.NewProducer(&rmq.Config{
+		Endpoint:      conf.Endpoint,
+		ConsumerGroup: conf.Group,
+		Credentials:   conf.sessionCredentials(),
+	}, rmq.WithTopics(p.topics...), rmq.WithTransactionChecker(checker))
+	if err != nil {
+		return nil, fmt.Errorf("rocketmq: create producer %s: %w", conf.Group, err)
+	}
+	p.producer = producer
+	return p, nil
 }
 
 // Start connects the producer to the broker.
@@ -119,6 +142,28 @@ func (p *Producer) GracefulStop() error {
 		return nil
 	}
 	return p.producer.GracefulStop()
+}
+
+// StartProducer connects p, logging a failure instead of returning it: a broker
+// outage must degrade publishing to errors rather than abort service startup. A
+// nil producer (RocketMQ not configured) is a no-op.
+func StartProducer(ctx context.Context, p *Producer, label string) {
+	if p == nil {
+		return
+	}
+	if err := p.Start(); err != nil {
+		logx.WithContext(ctx).Errorf("failed to start %s: %v", label, err)
+	}
+}
+
+// StopProducer flushes and disconnects p, logging a failure.
+func StopProducer(ctx context.Context, p *Producer, label string) {
+	if p == nil {
+		return
+	}
+	if err := p.GracefulStop(); err != nil {
+		logx.WithContext(ctx).Errorf("failed to stop %s: %v", label, err)
+	}
 }
 
 // Publish sends one message and waits for the broker acknowledgement.

@@ -1,0 +1,12 @@
+# 压测覆盖层：服务定义与本地开发完全一致，只替换需要为长跑调参的两个配置文件。
+# 用法见 deploy/README.md「压测环境」。
+services:
+  aim-auth:
+    volumes:
+      - ../config/bench/auth.yaml:/app/etc/auth.yaml:ro
+      - auth_log:/app/log
+
+  aim-logic:
+    volumes:
+      - ../config/bench/logic.yaml:/app/etc/logic.yaml:ro
+      - logic_log:/app/log

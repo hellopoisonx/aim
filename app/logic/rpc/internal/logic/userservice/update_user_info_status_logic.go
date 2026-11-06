@@ -4,6 +4,7 @@ import (
 	"context"
 	"math"
 
+	"github.com/hellopoisonx/aim/app/logic/rpc/internal/pbconv"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
@@ -27,13 +28,9 @@ func NewUpdateUserInfoStatusLogic(ctx context.Context, svcCtx *svc.ServiceContex
 
 // UpdateUserInfoStatus updates user status.
 func (l *UpdateUserInfoStatusLogic) UpdateUserInfoStatus(in *pb.UpdateUserInfoStatusReq) (*pb.UpdateUserInfoStatusResp, error) {
-	if in.GetId() <= 0 {
-		return nil, errorx.NewCodeError(errorx.CodeBadInput, "id is required and must be positive")
-	}
-
-	userSvc := l.svcCtx.UserInfoService
-	if userSvc == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "user service is not configured")
+	userSvc, err := requireUserOp(l.svcCtx, in.GetId())
+	if err != nil {
+		return nil, err
 	}
 
 	if in.GetStatus() < math.MinInt16 || in.GetStatus() > math.MaxInt16 {
@@ -42,10 +39,10 @@ func (l *UpdateUserInfoStatusLogic) UpdateUserInfoStatus(in *pb.UpdateUserInfoSt
 
 	info, err := userSvc.UpdateUserInfoStatus(l.ctx, in.GetId(), int16(in.GetStatus())) //nolint:gosec // bounded above before conversion.
 	if err != nil {
-		return nil, errorx.ToGRPCError(err)
+		return nil, err
 	}
 
 	return &pb.UpdateUserInfoStatusResp{
-		User: userInfoToResponse(info),
+		User: pbconv.User(info),
 	}, nil
 }

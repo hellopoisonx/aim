@@ -5,6 +5,7 @@ import (
 
 	sharedconversation "github.com/hellopoisonx/aim/app/shared/conversation"
 
+	"github.com/hellopoisonx/aim/app/logic/rpc/internal/pbconv"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
@@ -27,11 +28,12 @@ func NewCreateUserBotDirectConversationLogic(ctx context.Context, svcCtx *svc.Se
 }
 
 func (l *CreateUserBotDirectConversationLogic) CreateUserBotDirectConversation(in *pb.CreateUserBotDirectConversationReq) (*pb.CreateUserBotDirectConversationResp, error) {
-	if l.svcCtx.BotService == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "bot service not configured")
+	botSvc, err := requireBot(l.svcCtx, in.GetBotUserId())
+	if err != nil {
+		return nil, err
 	}
 	// Verify owner relationship and get bot profile info.
-	botInfo, err := l.svcCtx.BotService.GetUserBot(l.ctx, in.GetOwnerUserId(), in.GetBotUserId())
+	botInfo, err := botSvc.GetUserBot(l.ctx, in.GetOwnerUserId(), in.GetBotUserId())
 	if err != nil {
 		return nil, err
 	}
@@ -48,14 +50,6 @@ func (l *CreateUserBotDirectConversationLogic) CreateUserBotDirectConversation(i
 	}
 
 	return &pb.CreateUserBotDirectConversationResp{
-		Conversation: &pb.ConversationResponse{
-			Id:               conv.ID,
-			ConversationType: string(conv.ConversationType),
-			IsActive:         conv.IsActive,
-			CreatedAt:        conv.CreatedAt.UnixMilli(),
-			Name:             conv.Name,
-			Avatar:           conv.Avatar,
-			CreatorId:        conv.CreatorID,
-		},
+		Conversation: pbconv.Conversation(conv, nil, conv.Name),
 	}, nil
 }

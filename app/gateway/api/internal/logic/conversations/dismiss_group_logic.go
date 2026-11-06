@@ -27,19 +27,19 @@ func NewDismissGroupLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Dism
 	}
 }
 
-func (l *DismissGroupLogic) DismissGroup(req *types.DismissGroupRequest) (err error) {
-	identity, ok := authctx.IdentityFromContext(l.ctx)
-	if !ok {
-		return errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
+func (l *DismissGroupLogic) DismissGroup(req *types.DismissGroupRequest) (resp *types.MutationResult, err error) {
+	userID, err := authctx.RequireUserID(l.ctx)
+	if err != nil {
+		return nil, err
 	}
 
 	_, err = l.svcCtx.LogicConversationClient.DismissGroup(l.ctx, &conversationservice.DismissGroupReq{
 		ConversationId: req.Id,
-		OperatorId:     identity.UserID,
+		OperatorId:     userID,
 	})
 	if err != nil {
-		return errorx.SanitizeGRPCError(l, "dismiss group", err)
+		return nil, errorx.SanitizeGRPCError(l, "dismiss group", err)
 	}
 
-	return nil
+	return &types.MutationResult{Success: true}, nil
 }

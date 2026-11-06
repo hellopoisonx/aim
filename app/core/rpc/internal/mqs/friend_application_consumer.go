@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 
+	"github.com/hellopoisonx/aim/app/core/rpc/internal/push"
 	"github.com/hellopoisonx/aim/app/core/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/shared/events"
 	"github.com/hellopoisonx/aim/app/shared/tracing"
@@ -33,7 +34,6 @@ func NewFriendApplicationConsumer(ctx context.Context, svcCtx *svc.ServiceContex
 func (c *FriendApplicationConsumer) Consume(ctx context.Context, key string, value string) error {
 	var event events.FriendApplicationEvent
 	if err := json.Unmarshal([]byte(value), &event); err != nil {
-		// A malformed payload never decodes on redelivery.
 		logx.WithContext(ctx).Errorf(
 			"dropping undecodable friend application event key=%s: %v payload=%q", key, err, value,
 		)
@@ -58,8 +58,8 @@ func (c *FriendApplicationConsumer) Consume(ctx context.Context, key string, val
 		UpdatedAt:    event.UpdatedAt,
 	}
 
-	for _, nodeID := range gatewayNodes(ctx, c.svcCtx, event.TargetUserID) {
-		if _, err := pushFriendApplicationToNode(ctx, c.svcCtx.GatewayClient, nodeID, req); err != nil {
+	for _, nodeID := range push.GatewayNodes(ctx, c.svcCtx, event.TargetUserID) {
+		if _, err := c.svcCtx.GatewayClient.PushFriendApplicationToNode(ctx, nodeID, req); err != nil {
 			logx.WithContext(ctx).Errorf(
 				"friend application push to node %q for user %d failed: %v", nodeID, event.TargetUserID, err,
 			)

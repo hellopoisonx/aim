@@ -357,16 +357,16 @@ Bot 的 `device_id` 固定为 `bot-api`，因此与人类用户的限额隔离�
 
 ## 6. 端到端联调
 
-仓库内置 `dev-tool/aim_test.py` 提供命令行调试入口（已加入 Bot 子命令）：
+仓库内置 `dev-tool/e2e/aim_test.py` 提供命令行调试入口（已加入 Bot 子命令）：
 
 ```bash
 export AIM_BOT_TOKEN=aim_bot_xxxxxxxxxxxxxxxxxxxxxxxx
 
-python aim_test.py bot-me
-python aim_test.py bot-conv-list
-python aim_test.py bot-send --conversation-id 1 --content "hello from bot"
-python aim_test.py bot-webhook-set --url https://your.tunnel.example/aim --rotate-secret
-python aim_test.py bot-webhook-get
+python dev-tool/e2e/aim_test.py bot-me
+python dev-tool/e2e/aim_test.py bot-conv-list
+python dev-tool/e2e/aim_test.py bot-send --conversation-id 1 --content "hello from bot"
+python dev-tool/e2e/aim_test.py bot-webhook-set --url https://your.tunnel.example/aim --rotate-secret
+python dev-tool/e2e/aim_test.py bot-webhook-get
 ```
 
 

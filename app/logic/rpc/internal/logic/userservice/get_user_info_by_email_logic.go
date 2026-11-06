@@ -3,6 +3,7 @@ package userservicelogic
 import (
 	"context"
 
+	"github.com/hellopoisonx/aim/app/logic/rpc/internal/pbconv"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
@@ -30,17 +31,17 @@ func (l *GetUserInfoByEmailLogic) GetUserInfoByEmail(in *pb.GetUserInfoByEmailRe
 		return nil, errorx.NewCodeError(errorx.CodeBadInput, "email is required")
 	}
 
-	userSvc := l.svcCtx.UserInfoService
-	if userSvc == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "user service is not configured")
+	userSvc, err := requireUserService(l.svcCtx)
+	if err != nil {
+		return nil, err
 	}
 
 	info, err := userSvc.GetUserInfoByEmail(l.ctx, in.GetEmail())
 	if err != nil {
-		return nil, errorx.ToGRPCError(err)
+		return nil, err
 	}
 
 	return &pb.GetUserInfoResp{
-		User: userInfoToResponse(info),
+		User: pbconv.User(info),
 	}, nil
 }

@@ -256,8 +256,7 @@ func IsCode(err error, code int32) bool {
 }
 
 func AsAPIError(err error) (*APIError, bool) {
-	var apiErr *APIError
-	if errors.As(err, &apiErr) {
+	if apiErr, ok := errors.AsType[*APIError](err); ok {
 		return apiErr, true
 	}
 	return nil, false

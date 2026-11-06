@@ -1,11 +1,5 @@
 package errorx
 
-import (
-	"context"
-
-	"github.com/zeromicro/go-zero/core/logx"
-)
-
 // ErrorLogger is the minimal interface required for logging sanitized errors.
 // All go-zero logic structs embed logx.Logger, which satisfies this interface.
 type ErrorLogger interface {
@@ -41,26 +35,6 @@ func SanitizeGRPCErrorNoLog(err error) error {
 
 	codeErr, _ := bizCodeError(err)
 	return codeErr
-}
-
-// ToGRPCError converts an error raised inside a service into an error that is
-// safe to return from a gRPC handler.
-//
-// *CodeError values pass through untouched, so the exact biz code and message
-// reach the caller. Every other error is logged and replaced with a generic
-// CodeInternal error. Services use this instead of hand-written per-service
-// converters that silently swallow domain codes.
-func ToGRPCError(err error) error {
-	if err == nil {
-		return nil
-	}
-
-	if codeErr, ok := unwrapCodeError(err); ok {
-		return codeErr
-	}
-
-	logx.WithContext(context.Background()).Errorf("unclassified error crossed an RPC boundary: %v", err)
-	return NewCodeError(CodeInternal, "internal error")
 }
 
 // bizCodeError maps err onto a client-safe *CodeError and reports whether err

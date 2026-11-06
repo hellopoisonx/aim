@@ -181,7 +181,7 @@ func TestBotGetConversationHistory(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, int64(7), client.membersReq.ConversationId)
 	require.Equal(t, int64(100), client.historyReq.CursorId)
-	require.Equal(t, int32(100), client.historyReq.Limit)
+	require.Equal(t, int32(200), client.historyReq.Limit)
 	require.Equal(t, "99", resp.Messages[0].Id)
 	require.Equal(t, "2002", resp.Messages[0].SenderId)
 	require.Equal(t, "99", resp.Messages[0].ReadDetails[0].LastReadMessageId)

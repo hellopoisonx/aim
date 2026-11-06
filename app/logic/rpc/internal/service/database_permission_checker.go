@@ -5,17 +5,15 @@ import (
 	"errors"
 	"time"
 
+	"github.com/hellopoisonx/aim/app/logic/rpc/internal/service/rbac"
 	"github.com/hellopoisonx/aim/app/logic/rpc/model/dao"
 	"github.com/hellopoisonx/aim/app/logic/rpc/model/orm"
 	sharedcache "github.com/hellopoisonx/aim/app/shared/cache"
+	"github.com/hellopoisonx/aim/app/shared/errorx"
+	shareduser "github.com/hellopoisonx/aim/app/shared/user"
 )
 
 const DefaultTemporaryConversationMessageLimit int64 = 10
-
-// temporaryConversationMessageLimit 保留为默认值别名，供现有测试使用。
-//
-//nolint:unused // package tests reference this constant when golangci-lint runs with tests enabled.
-const temporaryConversationMessageLimit = DefaultTemporaryConversationMessageLimit
 
 // PermissionQuerier is the DAO slice used by the permission checker.
 type PermissionQuerier interface {
@@ -33,6 +31,7 @@ type DatabasePermissionChecker struct {
 	membersCache                      *sharedcache.TypedCache[[]orm.ConversationMember]
 	friendshipCache                   *sharedcache.TypedCache[[]orm.Friendship]
 	userTypeCache                     *sharedcache.TypedCache[string]
+	authz                             rbac.Authorizer
 }
 
 type DatabasePermissionCheckerCaches struct {
@@ -42,43 +41,50 @@ type DatabasePermissionCheckerCaches struct {
 	UserType     *sharedcache.TypedCache[string]
 }
 
-func NewDatabasePermissionChecker(queries PermissionQuerier) *DatabasePermissionChecker {
-	return NewDatabasePermissionCheckerWithLimit(queries, DefaultTemporaryConversationMessageLimit)
+type DatabasePermissionCheckerOption func(*DatabasePermissionChecker)
+
+// WithPermissionMessageLimit overrides the temporary conversation message
+// limit; a non-positive limit disables the cap.
+func WithPermissionMessageLimit(limit int64) DatabasePermissionCheckerOption {
+	return func(c *DatabasePermissionChecker) { c.temporaryConversationMessageLimit = limit }
 }
 
-// NewDatabasePermissionCheckerWithLimit 允许调用方自定义临时会话消息上限。
-// limit <= 0 表示不限制（仅供开发/压测使用）。
-func NewDatabasePermissionCheckerWithLimit(queries PermissionQuerier, limit int64) *DatabasePermissionChecker {
-	return NewDatabasePermissionCheckerWithLimitAndCaches(queries, limit, DatabasePermissionCheckerCaches{})
-}
-
-func NewDatabasePermissionCheckerWithLimitAndCaches(queries PermissionQuerier, limit int64, caches DatabasePermissionCheckerCaches) *DatabasePermissionChecker {
-	return &DatabasePermissionChecker{
-		queries:                           queries,
-		temporaryConversationMessageLimit: limit,
-		convCache:                         caches.Conversation,
-		membersCache:                      caches.Members,
-		friendshipCache:                   caches.Friendship,
-		userTypeCache:                     caches.UserType,
+func WithPermissionCaches(caches DatabasePermissionCheckerCaches) DatabasePermissionCheckerOption {
+	return func(c *DatabasePermissionChecker) {
+		c.convCache = caches.Conversation
+		c.membersCache = caches.Members
+		c.friendshipCache = caches.Friendship
+		c.userTypeCache = caches.UserType
 	}
 }
 
+func NewDatabasePermissionChecker(queries PermissionQuerier, authz rbac.Authorizer, opts ...DatabasePermissionCheckerOption) *DatabasePermissionChecker {
+	c := &DatabasePermissionChecker{
+		queries:                           queries,
+		authz:                             authz,
+		temporaryConversationMessageLimit: DefaultTemporaryConversationMessageLimit,
+	}
+	for _, opt := range opts {
+		opt(c)
+	}
+
+	return c
+}
+
 func (c *DatabasePermissionChecker) CheckMessagePermission(ctx context.Context, check PermissionCheck) (PermissionDecision, error) {
-	// 1. Get conversation
 	conv, err := c.getConversation(ctx, check.ConversationID)
 	if err != nil {
 		if errors.Is(err, dao.ErrNotFound) {
-			return PermissionDecision{Allowed: false, Code: CodeNotFound, Reason: "conversation not found"}, nil
+			return PermissionDecision{Allowed: false, Code: errorx.CodeNotFound, Reason: "conversation not found"}, nil
 		}
 
 		return PermissionDecision{}, err
 	}
 
 	if !conv.IsActive {
-		return PermissionDecision{Allowed: false, Code: CodeNotFound, Reason: "conversation is not active"}, nil
+		return PermissionDecision{Allowed: false, Code: errorx.CodeNotFound, Reason: "conversation is not active"}, nil
 	}
 
-	// 2. Check rules based on conversation type
 	if conv.ConversationType == ConversationTypeGroup {
 		return c.checkGroupPermission(ctx, check)
 	}
@@ -92,16 +98,19 @@ func (c *DatabasePermissionChecker) checkGroupPermission(ctx context.Context, ch
 		return PermissionDecision{}, err
 	}
 	var member orm.ConversationMember
-	found := false
 	for _, m := range members {
 		if m.UserID == check.SenderID {
 			member = m
-			found = true
 			break
 		}
 	}
-	if !found {
-		return PermissionDecision{Allowed: false, Code: CodePermissionDenied, Reason: "sender is not a member of this group"}, nil
+
+	allowed, err := c.authorizeSend(ctx, check)
+	if err != nil {
+		return PermissionDecision{}, err
+	}
+	if !allowed {
+		return PermissionDecision{Allowed: false, Code: errorx.CodeForbidden, Reason: "sender is not a member of this group"}, nil
 	}
 
 	// Filter mentions to only include conversation members
@@ -115,20 +124,37 @@ func (c *DatabasePermissionChecker) checkGroupPermission(ctx context.Context, ch
 		// Check if mute has expired
 		if member.MutedUntil != nil && member.MutedUntil.Before(time.Now()) {
 			// Mute expired, allow
-			return PermissionDecision{Allowed: true, Code: CodeOK, FilteredMentions: filtered}, nil
+			return PermissionDecision{Allowed: true, FilteredMentions: filtered}, nil
 		}
 
 		if member.MutedUntil == nil {
 			// Permanent mute
-			return PermissionDecision{Allowed: false, Code: CodePermissionDenied, Reason: "sender is muted"}, nil
+			return PermissionDecision{Allowed: false, Code: errorx.CodeForbidden, Reason: "sender is muted"}, nil
 		}
 
 		if member.MutedUntil.After(time.Now()) {
-			return PermissionDecision{Allowed: false, Code: CodePermissionDenied, Reason: "sender is muted"}, nil
+			return PermissionDecision{Allowed: false, Code: errorx.CodeForbidden, Reason: "sender is muted"}, nil
 		}
 	}
 
-	return PermissionDecision{Allowed: true, Code: CodeOK, FilteredMentions: filtered}, nil
+	return PermissionDecision{Allowed: true, FilteredMentions: filtered}, nil
+}
+
+func (c *DatabasePermissionChecker) authorizeSend(ctx context.Context, check PermissionCheck) (bool, error) {
+	userType, err := c.getUserType(ctx, check.SenderID)
+	if err != nil {
+		if errors.Is(err, dao.ErrNotFound) {
+			return false, nil
+		}
+		return false, err
+	}
+
+	subject, err := rbac.Subject(userType, check.SenderID)
+	if err != nil {
+		return false, err
+	}
+
+	return c.authz.Authorize(ctx, subject, rbac.Domain(check.ConversationID), rbac.ObjectConversation, rbac.ActionMessageSend)
 }
 
 func (c *DatabasePermissionChecker) checkDirectPermission(ctx context.Context, check PermissionCheck) (PermissionDecision, error) {
@@ -139,11 +165,11 @@ func (c *DatabasePermissionChecker) checkDirectPermission(ctx context.Context, c
 
 	peerID, senderIsMember, validDirectMembers := directConversationPeerID(members, check.SenderID)
 	if !senderIsMember {
-		return PermissionDecision{Allowed: false, Code: CodePermissionDenied, Reason: "sender is not a member of this direct conversation"}, nil
+		return PermissionDecision{Allowed: false, Code: errorx.CodeForbidden, Reason: "sender is not a member of this direct conversation"}, nil
 	}
 
 	if !validDirectMembers {
-		return PermissionDecision{Allowed: false, Code: CodePermissionDenied, Reason: "invalid direct conversation members"}, nil
+		return PermissionDecision{Allowed: false, Code: errorx.CodeForbidden, Reason: "invalid direct conversation members"}, nil
 	}
 
 	// Filter mentions to only include conversation members
@@ -168,12 +194,12 @@ func (c *DatabasePermissionChecker) checkDirectPermission(ctx context.Context, c
 	}
 
 	if hasBlocked {
-		return PermissionDecision{Allowed: false, Code: CodePermissionDenied, Reason: "blocked"}, nil
+		return PermissionDecision{Allowed: false, Code: errorx.CodeForbidden, Reason: "blocked"}, nil
 	}
 
 	if !hasAccepted {
 		if c.temporaryConversationMessageLimit <= 0 {
-			return PermissionDecision{Allowed: true, Code: CodeOK, Reason: "temporary conversation", FilteredMentions: filtered}, nil
+			return PermissionDecision{Allowed: true, Reason: "temporary conversation", FilteredMentions: filtered}, nil
 		}
 
 		count, err := c.queries.CountMessagesByConversation(ctx, check.ConversationID)
@@ -188,16 +214,16 @@ func (c *DatabasePermissionChecker) checkDirectPermission(ctx context.Context, c
 			}
 
 			if hasBot {
-				return PermissionDecision{Allowed: true, Code: CodeOK, Reason: "bot direct conversation", FilteredMentions: filtered}, nil
+				return PermissionDecision{Allowed: true, Reason: "bot direct conversation", FilteredMentions: filtered}, nil
 			}
 
-			return PermissionDecision{Allowed: false, Code: CodePermissionDenied, Reason: "temporary conversation message limit reached"}, nil
+			return PermissionDecision{Allowed: false, Code: errorx.CodeForbidden, Reason: "temporary conversation message limit reached"}, nil
 		}
 
-		return PermissionDecision{Allowed: true, Code: CodeOK, Reason: "temporary conversation", FilteredMentions: filtered}, nil
+		return PermissionDecision{Allowed: true, Reason: "temporary conversation", FilteredMentions: filtered}, nil
 	}
 
-	return PermissionDecision{Allowed: true, Code: CodeOK, FilteredMentions: filtered}, nil
+	return PermissionDecision{Allowed: true, FilteredMentions: filtered}, nil
 }
 
 func (c *DatabasePermissionChecker) directConversationHasBot(ctx context.Context, senderID, peerID int64) (bool, error) {
@@ -211,7 +237,7 @@ func (c *DatabasePermissionChecker) directConversationHasBot(ctx context.Context
 			return false, err
 		}
 
-		if userType == UserTypeBot {
+		if userType == shareduser.TypeBot {
 			return true, nil
 		}
 	}
@@ -249,14 +275,23 @@ func (c *DatabasePermissionChecker) getFriendships(ctx context.Context, userID, 
 	})
 }
 
-func (c *DatabasePermissionChecker) getUserType(ctx context.Context, userID int64) (string, error) {
+func (c *DatabasePermissionChecker) getUserType(ctx context.Context, userID int64) (shareduser.Type, error) {
+	var (
+		raw string
+		err error
+	)
 	if c.userTypeCache == nil {
-		return c.queries.GetUserType(ctx, userID)
+		raw, err = c.queries.GetUserType(ctx, userID)
+	} else {
+		raw, err = c.userTypeCache.Take(ctx, sharedcache.UserTypeKey(userID), func() (string, error) {
+			return c.queries.GetUserType(ctx, userID)
+		})
+	}
+	if err != nil {
+		return "", err
 	}
 
-	return c.userTypeCache.Take(ctx, sharedcache.UserTypeKey(userID), func() (string, error) {
-		return c.queries.GetUserType(ctx, userID)
-	})
+	return shareduser.ParseType(raw)
 }
 
 func directConversationPeerID(members []orm.ConversationMember, senderID int64) (peerID int64, senderIsMember bool, ok bool) {

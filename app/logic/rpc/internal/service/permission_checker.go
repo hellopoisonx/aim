@@ -1,12 +1,9 @@
 package service
 
-import "context"
+import (
+	"context"
 
-const (
-	CodeOK               int32 = 0
-	CodeInvalidArgument  int32 = 40000
-	CodePermissionDenied int32 = 40300
-	CodeNotFound         int32 = 40400
+	"github.com/hellopoisonx/aim/app/shared/errorx"
 )
 
 type PermissionCheck struct {
@@ -16,6 +13,9 @@ type PermissionCheck struct {
 	Mentions       []int64
 }
 
+// PermissionDecision is the authorization verdict. An allowed decision carries
+// code 0; a denial carries one of the errorx codes so the gateway maps it to
+// the same HTTP status as the rest of the API.
 type PermissionDecision struct {
 	Allowed          bool
 	Code             int32
@@ -27,14 +27,8 @@ type PermissionChecker interface {
 	CheckMessagePermission(ctx context.Context, check PermissionCheck) (PermissionDecision, error)
 }
 
-type AllowAllPermissionChecker struct{}
-
-func (AllowAllPermissionChecker) CheckMessagePermission(context.Context, PermissionCheck) (PermissionDecision, error) {
-	return PermissionDecision{Allowed: true, Code: CodeOK}, nil
-}
-
 type DenyAllPermissionChecker struct{}
 
 func (DenyAllPermissionChecker) CheckMessagePermission(context.Context, PermissionCheck) (PermissionDecision, error) {
-	return PermissionDecision{Allowed: false, Code: CodePermissionDenied, Reason: "permission checker is not configured"}, nil
+	return PermissionDecision{Allowed: false, Code: errorx.CodeForbidden, Reason: "permission checker is not configured"}, nil
 }

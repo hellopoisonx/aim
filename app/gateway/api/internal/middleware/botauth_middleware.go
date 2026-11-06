@@ -21,7 +21,7 @@ const botAuthScheme = "Bot"
 // It expects an `Authorization: Bot <token>` header. The token is resolved
 // through the logic BotService gRPC, which performs hash lookup, expiry,
 // revocation and bot-status checks server-side. On success the middleware
-// attaches a BotIdentity to the request context.
+// attaches a botctx.Identity to the request context.
 type BotAuthMiddleware struct {
 	client    botservice.BotService
 	rpcDeadln time.Duration
@@ -66,7 +66,7 @@ func (m *BotAuthMiddleware) Handle(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
-		identity := botctx.BotIdentity{
+		identity := botctx.Identity{
 			BotUserID:  identityPB.GetBotUserId(),
 			TokenID:    identityPB.GetTokenId(),
 			Scopes:     identityPB.GetScopes(),
@@ -75,7 +75,7 @@ func (m *BotAuthMiddleware) Handle(next http.HandlerFunc) http.HandlerFunc {
 			UserStatus: identityPB.GetUserStatus(),
 		}
 
-		next(w, r.WithContext(botctx.WithBotIdentity(r.Context(), identity)))
+		next(w, r.WithContext(botctx.WithIdentity(r.Context(), identity)))
 	}
 }
 

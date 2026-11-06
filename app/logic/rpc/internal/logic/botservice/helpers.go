@@ -1,9 +1,46 @@
 package botservicelogic
 
 import (
+	"time"
+
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/service"
+	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
+	"github.com/hellopoisonx/aim/app/shared/errorx"
 )
+
+// deadlineFromMillis converts the wire's unix-millisecond expiry; 0 means no
+// expiry.
+func deadlineFromMillis(ms int64) time.Time {
+	if ms <= 0 {
+		return time.Time{}
+	}
+
+	return time.UnixMilli(ms)
+}
+
+// requireBot returns the bot service after validating the bot user id.
+func requireBot(c *svc.ServiceContext, botUserID int64) (*service.BotService, error) {
+	botSvc, err := requireBotService(c)
+	if err != nil {
+		return nil, err
+	}
+
+	if botUserID <= 0 {
+		return nil, errorx.NewCodeError(errorx.CodeBadInput, "bot_user_id is required")
+	}
+
+	return botSvc, nil
+}
+
+// requireBotService returns the configured bot service without inspecting an id.
+func requireBotService(c *svc.ServiceContext) (*service.BotService, error) {
+	if c.BotService == nil {
+		return nil, errorx.NewCodeError(errorx.CodeInternal, "bot service not configured")
+	}
+
+	return c.BotService, nil
+}
 
 func userBotToProto(b service.UserBotInfo) *pb.UserBotInfo {
 	return &pb.UserBotInfo{

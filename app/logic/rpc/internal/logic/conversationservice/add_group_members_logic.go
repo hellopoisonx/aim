@@ -3,9 +3,9 @@ package conversationservicelogic
 import (
 	"context"
 
+	"github.com/hellopoisonx/aim/app/logic/rpc/internal/pbconv"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
-	"github.com/hellopoisonx/aim/app/shared/errorx"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -25,46 +25,22 @@ func NewAddGroupMembersLogic(ctx context.Context, svcCtx *svc.ServiceContext) *A
 }
 
 func (l *AddGroupMembersLogic) AddGroupMembers(in *pb.AddGroupMembersReq) (*pb.AddGroupMembersResp, error) {
-	if in.GetConversationId() <= 0 {
-		return nil, errorx.NewCodeError(errorx.CodeBadInput, "conversation_id is required")
-	}
-	if in.GetOperatorId() <= 0 {
-		return nil, errorx.NewCodeError(errorx.CodeBadInput, "operator_id is required")
-	}
-	if len(in.GetMemberIds()) == 0 {
-		return nil, errorx.NewCodeError(errorx.CodeBadInput, "member_ids must not be empty")
-	}
-
-	convSvc := l.svcCtx.ConversationService
-	if convSvc == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "conversation service is not configured")
-	}
-
-	conv, err := convSvc.AddGroupMembers(l.ctx, in.GetConversationId(), in.GetOperatorId(), in.GetOperatorName(), in.GetMemberIds())
+	convSvc, err := requireGroupMembersOp(l.svcCtx.ConversationService, in.GetConversationId(), in.GetOperatorId(), in.GetMemberIds())
 	if err != nil {
-		return nil, errorx.ToGRPCError(err)
+		return nil, err
 	}
 
-	members, err := convSvc.GetConversationMembers(l.ctx, conv.ID)
+	conv, err := convSvc.AddGroupMembers(l.ctx, in.GetConversationId(), in.GetOperatorId(), in.GetMemberIds())
 	if err != nil {
-		return nil, errorx.ToGRPCError(err)
+		return nil, err
 	}
 
-	memberIDs := make([]int64, len(members))
-	for i, m := range members {
-		memberIDs[i] = m.UserID
+	memberIDs, err := conversationMemberIDs(l.ctx, convSvc, conv.ID)
+	if err != nil {
+		return nil, err
 	}
 
 	return &pb.AddGroupMembersResp{
-		Conversation: &pb.ConversationResponse{
-			Id:               conv.ID,
-			ConversationType: string(conv.ConversationType),
-			IsActive:         conv.IsActive,
-			CreatedAt:        conv.CreatedAt.UnixMilli(),
-			MemberIds:        memberIDs,
-			Name:             conv.Name,
-			Avatar:           conv.Avatar,
-			CreatorId:        conv.CreatorID,
-		},
+		Conversation: pbconv.Conversation(conv, memberIDs, conv.Name),
 	}, nil
 }

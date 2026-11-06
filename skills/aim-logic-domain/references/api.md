@@ -93,8 +93,8 @@ message GetUserConversationsResp {
 
 - 请求：`GetConversationHistoryReq`（conversation_id、cursor_created_at 游标、cursor_id 游标、limit 分页大小）
 - 响应：`GetConversationHistoryResp`（messages 列表、next_cursor_created_at、next_cursor_id、has_more）
-- 分页规则：当 `cursor_created_at=0 && cursor_id=0` 时返回最新一页；否则按 `(created_at, id)` 游标向前翻页；limit 默认 50，最大 100
-- 服务层：`ConversationService.GetConversationHistory` → DAO `ListMessagesByConversationInitial` 或 `ListMessagesByConversation`
+- 分页规则：游标 `MessageCursor{CreatedAt, ID}` 零值返回最新一页；否则按 `(created_at, id)` 游标向前翻页；limit 默认 50，最大 100
+- 服务层：`ConversationService.GetConversationHistory(ctx, conversationID, cursor conversation.MessageCursor, limit)` → DAO `ListMessagesByConversation`（单一方法，按游标是否为零值决定是否加游标谓词）
 - 错误码：40000（conversation_id 必须正数）、40400（会话不存在）、50000（基础设施错误）
 
 ### GetUserConversations

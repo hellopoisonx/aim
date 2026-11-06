@@ -3,6 +3,7 @@ package userservicelogic
 import (
 	"context"
 
+	"github.com/hellopoisonx/aim/app/logic/rpc/internal/pbconv"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
@@ -24,7 +25,7 @@ func NewSearchUserInfoByNicknameLogic(ctx context.Context, svcCtx *svc.ServiceCo
 	}
 }
 
-// SearchUserInfoByNickname searches user profiles by nickname prefix.
+// SearchUserInfoByNickname searches user profiles by nickname substring.
 func (l *SearchUserInfoByNicknameLogic) SearchUserInfoByNickname(in *pb.SearchUserInfoByNicknameReq) (*pb.SearchUserInfoByNicknameResp, error) {
 	if in.GetNickname() == "" {
 		return nil, errorx.NewCodeError(errorx.CodeBadInput, "nickname is required")
@@ -39,19 +40,19 @@ func (l *SearchUserInfoByNicknameLogic) SearchUserInfoByNickname(in *pb.SearchUs
 		limit = 100
 	}
 
-	userSvc := l.svcCtx.UserInfoService
-	if userSvc == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "user service is not configured")
+	userSvc, err := requireUserService(l.svcCtx)
+	if err != nil {
+		return nil, err
 	}
 
 	infos, err := userSvc.SearchUserInfoByNickname(l.ctx, in.GetNickname(), limit)
 	if err != nil {
-		return nil, errorx.ToGRPCError(err)
+		return nil, err
 	}
 
 	users := make([]*pb.UserInfoResponse, 0, len(infos))
 	for _, info := range infos {
-		users = append(users, userInfoToResponse(info))
+		users = append(users, pbconv.User(info))
 	}
 
 	return &pb.SearchUserInfoByNicknameResp{

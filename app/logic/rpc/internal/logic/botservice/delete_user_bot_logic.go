@@ -5,7 +5,6 @@ import (
 
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
-	"github.com/hellopoisonx/aim/app/shared/errorx"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -25,11 +24,12 @@ func NewDeleteUserBotLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Del
 }
 
 func (l *DeleteUserBotLogic) DeleteUserBot(in *pb.DeleteUserBotReq) (*pb.DeleteUserBotResp, error) {
-	if l.svcCtx.BotService == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "bot service not configured")
+	botSvc, err := requireBot(l.svcCtx, in.GetBotUserId())
+	if err != nil {
+		return nil, err
 	}
 
-	deleted, err := l.svcCtx.BotService.DeleteUserBot(l.ctx,
+	deleted, err := botSvc.DeleteUserBot(l.ctx,
 		in.GetOwnerUserId(), in.GetBotUserId())
 	if err != nil {
 		return nil, err

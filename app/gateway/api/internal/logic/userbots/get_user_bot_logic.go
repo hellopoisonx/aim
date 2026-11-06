@@ -5,6 +5,7 @@ import (
 
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/authctx"
 
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/pbconv"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/botservice"
@@ -24,15 +25,15 @@ func NewGetUserBotLogic(ctx context.Context, svcCtx *svc.ServiceContext) *GetUse
 }
 
 func (l *GetUserBotLogic) GetUserBot(req *types.GetUserBotRequest) (resp *types.GetUserBotResponse, err error) {
-	identity, ok := authctx.IdentityFromContext(l.ctx)
-	if !ok {
-		return nil, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
+	userID, err := authctx.RequireUserID(l.ctx)
+	if err != nil {
+		return nil, err
 	}
 	rpcResp, err := l.svcCtx.LogicBotClient.GetUserBot(l.ctx, &botservice.GetUserBotReq{
-		OwnerUserId: identity.UserID, BotUserId: req.Id,
+		OwnerUserId: userID, BotUserId: req.Id,
 	})
 	if err != nil {
 		return nil, errorx.SanitizeGRPCError(l, "get user bot", err)
 	}
-	return &types.GetUserBotResponse{Bot: userBotToType(rpcResp.GetBot())}, nil
+	return &types.GetUserBotResponse{Bot: pbconv.UserBot(rpcResp.GetBot())}, nil
 }

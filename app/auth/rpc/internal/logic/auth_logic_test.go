@@ -8,7 +8,7 @@ import (
 
 	"github.com/hellopoisonx/aim/app/auth/rpc/internal/config"
 	authsvc "github.com/hellopoisonx/aim/app/auth/rpc/internal/service"
-	"github.com/hellopoisonx/aim/app/auth/rpc/internal/svc"
+	"github.com/hellopoisonx/aim/app/auth/rpc/internal/svc/svctest"
 	"github.com/hellopoisonx/aim/app/auth/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 	"github.com/stretchr/testify/require"
@@ -19,7 +19,7 @@ func TestAuthClosedLoop(t *testing.T) {
 	users := newMemoryUserStore(t)
 	sessions := newMemorySessionStore()
 	issuer := fixedIssuer{}
-	svcCtx := svc.NewServiceContextWithStores(config.Config{}, users, sessions, issuer)
+	svcCtx := svctest.WithStores(config.Config{}, users, sessions, issuer)
 
 	registered, err := NewRegisterLogic(ctx, svcCtx).Register(&pb.RegisterReq{
 		Email:    "Ada@Example.COM",
@@ -59,7 +59,7 @@ func TestLoginRejectsWrongPassword(t *testing.T) {
 	ctx := context.Background()
 	users := newMemoryUserStore(t)
 	sessions := newMemorySessionStore()
-	svcCtx := svc.NewServiceContextWithStores(config.Config{}, users, sessions, fixedIssuer{})
+	svcCtx := svctest.WithStores(config.Config{}, users, sessions, fixedIssuer{})
 
 	_, err := NewRegisterLogic(ctx, svcCtx).Register(&pb.RegisterReq{Email: "ada@example.com", Password: "password123", Username: "Ada", DeviceId: "desktop-1"})
 	require.NoError(t, err)
@@ -72,7 +72,7 @@ func TestRepeatedLoginCleansUpOldRefreshToken(t *testing.T) {
 	ctx := context.Background()
 	users := newMemoryUserStore(t)
 	sessions := newMemorySessionStore()
-	svcCtx := svc.NewServiceContextWithStores(config.Config{}, users, sessions, fixedIssuer{})
+	svcCtx := svctest.WithStores(config.Config{}, users, sessions, fixedIssuer{})
 
 	_, err := NewRegisterLogic(ctx, svcCtx).Register(&pb.RegisterReq{
 		Email:    "ada@example.com",
@@ -111,7 +111,7 @@ func TestRepeatedLoginCleansUpOldRefreshToken(t *testing.T) {
 
 func TestAuthValidationErrors(t *testing.T) {
 	ctx := context.Background()
-	svcCtx := svc.NewServiceContextWithStores(config.Config{}, newMemoryUserStore(t), newMemorySessionStore(), fixedIssuer{})
+	svcCtx := svctest.WithStores(config.Config{}, newMemoryUserStore(t), newMemorySessionStore(), fixedIssuer{})
 
 	_, err := NewRegisterLogic(ctx, svcCtx).Register(&pb.RegisterReq{Email: "ada@example.com", Password: "password123"})
 	require.Error(t, err)
@@ -133,7 +133,7 @@ func TestAuthLogicInternalErrorBranches(t *testing.T) {
 	ctx := context.Background()
 	users := newMemoryUserStore(t)
 	sessions := newMemorySessionStore()
-	svcCtx := svc.NewServiceContextWithStores(config.Config{}, users, sessions, fixedIssuer{})
+	svcCtx := svctest.WithStores(config.Config{}, users, sessions, fixedIssuer{})
 
 	_, err := NewRegisterLogic(ctx, svcCtx).Register(&pb.RegisterReq{Email: "ada@example.com", Password: "password123", Username: "Ada", DeviceId: "desktop-1"})
 	require.NoError(t, err)
@@ -184,7 +184,7 @@ func (s *memoryUserStore) CreateUser(_ context.Context, email, passwordHash, nam
 
 	// Simulate duplicate email detection
 	if _, exists := s.byEmail[email]; exists {
-		return authsvc.UserCredential{}, errorx.NewCodeError(authsvc.CodeConflict, "email already registered")
+		return authsvc.UserCredential{}, errorx.NewCodeError(errorx.CodeConflict, "email already registered")
 	}
 
 	user := authsvc.UserCredential{ID: s.nextID, Email: email, PasswordHash: passwordHash, Name: name, Status: authsvc.StatusNormal}
@@ -201,7 +201,7 @@ func (s *memoryUserStore) GetUserByEmail(_ context.Context, email string) (auths
 
 	user, ok := s.byEmail[email]
 	if !ok {
-		return authsvc.UserCredential{}, errorx.NewCodeError(authsvc.CodeUnauthorized, "not found")
+		return authsvc.UserCredential{}, errorx.NewCodeError(errorx.CodeAuth, "not found")
 	}
 
 	return user, nil
@@ -215,7 +215,7 @@ func (s *memoryUserStore) CreateBotCredential(ctx context.Context, email, passwo
 
 type memorySessionStore struct {
 	next     int
-	rt       map[string][2]string //nolint:unused
+	rt       map[string][2]string
 	byDevice map[[2]string]string
 	err      error
 }
@@ -252,7 +252,7 @@ func (s *memorySessionStore) Rotate(ctx context.Context, token string) (int64, s
 
 	entry, ok := s.rt[token]
 	if !ok {
-		return 0, "", "", errorx.NewCodeError(authsvc.CodeUnauthorized, "invalid refresh token")
+		return 0, "", "", errorx.NewCodeError(errorx.CodeAuth, "invalid refresh token")
 	}
 
 	delete(s.rt, token)

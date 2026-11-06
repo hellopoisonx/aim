@@ -3,7 +3,11 @@ package attachments
 import (
 	"context"
 
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/authctx"
+
 	attachmentpb "github.com/hellopoisonx/aim/app/attachment/rpc/pb"
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/membership"
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/pbconv"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
 
@@ -25,7 +29,7 @@ func NewGetAttachmentLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Get
 }
 
 func (l *GetAttachmentLogic) GetAttachment(req *types.GetAttachmentRequest) (resp *types.AttachmentFileInfo, err error) {
-	userID, err := currentUserID(l.ctx)
+	userID, err := authctx.RequireUserID(l.ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -38,5 +42,9 @@ func (l *GetAttachmentLogic) GetAttachment(req *types.GetAttachmentRequest) (res
 		return nil, err
 	}
 
-	return fileInfoFromPB(info), nil
+	if err := membership.RequireMember(l.ctx, l, l.svcCtx.LogicConversationClient, info.GetConversationId(), userID, membership.ActorUser); err != nil {
+		return nil, err
+	}
+
+	return pbconv.AttachmentFileInfo(info), nil
 }

@@ -4,24 +4,15 @@ import (
 	"context"
 	"encoding/json"
 
+	"github.com/hellopoisonx/aim/app/core/rpc/internal/push"
 	"github.com/hellopoisonx/aim/app/core/rpc/internal/svc"
-	logicpb "github.com/hellopoisonx/aim/app/logic/rpc/pb"
+	"github.com/hellopoisonx/aim/app/shared/events"
 	"github.com/hellopoisonx/aim/app/shared/tracing"
 	gwpb "github.com/hellopoisonx/aim/shared/proto/gateway/pb"
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
-// typingEvent is the broker message for typing notification (mirrors gateway svc.typingEvent).
-type typingEvent struct {
-	tracing.TraceContextFields
-
-	FromUserID     int64  `json:"from_user_id"`
-	ConversationID int64  `json:"conversation_id"`
-	Timestamp      int64  `json:"timestamp"`
-	GatewayNodeID  string `json:"gateway_node_id"`
-}
-
-// TypingConsumer consumes aim-typing-events and fans out to conversation members' gateway nodes.
+// TypingConsumer consumes events.TopicTyping and fans out to conversation members' gateway nodes.
 type TypingConsumer struct {
 	ctx    context.Context
 	svcCtx *svc.ServiceContext
@@ -35,10 +26,12 @@ func NewTypingConsumer(ctx context.Context, svcCtx *svc.ServiceContext) *TypingC
 func (c *TypingConsumer) Consume(ctx context.Context, key string, value string) error {
 	logx.WithContext(ctx).Infof("consuming typing event, key=%s", key)
 
-	var event typingEvent
+	var event events.TypingEvent
 	if err := json.Unmarshal([]byte(value), &event); err != nil {
-		logx.WithContext(ctx).Errorf("failed to unmarshal typing event: %v", err)
-		return err
+		logx.WithContext(ctx).Errorf(
+			"dropping undecodable typing event key=%s: %v payload=%q", key, err, value,
+		)
+		return nil
 	}
 
 	ctx = tracing.ExtractTraceContext(ctx, event.TraceContextFields)
@@ -48,50 +41,33 @@ func (c *TypingConsumer) Consume(ctx context.Context, key string, value string) 
 
 	logx.WithContext(ctx).Infof("typing event: from=%d conv=%d", event.FromUserID, event.ConversationID)
 
-	// Get conversation members.
-	if c.svcCtx.LogicConversationClient == nil {
-		logx.WithContext(ctx).Debugf("no conversation client configured, skipping typing fan-out for conv=%d", event.ConversationID)
-		return nil
-	}
-
-	membersResp, err := c.svcCtx.LogicConversationClient.GetConversationMembers(ctx, &logicpb.GetConversationMembersReq{
-		ConversationId: event.ConversationID,
-	})
+	memberIDs, _, err := push.ConversationRecipients(ctx, c.svcCtx, event.ConversationID)
 	if err != nil {
-		logx.WithContext(ctx).Errorf("GetConversationMembers failed for conv %d: %v", event.ConversationID, err)
-		// Don't return error for typing - it's transient.
+		logx.WithContext(ctx).Errorf("conversation member lookup conv=%d failed: %v", event.ConversationID, err)
+		return nil
+	}
+	if len(memberIDs) == 0 {
 		return nil
 	}
 
-	// For each member (except sender), find their gateway node(s) and push.
-	for _, memberID := range membersResp.GetMemberIds() {
-		if memberID <= 0 || memberID == event.FromUserID {
-			continue
+	// Typing is transient: a failed node is not worth a retry.
+	_ = push.ToMemberNodes(ctx, c.svcCtx, memberIDs, event.FromUserID, event.GatewayNodeID, func(memberID int64, nodeID string) error {
+		req := &gwpb.PushTypingReq{
+			TargetUserId:   memberID,
+			FromUserId:     event.FromUserID,
+			ConversationId: event.ConversationID,
+			Timestamp:      event.Timestamp,
 		}
 
-		nodeIDs := gatewayNodes(ctx, c.svcCtx, memberID)
-
-		for _, nodeID := range nodeIDs {
-			if event.GatewayNodeID != "" && nodeID == event.GatewayNodeID {
-				continue
-			}
-
-			req := &gwpb.PushTypingReq{
-				TargetUserId:   memberID,
-				FromUserId:     event.FromUserID,
-				ConversationId: event.ConversationID,
-				Timestamp:      event.Timestamp,
-			}
-
-			if _, err := pushTypingToNode(ctx, c.svcCtx.GatewayClient, nodeID, req); err != nil {
-				logx.WithContext(ctx).Errorf("PushTyping to node %s for member %d failed: %v", nodeID, memberID, err)
-				continue
-			}
-
-			logx.WithContext(ctx).Debugf("typing pushed: from=%d to member=%d conv=%d node=%s",
-				event.FromUserID, memberID, event.ConversationID, nodeID)
+		if _, err := c.svcCtx.GatewayClient.PushTypingToNode(ctx, nodeID, req); err != nil {
+			return err
 		}
-	}
+
+		logx.WithContext(ctx).Debugf("typing pushed: from=%d to member=%d conv=%d node=%s",
+			event.FromUserID, memberID, event.ConversationID, nodeID)
+
+		return nil
+	})
 
 	return nil
 }

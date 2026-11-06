@@ -4,25 +4,16 @@ import (
 	"context"
 	"encoding/json"
 
+	"github.com/hellopoisonx/aim/app/core/rpc/internal/push"
 	"github.com/hellopoisonx/aim/app/core/rpc/internal/svc"
 	logicpb "github.com/hellopoisonx/aim/app/logic/rpc/pb"
+	"github.com/hellopoisonx/aim/app/shared/events"
 	"github.com/hellopoisonx/aim/app/shared/tracing"
 	gwpb "github.com/hellopoisonx/aim/shared/proto/gateway/pb"
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
-// presenceEvent is the broker message for presence change (mirrors gateway svc.presenceEvent).
-type presenceEvent struct {
-	tracing.TraceContextFields
-
-	UserID        int64  `json:"user_id"`
-	DeviceID      string `json:"device_id"`
-	Status        string `json:"status"`
-	UpdatedAt     int64  `json:"updated_at"`
-	GatewayNodeID string `json:"gateway_node_id"`
-}
-
-// PresenceConsumer consumes aim-presence-events and fans out to friends' gateway nodes.
+// PresenceConsumer consumes events.TopicPresence and fans out to friends' gateway nodes.
 type PresenceConsumer struct {
 	ctx    context.Context
 	svcCtx *svc.ServiceContext
@@ -36,10 +27,8 @@ func NewPresenceConsumer(ctx context.Context, svcCtx *svc.ServiceContext) *Prese
 func (c *PresenceConsumer) Consume(ctx context.Context, key string, value string) error {
 	logx.WithContext(ctx).Infof("consuming presence event, key=%s", key)
 
-	var event presenceEvent
+	var event events.PresenceEvent
 	if err := json.Unmarshal([]byte(value), &event); err != nil {
-		// A malformed payload never decodes on redelivery: dropping it keeps the
-		// partition moving instead of replaying the same poison message forever.
 		logx.WithContext(ctx).Errorf(
 			"dropping undecodable presence event key=%s: %v payload=%q", key, err, value,
 		)
@@ -75,7 +64,7 @@ func (c *PresenceConsumer) Consume(ctx context.Context, key string, value string
 			continue
 		}
 
-		nodeIDs := gatewayNodes(ctx, c.svcCtx, friendID)
+		nodeIDs := push.GatewayNodes(ctx, c.svcCtx, friendID)
 
 		for _, nodeID := range nodeIDs {
 			req := &gwpb.PushPresenceReq{
@@ -85,7 +74,7 @@ func (c *PresenceConsumer) Consume(ctx context.Context, key string, value string
 				TargetUserId: friendID,
 			}
 
-			if _, err := pushPresenceToNode(ctx, c.svcCtx.GatewayClient, nodeID, req); err != nil {
+			if _, err := c.svcCtx.GatewayClient.PushPresenceToNode(ctx, nodeID, req); err != nil {
 				logx.WithContext(ctx).Errorf("PushPresence to node %s for friend %d failed: %v", nodeID, friendID, err)
 				continue
 			}

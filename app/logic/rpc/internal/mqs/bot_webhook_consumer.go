@@ -3,9 +3,7 @@ package mqs
 import (
 	"bytes"
 	"context"
-	"crypto/hmac"
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -20,6 +18,7 @@ import (
 
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/logic/rpc/model/orm"
+	"github.com/hellopoisonx/aim/app/shared/botwebhook"
 	"github.com/hellopoisonx/aim/app/shared/tracing"
 
 	"github.com/zeromicro/go-zero/core/logx"
@@ -39,6 +38,12 @@ const botWebhookHTTPTimeout = 5 * time.Second
 // recovery; we deliberately do not block the consumer on a single bot.
 const botWebhookMaxRetries = 5
 
+// botWebhookStore is the read surface the consumer needs from the DAO.
+type botWebhookStore interface {
+	ListActiveBotWebhooksForConversation(ctx context.Context, conversationID int64) ([]orm.BotWebhook, error)
+	GetUserType(ctx context.Context, id int64) (string, error)
+}
+
 // BotWebhookConsumer consumes the same `aim-message-transfer` topic as
 // the archive consumer but uses an independent consumer group, so its
 // offset is decoupled from message persistence.
@@ -51,11 +56,6 @@ const botWebhookMaxRetries = 5
 //     `sender_type` (human/bot/system) — bots can filter accordingly.
 //  4. Fans out HTTP POSTs in parallel with HMAC-SHA256 signatures and
 //     exponential backoff retries.
-type botWebhookStore interface {
-	ListActiveBotWebhooksForConversation(ctx context.Context, conversationID int64) ([]orm.BotWebhook, error)
-	GetUserType(ctx context.Context, id int64) (string, error)
-}
-
 type BotWebhookConsumer struct {
 	ctx        context.Context
 	store      botWebhookStore
@@ -102,7 +102,6 @@ func NewBotWebhookConsumer(ctx context.Context, svcCtx *svc.ServiceContext) *Bot
 		jobs:   make(chan webhookJob, botWebhookQueueSize),
 		stopCh: make(chan struct{}),
 	}
-	c.Start()
 
 	return c
 }
@@ -248,7 +247,7 @@ func (c *BotWebhookConsumer) deliver(ctx context.Context, hook orm.BotWebhook, e
 		return
 	}
 
-	signature := signHMAC(body, hook.SecretHash)
+	signature := botwebhook.Sign(hook.SecretHash, body)
 
 	for attempt := range botWebhookMaxRetries {
 		if attempt > 0 {
@@ -273,38 +272,18 @@ func (c *BotWebhookConsumer) deliver(ctx context.Context, hook orm.BotWebhook, e
 		hook.BotUserID, event.MessageID, botWebhookMaxRetries)
 }
 
-// botWebhookPayload is the V0 message.created envelope.
-type botWebhookPayload struct {
-	EventID        string                   `json:"event_id"`
-	Type           string                   `json:"type"`
-	CreatedAt      int64                    `json:"created_at"`
-	ConversationID string                   `json:"conversation_id"`
-	Message        botWebhookMessagePayload `json:"message"`
-}
-
-type botWebhookMessagePayload struct {
-	MessageID   string   `json:"message_id"`
-	SenderID    string   `json:"sender_id"`
-	SenderType  string   `json:"sender_type,omitempty"`
-	MessageType string   `json:"message_type"`
-	Content     string   `json:"content"`
-	ClientMsgID string   `json:"client_msg_id,omitempty"`
-	Mentions    []string `json:"mentions,omitempty"`
-	Timestamp   int64    `json:"timestamp"`
-}
-
 func (c *BotWebhookConsumer) buildPayload(event events.TransferEvent, senderType string) ([]byte, string, error) {
 	eventID, err := newEventID()
 	if err != nil {
 		return nil, "", err
 	}
 
-	payload := botWebhookPayload{
+	payload := botwebhook.WebhookEvent{
 		EventID:        eventID,
 		Type:           botWebhookEventType,
 		CreatedAt:      c.now().UnixMilli(),
 		ConversationID: strconv.FormatInt(event.ConversationID, 10),
-		Message: botWebhookMessagePayload{
+		Message: botwebhook.WebhookMessage{
 			MessageID:   strconv.FormatInt(event.MessageID, 10),
 			SenderID:    strconv.FormatInt(event.SenderID, 10),
 			SenderType:  senderType,
@@ -333,7 +312,7 @@ func (c *BotWebhookConsumer) postOnce(ctx context.Context, url, eventID, signatu
 	req.Header.Set("User-Agent", "AIM-Bot-Webhook/1.0")
 	req.Header.Set("X-AIM-Event-Id", eventID)
 	req.Header.Set("X-AIM-Event-Type", botWebhookEventType)
-	req.Header.Set("X-AIM-Signature", "sha256="+signature)
+	req.Header.Set("X-AIM-Signature", botwebhook.SignaturePrefix+signature)
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -350,21 +329,6 @@ func (c *BotWebhookConsumer) postOnce(ctx context.Context, url, eventID, signatu
 	}
 
 	return nil
-}
-
-// signHMAC returns the lowercase hex HMAC-SHA256 of body keyed by the
-// stored secret_hash. Operators who want to verify the signature use the
-// same secret_hash value (they hold the plaintext secret only by virtue
-// of receiving it once at SetWebhook time — the gateway never persists
-// the plaintext).
-//
-// NOTE: For V0 we sign with secret_hash directly. Future versions can
-// migrate to a per-row HMAC key without breaking the wire format because
-// X-AIM-Signature already carries an algorithm prefix.
-func signHMAC(body []byte, key string) string {
-	mac := hmac.New(sha256.New, []byte(key))
-	mac.Write(body)
-	return hex.EncodeToString(mac.Sum(nil))
 }
 
 // subscribesTo returns true when the events list contains target or "*".

@@ -21,11 +21,11 @@ func GrantGroupAdminHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
 		}
 
 		l := conversations.NewGrantGroupAdminLogic(r.Context(), svcCtx)
-		err := l.GrantGroupAdmin(&req)
+		resp, err := l.GrantGroupAdmin(&req)
 		if err != nil {
 			httpx.ErrorCtx(r.Context(), w, err)
 		} else {
-			httpx.Ok(w)
+			httpx.OkJsonCtx(r.Context(), w, resp)
 		}
 	}
 }

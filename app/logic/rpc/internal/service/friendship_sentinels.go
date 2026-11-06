@@ -3,21 +3,16 @@ package service
 import "github.com/hellopoisonx/aim/app/shared/errorx"
 
 const (
-	CodeSelfAdd        = 40010
-	CodeBlocked        = 40313
-	CodeNotPending     = 40314
-	CodeFriendNotFound = 40411
-
 	FriendshipStatusPending  = "pending"
 	FriendshipStatusAccepted = "accepted"
 	FriendshipStatusBlocked  = "blocked"
 )
 
-// Domain errors carry their biz code directly; handlers return them through
-// errorx.ToGRPCError.
+// Domain errors carry their biz code directly; the RPC error interceptor
+// passes them through to the caller untouched.
 var (
-	ErrSelfAdd        = errorx.NewCodeError(CodeSelfAdd, "cannot add yourself as friend")
-	ErrBlocked        = errorx.NewCodeError(CodeBlocked, "user is blocked")
-	ErrNotPending     = errorx.NewCodeError(CodeNotPending, "no pending friend request found")
-	ErrFriendNotFound = errorx.NewCodeError(CodeFriendNotFound, "friend request not found")
+	ErrSelfAdd        = errorx.NewCodeError(errorx.CodeFriendshipSelfAdd, "cannot add yourself as friend")
+	ErrBlocked        = errorx.NewCodeError(errorx.CodeFriendshipBlocked, "user is blocked")
+	ErrNotPending     = errorx.NewCodeError(errorx.CodeFriendshipNotPending, "no pending friend request found")
+	ErrFriendNotFound = errorx.NewCodeError(errorx.CodeFriendshipNotFound, "friend request not found")
 )

@@ -8,10 +8,12 @@ import (
 	"strings"
 
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/authctx"
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/pbconv"
 
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/conversationservice"
+	sharedconversation "github.com/hellopoisonx/aim/app/shared/conversation"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 
 	"github.com/zeromicro/go-zero/core/logx"
@@ -31,10 +33,10 @@ func NewCreateGroupLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Creat
 	}
 }
 
-func (l *CreateGroupLogic) CreateGroup(req *types.CreateGroupRequest) (resp *types.CreateConversationResponse, err error) {
-	identity, ok := authctx.IdentityFromContext(l.ctx)
-	if !ok {
-		return nil, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
+func (l *CreateGroupLogic) CreateGroup(req *types.CreateGroupRequest) (resp *types.ConversationItem, err error) {
+	userID, err := authctx.RequireUserID(l.ctx)
+	if err != nil {
+		return nil, err
 	}
 
 	if len(req.MemberIds) == 0 {
@@ -47,8 +49,8 @@ func (l *CreateGroupLogic) CreateGroup(req *types.CreateGroupRequest) (resp *typ
 	}
 
 	rpcResp, err := l.svcCtx.LogicConversationClient.CreateConversation(l.ctx, &conversationservice.CreateConversationReq{
-		ConversationType: "group",
-		CreatorId:        identity.UserID,
+		ConversationType: string(sharedconversation.TypeGroup),
+		CreatorId:        userID,
 		MemberIds:        req.MemberIds,
 		Name:             name,
 		Avatar:           req.Avatar,
@@ -62,19 +64,7 @@ func (l *CreateGroupLogic) CreateGroup(req *types.CreateGroupRequest) (resp *typ
 		return nil, errorx.NewCodeError(errorx.CodeInternal, "internal error")
 	}
 
-	memberIDs := conv.GetMemberIds()
-	if memberIDs == nil {
-		memberIDs = []int64{}
-	}
+	item := pbconv.Conversation(conv)
 
-	return &types.CreateConversationResponse{
-		ConversationId:   conv.GetId(),
-		ConversationType: conv.GetConversationType(),
-		IsActive:         conv.GetIsActive(),
-		CreatedAt:        conv.GetCreatedAt(),
-		MemberIds:        memberIDs,
-		Name:             conv.GetName(),
-		Avatar:           conv.GetAvatar(),
-		CreatorId:        conv.GetCreatorId(),
-	}, nil
+	return &item, nil
 }

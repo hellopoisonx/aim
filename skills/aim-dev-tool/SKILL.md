@@ -8,8 +8,8 @@ description: AIM 开发测试工具（dev-tool）。Python CLI，覆盖 gateway 
 
 | 工具 | 文件 | 用途 |
 |------|------|------|
-| 功能测试 | `dev-tool/aim_test.py` | 单端点调试、冒烟测试、交互探索 |
-| 压力测试 | `dev-tool/benchmark.py` | 并发压测、QPS/延迟分布、容量评估 |
+| 功能测试 | `dev-tool/e2e/aim_test.py` | 单端点调试、冒烟测试、交互探索 |
+| 压力测试 | `dev-tool/bench/benchmark.py` | 并发压测、QPS/延迟分布、容量评估 |
 
 两个工具共享 `RESTClient` / `WSClient` / `TokenManager` 和 Protobuf 编解码层。
 
@@ -17,17 +17,17 @@ description: AIM 开发测试工具（dev-tool）。Python CLI，覆盖 gateway 
 
 - 先看 `references/setup.md`，确认 Python 环境和依赖就绪。
 - 再看 `references/commands.md`，了解所有可用命令和交互模式。
-- 改命令或新增端点时：改 `dev-tool/aim_test.py`，然后更新本 Skill 的 `references/commands.md`。
-- 压测时：`python benchmark.py <scenario>`，详见下方 "压力测试" 段落。
+- 改命令或新增端点时：改 `dev-tool/e2e/aim_test.py`，然后更新本 Skill 的 `references/commands.md`。
+- 压测时：`python dev-tool/bench/benchmark.py <scenario>`，详见下方 "压力测试" 段落。
 
 ## 压力测试
 
-`dev-tool/benchmark.py` — 并发压测工具，复用 `aim_test.py` 的 REST/WS 客户端。
+`dev-tool/bench/benchmark.py` — 并发压测工具，复用 `aim_test.py` 的 REST/WS 客户端。
 
 ### 压测架构
 
 ```
-dev-tool/benchmark.py
+dev-tool/bench/benchmark.py
 ├── MetricsCollector    → 线程安全的指标采集（延迟、错误、状态码）
 ├── RateLimiter         → 令牌桶速率控制 + 渐进加压
 ├── LoadGenerator       → ThreadPoolExecutor 并发引擎
@@ -44,12 +44,12 @@ dev-tool/benchmark.py
 
 | 命令 | 说明 | 示例 |
 |------|------|------|
-| `register` | 批量注册用户 | `python benchmark.py register --users 100 --rps 50` |
-| `login` | 批量登录 | `python benchmark.py login --users 100` |
-| `friend-chain` | 好友链（注册→登录→加好友→接受） | `python benchmark.py friend-chain --users 50` |
-| `ws-message` | WS 消息并发发送 | `python benchmark.py ws-message --users 20 --messages-per-user 100` |
-| `presence` | 好友在线状态查询压测 | `python benchmark.py presence --users 50 --rps 100` |
-| `mixed` | REST + WS 混合负载 | `python benchmark.py mixed --users 100 --duration 30 --rps 200` |
+| `register` | 批量注册用户 | `python dev-tool/bench/benchmark.py register --users 100 --rps 50` |
+| `login` | 批量登录 | `python dev-tool/bench/benchmark.py login --users 100` |
+| `friend-chain` | 好友链（注册→登录→加好友→接受） | `python dev-tool/bench/benchmark.py friend-chain --users 50` |
+| `ws-message` | WS 消息并发发送 | `python dev-tool/bench/benchmark.py ws-message --users 20 --messages-per-user 100` |
+| `presence` | 好友在线状态查询压测 | `python dev-tool/bench/benchmark.py presence --users 50 --rps 100` |
+| `mixed` | REST + WS 混合负载 | `python dev-tool/bench/benchmark.py mixed --users 100 --duration 30 --rps 200` |
 
 ### 通用参数
 
@@ -86,16 +86,16 @@ dev-tool/benchmark.py
 cd dev-tool
 
 # 快速验证：小规模注册
-python benchmark.py register --users 10
+python dev-tool/bench/benchmark.py register --users 10
 
 # 容量评估：500 用户注册 + 50 RPS 限速 + 10s 渐进加压
-python benchmark.py register --users 500 --rps 50 --ramp-up 10
+python dev-tool/bench/benchmark.py register --users 500 --rps 50 --ramp-up 10
 
 # WS 消息压测：50 用户每用户发 500 条消息
-python benchmark.py ws-message --users 50 --messages-per-user 500 --quiet
+python dev-tool/bench/benchmark.py ws-message --users 50 --messages-per-user 500 --quiet
 
 # 混合负载：100 用户持续 60 秒，限速 200 RPS，输出 JSON 报告
-python benchmark.py mixed --users 100 --duration 60 --rps 200 --output report.json
+python dev-tool/bench/benchmark.py mixed --users 100 --duration 60 --rps 200 --output report.json
 ```
 
 ### 输入/输出格式
@@ -125,7 +125,7 @@ python benchmark.py mixed --users 100 --duration 60 --rps 200 --output report.js
 ## 架构
 
 ```
-dev-tool/aim_test.py
+dev-tool/e2e/aim_test.py
 ├── RESTClient     → gateway HTTP API（POST/GET + Bearer token）
 ├── WSClient       → gateway WebSocket（Protobuf 帧 encode/decode）
 ├── TokenManager   → 多 profile 的 access/refresh token 持久化
@@ -134,12 +134,14 @@ dev-tool/aim_test.py
 ```
 
 依赖：
-- `ws_pb2.py` / `gateway_pb2.py`：编译自 `shared/proto/ws/ws.proto` / `shared/proto/gateway/gateway.proto`
+- `dev-tool/pb/ws_pb2.py`：由 `shared/proto/ws/ws.proto` 生成，不要手改；重新生成用
+  `protoc -I . --python_out=/tmp/pbnew shared/proto/ws/ws.proto` 后拷到 `dev-tool/pb/`。
 - `requests`, `websocket-client`, `protobuf`
 
 ## 约定
 
-- 压测环境与本地开发环境通过端口 +10000 偏移隔离，互不影响；压测环境服务名统一 `bench-` 前缀。
+- 压测环境与本地开发是同一套 Compose 服务（`deploy/compose/base.yaml`），只多挂
+  `deploy/config/bench/{auth,logic}.yaml`；两者容器名相同，不能同时运行。
 - Gateway 容器需设置 `AIM_GATEWAY_NODE_ID` 环境变量（Snowflake 机器 ID），主开发环境为 `0`，压测环境也为 `0`（因两者不会同时运行于同一数据库）。
 - Fixture 数据（`user.json`、`msg.txt`）由 `generate_fixtures.py` 生成，不要手动编辑；如需自定义数量用 `--count` 参数。
 
@@ -148,10 +150,10 @@ dev-tool/aim_test.py
 ### Windows 编码错误
 
 `run-all` 使用 Unicode 字符（如 `✓`），Windows 终端默认 GBK 编码会报 `UnicodeEncodeError`。
-所有 `python aim_test.py` 命令前加 `PYTHONIOENCODING=utf-8`：
+所有 `python dev-tool/e2e/aim_test.py` 命令前加 `PYTHONIOENCODING=utf-8`：
 
 ```bash
-PYTHONIOENCODING=utf-8 python aim_test.py run-all
+PYTHONIOENCODING=utf-8 python dev-tool/e2e/aim_test.py run-all
 ```
 
 ### 注册后立即好友请求失败（`user not found`）
@@ -194,60 +196,50 @@ func (f *fakeQuerier) ListFriends(ctx context.Context, userID int64) ([]model.Fr
 - `references/setup.md`：环境与配置（aim_test + benchmark 通用）
 - `references/commands.md`：aim_test 命令参考 + benchmark 命令参考
 
-### 压测环境（独立 Docker Compose）
+### 压测环境（复用 deploy 分层 Compose）
 
-`dev-tool/docker-compose.yaml` 提供独立于本地开发的压测环境，所有端口 +10000 偏移避免冲突：
-
-| 服务 | 压测端口 | 开发端口 | 偏移 |
-|------|---------|---------|------|
-| gateway REST | 18888 | 8888 | +10000 |
-| gateway gRPC | 19091 | 9091 | +10000 |
-| auth gRPC | 18989 | 8989 | +10000 |
-| core gRPC | 18081 | 8080 | +10000 |
-| RocketMQ proxy (gRPC) | 18082 | 8081 | — |
-| PostgreSQL | 15432 | 5432 | +10000 |
-| Redis | 16379 | 6379 | +10000 |
-| etcd | 12379 | 2379 | +10000 |
-
-| etcd peer | 12380 | 2380 | +10000 |
-
-| Tempo HTTP API | 13200 | 3200 | +10000 |
-
-压测环境配置文件在 `dev-tool/etc/`，服务名均以 `bench-` 前缀，容器间通过 `bench-network` 通信。
-
-启动压测环境：
+压测不再是独立的一套服务定义：在本地开发组合上叠加 `deploy/compose/bench.yaml`，
+它只替换 `deploy/config/bench/{auth,logic}.yaml`（token TTL 30m、临时会话消息不限制）。
+端口、服务名、容器名与本地开发一致，因此不能与本地开发栈同时启动。
 
 ```bash
-cd dev-tool
-docker compose up -d                    # 启动压测环境
-python benchmark.py register --users 100
-python benchmark.py ws-message --users 20 --messages-per-user 100
-docker compose down -v                  # 停止并清理数据
+docker compose --env-file deploy/env/local.env \
+  -f deploy/compose/base.yaml \
+  -f deploy/compose/dev.yaml \
+  -f deploy/compose/bench.yaml \
+  up -d --build
+
+python dev-tool/bench/benchmark.py register --users 100
+python dev-tool/bench/benchmark.py ws-message --users 20 --messages-per-user 100
+
+docker compose --env-file deploy/env/local.env \
+  -f deploy/compose/base.yaml -f deploy/compose/dev.yaml -f deploy/compose/bench.yaml \
+  down -v
 ```
 
-压测时需指向压测端口：
+压测脚本默认连本地端口，无需额外环境变量：
 
 ```bash
-export AIM_GATEWAY_HTTP=http://127.0.0.1:18888
-export AIM_GATEWAY_WS=ws://127.0.0.1:18888/ws
+export AIM_GATEWAY_HTTP=http://127.0.0.1:8888
+export AIM_GATEWAY_WS=ws://127.0.0.1:8888/ws
 ```
 
 ### Fixture 生成
 
-`dev-tool/generate_fixtures.py` 生成压测所需的测试数据：
+`dev-tool/fixtures/generate_fixtures.py` 生成压测所需的测试数据，输出到同目录：
 
 ```bash
-cd dev-tool
-python generate_fixtures.py                # 默认 1000 条
-python generate_fixtures.py --count 5000   # 自定义数量
+python dev-tool/fixtures/generate_fixtures.py                # 默认 1000 条
+python dev-tool/fixtures/generate_fixtures.py --count 5000   # 自定义数量
 ```
 
-输出：
-- `user.json`：批量注册用户数据（email, password, username）
-- `msg.txt`：随机消息字符串（每行一条，混合中文/英文/数字）
+输出（被 `.gitignore` 忽略）：
+- `dev-tool/fixtures/user.json`：批量注册用户数据（email, password, username）
+- `dev-tool/fixtures/msg.txt`：随机消息字符串（每行一条，混合中文/英文/数字）
 
 ## 最近变更
 
+- 2026-11-05: 目录重组：`e2e/`（`aim_test.py`、`rl_smoke.py`）、`bench/`（`benchmark.py`、PowerShell 包装）、`fixtures/`（`generate_fixtures.py`）、`pb/`（唯一一份 protobuf stub，由 `shared/proto/ws/ws.proto` 生成）。删除 `dev-tool/docker-compose.yaml`、`dev-tool/etc/`、`dev-tool/deploy/prometheus.yml` 与两份过期报告：压测环境改为叠加 `deploy/compose/bench.yaml`，端口不再 +10000 偏移。`ws_pb2.py` 重新生成后 `ReadReceiptPayload` 字段名恢复为 `last_read_message_id`。
 - 2026-06-03: 压测环境基础设施从 Nacos 切到 etcd。`dev-tool/docker-compose.yaml` 的 `bench-nacos` 服务改为 `bench-etcd`（`quay.io/coreos/etcd:v3.5.21`，端口 +10000 偏移到 12379/12380）；`dev-tool/etc/*.yaml` 的 `Nacos:` 块改为 `Etcd:` 块。
 
 - 2026-05-30: `WSClient` 自动跟踪已连续处理的白名单 pending 推送 `seq`，自动心跳携带 `HeartbeatPayload.last_seq` 以触发服务端 L1 pending 补发；`ws-heartbeat` 新增 `--last-seq` 覆盖参数，交互模式支持 `ws-heartbeat N`。
@@ -260,5 +252,5 @@ python generate_fixtures.py --count 5000   # 自定义数量
 - 2026-05-22: `WSClient` 新增 `rest_client` 参数和 `_try_refresh_token()` 方法：`reconnect()` 重连前自动检测 Token 过期并通过 REST API 刷新。benchmark 数据流扩展：`user_creds`/`conv_pairs` 元组增加 `refresh_token`/`expires_at`/`device_id`，`WsMessageScenario` 和 `MixedScenario` 为每个 `WSClient` 注入对应的 `RESTClient`。压测配置 `dev-tool/etc/auth.yaml` 的 `AccessTTL` 从 `5m` 增大到 `30m`。详见 `aim-ws-token-management` skill。
 - 2026-05-22: `WSClient` 新增自动心跳（默认 30s 间隔）、自动重连（默认最多 3 次，指数退避 1/2/4s）、`ensure_connected()` 主动重连方法。`disconnect()` 标记 `_intentional_close` 以区分主动/被动断线；`_on_close` 被动断线时自动触发重连。压测 `ws-message` 的 `send_one` 捕获 `RuntimeError("Not connected")` 后尝试重连重试（最多 3 次），重连仍失败记录 `ws_disconnected` 错误（替代原来笼统的 `RuntimeError`）。`mixed` 场景同步增加断线重连逻辑。
 - 2026-05-22: `ws-message` 延迟语义改为端到端（A 发送 → 服务器 → B 收到 PUSH_MESSAGE）。发送方和接收方均建立 WS 连接，通过 `client_msg_id` 关联发送与接收，30s 超时未收到则记录 `recv_timeout` 错误。步骤从 4 步扩展为 5 步（Step 3: 接收方连接，Step 4: 发送方连接，Step 5: 发送消息+等待回执）。`WSClient.send_message()` 现在返回 `client_msg_id`。`LoadGenerator._worker_loop` 支持 `_SKIP_METRICS` 哨兵值，允许 task_fn 自行管理指标记录。
-- 2026-05-22: 新增独立压测 Docker Compose 环境（`dev-tool/docker-compose.yaml`，端口 +10000 偏移）、压测专属配置（`dev-tool/etc/`）、Fixture 生成器（`dev-tool/generate_fixtures.py`）。主 `docker-compose.yaml` 为 gateway 添加 `AIM_GATEWAY_NODE_ID: 0` 环境变量。
+- 2026-05-22: 新增独立压测 Docker Compose 环境（`dev-tool/docker-compose.yaml`，端口 +10000 偏移）、压测专属配置（`dev-tool/etc/`）、Fixture 生成器（`dev-tool/fixtures/generate_fixtures.py`）。主 `docker-compose.yaml` 为 gateway 添加 `AIM_GATEWAY_NODE_ID: 0` 环境变量。
 - 2026-05-22: `--quiet` 彻底静默。现在会同时（1）设 `aim_test.VERBOSE=False` 拑制 WSClient 调试输出；（2）将 `websocket`/`urllib3`/`requests` logger 降为 CRITICAL；（3）为 setup-阶段 LoadGenerator 传 `verbose=False` 以去掉注册/创建会话阶段的进度条与中间汇总。CLI 所有场景（含 register/login/friend-chain）都支持 `--quiet`。

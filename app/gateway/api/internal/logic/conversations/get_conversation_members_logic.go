@@ -5,6 +5,7 @@ import (
 
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/authctx"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/membership"
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/pbconv"
 
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
@@ -29,13 +30,13 @@ func NewGetConversationMembersLogic(ctx context.Context, svcCtx *svc.ServiceCont
 }
 
 func (l *GetConversationMembersLogic) GetConversationMembers(req *types.GetConversationMembersDetailRequest) (resp *types.GetConversationMembersResponse, err error) {
-	identity, ok := authctx.IdentityFromContext(l.ctx)
-	if !ok || identity.UserID <= 0 {
-		return nil, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
+	userID, err := authctx.RequireUserID(l.ctx)
+	if err != nil {
+		return nil, err
 	}
 
 	// The member list is conversation-scoped data: only members may read it.
-	if err := membership.RequireMember(l.ctx, l, l.svcCtx.LogicConversationClient, req.Id, identity.UserID, membership.ActorUser); err != nil {
+	if err := membership.RequireMember(l.ctx, l, l.svcCtx.LogicConversationClient, req.Id, userID, membership.ActorUser); err != nil {
 		return nil, err
 	}
 
@@ -49,14 +50,7 @@ func (l *GetConversationMembersLogic) GetConversationMembers(req *types.GetConve
 	members := rpcResp.GetMembers()
 	items := make([]types.MemberDetailItem, 0, len(members))
 	for _, m := range members {
-		items = append(items, types.MemberDetailItem{
-			UserId:   m.GetUserId(),
-			Email:    m.GetEmail(),
-			Avatar:   m.GetAvatar(),
-			Role:     m.GetRole(),
-			JoinedAt: m.GetJoinedAt(),
-			Name:     m.GetName(),
-		})
+		items = append(items, pbconv.MemberDetail(m))
 	}
 
 	return &types.GetConversationMembersResponse{

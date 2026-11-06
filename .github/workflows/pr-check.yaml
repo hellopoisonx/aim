@@ -1,9 +1,9 @@
 # 触发: 任何 PR + main 分支推送
-# 不依赖 docker, 3-5 分钟完成
 # 作用:
-#   1. 编译 + 单元测试 + 覆盖率软门禁
+#   1. 编译 + 单元测试 + 覆盖率软门禁 (不含 docker, 3-5 分钟)
 #   2. .golangci.yaml lint
 #   3. goctl api go 重生成 + git diff (守住 gateway.api 契约)
+#   4. Postgres 集成套件 (另外起一个 job, 见文件末尾)
 name: PR Check
 
 on:
@@ -34,23 +34,33 @@ jobs:
           cache: true
 
       - name: Build
-        run: go build ./app/... ./shared/...
+        run: go build ./app/... ./shared/... ./bot_sdk/...
 
       # AGENTS.md 要求 "代码更改后必须执行测试、覆盖率测试、lint"
       # coverage 软门禁: < 50% 时仅 ::warning::, 不阻断 PR
       # 等项目覆盖率基线稳定后再考虑升级为 hard-fail
+      #
+      # 分母只保留手写代码: proto 桩 (app/*/rpc/pb, shared/proto/*/pb) 按设计
+      # 没有测试, 但会以 0% 进入 profile, 把 ~17k 行生成代码算进分母。
+      # 生成代码留在分母里会让门禁既无法达标, 也对真实缺口不敏感。
+      # (goctl 生成的 internal/types 只有结构体声明, 没有语句, 本来就不入 profile。)
       - name: Test (with coverage)
         run: |
           mkdir -p coverage
-          go test -coverprofile=coverage/coverage.out ./app/... ./shared/...
-          total=$(go tool cover -func=coverage/coverage.out | tail -1)
-          echo "覆盖率: $total"
+          go test -coverprofile=coverage/coverage.out ./app/... ./shared/... ./bot_sdk/...
+          grep -vE '/pb/' coverage/coverage.out > coverage/handwritten.out
+          total=$(go tool cover -func=coverage/handwritten.out | tail -1)
+          echo "手写代码覆盖率: $total"
           pct=$(echo "$total" | grep -oE '[0-9]+\.[0-9]+%' | head -1 | tr -d '%')
           if awk -v p="$pct" 'BEGIN { exit !(p+0 < 50) }'; then
-            echo "::warning::覆盖率 ${pct}% 低于 50% 软门禁"
+            echo "::warning::手写代码覆盖率 ${pct}% 低于 50% 软门禁"
           else
-            echo "✓ 覆盖率 ${pct}% ≥ 50% 软门禁"
+            echo "✓ 手写代码覆盖率 ${pct}% ≥ 50% 软门禁"
           fi
+
+      # bot_sdk 的 integration 套件用 httptest 起内存网关, 不需要外部服务
+      - name: Test bot_sdk integration suite
+        run: go test -tags=integration -count=1 ./bot_sdk/...
 
       - name: Upload coverage artifact
         if: always()
@@ -133,3 +143,69 @@ jobs:
             exit 1
           fi
           echo "✓ routes.go / types.go 与 gateway.api 一致"
+
+  integration:
+    # 守住 AIM_TEST_POSTGRES_DSN 门控的集成套件 (app/*/model/dao/dao_integration_test.go,
+    # app/logic/rpc/integrationtest/, app/shared/attachmentstore/dao, app/shared/gormdb)。
+    # 它们验证 fake 无法覆盖的部分 —— JSONB、text[]、部分索引、ON CONFLICT、proto 字段名
+    # 与错误码 —— 没有数据库时会静默 skip, 所以必须在这里真跑。
+    #
+    # 每个服务一个库 (与 deploy/compose/base.yaml 的 aim_auth / aim_logic /
+    # aim_attachment 一致): event_journal、outbox_records 等表被多个 migration 集
+    # 各自创建, 共库会互相踩。
+    #
+    # 只起 Postgres: 这些套件不引用 Redis / RocketMQ / etcd (grep 无命中),
+    # 起它们只会白占 PR 时间。将来若有套件需要, 在此加 service 即可。
+    name: Integration (${{ matrix.name }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: auth DAO
+            database: aim_auth
+            packages: ./app/auth/rpc/model/dao/...
+          - name: logic DAO + gRPC
+            database: aim_logic
+            packages: ./app/logic/rpc/model/dao/... ./app/logic/rpc/integrationtest/...
+          - name: attachment store
+            database: aim_attachment
+            packages: ./app/shared/attachmentstore/dao/...
+          - name: gormdb pool
+            database: aim_test
+            packages: ./app/shared/gormdb/...
+    services:
+      postgres:
+        # 与部署版本对齐 (deploy/compose/base.yaml), 免得 SQL 特性只在 CI 之外生效
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: aim
+          POSTGRES_PASSWORD: aim
+          POSTGRES_DB: ${{ matrix.database }}
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U aim -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+          cache: true
+
+      - name: Run ${{ matrix.name }} suite
+        env:
+          AIM_TEST_POSTGRES_DSN: postgres://aim:aim@localhost:5432/${{ matrix.database }}?sslmode=disable
+        run: |
+          go test -count=1 -p 1 -v ${{ matrix.packages }} 2>&1 | tee integration.log
+          # DSN 写错时套件又会退回 skip, 日志里看不出任何变化, 所以显式断言
+          if grep -q -- '--- SKIP' integration.log; then
+            echo "::error::${{ matrix.name }} 套件被跳过, 检查 AIM_TEST_POSTGRES_DSN 与 Postgres service"
+            exit 1
+          fi

@@ -71,7 +71,7 @@ func TestCreateConversation(t *testing.T) {
 		name      string
 		req       *types.CreateConversationRequest
 		mockSetup func(*mockConversationService)
-		wantResp  *types.CreateConversationResponse
+		wantResp  *types.ConversationItem
 		wantErr   *errorx.CodeError
 	}{
 		{
@@ -214,7 +214,7 @@ func TestCreateConversation(t *testing.T) {
 					}, nil
 				}
 			},
-			wantResp: &types.CreateConversationResponse{
+			wantResp: &types.ConversationItem{
 				ConversationId:   12345,
 				ConversationType: "direct",
 				IsActive:         true,
@@ -254,7 +254,7 @@ func TestCreateConversation(t *testing.T) {
 					}, nil
 				}
 			},
-			wantResp: &types.CreateConversationResponse{
+			wantResp: &types.ConversationItem{
 				ConversationId:   67890,
 				ConversationType: "group",
 				IsActive:         true,
@@ -283,7 +283,7 @@ func TestCreateConversation(t *testing.T) {
 					}, nil
 				}
 			},
-			wantResp: &types.CreateConversationResponse{
+			wantResp: &types.ConversationItem{
 				ConversationId:   999,
 				ConversationType: "direct",
 				IsActive:         true,

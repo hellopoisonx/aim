@@ -8,9 +8,9 @@ import (
 
 	sharedconversation "github.com/hellopoisonx/aim/app/shared/conversation"
 
-	"github.com/hellopoisonx/aim/app/shared/pgtypes"
+	shareduser "github.com/hellopoisonx/aim/app/shared/user"
 
-	"github.com/lib/pq"
+	"github.com/hellopoisonx/aim/app/shared/pgtypes"
 )
 
 // Conversation maps table conversations (001, 004).
@@ -69,14 +69,14 @@ func (Message) TableName() string { return "messages" }
 
 // UserInfo maps table user_info (003, 006).
 type UserInfo struct {
-	ID        int64     `gorm:"column:id;primaryKey" json:"id"`
-	Email     string    `gorm:"column:email;size:255;not null;uniqueIndex" json:"email"`
-	Status    int16     `gorm:"column:status;not null;default:1" json:"status"`
-	Nickname  string    `gorm:"column:nickname;size:255;not null" json:"nickname"`
-	Avatar    string    `gorm:"column:avatar;size:255;not null;default:'https://implement.me'" json:"avatar"`
-	UserType  string    `gorm:"column:user_type;size:16;not null;default:human" json:"user_type"`
-	CreatedAt time.Time `gorm:"column:created_at;not null" json:"created_at"`
-	UpdatedAt time.Time `gorm:"column:updated_at;not null" json:"updated_at"`
+	ID        int64             `gorm:"column:id;primaryKey" json:"id"`
+	Email     string            `gorm:"column:email;size:255;not null;uniqueIndex" json:"email"`
+	Status    shareduser.Status `gorm:"column:status;not null;default:1" json:"status"`
+	Nickname  string            `gorm:"column:nickname;size:255;not null" json:"nickname"`
+	Avatar    string            `gorm:"column:avatar;size:255;not null;default:'https://implement.me'" json:"avatar"`
+	UserType  shareduser.Type   `gorm:"column:user_type;size:16;not null;default:human" json:"user_type"`
+	CreatedAt time.Time         `gorm:"column:created_at;not null" json:"created_at"`
+	UpdatedAt time.Time         `gorm:"column:updated_at;not null" json:"updated_at"`
 }
 
 // TableName pins the physical table name (GORM default would be "user_infos").
@@ -93,16 +93,16 @@ type ConversationReadState struct {
 // TableName pins the physical table name.
 func (ConversationReadState) TableName() string { return "conversation_read_states" }
 
-// BotToken maps table bot_tokens (007). Scopes is a legacy text[] column.
+// BotToken maps table bot_tokens (007). Action permissions live in
+// bot_token_permissions (009).
 type BotToken struct {
-	ID        int64          `gorm:"column:id;primaryKey" json:"id"`
-	BotUserID int64          `gorm:"column:bot_user_id;not null;index:idx_bot_tokens_bot_user_id" json:"bot_user_id"`
-	TokenHash string         `gorm:"column:token_hash;size:128;not null;uniqueIndex" json:"token_hash"`
-	Name      string         `gorm:"column:name;size:64;not null;default:''" json:"name"`
-	Scopes    pq.StringArray `gorm:"column:scopes;type:text[];not null" json:"scopes"`
-	ExpiresAt *time.Time     `gorm:"column:expires_at" json:"expires_at"`
-	RevokedAt *time.Time     `gorm:"column:revoked_at" json:"revoked_at"`
-	CreatedAt time.Time      `gorm:"column:created_at;not null" json:"created_at"`
+	ID        int64      `gorm:"column:id;primaryKey" json:"id"`
+	BotUserID int64      `gorm:"column:bot_user_id;not null;index:idx_bot_tokens_bot_user_id" json:"bot_user_id"`
+	TokenHash string     `gorm:"column:token_hash;size:128;not null;uniqueIndex" json:"token_hash"`
+	Name      string     `gorm:"column:name;size:64;not null;default:''" json:"name"`
+	ExpiresAt *time.Time `gorm:"column:expires_at" json:"expires_at"`
+	RevokedAt *time.Time `gorm:"column:revoked_at" json:"revoked_at"`
+	CreatedAt time.Time  `gorm:"column:created_at;not null" json:"created_at"`
 }
 
 // TableName pins the physical table name.
@@ -110,10 +110,10 @@ func (BotToken) TableName() string { return "bot_tokens" }
 
 // BotWebhook maps table bot_webhooks (008).
 type BotWebhook struct {
-	BotUserID  int64          `gorm:"column:bot_user_id;primaryKey" json:"bot_user_id"`
-	Url        string         `gorm:"column:url;size:512;not null" json:"url"`
-	SecretHash string         `gorm:"column:secret_hash;size:128;not null" json:"secret_hash"`
-	Events     pq.StringArray `gorm:"column:events;type:text[];not null" json:"events"`
+	BotUserID  int64             `gorm:"column:bot_user_id;primaryKey" json:"bot_user_id"`
+	Url        string            `gorm:"column:url;size:512;not null" json:"url"`
+	SecretHash string            `gorm:"column:secret_hash;size:128;not null" json:"secret_hash"`
+	Events     pgtypes.TextArray `gorm:"column:events;type:text[];not null" json:"events"`
 	// Enabled is always written explicitly; false must be persisted rather than
 	// falling back to the DDL default.
 	Enabled   bool      `gorm:"column:enabled;not null" json:"enabled"`
@@ -196,3 +196,21 @@ type UserBot struct {
 
 // TableName pins the physical table name.
 func (UserBot) TableName() string { return "user_bots" }
+
+// CasbinRule maps table casbin_rule (016).
+type CasbinRule struct {
+	ID    int64  `gorm:"column:id;primaryKey"`
+	Ptype string `gorm:"column:ptype;size:100;not null"`
+	V0    string `gorm:"column:v0;size:100;not null;default:''"`
+	V1    string `gorm:"column:v1;size:100;not null;default:''"`
+	V2    string `gorm:"column:v2;size:100;not null;default:''"`
+	V3    string `gorm:"column:v3;size:100;not null;default:''"`
+	V4    string `gorm:"column:v4;size:100;not null;default:''"`
+	V5    string `gorm:"column:v5;size:100;not null;default:''"`
+}
+
+func (CasbinRule) TableName() string { return "casbin_rule" }
+
+func (r CasbinRule) Values() []string {
+	return []string{r.V0, r.V1, r.V2, r.V3, r.V4, r.V5}
+}

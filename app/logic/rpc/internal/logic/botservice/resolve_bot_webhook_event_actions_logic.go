@@ -6,7 +6,6 @@ import (
 
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
-	"github.com/hellopoisonx/aim/app/shared/errorx"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -27,11 +26,12 @@ func NewResolveBotWebhookEventActionsLogic(ctx context.Context, svcCtx *svc.Serv
 
 // ResolveBotWebhookEventActions maps webhook event names (e.g. message.created)
 func (l *ResolveBotWebhookEventActionsLogic) ResolveBotWebhookEventActions(in *pb.ResolveBotWebhookEventActionsReq) (*pb.ResolveBotWebhookEventActionsResp, error) {
-	if l.svcCtx.BotService == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "bot service not configured")
+	botSvc, err := requireBotService(l.svcCtx)
+	if err != nil {
+		return nil, err
 	}
 
-	m, err := l.svcCtx.BotService.ResolveWebhookEventActions(l.ctx, in.GetEvents())
+	m, err := botSvc.ResolveWebhookEventActions(l.ctx, in.GetEvents())
 	if err != nil {
 		return nil, err
 	}

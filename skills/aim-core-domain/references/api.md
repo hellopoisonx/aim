@@ -1,42 +1,25 @@
 # 接口定义
 
-## TransferService RPC
+## 消息写入（已迁出 core）
 
-Proto 定义：`app/core/rpc/core.proto`，生成的 pb 代码在 `app/core/rpc/pb/`。
+`core.proto` 不再定义 `TransferService`：WS / Bot OpenAPI 发消息由 gateway 直接调用 logic 的 `MessageService.IngestMessage`。core 只保留消费侧：
 
-### TransferService
+- 消费 `aim-message-transfer`（FIFO，Key/MessageGroup = `conversation_id`）
+- 发布 `aim-gateway-push`（FIFO，同上），payload 见 `app/shared/events/push.go` 的 `PushEvent`
 
-```protobuf
-service TransferService {
-  // Transfer 将消息路由到核心服务进行投递
-  // 网关调用此 RPC 将用户发送的消息交给核心处理
-  rpc Transfer(TransferReq) returns (TransferResp);
-}
+`app/core/rpc/pb` 当前只有文件描述符，没有服务；core 仍启动 zrpc server 以保持端口/etcd 注册稳定。
 
-// TransferReq 消息发送请求
-message TransferReq {
-  int64  sender_id       = 1; // 发送者用户 ID
-  string device_id       = 2; // 设备 ID（用于设备维度去重和限流）
-  int64  conversation_id = 3; // 会话 ID
-  string message_type    = 4; // 消息类型：text/image/file/voice/video等
-  string content         = 5; // 消息内容
-  string client_msg_id   = 6; // 客户端消息 ID（用于去重和幂等）
-  repeated string mentions = 7; // 被 @ 的用户 ID 列表
-}
+## PushEvent 契约
 
-// TransferResp 消息发送响应
-message TransferResp {
-  int64  message_id    = 1; // 服务端分配的消息 ID
-  string client_msg_id = 2; // 客户端消息 ID（回传用于确认）
-  int64  accepted_at   = 3; // 消息被服务端接受的时间戳（Unix 毫秒）
-}
-```
+| 字段 | 说明 |
+| --- | --- |
+| `message_id` / `conversation_id` / `conversation_type` / `message_type` / `content` / `sent_at` | 消息本体 |
+| `sender_id` / `sender_info` / `source_device_id` | 发送者快照与源设备（gateway 跳过源设备） |
+| `target_user_id` | 单聊写扩散：本条事件唯一接收者，`member_ids` 为空 |
+| `member_ids` | 群聊读扩散：会话成员快照，`target_user_id` 为 0 |
+| `traceparent` / `tracestate` | 链路追踪透传 |
 
-### 返回码约定
-
-- `code=0`：成功，返回 message_id
-- `code>0`：业务错误码（40000/40100/40300/40400/42900）
-- 基础设施错误（Internal/Unavailable）映射为 `code=50000`，客户端应重试
+两个寻址字段互斥，gateway 对同时为空或同时非空的事件记日志后丢弃。
 
 ## GatewayService（调用方）
 
@@ -53,7 +36,7 @@ Proto 定义：`shared/proto/gateway/gateway.proto`，生成的 pb 代码在 `sh
 
 ## PermissionService（调用方）
 
-aim-core 的 Transfer Service 调用 `app/logic/rpc/logic.proto` 定义的 PermissionService，查询消息进入 broker 前所需的业务上下文。
+消息写入迁到 logic 后，core 不再调用 `PermissionService`；权限校验在 logic 进程内完成（`PermissionChecker` + Casbin）。
 
 | RPC | 用途 |
 | --- | --- |

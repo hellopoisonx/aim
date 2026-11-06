@@ -27,20 +27,19 @@ func NewLeaveGroupLogic(ctx context.Context, svcCtx *svc.ServiceContext) *LeaveG
 	}
 }
 
-func (l *LeaveGroupLogic) LeaveGroup(req *types.LeaveGroupRequest) (err error) {
-	identity, ok := authctx.IdentityFromContext(l.ctx)
-	if !ok {
-		return errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
+func (l *LeaveGroupLogic) LeaveGroup(req *types.LeaveGroupRequest) (resp *types.MutationResult, err error) {
+	userID, err := authctx.RequireUserID(l.ctx)
+	if err != nil {
+		return nil, err
 	}
 
 	_, err = l.svcCtx.LogicConversationClient.LeaveGroup(l.ctx, &conversationservice.LeaveGroupReq{
 		ConversationId: req.Id,
-		UserId:         identity.UserID,
-		UserName:       "",
+		UserId:         userID,
 	})
 	if err != nil {
-		return errorx.SanitizeGRPCError(l, "leave group", err)
+		return nil, errorx.SanitizeGRPCError(l, "leave group", err)
 	}
 
-	return nil
+	return &types.MutationResult{Success: true}, nil
 }

@@ -10,6 +10,7 @@ import (
 	"github.com/hellopoisonx/aim/app/logic/rpc/model/dao"
 	"github.com/hellopoisonx/aim/app/logic/rpc/model/orm"
 	sharedconversation "github.com/hellopoisonx/aim/app/shared/conversation"
+	shareduser "github.com/hellopoisonx/aim/app/shared/user"
 )
 
 // The fake is assigned to service.ConversationStore by the tests that build the
@@ -17,19 +18,20 @@ import (
 
 // ConversationStore is an in-memory ConversationStore with error injection.
 type ConversationStore struct {
-	Conversations       map[int64]orm.Conversation
-	Members             map[int64][]orm.ConversationMember // key: conversationID
-	Messages            map[int64][]orm.Message            // key: conversationID
-	ReadStates          map[int64]map[int64]orm.ConversationReadState
-	CreateErr           error
-	GetErr              error
-	AddMemberErr        error
-	GetMembersErr       error
-	ListMessagesErr     error
-	ListMessagesInitErr error
-	CountErr            error
-	UpsertReadErr       error
-	ListReadStatesErr   error
+	Conversations     map[int64]orm.Conversation
+	Members           map[int64][]orm.ConversationMember // key: conversationID
+	Messages          map[int64][]orm.Message            // key: conversationID
+	ReadStates        map[int64]map[int64]orm.ConversationReadState
+	BotUserIDs        map[int64]struct{}
+	UserTypeErr       error
+	CreateErr         error
+	GetErr            error
+	AddMemberErr      error
+	GetMembersErr     error
+	ListMessagesErr   error
+	CountErr          error
+	UpsertReadErr     error
+	ListReadStatesErr error
 }
 
 func (f *ConversationStore) CreateConversation(ctx context.Context, id int64, conversationType sharedconversation.Type, name, avatar string, creatorID int64) (orm.Conversation, error) {
@@ -247,6 +249,17 @@ func (f *ConversationStore) GetConversationMembers(ctx context.Context, conversa
 	return f.Members[conversationID], nil
 }
 
+func (f *ConversationStore) GetUserType(_ context.Context, id int64) (string, error) {
+	if f.UserTypeErr != nil {
+		return "", f.UserTypeErr
+	}
+	if _, ok := f.BotUserIDs[id]; ok {
+		return string(shareduser.TypeBot), nil
+	}
+
+	return string(shareduser.TypeHuman), nil
+}
+
 func (f *ConversationStore) GetConversationsByUserID(ctx context.Context, userID int64) ([]orm.Conversation, error) {
 	var result []orm.Conversation
 	for convID, conv := range f.Conversations {
@@ -260,7 +273,7 @@ func (f *ConversationStore) GetConversationsByUserID(ctx context.Context, userID
 	return result, nil
 }
 
-func (f *ConversationStore) ListMessagesByConversation(ctx context.Context, conversationID int64, cursorCreatedAt time.Time, cursorID int64, limit int32) ([]orm.Message, error) {
+func (f *ConversationStore) ListMessagesByConversation(_ context.Context, conversationID int64, cursor sharedconversation.MessageCursor, limit int32) ([]orm.Message, error) {
 	if f.ListMessagesErr != nil {
 		return nil, f.ListMessagesErr
 	}
@@ -270,11 +283,10 @@ func (f *ConversationStore) ListMessagesByConversation(ctx context.Context, conv
 		return []orm.Message{}, nil
 	}
 
-	// Filter Messages based on cursor (CreatedAt and ID)
 	var result []orm.Message
 	for _, msg := range msgs {
 		// Simple cursor filter: Messages with ID < cursorID
-		if cursorID > 0 && msg.ID >= cursorID {
+		if cursor.ID > 0 && msg.ID >= cursor.ID {
 			continue
 		}
 		result = append(result, msg)
@@ -283,23 +295,6 @@ func (f *ConversationStore) ListMessagesByConversation(ctx context.Context, conv
 		}
 	}
 	return result, nil
-}
-
-func (f *ConversationStore) ListMessagesByConversationInitial(ctx context.Context, conversationID int64, limit int32) ([]orm.Message, error) {
-	if f.ListMessagesInitErr != nil {
-		return nil, f.ListMessagesInitErr
-	}
-
-	msgs := f.Messages[conversationID]
-	if msgs == nil {
-		return []orm.Message{}, nil
-	}
-
-	// Return first N Messages
-	if int64(len(msgs)) <= int64(limit) {
-		return msgs, nil
-	}
-	return msgs[:limit], nil
 }
 
 func (f *ConversationStore) CountMessagesByConversation(ctx context.Context, conversationID int64) (int64, error) {
@@ -315,7 +310,7 @@ func (f *ConversationStore) GetDirectConversationByMembers(ctx context.Context, 
 	}
 	// Search for a conversation where both users are Members
 	for convID, conv := range f.Conversations {
-		if conv.ConversationType != "direct" || !conv.IsActive {
+		if conv.ConversationType != sharedconversation.TypeDirect || !conv.IsActive {
 			continue
 		}
 		memberSet := make(map[int64]bool)
@@ -336,5 +331,6 @@ func NewConversationStore() *ConversationStore {
 		Members:       make(map[int64][]orm.ConversationMember),
 		Messages:      make(map[int64][]orm.Message),
 		ReadStates:    make(map[int64]map[int64]orm.ConversationReadState),
+		BotUserIDs:    make(map[int64]struct{}),
 	}
 }

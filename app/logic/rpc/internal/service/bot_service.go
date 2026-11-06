@@ -13,13 +13,11 @@ import (
 	"github.com/hellopoisonx/aim/app/shared/bottoken"
 	sharedcache "github.com/hellopoisonx/aim/app/shared/cache"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
-	"github.com/hellopoisonx/aim/app/shared/tools"
+	"github.com/hellopoisonx/aim/app/shared/snowflake"
+	shareduser "github.com/hellopoisonx/aim/app/shared/user"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
-
-// UserTypeBot is the value stored in user_info.user_type for Bot identities.
-const UserTypeBot = "bot"
 
 // SystemOwnerUserID marks system-owned official bots in user_bots.owner_user_id.
 const SystemOwnerUserID int64 = 0
@@ -33,7 +31,7 @@ type BotIdentity struct {
 	Scopes     []string
 	Nickname   string
 	Avatar     string
-	UserStatus int16
+	UserStatus shareduser.Status
 }
 
 // BotWebhookConfig is the service-level view of bot_webhooks (no plaintext secret).
@@ -61,7 +59,7 @@ type UserBotInfo struct {
 	Email       string
 	Nickname    string
 	Avatar      string
-	Status      int16
+	Status      shareduser.Status
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 }
@@ -111,10 +109,10 @@ type BotManagementQuerier interface {
 	GetManagedUserBot(ctx context.Context, ownerUserID, botUserID int64) (dao.ManagedUserBot, error)
 	ListManagedUserBots(ctx context.Context, ownerUserID int64) ([]dao.ManagedUserBot, error)
 	UpdateManagedUserBotProfile(ctx context.Context, ownerUserID, botUserID int64, nickname, avatar string) (orm.UserInfo, error)
-	UpdateManagedUserBotStatus(ctx context.Context, ownerUserID, botUserID int64, status int16) (orm.UserInfo, error)
+	UpdateManagedUserBotStatus(ctx context.Context, ownerUserID, botUserID int64, status shareduser.Status) (orm.UserInfo, error)
 	SoftDeleteManagedUserBot(ctx context.Context, ownerUserID, botUserID int64) (int64, error)
 	RevokeAllBotTokensByBot(ctx context.Context, botUserID int64) (int64, error)
-	CreateBotToken(ctx context.Context, id, botUserID int64, tokenHash, name string, scopes []string, expiresAt *time.Time) (orm.BotToken, error)
+	CreateBotToken(ctx context.Context, id, botUserID int64, tokenHash, name string, expiresAt *time.Time) (orm.BotToken, error)
 	ListBotTokensByBot(ctx context.Context, botUserID int64) ([]orm.BotToken, error)
 	GetManagedBotToken(ctx context.Context, ownerUserID, botUserID, tokenID int64) (orm.BotToken, error)
 	UpdateManagedBotToken(ctx context.Context, ownerUserID, botUserID, tokenID int64, name string, expiresAt *time.Time) (orm.BotToken, error)
@@ -137,7 +135,7 @@ type BotService struct {
 	queries       BotQuerier
 	management    BotManagementQuerier
 	txRunner      BotTxRunner
-	idGen         *tools.Snowflake
+	idGen         *snowflake.Snowflake
 	botTokenCache *sharedcache.TypedCache[dao.BotTokenWithUser]
 }
 
@@ -155,7 +153,7 @@ func WithBotTxRunner(runner BotTxRunner) BotServiceOption {
 	}
 }
 
-func WithBotIDGenerator(idGen *tools.Snowflake) BotServiceOption {
+func WithBotIDGenerator(idGen *snowflake.Snowflake) BotServiceOption {
 	return func(s *BotService) {
 		s.idGen = idGen
 	}
@@ -184,7 +182,7 @@ func NewBotService(queries BotQuerier, management BotManagementQuerier, opts ...
 //   - row must exist with matching hash
 //   - revoked_at must be NULL
 //   - expires_at must be in the future (or NULL)
-//   - owner user_type must be "bot"
+//   - owner user_type must be bot
 //   - owner status must equal 1 (enabled)
 func (s *BotService) ValidateBotToken(ctx context.Context, plaintext string) (BotIdentity, error) {
 	parsed, err := bottoken.ParsePlaintext(plaintext)
@@ -209,11 +207,11 @@ func (s *BotService) ValidateBotToken(ctx context.Context, plaintext string) (Bo
 		return BotIdentity{}, errorx.NewCodeError(errorx.CodeBotTokenRevoked, "bot token expired")
 	}
 
-	if row.UserType != UserTypeBot {
+	if row.UserType != shareduser.TypeBot {
 		return BotIdentity{}, errorx.NewCodeError(errorx.CodeBotDisabled, "user is not a bot")
 	}
 
-	if row.UserStatus != 1 {
+	if row.UserStatus != shareduser.StatusEnabled {
 		return BotIdentity{}, errorx.NewCodeError(errorx.CodeBotDisabled, "bot is disabled")
 	}
 
@@ -266,7 +264,7 @@ func (s *BotService) GetBotProfile(ctx context.Context, botUserID int64) (orm.Us
 		return orm.UserInfo{}, err
 	}
 
-	if info.UserType != UserTypeBot {
+	if info.UserType != shareduser.TypeBot {
 		return orm.UserInfo{}, errorx.NewCodeError(errorx.CodeBotDisabled, "user is not a bot")
 	}
 
@@ -537,9 +535,9 @@ func (s *BotService) SetUserBotStatus(ctx context.Context, ownerUserID, botUserI
 		return UserBotInfo{}, err
 	}
 
-	status := int16(0)
+	status := shareduser.StatusDisabled
 	if enabled {
-		status = 1
+		status = shareduser.StatusEnabled
 	}
 
 	info, err := queries.UpdateManagedUserBotStatus(ctx, ownerUserID, botUserID, status)
@@ -594,7 +592,7 @@ func (s *BotService) DeleteUserBot(ctx context.Context, ownerUserID, botUserID i
 	return deleted, nil
 }
 
-func (s *BotService) CreateUserBotToken(ctx context.Context, ownerUserID, botUserID int64, name string, expiresAtMs int64, actions []string) (UserBotTokenInfo, string, error) {
+func (s *BotService) CreateUserBotToken(ctx context.Context, ownerUserID, botUserID int64, name string, expiresAt time.Time, actions []string) (UserBotTokenInfo, string, error) {
 	if _, err := s.GetUserBot(ctx, ownerUserID, botUserID); err != nil {
 		return UserBotTokenInfo{}, "", err
 	}
@@ -620,7 +618,7 @@ func (s *BotService) CreateUserBotToken(ctx context.Context, ownerUserID, botUse
 	name = strings.TrimSpace(name)
 	var token orm.BotToken
 	err = s.inBotManagementTx(ctx, func(q BotManagementQuerier) error {
-		created, err := q.CreateBotToken(ctx, tokenID, botUserID, bottoken.Hash(plaintext), name, validatedActions, timestampFromMillis(expiresAtMs))
+		created, err := q.CreateBotToken(ctx, tokenID, botUserID, bottoken.Hash(plaintext), name, expiryPointer(expiresAt))
 		if err != nil {
 			return err
 		}
@@ -666,7 +664,7 @@ func (s *BotService) ListUserBotTokens(ctx context.Context, ownerUserID, botUser
 	return out, nil
 }
 
-func (s *BotService) UpdateUserBotToken(ctx context.Context, ownerUserID, botUserID, tokenID int64, name string, expiresAtMs int64, actions []string) (UserBotTokenInfo, error) {
+func (s *BotService) UpdateUserBotToken(ctx context.Context, ownerUserID, botUserID, tokenID int64, name string, expiresAt time.Time, actions []string) (UserBotTokenInfo, error) {
 	validatedActions, actionRows, err := s.validateTokenActions(ctx, actions)
 	if err != nil {
 		return UserBotTokenInfo{}, err
@@ -688,7 +686,7 @@ func (s *BotService) UpdateUserBotToken(ctx context.Context, ownerUserID, botUse
 	name = strings.TrimSpace(name)
 	var updated orm.BotToken
 	err = s.inBotManagementTx(ctx, func(q BotManagementQuerier) error {
-		token, err := q.UpdateManagedBotToken(ctx, ownerUserID, botUserID, tokenID, name, timestampFromMillis(expiresAtMs))
+		token, err := q.UpdateManagedBotToken(ctx, ownerUserID, botUserID, tokenID, name, expiryPointer(expiresAt))
 		if err != nil {
 			return err
 		}
@@ -730,7 +728,7 @@ func (s *BotService) RotateUserBotToken(ctx context.Context, ownerUserID, botUse
 		return UserBotTokenInfo{}, "", err
 	}
 
-	info, plaintext, err := s.CreateUserBotToken(ctx, ownerUserID, botUserID, oldToken.Name, timeToMillis(oldToken.ExpiresAt), actions)
+	info, plaintext, err := s.CreateUserBotToken(ctx, ownerUserID, botUserID, oldToken.Name, expiryValue(oldToken.ExpiresAt), actions)
 	if err != nil {
 		return UserBotTokenInfo{}, "", err
 	}
@@ -910,26 +908,26 @@ func botTokenToInfo(token orm.BotToken, actions []string) UserBotTokenInfo {
 	}
 }
 
-func timestampFromMillis(ms int64) *time.Time {
-	if ms <= 0 {
+// expiryPointer maps "no expiry" onto the nil the DAO stores.
+func expiryPointer(ts time.Time) *time.Time {
+	if ts.IsZero() {
 		return nil
 	}
 
-	ts := time.UnixMilli(ms)
 	return &ts
 }
 
-func timeToMillis(ts *time.Time) int64 {
+func expiryValue(ts *time.Time) time.Time {
 	if ts == nil {
-		return 0
+		return time.Time{}
 	}
 
-	return ts.UnixMilli()
+	return *ts
 }
 
 // botManagementErr maps a DAO miss onto the resource-specific not-found message
-// and leaves every other error untouched; callers pass it to
-// errorx.ToGRPCError, which preserves typed biz errors.
+// and leaves every other error untouched; typed biz errors survive the RPC
+// boundary through the error interceptor.
 func botManagementErr(err error, notFoundMsg string) error {
 	if errors.Is(err, dao.ErrNotFound) {
 		return errorx.NewCodeError(errorx.CodeNotFound, notFoundMsg)

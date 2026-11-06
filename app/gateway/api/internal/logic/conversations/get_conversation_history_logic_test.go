@@ -249,14 +249,14 @@ func TestGetConversationHistory(t *testing.T) {
 			wantErr: nil,
 		},
 		{
-			name: "success - limit normalized to default 50",
+			name: "success - zero limit forwarded for the service to default",
 			req: &types.GetConversationHistoryRequest{
 				Id:    123,
 				Limit: 0,
 			},
 			mockSetup: func(ms *mockGetHistoryConversationService) {
 				ms.GetConversationHistoryFunc = func(ctx context.Context, in *conversationservice.GetConversationHistoryReq) (*conversationservice.GetConversationHistoryResp, error) {
-					is.Equal(int32(50), in.Limit)
+					is.Equal(int32(0), in.Limit)
 					return &conversationservice.GetConversationHistoryResp{
 						Messages:            nil,
 						NextCursorCreatedAt: 0,
@@ -274,14 +274,14 @@ func TestGetConversationHistory(t *testing.T) {
 			wantErr: nil,
 		},
 		{
-			name: "success - limit normalized from negative to 50",
+			name: "success - negative limit forwarded for the service to default",
 			req: &types.GetConversationHistoryRequest{
 				Id:    123,
 				Limit: -10,
 			},
 			mockSetup: func(ms *mockGetHistoryConversationService) {
 				ms.GetConversationHistoryFunc = func(ctx context.Context, in *conversationservice.GetConversationHistoryReq) (*conversationservice.GetConversationHistoryResp, error) {
-					is.Equal(int32(50), in.Limit)
+					is.Equal(int32(-10), in.Limit)
 					return &conversationservice.GetConversationHistoryResp{
 						Messages:            nil,
 						NextCursorCreatedAt: 0,
@@ -299,14 +299,14 @@ func TestGetConversationHistory(t *testing.T) {
 			wantErr: nil,
 		},
 		{
-			name: "success - limit normalized from >100 to 100",
+			name: "success - oversized limit forwarded for the service to cap",
 			req: &types.GetConversationHistoryRequest{
 				Id:    123,
 				Limit: 200,
 			},
 			mockSetup: func(ms *mockGetHistoryConversationService) {
 				ms.GetConversationHistoryFunc = func(ctx context.Context, in *conversationservice.GetConversationHistoryReq) (*conversationservice.GetConversationHistoryResp, error) {
-					is.Equal(int32(100), in.Limit)
+					is.Equal(int32(200), in.Limit)
 					return &conversationservice.GetConversationHistoryResp{
 						Messages:            nil,
 						NextCursorCreatedAt: 0,

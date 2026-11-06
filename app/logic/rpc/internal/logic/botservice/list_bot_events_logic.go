@@ -5,7 +5,6 @@ import (
 
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
-	"github.com/hellopoisonx/aim/app/shared/errorx"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -25,11 +24,12 @@ func NewListBotEventsLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Lis
 }
 
 func (l *ListBotEventsLogic) ListBotEvents(in *pb.ListBotEventsReq) (*pb.ListBotEventsResp, error) {
-	if l.svcCtx.BotService == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "bot service not configured")
+	botSvc, err := requireBotService(l.svcCtx)
+	if err != nil {
+		return nil, err
 	}
 
-	events, err := l.svcCtx.BotService.ListBotEvents(l.ctx)
+	events, err := botSvc.ListBotEvents(l.ctx)
 	if err != nil {
 		return nil, err
 	}

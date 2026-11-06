@@ -23,7 +23,7 @@ service UserService {
   rpc UpdateUserInfoProfile(UpdateUserInfoProfileReq) returns (UpdateUserInfoProfileResp);
   // UpdateUserInfoStatus updates user status.
   rpc UpdateUserInfoStatus(UpdateUserInfoStatusReq) returns (UpdateUserInfoStatusResp);
-  // SearchUserInfoByNickname searches user profiles by nickname prefix.
+  // SearchUserInfoByNickname searches user profiles by nickname substring.
   rpc SearchUserInfoByNickname(SearchUserInfoByNicknameReq) returns (SearchUserInfoByNicknameResp);
 }
 
@@ -54,8 +54,8 @@ message UserInfoResponse {
   int32 status = 3;
   string nickname = 4;
   string avatar = 5;
-  int64 created_at = 6;  // unix timestamp
-  int64 updated_at = 7;  // unix timestamp
+  int64 created_at = 6;  // unix milliseconds, the unit every RPC and REST timestamp uses
+  int64 updated_at = 7;  // unix milliseconds
 }
 
 message CreateUserInfoReq {
@@ -344,8 +344,9 @@ message ListConversationReadStatesResp {
 // FriendshipService messages
 
 service FriendshipService {
-  // AddFriend sends a friend request or accepts an existing pending one.
-  // Idempotent: if already friends (accepted or pending), returns the existing record.
+  // AddFriend sends a friend request.
+  // Idempotent: a pending or accepted record in the same direction is returned
+  // unchanged; a request waiting in the reverse direction is left to AcceptFriend.
   rpc AddFriend(AddFriendReq) returns (AddFriendResp);
   // ListFriendApplications lists pending friend applications received by the user.
   rpc ListFriendApplications(ListFriendApplicationsReq) returns (ListFriendApplicationsResp);
@@ -856,4 +857,33 @@ message ListBotEventsReq {}
 
 message ListBotEventsResp {
   repeated BotEventInfo events = 1;
+}
+
+// MessageService is the single write entry for chat messages: the gateway
+// forwards WebSocket send frames and the Bot OpenAPI forwards REST sends here.
+// It validates, authorizes, assigns the message id and publishes the transfer
+// event that core consumes for archiving and fan-out.
+service MessageService {
+  rpc IngestMessage(IngestMessageReq) returns (IngestMessageResp);
+}
+
+message IngestMessageReq {
+  int64 sender_id = 1;
+  // device_id identifies the originating device so the gateway can skip it when
+  // fanning the message back for multi-device sync.
+  string device_id = 2;
+  int64 conversation_id = 3;
+  // message_type is a short client-supported type such as text/image/file/voice/video.
+  string message_type = 4;
+  string content = 5;
+  // client_msg_id is the client-side idempotency key.
+  string client_msg_id = 6;
+  repeated string mentions = 7;
+}
+
+message IngestMessageResp {
+  int64 message_id = 1;
+  string client_msg_id = 2;
+  // accepted_at is the server acceptance time in unix milliseconds.
+  int64 accepted_at = 3;
 }

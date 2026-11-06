@@ -24,12 +24,13 @@ info:
     ```
 
     认证中间件失败路径可能只返回 `{ "code": 40100, "msg": "..." }`，不带 `body` 字段。
-    少数无返回体操作当前实现调用 `httpx.Ok(w)`，成功时仅返回 HTTP 200 且响应体为空。
+    所有成功响应都带 `body`：返回资源的接口给出完整资源；RPC 只返回空的变更接口给出 `{"success": true}`。
 
     ## 时间与 ID
     - 除特别说明外，人类用户 REST API 中 Snowflake ID 使用 JSON number（int64）。
     - Bot OpenAPI 与 Webhook JSON 为避免 JavaScript 精度丢失，Snowflake ID 使用十进制字符串。
-    - `created_at` / `updated_at` / 附件 `expires_at` 多为 Unix milliseconds；认证 token `expires_at` 为 Unix seconds。
+    - 时间单位的权威定义在 RPC 契约 `app/logic/rpc/logic.proto`：所有 `created_at` / `updated_at` / `expires_at` 都是 Unix milliseconds。
+      gateway 的 `internal/pbconv` 原样透传 RPC 值，不做单位换算；唯一例外是认证 token 的 `expires_at`，见 Auth 接口说明。
 servers:
   - url: http://127.0.0.1:8888
     description: 本地开发默认 gateway-api 地址
@@ -583,14 +584,14 @@ paths:
       operationId: conversationsRemoveMember
       summary: 移除群成员
       description: |
-        需要 Bearer JWT。仅群聊有效。当前 logic 权限：`owner` 可移除非 owner 成员；`admin` 只能移除普通 `member`，不能移除 owner/admin 或自己。成功时返回 HTTP 200 空响应体，并产生群变更系统消息。
+        需要 Bearer JWT。仅群聊有效。当前 logic 权限：`owner` 可移除非 owner 成员；`admin` 只能移除普通 `member`，不能移除 owner/admin 或自己。成功时返回 `{"success": true}`，并产生群变更系统消息。
       security:
         - BearerAuth: []
       parameters:
         - $ref: '#/components/parameters/ConversationIdPath'
         - $ref: '#/components/parameters/MemberUidPath'
       responses:
-        "200": { $ref: '#/components/responses/EmptyOK' }
+        "200": { $ref: '#/components/responses/MutationOK' }
         "400": { $ref: '#/components/responses/BadRequest' }
         "401": { $ref: '#/components/responses/Unauthorized' }
         "403": { $ref: '#/components/responses/Forbidden' }
@@ -602,14 +603,14 @@ paths:
       operationId: conversationsGrantAdmin
       summary: 授予群管理员
       description: |
-        需要 Bearer JWT。仅群主 (`owner`) 可操作；目标用户必须是当前群成员且不能是群主本人。成功时返回 HTTP 200 空响应体。
+        需要 Bearer JWT。仅群主 (`owner`) 可操作；目标用户必须是当前群成员且不能是群主本人。成功时返回 `{"success": true}`。
       security:
         - BearerAuth: []
       parameters:
         - $ref: '#/components/parameters/ConversationIdPath'
         - $ref: '#/components/parameters/MemberUidPath'
       responses:
-        "200": { $ref: '#/components/responses/EmptyOK' }
+        "200": { $ref: '#/components/responses/MutationOK' }
         "400": { $ref: '#/components/responses/BadRequest' }
         "401": { $ref: '#/components/responses/Unauthorized' }
         "403": { $ref: '#/components/responses/Forbidden' }
@@ -620,14 +621,14 @@ paths:
       operationId: conversationsRevokeAdmin
       summary: 撤销群管理员
       description: |
-        需要 Bearer JWT。仅群主 (`owner`) 可操作；不能对群主本人执行。目标为普通成员时为幂等成功。成功时返回 HTTP 200 空响应体。
+        需要 Bearer JWT。仅群主 (`owner`) 可操作；不能对群主本人执行。目标为普通成员时为幂等成功。成功时返回 `{"success": true}`。
       security:
         - BearerAuth: []
       parameters:
         - $ref: '#/components/parameters/ConversationIdPath'
         - $ref: '#/components/parameters/MemberUidPath'
       responses:
-        "200": { $ref: '#/components/responses/EmptyOK' }
+        "200": { $ref: '#/components/responses/MutationOK' }
         "400": { $ref: '#/components/responses/BadRequest' }
         "401": { $ref: '#/components/responses/Unauthorized' }
         "403": { $ref: '#/components/responses/Forbidden' }
@@ -668,13 +669,13 @@ paths:
       operationId: conversationsLeave
       summary: 退出群聊
       description: |
-        需要 Bearer JWT。仅群聊有效；群主不能直接退出，需先转让群主或解散群聊。成功时返回 HTTP 200 空响应体，并产生群变更系统消息。
+        需要 Bearer JWT。仅群聊有效；群主不能直接退出，需先转让群主或解散群聊。成功时返回 `{"success": true}`，并产生群变更系统消息。
       security:
         - BearerAuth: []
       parameters:
         - $ref: '#/components/parameters/ConversationIdPath'
       responses:
-        "200": { $ref: '#/components/responses/EmptyOK' }
+        "200": { $ref: '#/components/responses/MutationOK' }
         "400": { $ref: '#/components/responses/BadRequest' }
         "401": { $ref: '#/components/responses/Unauthorized' }
         "403": { $ref: '#/components/responses/Forbidden' }
@@ -686,13 +687,13 @@ paths:
       operationId: conversationsDismiss
       summary: 解散群聊
       description: |
-        需要 Bearer JWT。仅群主 (`owner`) 可解散群聊。成功时返回 HTTP 200 空响应体，并产生 `group_dismissed` 系统消息。
+        需要 Bearer JWT。仅群主 (`owner`) 可解散群聊。成功时返回 `{"success": true}`，并产生 `group_dismissed` 系统消息。
       security:
         - BearerAuth: []
       parameters:
         - $ref: '#/components/parameters/ConversationIdPath'
       responses:
-        "200": { $ref: '#/components/responses/EmptyOK' }
+        "200": { $ref: '#/components/responses/MutationOK' }
         "400": { $ref: '#/components/responses/BadRequest' }
         "401": { $ref: '#/components/responses/Unauthorized' }
         "403": { $ref: '#/components/responses/Forbidden' }
@@ -720,7 +721,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/UpdateGroupInfoResponseEnvelope'
+                $ref: '#/components/schemas/ConversationResponseEnvelope'
         "400": { $ref: '#/components/responses/BadRequest' }
         "401": { $ref: '#/components/responses/Unauthorized' }
         "403": { $ref: '#/components/responses/Forbidden' }
@@ -1434,7 +1435,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AddUserBotToConversationResponseEnvelope'
+                $ref: '#/components/schemas/ConversationResponseEnvelope'
         "400": { $ref: '#/components/responses/BadRequest' }
         "401": { $ref: '#/components/responses/Unauthorized' }
         "403": { $ref: '#/components/responses/Forbidden' }
@@ -1456,7 +1457,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CreateUserBotDirectConversationResponseEnvelope'
+                $ref: '#/components/schemas/ConversationResponseEnvelope'
         "400": { $ref: '#/components/responses/BadRequest' }
         "401": { $ref: '#/components/responses/Unauthorized' }
         "403": { $ref: '#/components/responses/Forbidden' }
@@ -1632,8 +1633,11 @@ components:
       schema: { type: integer, format: int64, minimum: 1 }
       description: 会话 ID。
   responses:
-    EmptyOK:
-      description: 成功。当前实现返回 HTTP 200 且响应体为空。
+    MutationOK:
+      description: '成功。响应体为 {"success": true}，表示 RPC 已完成该变更且没有额外资源可返回。'
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/MutationResultEnvelope' }
     BadRequest:
       description: 请求参数错误或请求体校验失败。
       content:
@@ -1811,6 +1815,20 @@ components:
           required: [body]
           properties:
             body: { $ref: '#/components/schemas/LogoutResponse' }
+    MutationResult:
+      type: object
+      required: [success]
+      properties:
+        success:
+          type: boolean
+          description: RPC 已完成该变更。失败时返回错误响应，因此成功路径恒为 true。
+    MutationResultEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelopeBase'
+        - type: object
+          required: [body]
+          properties:
+            body: { $ref: '#/components/schemas/MutationResult' }
     UserInfo:
       type: object
       required: [id, email, status, nickname, avatar, created_at, updated_at]
@@ -1826,7 +1844,7 @@ components:
       type: object
       required: [id, nickname, email, avatar]
       properties:
-        id: { type: string, description: 用户 ID 十进制字符串。 }
+        id: { type: integer, format: int64 }
         nickname: { type: string }
         email: { type: string, format: email }
         avatar: { type: string }
@@ -2133,24 +2151,6 @@ components:
       properties:
         name: { type: string, nullable: true }
         avatar: { type: string, nullable: true }
-    UpdateGroupInfoResponse:
-      type: object
-      required: [conversation_id, conversation_type, is_active, name, avatar, creator_id, created_at]
-      properties:
-        conversation_id: { type: integer, format: int64 }
-        conversation_type: { $ref: '#/components/schemas/ConversationType' }
-        is_active: { type: boolean }
-        name: { type: string }
-        avatar: { type: string }
-        creator_id: { type: integer, format: int64 }
-        created_at: { type: integer, format: int64, description: Unix milliseconds。 }
-    UpdateGroupInfoResponseEnvelope:
-      allOf:
-        - $ref: '#/components/schemas/SuccessEnvelopeBase'
-        - type: object
-          required: [body]
-          properties:
-            body: { $ref: '#/components/schemas/UpdateGroupInfoResponse' }
     MemberDetailItem:
       type: object
       required: [user_id, email, avatar, role, joined_at]
@@ -2850,48 +2850,6 @@ components:
           required: [body]
           properties:
             body: { $ref: '#/components/schemas/RevokeUserBotTokenResponse' }
-    AddUserBotToConversationResponse:
-      type: object
-      required: [conversation_id, conversation_type, is_active, created_at, member_ids, name, avatar, creator_id]
-      properties:
-        conversation_id: { type: integer, format: int64 }
-        conversation_type: { type: string, description: direct / group。 }
-        is_active: { type: boolean }
-        created_at: { type: integer, format: int64, description: Unix milliseconds。 }
-        member_ids:
-          type: array
-          items: { type: integer, format: int64 }
-        name: { type: string }
-        avatar: { type: string }
-        creator_id: { type: integer, format: int64 }
-    AddUserBotToConversationResponseEnvelope:
-      allOf:
-        - $ref: '#/components/schemas/SuccessEnvelopeBase'
-        - type: object
-          required: [body]
-          properties:
-            body: { $ref: '#/components/schemas/AddUserBotToConversationResponse' }
-    CreateUserBotDirectConversationResponse:
-      type: object
-      required: [conversation_id, conversation_type, is_active, created_at, member_ids, name, avatar, creator_id]
-      properties:
-        conversation_id: { type: integer, format: int64 }
-        conversation_type: { type: string, description: direct。 }
-        is_active: { type: boolean }
-        created_at: { type: integer, format: int64, description: Unix milliseconds。 }
-        member_ids:
-          type: array
-          items: { type: integer, format: int64 }
-        name: { type: string }
-        avatar: { type: string }
-        creator_id: { type: integer, format: int64 }
-    CreateUserBotDirectConversationResponseEnvelope:
-      allOf:
-        - $ref: '#/components/schemas/SuccessEnvelopeBase'
-        - type: object
-          required: [body]
-          properties:
-            body: { $ref: '#/components/schemas/CreateUserBotDirectConversationResponse' }
     BotActionItem:
       type: object
       required: [id, action, description]

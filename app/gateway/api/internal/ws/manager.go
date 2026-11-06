@@ -59,27 +59,32 @@ type Manager struct {
 	replay *ReplayStore // pending/replay 队列，服务侧面向心跳重放用
 }
 
-// NewManager creates a new connection manager without Redis or node identity.
-// Use NewManagerWithPresence for production setups.
-func NewManager() *Manager {
+// ManagerOption customises a Manager at construction.
+type ManagerOption func(*Manager)
+
+// WithPresence makes the manager synchronise Redis presence sets and applies the
+// production heartbeat and reconnect-grace defaults.
+func WithPresence(redisClient *redis.Client, nodeID string, ttlSeconds int) ManagerOption {
+	return func(m *Manager) {
+		m.redisClient = redisClient
+		m.nodeID = nodeID
+		m.presenceTTL = time.Duration(ttlSeconds) * time.Second
+		m.heartbeatTimeout = 60 * time.Second
+		m.reconnectGrace = 30 * time.Second
+	}
+}
+
+// NewManager creates a new connection manager. Without [WithPresence] it keeps
+// no Redis presence state and treats the heartbeat timeout as unconfigured.
+func NewManager(opts ...ManagerOption) *Manager {
 	m := &Manager{
 		connections:    make(map[authctx.Identity]*Connection),
 		pendingOffline: make(map[authctx.Identity]time.Time),
 	}
-	m.replay = mustNewReplayStore()
-	return m
-}
-
-// NewManagerWithPresence creates a manager that synchronises Redis presence sets.
-func NewManagerWithPresence(redisClient *redis.Client, nodeID string, ttlSeconds int) *Manager {
-	m := &Manager{
-		connections:      make(map[authctx.Identity]*Connection),
-		redisClient:      redisClient,
-		nodeID:           nodeID,
-		presenceTTL:      time.Duration(ttlSeconds) * time.Second,
-		heartbeatTimeout: 60 * time.Second, // default: 60s heartbeat timeout
-		reconnectGrace:   30 * time.Second, // default: 30s token-refresh grace
-		pendingOffline:   make(map[authctx.Identity]time.Time),
+	for _, opt := range opts {
+		if opt != nil {
+			opt(m)
+		}
 	}
 	m.replay = mustNewReplayStore()
 	return m
@@ -232,16 +237,37 @@ func (m *Manager) RecordClientAck(identity authctx.Identity, ackSeq int64) bool 
 
 // RecordHeartbeat updates the LastSeen time for a connection and renews presence TTL.
 func (m *Manager) RecordHeartbeat(ctx context.Context, identity authctx.Identity) {
-	m.mu.RLock()
+	// LastSeen is read by the reaper's ScanStaleConnections under the same lock.
+	m.mu.Lock()
 	conn, exists := m.connections[identity]
-	m.mu.RUnlock()
+	if exists {
+		conn.LastSeen = time.Now().UnixMilli()
+	}
+	m.mu.Unlock()
 
 	if !exists {
 		return
 	}
 
-	conn.LastSeen = time.Now().UnixMilli()
 	m.RenewPresenceTTL(ctx, identity.UserID)
+}
+
+// ArmTokenExpiry records the token expiry on the live connection and arms the
+// timer that fires at it. It reports false when the identity is gone, so no
+// timer is left firing against a closed socket.
+func (m *Manager) ArmTokenExpiry(identity authctx.Identity, expiresAt int64, d time.Duration, fire func()) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	conn, exists := m.connections[identity]
+	if !exists {
+		return false
+	}
+
+	conn.ExpiresAt = expiresAt
+	conn.ExpiryTimer = time.AfterFunc(d, fire)
+
+	return true
 }
 
 // Unregister removes a connection by identity.
@@ -479,8 +505,9 @@ func (m *Manager) ScanStaleConnections(now int64) []authctx.Identity {
 	return stale
 }
 
-// ScanExpiredGraces returns identities whose reconnect grace has expired.
-// Each entry is paired with whether the identity has any remaining active connections.
+// ScanExpiredGraces returns identities whose reconnect grace deadline has
+// passed. It reports only the deadline; callers decide whether the grace still
+// matters (HasPendingGrace) and what to publish.
 func (m *Manager) ScanExpiredGraces(now time.Time) []authctx.Identity {
 	m.pendingMu.Lock()
 	defer m.pendingMu.Unlock()

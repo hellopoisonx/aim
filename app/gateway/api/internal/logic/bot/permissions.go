@@ -10,24 +10,23 @@ import (
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 )
 
-func requireBotAction(ctx context.Context, action string) (botctx.BotIdentity, error) {
-	identity, ok := botctx.FromContext(ctx)
+func requireBotAction(ctx context.Context, action string) (botctx.Identity, error) {
+	identity, ok := botctx.IdentityFromContext(ctx)
 	if !ok {
-		return botctx.BotIdentity{}, errorx.NewCodeError(errorx.CodeBotTokenInvalid, "missing bot identity")
+		return botctx.Identity{}, errorx.NewCodeError(errorx.CodeBotTokenInvalid, "missing bot identity")
 	}
 
 	if err := identity.RequireAction(action); err != nil {
-		return botctx.BotIdentity{}, err
+		return botctx.Identity{}, err
 	}
 
 	return identity, nil
 }
 
-func requireWebhookEventActions(ctx context.Context, svcCtx *svc.ServiceContext, identity botctx.BotIdentity, events []string) error {
+func requireWebhookEventActions(ctx context.Context, svcCtx *svc.ServiceContext, identity botctx.Identity, events []string) error {
 	resp, err := svcCtx.LogicBotClient.ResolveBotWebhookEventActions(ctx, &botservice.ResolveBotWebhookEventActionsReq{Events: events})
 	if err != nil {
-		var ce *errorx.CodeError
-		if errors.As(err, &ce) {
+		if ce, ok := errors.AsType[*errorx.CodeError](err); ok {
 			return ce
 		}
 

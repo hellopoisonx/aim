@@ -154,7 +154,7 @@ func TestRemoveTagReportsMissingAssignment(t *testing.T) {
 	}
 	svc := NewFriendshipTagService(store, fixedIDGen{id: 1})
 
-	removed, err := svc.RemoveTag(context.Background(), 1, 2, 9)
+	removed, err := svc.UntagFriend(context.Background(), 1, 2, 9)
 	require.NoError(t, err)
 	require.False(t, removed)
 }

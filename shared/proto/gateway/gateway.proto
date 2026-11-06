@@ -105,10 +105,10 @@ message PushMessageResp {
 
 // PushPresenceReq — 推送用户在线状态请求
 message PushPresenceReq {
-  int64 user_id = 1;          // 状态变更的用户 ID
+  int64 user_id = 1;          // 状态变更的用户 ID；仅用于 payload，不参与路由
   string status = 2;          // 状态：online/offline
   int64 updated_at = 3;       // 状态变更时间戳（毫秒）
-  int64 target_user_id = 4;   // 目标用户 ID（投递到此用户在本节点的所有连接）
+  int64 target_user_id = 4;   // 唯一路由字段：投递到此用户在本节点的所有连接（必填）
 }
 
 // PushPresenceResp — 推送用户在线状态响应

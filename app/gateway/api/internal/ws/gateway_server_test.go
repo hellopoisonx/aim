@@ -3,6 +3,7 @@ package ws
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -446,46 +447,6 @@ func TestGatewayServerPushPresence(t *testing.T) {
 	require.Equal(t, "online", pushPresence.GetStatus())
 }
 
-func TestGatewayServerPushPresenceFallbackToUserId(t *testing.T) {
-	t.Parallel()
-
-	env := setupGatewayTest(t)
-	t.Cleanup(env.cleanup)
-
-	userID := int64(12346)
-	deviceID := "test-device-presence-fallback"
-
-	wsServer := newWSTestServer(t, env.manager, userID, deviceID)
-	t.Cleanup(wsServer.close)
-
-	conn, err := wsServer.dialWebSocket("test-token")
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = conn.Close(websocket.StatusNormalClosure, "test done") })
-
-	// Call PushPresence without TargetUserId — should fall back to UserId for delivery.
-	ctx := context.Background()
-	resp, err := env.client.PushPresence(ctx, &pb.PushPresenceReq{
-		UserId:    userID, // both the status-changed user and the target (fallback)
-		Status:    "offline",
-		UpdatedAt: time.Now().UnixMilli(),
-	})
-	require.NoError(t, err)
-	require.True(t, resp.Success)
-
-	// Read the pushed presence frame
-	frame, err := readFrame(ctx, conn)
-	require.NoError(t, err)
-	require.Equal(t, wspb.FrameType_FRAME_TYPE_PUSH_PRESENCE, frame.GetType())
-
-	payload, err := DecodePayload(frame)
-	require.NoError(t, err)
-
-	pushPresence, ok := payload.(*wspb.PushPresencePayload)
-	require.True(t, ok)
-	require.Equal(t, userID, pushPresence.GetUserId())
-	require.Equal(t, "offline", pushPresence.GetStatus())
-}
-
 func TestGatewayServerKickUser(t *testing.T) {
 	t.Parallel()
 
@@ -691,9 +652,9 @@ func TestGatewayServerPushPresenceInvalidArgument(t *testing.T) {
 
 	ctx := context.Background()
 
-	// user_id = 0 should fail
+	// target_user_id = 0 should fail
 	_, err := env.client.PushPresence(ctx, &pb.PushPresenceReq{
-		UserId: 0,
+		TargetUserId: 0,
 	})
 	require.Error(t, err)
 }
@@ -898,4 +859,23 @@ func waitForManagerEmpty(manager *Manager, timeout time.Duration) {
 
 		time.Sleep(2 * time.Millisecond)
 	}
+}
+
+func TestDeliveryErrorOnlyWhenEveryWriteFailed(t *testing.T) {
+	t.Parallel()
+
+	writeErr := errors.New("write failed")
+
+	require.ErrorIs(t, deliveryError(0, writeErr), writeErr)
+	require.NoError(t, deliveryError(1, writeErr))
+	require.NoError(t, deliveryError(0, nil))
+}
+
+func TestDeliverLocalWithoutLocalConnectionsIsNotAnError(t *testing.T) {
+	t.Parallel()
+
+	server := NewGatewayServer(NewManager())
+
+	require.NoError(t, server.DeliverLocal(context.Background(), &pb.PushMessageReq{TargetUserId: 42}))
+	require.NoError(t, server.DeliverLocalMembers(context.Background(), &pb.PushMessageReq{ConversationId: 1}, []int64{42}))
 }

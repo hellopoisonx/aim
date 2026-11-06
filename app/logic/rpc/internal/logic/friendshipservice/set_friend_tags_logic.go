@@ -3,7 +3,6 @@ package friendshipservicelogic
 import (
 	"context"
 
-	"github.com/hellopoisonx/aim/app/logic/rpc/internal/service"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
@@ -37,23 +36,13 @@ func (l *SetFriendTagsLogic) SetFriendTags(in *pb.SetFriendTagsReq) (*pb.SetFrie
 	}
 
 	if err := l.svcCtx.FriendTagService.SetTags(l.ctx, in.GetUserId(), in.GetFriendId(), in.GetTagIds()); err != nil {
-		return nil, errorx.ToGRPCError(err)
+		return nil, err
 	}
 
-	friendship := &pb.FriendshipResponse{
-		UserId:    in.GetUserId(),
-		FriendId:  in.GetFriendId(),
-		Status:    service.FriendshipStatusAccepted,
-		CreatedAt: 0,
-		UpdatedAt: 0,
+	friendship, err := acceptedFriendshipWithTags(l.ctx, l.svcCtx.FriendTagService, in.GetUserId(), in.GetFriendId())
+	if err != nil {
+		return nil, err
 	}
-
-	tags, _ := l.svcCtx.FriendTagService.GetFriendTags(l.ctx, in.GetUserId(), in.GetFriendId())
-	pbTags := make([]*pb.FriendTagResponse, 0, len(tags))
-	for _, tag := range tags {
-		pbTags = append(pbTags, friendTagToProto(tag))
-	}
-	friendship.Tags = pbTags
 
 	return &pb.SetFriendTagsResp{Friendship: friendship}, nil
 }

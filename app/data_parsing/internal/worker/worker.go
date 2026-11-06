@@ -28,41 +28,62 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/propagation"
-	"go.opentelemetry.io/otel/trace"
+	"gorm.io/gorm"
 )
 
-// parsedProducerGroup is the broker-visible producer group of the parsing
-// worker.
-const parsedProducerGroup = "aim-data-parsing-producer"
+const dataParsingTracerName = "github.com/hellopoisonx/aim/app/data_parsing"
+
+// attachmentStore is the subset of dao.Store the worker writes through.
+type attachmentStore interface {
+	UpsertAttachmentObject(ctx context.Context, object orm.AttachmentObject) error
+	UpsertAttachmentParseResult(ctx context.Context, result orm.AttachmentParseResult) error
+	SetParseStatus(ctx context.Context, fileID uuid.UUID, status string) (int64, error)
+	SetParseResultError(ctx context.Context, fileID uuid.UUID, message string) error
+}
+
+// publisher is the subset of *rocketmq.Producer the worker drives.
+type publisher interface {
+	Start() error
+	GracefulStop() error
+	Publish(ctx context.Context, m rocketmq.Message) error
+	SendTransactional(ctx context.Context, db *gorm.DB, m rocketmq.TransactionalMessage, localTx func(ctx context.Context, tx *gorm.DB) error) error
+}
 
 type Worker struct {
 	cfg      config.Config
-	store    *dao.Store
+	db       *gorm.DB
+	store    attachmentStore
+	newStore func(*gorm.DB) attachmentStore
 	parser   parser.Parser
-	producer *rocketmq.Producer
+	producer publisher
 }
 
 func New(ctx context.Context, cfg config.Config) (*Worker, error) {
-	var store *dao.Store
-	if cfg.Postgres.DataSource != "" {
-		db, err := gormdb.Open(cfg.Postgres.DataSource)
-		if err != nil {
-			return nil, err
-		}
-		store = dao.New(db)
+	db, err := gormdb.OpenOptional(cfg.Postgres.DataSource)
+	if err != nil {
+		return nil, err
 	}
-	var producer *rocketmq.Producer
-	if cfg.ParsedProducer.IsConfigured() {
-		created, err := rocketmq.NewProducer(cfg.ParsedProducer.EndpointConf, parsedProducerGroup, cfg.ParsedProducer.Topic)
-		if err != nil {
-			return nil, err
-		}
-		if err := created.Start(); err != nil {
-			return nil, err
-		}
-		producer = created
+	var store attachmentStore
+	newStore := func(db *gorm.DB) attachmentStore { return dao.New(db) }
+	if db != nil {
+		store = newStore(db)
 	}
-	return &Worker{cfg: cfg, store: store, parser: parser.DefaultParser{}, producer: producer}, nil
+	// Parsed events are published with the parse-result writes, so the
+	// transaction check-back must resolve them from this database.
+	producer, err := rocketmq.NewProducer(cfg.ParsedProducer, rocketmq.WithJournalChecker(db))
+	if err != nil {
+		return nil, err
+	}
+	var pub publisher
+	if producer != nil {
+		pub = producer
+		// An unreachable broker must not crash-loop the consumer: parsing keeps
+		// running and publishes fail loudly instead.
+		if err := producer.Start(); err != nil {
+			logx.WithContext(ctx).Errorf("failed to start rocketmq parsed producer: %v", err)
+		}
+	}
+	return &Worker{cfg: cfg, db: db, store: store, newStore: newStore, parser: parser.DefaultParser{}, producer: pub}, nil
 }
 
 func (w *Worker) Close() {
@@ -71,11 +92,8 @@ func (w *Worker) Close() {
 			logx.WithContext(context.Background()).Errorf("failed to stop rocketmq parsed producer: %v", err)
 		}
 	}
-	if w.store == nil {
-		return
-	}
-	if db := w.store.DB(); db != nil {
-		if sqlDB, err := db.DB(); err == nil {
+	if w.db != nil {
+		if sqlDB, err := w.db.DB(); err == nil {
 			_ = sqlDB.Close()
 		}
 	}
@@ -123,51 +141,104 @@ func (w *Worker) Consume(ctx context.Context, key string, value string) (err err
 	if err != nil {
 		return w.fail(ctx, event, err)
 	}
+	// The parser always yields a thumbnail, so upload, DB row and event key agree.
 	thumbKey := fmt.Sprintf("attachments/derived/%s/thumbnail.png", event.FileID)
-	if len(res.Thumbnail) > 0 {
-		if err := w.putObject(ctx, thumbKey, res.ThumbMIME, res.Thumbnail); err != nil {
-			return w.fail(ctx, event, err)
-		}
+	if err := w.putObject(ctx, thumbKey, res.ThumbMIME, res.Thumbnail); err != nil {
+		return w.fail(ctx, event, err)
 	}
 	meta, _ := json.Marshal(res.Metadata)
-	if w.store != nil {
-		fileID, parseErr := uuid.Parse(event.FileID)
-		if parseErr != nil {
-			return w.fail(ctx, event, parseErr)
-		}
-		size := int64(len(res.Thumbnail))
-		thumbWidth := clampInt32(res.ThumbWidth)
-		thumbHeight := clampInt32(res.ThumbHeight)
-		width := clampInt32(res.Width)
-		height := clampInt32(res.Height)
-		if err = w.store.UpsertAttachmentObject(ctx, orm.AttachmentObject{
-			FileID:     fileID,
-			ObjectRole: "thumbnail",
-			Bucket:     event.Bucket,
-			ObjectKey:  thumbKey,
-			Mime:       res.ThumbMIME,
-			SizeBytes:  &size,
-			Width:      &thumbWidth,
-			Height:     &thumbHeight,
-			DurationMs: &res.DurationMS,
-		}); err != nil {
-			return w.fail(ctx, event, err)
-		}
-		if err = w.store.UpsertAttachmentParseResult(ctx, orm.AttachmentParseResult{
-			FileID:     fileID,
-			DurationMs: &res.DurationMS,
-			Width:      &width,
-			Height:     &height,
-			Metadata:   pgtypes.JSON(meta),
-		}); err != nil {
-			return w.fail(ctx, event, err)
-		}
-		if _, err = w.store.SetParseStatus(ctx, fileID, attachment.ParseStatusReady); err != nil {
-			return w.fail(ctx, event, err)
-		}
+	parsed := events.AttachmentParsedEvent{
+		FileID:             event.FileID,
+		Kind:               event.Kind,
+		ParseStatus:        attachment.ParseStatusReady,
+		ThumbnailObjectKey: thumbKey,
+		DurationMS:         res.DurationMS,
+		Width:              res.Width,
+		Height:             res.Height,
+		Metadata:           &res.Metadata,
+		ParsedAt:           time.Now().UnixMilli(),
 	}
 
-	return w.publish(ctx, events.AttachmentParsedEvent{TraceContextFields: tracing.InjectTraceContext(ctx), FileID: event.FileID, Kind: event.Kind, ParseStatus: attachment.ParseStatusReady, ThumbnailObjectKey: thumbKey, DurationMS: res.DurationMS, Width: res.Width, Height: res.Height, Metadata: &res.Metadata, ParsedAt: time.Now().UnixMilli()})
+	if w.db == nil {
+		return w.publish(ctx, parsed)
+	}
+
+	fileID, err := uuid.Parse(event.FileID)
+	if err != nil {
+		return w.fail(ctx, event, err)
+	}
+
+	if w.producer != nil {
+		ctx, span := tracing.StartMQProducerSpan(
+			ctx,
+			"data_parsing.rocketmq.attachment_parsed.publish",
+			attribute.String("attachment.file_id", event.FileID),
+		)
+		defer span.End()
+
+		parsed.TraceContextFields = tracing.InjectTraceContext(ctx)
+		body, err := json.Marshal(parsed)
+		if err != nil {
+			tracing.RecordSpanError(span, err)
+			return err
+		}
+
+		err = w.producer.SendTransactional(ctx, w.db, rocketmq.TransactionalMessage{
+			Topic:    w.cfg.ParsedProducer.Topic,
+			EventUID: "attachment.parsed:" + fileID.String(),
+			Key:      fileID.String(),
+			Body:     body,
+		}, func(ctx context.Context, tx *gorm.DB) error {
+			return w.persistParseResult(ctx, w.newStore(tx), fileID, event.Bucket, thumbKey, res, meta)
+		})
+		if err != nil {
+			tracing.RecordSpanError(span, err)
+		}
+
+		return err
+	}
+
+	if err := w.persistParseResult(ctx, w.store, fileID, event.Bucket, thumbKey, res, meta); err != nil {
+		return w.fail(ctx, event, err)
+	}
+
+	return w.publish(ctx, parsed)
+}
+
+// persistParseResult writes the parse output on store, which is either a
+// transaction supplied by SendTransactional or the worker's own handle.
+func (w *Worker) persistParseResult(ctx context.Context, store attachmentStore, fileID uuid.UUID, bucket, thumbKey string, res *parser.Result, meta []byte) error {
+	size := int64(len(res.Thumbnail))
+	thumbWidth := clampInt32(res.ThumbWidth)
+	thumbHeight := clampInt32(res.ThumbHeight)
+	if err := store.UpsertAttachmentObject(ctx, orm.AttachmentObject{
+		FileID:     fileID,
+		ObjectRole: "thumbnail",
+		Bucket:     bucket,
+		ObjectKey:  thumbKey,
+		Mime:       res.ThumbMIME,
+		SizeBytes:  &size,
+		Width:      &thumbWidth,
+		Height:     &thumbHeight,
+		DurationMs: &res.DurationMS,
+	}); err != nil {
+		return err
+	}
+
+	width := clampInt32(res.Width)
+	height := clampInt32(res.Height)
+	if err := store.UpsertAttachmentParseResult(ctx, orm.AttachmentParseResult{
+		FileID:     fileID,
+		DurationMs: &res.DurationMS,
+		Width:      &width,
+		Height:     &height,
+		Metadata:   pgtypes.JSON(meta),
+	}); err != nil {
+		return err
+	}
+
+	_, err := store.SetParseStatus(ctx, fileID, attachment.ParseStatusReady)
+	return err
 }
 
 // clampInt32 narrows a parser-reported dimension to the int32 column range.
@@ -229,32 +300,61 @@ func (w *Worker) objectURL(key string) string {
 	return endpoint + "/" + bucket + "/" + strings.TrimLeft(key, "/")
 }
 
-func (w *Worker) getObject(ctx context.Context, key string) ([]byte, error) {
-	ctx, span := otel.Tracer("github.com/hellopoisonx/aim/app/data_parsing").Start(
-		ctx,
-		"data_parsing.seaweed.get_object",
-		trace.WithSpanKind(trace.SpanKindClient),
-		trace.WithAttributes(attribute.String("seaweed.object_key", key)),
-	)
-	defer span.End()
+// seaweedHTTPTimeout bounds one object transfer; http.DefaultClient has none, so
+// a stalled endpoint would wedge the consumer goroutine.
+const seaweedHTTPTimeout = 30 * time.Second
 
+var seaweedHTTPClient = &http.Client{Timeout: seaweedHTTPTimeout}
+
+// doObject signs, sends and status-checks one object request. On success the
+// caller owns the response body and must close it.
+func (w *Worker) doObject(ctx context.Context, method, key, mime string, body []byte) (*http.Response, error) {
 	url := w.objectURL(key)
+	var signedHeaders map[string]string
 	if w.cfg.Seaweed.AccessKey != "" && w.cfg.Seaweed.SecretKey != "" {
+		var signHeaders map[string]string
+		if mime != "" {
+			signHeaders = map[string]string{"content-type": mime}
+		}
 		signer := s3signer.S3Signer{Endpoint: w.cfg.Seaweed.Endpoint, Region: "us-east-1", AccessKey: w.cfg.Seaweed.AccessKey, SecretKey: w.cfg.Seaweed.SecretKey, Bucket: w.cfg.Seaweed.Bucket}
-		signed, _, err := signer.PresignInternal(http.MethodGet, key, time.Minute, nil)
+		signed, headers, err := signer.PresignInternal(method, key, time.Minute, signHeaders)
 		if err != nil {
-			tracing.RecordSpanError(span, err)
 			return nil, err
 		}
 		url = signed
+		signedHeaders = headers
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	var payload io.Reader
+	if body != nil {
+		payload = bytes.NewReader(body)
+	}
+	req, err := http.NewRequestWithContext(ctx, method, url, payload)
 	if err != nil {
-		tracing.RecordSpanError(span, err)
 		return nil, err
 	}
+	for k, v := range signedHeaders {
+		req.Header.Set(k, v)
+	}
+	if mime != "" {
+		req.Header.Set("Content-Type", mime)
+	}
 	otel.GetTextMapPropagator().Inject(ctx, propagation.HeaderCarrier(req.Header))
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := seaweedHTTPClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		_ = resp.Body.Close()
+		return nil, fmt.Errorf("%s object status %d", strings.ToLower(method), resp.StatusCode)
+	}
+	return resp, nil
+}
+
+func (w *Worker) getObject(ctx context.Context, key string) ([]byte, error) {
+	ctx, span := tracing.StartClientSpan(ctx, dataParsingTracerName, "data_parsing.seaweed.get_object", attribute.String("seaweed.object_key", key))
+	defer span.End()
+
+	resp, err := w.doObject(ctx, http.MethodGet, key, "", nil)
 	if err != nil {
 		tracing.RecordSpanError(span, err)
 		return nil, err
@@ -262,46 +362,14 @@ func (w *Worker) getObject(ctx context.Context, key string) ([]byte, error) {
 	defer func() { _ = resp.Body.Close() }()
 
 	span.SetAttributes(attribute.Int("http.response.status_code", resp.StatusCode))
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		err := fmt.Errorf("get object status %d", resp.StatusCode)
-		tracing.RecordSpanError(span, err)
-		return nil, err
-	}
 	return io.ReadAll(resp.Body)
 }
 
 func (w *Worker) putObject(ctx context.Context, key, mime string, data []byte) error {
-	ctx, span := otel.Tracer("github.com/hellopoisonx/aim/app/data_parsing").Start(
-		ctx,
-		"data_parsing.seaweed.put_object",
-		trace.WithSpanKind(trace.SpanKindClient),
-		trace.WithAttributes(attribute.String("seaweed.object_key", key)),
-	)
+	ctx, span := tracing.StartClientSpan(ctx, dataParsingTracerName, "data_parsing.seaweed.put_object", attribute.String("seaweed.object_key", key))
 	defer span.End()
 
-	url := w.objectURL(key)
-	var headers map[string]string
-	if w.cfg.Seaweed.AccessKey != "" && w.cfg.Seaweed.SecretKey != "" {
-		signer := s3signer.S3Signer{Endpoint: w.cfg.Seaweed.Endpoint, Region: "us-east-1", AccessKey: w.cfg.Seaweed.AccessKey, SecretKey: w.cfg.Seaweed.SecretKey, Bucket: w.cfg.Seaweed.Bucket}
-		signed, signedHeaders, err := signer.PresignInternal(http.MethodPut, key, time.Minute, map[string]string{"content-type": mime})
-		if err != nil {
-			tracing.RecordSpanError(span, err)
-			return err
-		}
-		url = signed
-		headers = signedHeaders
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, bytes.NewReader(data))
-	if err != nil {
-		tracing.RecordSpanError(span, err)
-		return err
-	}
-	for k, v := range headers {
-		req.Header.Set(k, v)
-	}
-	req.Header.Set("Content-Type", mime)
-	otel.GetTextMapPropagator().Inject(ctx, propagation.HeaderCarrier(req.Header))
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := w.doObject(ctx, http.MethodPut, key, mime, data)
 	if err != nil {
 		tracing.RecordSpanError(span, err)
 		return err
@@ -309,10 +377,5 @@ func (w *Worker) putObject(ctx context.Context, key, mime string, data []byte) e
 	defer func() { _ = resp.Body.Close() }()
 
 	span.SetAttributes(attribute.Int("http.response.status_code", resp.StatusCode))
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		err := fmt.Errorf("put object status %d", resp.StatusCode)
-		tracing.RecordSpanError(span, err)
-		return err
-	}
 	return nil
 }

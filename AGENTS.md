@@ -25,11 +25,11 @@ aim/
 ├── app/core/rpc/        # 消息投递
 ├── app/gateway/api/     # 对外入口
 ├── app/logic/rpc/       # 业务上下文
-├── app/attachment/      # 附件服务
+├── app/attachment/rpc/  # 附件服务
 ├── app/data_parsing/    # 数据解析
 ├── app/shared/          # 共享库
 ├── bot_sdk/             # Bot Go SDK
-├── dev-tool/            # 调试压测工具
+├── dev-tool/            # 调试压测工具（e2e/ bench/ fixtures/ pb/）
 ├── deploy/              # 部署编排
 ├── docs/                # 文档与协议规范
 ├── shared/proto/        # Protobuf 协议
@@ -71,7 +71,6 @@ aim/
 ## 反模式
 
 - 不要编辑 `*.pb.go`、goctl 生成的 routes/types/server/client 文件，除非重新生成；DAO 查询只写在 `model/dao`。
-- 不要把内容审核拆成独立微服务；它是 `app/shared/moderation` 进程内共享库。
 - 不要用 PostgreSQL 做实时配额拦截；热路径使用 Redis 滑动窗口。
 - 不要假设 Redis/RedisBloom 返回类型固定；RESP2/RESP3 可能不同，必须类型分支并加回归测试。
 - 不要新增循环依赖；特别是 `app/logic` 不能导入 `app/core`。

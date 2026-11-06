@@ -15,7 +15,7 @@ const (
 	invalidateReadBatch   = 64
 )
 
-type InvalidateMsg struct {
+type invalidateMsg struct {
 	Cache string   `json:"cache"`
 	Keys  []string `json:"keys"`
 }
@@ -79,32 +79,34 @@ func (m *CacheManager) runInvalidationLoop() {
 
 		for _, stream := range streams {
 			for _, msg := range stream.Messages {
+				// Advance before decoding so a malformed entry is skipped
+				// instead of re-read forever.
+				lastID = msg.ID
 				payload, err := parseInvalidationFields(msg.Values)
 				if err != nil {
 					continue
 				}
 
-				lastID = msg.ID
 				m.deleteLocal(payload.Cache, payload.Keys)
 			}
 		}
 	}
 }
 
-// parseInvalidationFields decodes a stream entry into an InvalidateMsg.
-func parseInvalidationFields(values map[string]any) (InvalidateMsg, error) {
-	var msg InvalidateMsg
+// parseInvalidationFields decodes a stream entry into an invalidateMsg.
+func parseInvalidationFields(values map[string]any) (invalidateMsg, error) {
+	var msg invalidateMsg
 
 	cacheName, _ := values["cache"].(string)
 	if cacheName == "" {
-		return InvalidateMsg{}, errors.New("missing cache field")
+		return invalidateMsg{}, errors.New("missing cache field")
 	}
 	msg.Cache = cacheName
 
 	rawKeys, _ := values["keys"].(string)
 	if rawKeys != "" {
 		if err := json.Unmarshal([]byte(rawKeys), &msg.Keys); err != nil {
-			return InvalidateMsg{}, err
+			return invalidateMsg{}, err
 		}
 	}
 

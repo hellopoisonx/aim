@@ -5,7 +5,6 @@ import (
 
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
-	"github.com/hellopoisonx/aim/app/shared/errorx"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -24,20 +23,16 @@ func NewDeleteFriendTagLogic(ctx context.Context, svcCtx *svc.ServiceContext) *D
 	}
 }
 
+// DeleteFriendTag deletes the tag itself, which drops it from every friend.
 func (l *DeleteFriendTagLogic) DeleteFriendTag(in *pb.DeleteFriendTagReq) (*pb.DeleteFriendTagResp, error) {
-	if in.GetUserId() <= 0 {
-		return nil, errorx.NewCodeError(errorx.CodeBadInput, "user_id is required and must be positive")
-	}
-	if in.GetTagId() <= 0 {
-		return nil, errorx.NewCodeError(errorx.CodeBadInput, "tag_id is required and must be positive")
-	}
-	if l.svcCtx.FriendTagService == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "friend tag service not configured")
+	tagSvc, err := requireTagOp(l.svcCtx, in.GetUserId(), in.GetTagId())
+	if err != nil {
+		return nil, err
 	}
 
-	deleted, err := l.svcCtx.FriendTagService.DeleteTag(l.ctx, in.GetUserId(), in.GetTagId())
+	deleted, err := tagSvc.DeleteTag(l.ctx, in.GetUserId(), in.GetTagId())
 	if err != nil {
-		return nil, errorx.ToGRPCError(err)
+		return nil, err
 	}
 
 	return &pb.DeleteFriendTagResp{Deleted: deleted}, nil

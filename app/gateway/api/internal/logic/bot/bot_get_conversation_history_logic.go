@@ -5,6 +5,7 @@ import (
 
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/pbconv"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/conversationservice"
@@ -49,19 +50,11 @@ func (l *BotGetConversationHistoryLogic) BotGetConversationHistory(req *types.Bo
 		return nil, err
 	}
 
-	limit := req.Limit
-	if limit <= 0 {
-		limit = 50
-	}
-	if limit > 100 {
-		limit = 100
-	}
-
 	rpcResp, err := client.GetConversationHistory(l.ctx, &conversationservice.GetConversationHistoryReq{
 		ConversationId:  conversationID,
 		CursorCreatedAt: req.CursorCreatedAt,
 		CursorId:        cursorID,
-		Limit:           limit,
+		Limit:           req.Limit,
 	})
 	if err != nil {
 		return nil, errorx.SanitizeGRPCErrorNoLog(err)
@@ -69,40 +62,12 @@ func (l *BotGetConversationHistoryLogic) BotGetConversationHistory(req *types.Bo
 
 	messages := make([]types.BotMessageItem, 0, len(rpcResp.GetMessages()))
 	for _, msg := range rpcResp.GetMessages() {
-		senderInfo := msg.GetSenderInfo()
-		readDetails := make([]types.BotMessageReadDetailItem, 0, len(msg.GetReadDetails()))
-		for _, rd := range msg.GetReadDetails() {
-			readDetails = append(readDetails, types.BotMessageReadDetailItem{
-				UserId:            formatID(rd.GetUserId()),
-				IsRead:            rd.GetIsRead(),
-				LastReadMessageId: formatID(rd.GetLastReadMessageId()),
-				UpdatedAt:         rd.GetUpdatedAt(),
-				Email:             rd.GetEmail(),
-				Avatar:            rd.GetAvatar(),
-			})
-		}
-
-		messages = append(messages, types.BotMessageItem{
-			Id:             formatID(msg.GetId()),
-			ConversationId: formatID(msg.GetConversationId()),
-			SenderId:       formatID(msg.GetSenderId()),
-			SenderInfo: types.BotSenderInfo{
-				Name:  senderInfo.GetName(),
-				Email: senderInfo.GetEmail(),
-			},
-			MessageType: msg.GetMessageType(),
-			Content:     msg.GetContent(),
-			ClientMsgId: msg.GetClientMsgId(),
-			CreatedAt:   msg.GetCreatedAt(),
-			IsSystem:    msg.GetIsSystem(),
-			Mentions:    msg.GetMentions(),
-			ReadDetails: readDetails,
-		})
+		messages = append(messages, pbconv.BotMessage(msg))
 	}
 
 	readStates := make([]types.BotReadStateItem, 0, len(rpcResp.GetReadStates()))
 	for _, st := range rpcResp.GetReadStates() {
-		readStates = append(readStates, convertBotReadState(st))
+		readStates = append(readStates, pbconv.BotReadState(st))
 	}
 
 	return &types.BotGetConversationHistoryResponse{

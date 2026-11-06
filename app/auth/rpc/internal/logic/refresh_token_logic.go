@@ -3,7 +3,6 @@ package logic
 import (
 	"context"
 
-	authsvc "github.com/hellopoisonx/aim/app/auth/rpc/internal/service"
 	"github.com/hellopoisonx/aim/app/auth/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/auth/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
@@ -27,7 +26,7 @@ func NewRefreshTokenLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Refr
 
 func (l *RefreshTokenLogic) RefreshToken(in *pb.RefreshTokenReq) (*pb.RefreshTokenResp, error) {
 	if in.GetRefreshToken() == "" {
-		return nil, errorx.NewCodeError(authsvc.CodeInvalidArgument, "missing refresh token")
+		return nil, errorx.NewCodeError(errorx.CodeBadInput, "missing refresh token")
 	}
 
 	userID, deviceID, refreshToken, err := l.svcCtx.Sessions.Rotate(l.ctx, in.GetRefreshToken())
@@ -37,7 +36,7 @@ func (l *RefreshTokenLogic) RefreshToken(in *pb.RefreshTokenReq) (*pb.RefreshTok
 
 	accessToken, expiresAt, err := l.svcCtx.TokenIssuer.Issue(l.ctx, userID, deviceID)
 	if err != nil {
-		return nil, errorx.NewCodeError(authsvc.CodeInternal, "issue access token failed")
+		return nil, errorx.NewCodeError(errorx.CodeInternal, "issue access token failed")
 	}
 
 	return &pb.RefreshTokenResp{AccessToken: accessToken, RefreshToken: refreshToken, ExpiresAt: expiresAt}, nil

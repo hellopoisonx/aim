@@ -50,6 +50,8 @@ func NewCacheManager(rds redis.UniversalClient, stream string) *CacheManager {
 	return m
 }
 
+// Close stops the invalidation loop and waits for it. The Redis client is
+// owned by the caller and is left open.
 func (m *CacheManager) Close() {
 	if m == nil || m.cancel == nil {
 		return
@@ -112,7 +114,7 @@ func (l *redisLayer) Del(ctx context.Context, keys ...string) error {
 	return l.rds.Del(ctx, keys...).Err()
 }
 
-func NewTypedCache[T any](m *CacheManager, name string, l1TTL, l2TTL time.Duration, l1Limit int) (*TypedCache[T], error) {
+func newTypedCache[T any](m *CacheManager, name string, l1TTL, l2TTL time.Duration, l1Limit int) (*TypedCache[T], error) {
 	if m == nil {
 		return &TypedCache[T]{}, nil
 	}
@@ -152,7 +154,7 @@ func NewTypedCache[T any](m *CacheManager, name string, l1TTL, l2TTL time.Durati
 }
 
 func MustTyped[T any](m *CacheManager, name string, l1TTL, l2TTL time.Duration, l1Limit int) *TypedCache[T] {
-	c, err := NewTypedCache[T](m, name, l1TTL, l2TTL, l1Limit)
+	c, err := newTypedCache[T](m, name, l1TTL, l2TTL, l1Limit)
 	if err != nil {
 		panic(err)
 	}

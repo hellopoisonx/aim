@@ -3,6 +3,7 @@ package botservicelogic
 import (
 	"context"
 
+	"github.com/hellopoisonx/aim/app/logic/rpc/internal/pbconv"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
@@ -25,12 +26,13 @@ func NewAddUserBotToConversationLogic(ctx context.Context, svcCtx *svc.ServiceCo
 }
 
 func (l *AddUserBotToConversationLogic) AddUserBotToConversation(in *pb.AddUserBotToConversationReq) (*pb.AddUserBotToConversationResp, error) {
-	if l.svcCtx.BotService == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "bot service not configured")
+	botSvc, err := requireBot(l.svcCtx, in.GetBotUserId())
+	if err != nil {
+		return nil, err
 	}
 
 	// Verify owner relationship.
-	if _, err := l.svcCtx.BotService.GetUserBot(l.ctx, in.GetOwnerUserId(), in.GetBotUserId()); err != nil {
+	if _, err := botSvc.GetUserBot(l.ctx, in.GetOwnerUserId(), in.GetBotUserId()); err != nil {
 		return nil, err
 	}
 
@@ -40,20 +42,12 @@ func (l *AddUserBotToConversationLogic) AddUserBotToConversation(in *pb.AddUserB
 
 	conv, err := l.svcCtx.ConversationService.AddGroupMembers(l.ctx,
 		in.GetConversationId(), in.GetOperatorId(),
-		in.GetOperatorName(), []int64{in.GetBotUserId()})
+		[]int64{in.GetBotUserId()})
 	if err != nil {
 		return nil, err
 	}
 
 	return &pb.AddUserBotToConversationResp{
-		Conversation: &pb.ConversationResponse{
-			Id:               conv.ID,
-			ConversationType: string(conv.ConversationType),
-			IsActive:         conv.IsActive,
-			CreatedAt:        conv.CreatedAt.UnixMilli(),
-			Name:             conv.Name,
-			Avatar:           conv.Avatar,
-			CreatorId:        conv.CreatorID,
-		},
+		Conversation: pbconv.Conversation(conv, nil, conv.Name),
 	}, nil
 }

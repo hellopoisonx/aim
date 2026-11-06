@@ -1,5 +1,5 @@
 // Package orm holds the GORM models of the aim_attachment database.
-// Structs mirror app/attachment/model/migrations 1:1. Migration SQL remains
+// Structs mirror app/attachment/rpc/model/migrations 1:1. Migration SQL remains
 // the single source of truth for the schema; never run AutoMigrate.
 package orm
 
@@ -49,35 +49,6 @@ type AttachmentObject struct {
 
 // TableName pins the physical table name.
 func (AttachmentObject) TableName() string { return "attachment_objects" }
-
-// AttachmentReference maps table attachment_references (000).
-// UNIQUE(file_id, message_id) allows duplicate NULL message_id in PostgreSQL.
-type AttachmentReference struct {
-	ID             int64     `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
-	FileID         uuid.UUID `gorm:"column:file_id;type:uuid;not null;uniqueIndex:attachment_references_file_id_message_id_key,priority:1" json:"file_id"`
-	MessageID      *int64    `gorm:"column:message_id;uniqueIndex:attachment_references_file_id_message_id_key,priority:2" json:"message_id"`
-	ConversationID int64     `gorm:"column:conversation_id;not null" json:"conversation_id"`
-	SenderID       int64     `gorm:"column:sender_id;not null" json:"sender_id"`
-	CreatedAt      time.Time `gorm:"column:created_at;not null" json:"created_at"`
-}
-
-// TableName pins the physical table name.
-func (AttachmentReference) TableName() string { return "attachment_references" }
-
-// AttachmentParseJob maps table attachment_parse_jobs (000).
-type AttachmentParseJob struct {
-	ID          int64     `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
-	FileID      uuid.UUID `gorm:"column:file_id;type:uuid;not null" json:"file_id"`
-	Status      string    `gorm:"column:status;size:16;not null;default:pending" json:"status"`
-	Attempts    int32     `gorm:"column:attempts;not null;default:0" json:"attempts"`
-	LastError   *string   `gorm:"column:last_error" json:"last_error"`
-	AvailableAt time.Time `gorm:"column:available_at;not null;default:now()" json:"available_at"`
-	CreatedAt   time.Time `gorm:"column:created_at;not null" json:"created_at"`
-	UpdatedAt   time.Time `gorm:"column:updated_at;not null" json:"updated_at"`
-}
-
-// TableName pins the physical table name.
-func (AttachmentParseJob) TableName() string { return "attachment_parse_jobs" }
 
 // AttachmentParseResult maps table attachment_parse_results (000).
 type AttachmentParseResult struct {

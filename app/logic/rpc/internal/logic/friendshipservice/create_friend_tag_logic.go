@@ -6,7 +6,6 @@ import (
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/logic/rpc/model/orm"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
-	"github.com/hellopoisonx/aim/app/shared/errorx"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -26,16 +25,14 @@ func NewCreateFriendTagLogic(ctx context.Context, svcCtx *svc.ServiceContext) *C
 }
 
 func (l *CreateFriendTagLogic) CreateFriendTag(in *pb.CreateFriendTagReq) (*pb.CreateFriendTagResp, error) {
-	if in.GetUserId() <= 0 {
-		return nil, errorx.NewCodeError(errorx.CodeBadInput, "user_id is required and must be positive")
-	}
-	if l.svcCtx.FriendTagService == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "friend tag service not configured")
+	tagSvc, err := requireTagService(l.svcCtx, in.GetUserId())
+	if err != nil {
+		return nil, err
 	}
 
-	tag, err := l.svcCtx.FriendTagService.CreateTag(l.ctx, in.GetUserId(), in.GetName())
+	tag, err := tagSvc.CreateTag(l.ctx, in.GetUserId(), in.GetName())
 	if err != nil {
-		return nil, errorx.ToGRPCError(err)
+		return nil, err
 	}
 
 	return &pb.CreateFriendTagResp{Tag: friendTagToProto(tag)}, nil

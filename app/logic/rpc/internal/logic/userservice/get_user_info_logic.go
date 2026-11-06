@@ -3,9 +3,9 @@ package userservicelogic
 import (
 	"context"
 
+	"github.com/hellopoisonx/aim/app/logic/rpc/internal/pbconv"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
-	"github.com/hellopoisonx/aim/app/shared/errorx"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -26,21 +26,17 @@ func NewGetUserInfoLogic(ctx context.Context, svcCtx *svc.ServiceContext) *GetUs
 
 // GetUserInfo retrieves a user profile by ID.
 func (l *GetUserInfoLogic) GetUserInfo(in *pb.GetUserInfoReq) (*pb.GetUserInfoResp, error) {
-	if in.GetId() <= 0 {
-		return nil, errorx.NewCodeError(errorx.CodeBadInput, "id is required and must be positive")
-	}
-
-	userSvc := l.svcCtx.UserInfoService
-	if userSvc == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "user service is not configured")
+	userSvc, err := requireUserOp(l.svcCtx, in.GetId())
+	if err != nil {
+		return nil, err
 	}
 
 	info, err := userSvc.GetUserInfo(l.ctx, in.GetId())
 	if err != nil {
-		return nil, errorx.ToGRPCError(err)
+		return nil, err
 	}
 
 	return &pb.GetUserInfoResp{
-		User: userInfoToResponse(info),
+		User: pbconv.User(info),
 	}, nil
 }

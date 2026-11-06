@@ -8,10 +8,11 @@ import (
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/authctx"
 
 	"github.com/coder/websocket"
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/fanout"
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/membership"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/ws"
 	logicpb "github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
-	gwpb "github.com/hellopoisonx/aim/shared/proto/gateway/pb"
 	pb "github.com/hellopoisonx/aim/shared/proto/ws/pb"
 	"github.com/zeromicro/go-zero/core/logx"
 	"go.opentelemetry.io/otel"
@@ -22,7 +23,7 @@ import (
 // Typing and read-receipt frame handling with local fan-out.
 
 // handleTyping publishes a typing notice for fan-out by core.
-func (h *WsHandler) handleTyping(ctx context.Context, _ *websocket.Conn, frame *pb.WsFrame) error {
+func (h *WsHandler) handleTyping(ctx context.Context, conn *websocket.Conn, frame *pb.WsFrame) error {
 	tracer := otel.Tracer("github.com/hellopoisonx/aim/app/gateway/api")
 	ctx, span := tracer.Start(ctx, "ws.handle_typing")
 	defer span.End()
@@ -49,6 +50,22 @@ func (h *WsHandler) handleTyping(ctx context.Context, _ *websocket.Conn, frame *
 		attribute.Int64("ws.conversation_id", typingPayload.GetConversationId()),
 	)
 
+	if h.srv.LogicConversationClient == nil {
+		return h.writeErrorAck(ctx, conn, frame.GetSeq(), "", pb.AckStatus_ACK_STATUS_RETRYABLE, errorx.CodeInternal, "logic unavailable")
+	}
+
+	memberCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+
+	if err := membership.RequireMember(memberCtx, logx.WithContext(ctx), h.srv.LogicConversationClient, typingPayload.GetConversationId(), identity.UserID, membership.ActorUser); err != nil {
+		var codeErr *errorx.CodeError
+		if !errors.As(err, &codeErr) {
+			return h.writeErrorAck(ctx, conn, frame.GetSeq(), "", pb.AckStatus_ACK_STATUS_RETRYABLE, errorx.CodeInternal, "internal error")
+		}
+
+		return h.writeErrorAck(ctx, conn, frame.GetSeq(), "", ackStatusForCode(codeErr.Code), codeErr.Code, codeErr.Message)
+	}
+
 	// Publish via TypingPublisher (non-blocking best-effort; typing is transient).
 	if h.srv.TypingPub != nil {
 		if err := h.srv.TypingPub.PublishTyping(ctx, identity.UserID, typingPayload.GetConversationId()); err != nil {
@@ -59,7 +76,7 @@ func (h *WsHandler) handleTyping(ctx context.Context, _ *websocket.Conn, frame *
 	// Also fan out to local gateway connections immediately. The broker/core fan-out remains
 	// the cross-node path, while this local best-effort push avoids transient UI
 	// stalls when the consumer group is starting or a topic is not ready yet.
-	go h.fanOutTypingLocal(context.WithoutCancel(ctx), identity.UserID, typingPayload.GetConversationId())
+	fanout.Typing(ctx, h.srv, identity.UserID, typingPayload.GetConversationId())
 
 	return nil
 }
@@ -88,10 +105,7 @@ func (h *WsHandler) handleReadReceipt(ctx context.Context, conn *websocket.Conn,
 
 	identity, ok := authctx.IdentityFromContext(ctx)
 	if !ok {
-		codeErr := errorx.NewCodeError(errorx.CodeAuth, "no identity in context")
-		span.RecordError(codeErr)
-		span.SetStatus(codes.Error, codeErr.Message)
-		return h.writeErrorAck(ctx, conn, frame.GetSeq(), "", pb.AckStatus_ACK_STATUS_REJECTED, codeErr.Code, codeErr.Message)
+		return h.writeAuthErrorAck(ctx, conn, span, frame, "")
 	}
 
 	span.SetAttributes(
@@ -118,13 +132,7 @@ func (h *WsHandler) handleReadReceipt(ctx context.Context, conn *websocket.Conn,
 			return h.writeErrorAck(ctx, conn, frame.GetSeq(), "", pb.AckStatus_ACK_STATUS_RETRYABLE, errorx.CodeInternal, "internal error")
 		}
 
-		status := pb.AckStatus_ACK_STATUS_RETRYABLE
-		switch codeErr.Code {
-		case errorx.CodeBadInput, errorx.CodeAuth, errorx.CodeForbidden, errorx.CodeNotFound, errorx.CodeConflict, errorx.CodeRateLimit:
-			status = pb.AckStatus_ACK_STATUS_REJECTED
-		}
-
-		return h.writeErrorAck(ctx, conn, frame.GetSeq(), "", status, codeErr.Code, codeErr.Message)
+		return h.writeErrorAck(ctx, conn, frame.GetSeq(), "", ackStatusForCode(codeErr.Code), codeErr.Code, codeErr.Message)
 	}
 
 	// Best-effort fan-out: publish the read receipt event for downstream consumers.
@@ -141,7 +149,7 @@ func (h *WsHandler) handleReadReceipt(ctx context.Context, conn *websocket.Conn,
 	// broker/core fan-out loop catches up. Cross-node delivery still goes through
 	// the published event above. Run it independently so read-receipt ACK latency only
 	// depends on the durable cursor update.
-	go h.fanOutReadReceiptLocal(context.WithoutCancel(ctx), identity.UserID, receiptPayload.GetConversationId(), resp.GetReadState().GetLastReadMessageId(), resp.GetReadState().GetUpdatedAt())
+	fanout.ReadReceipt(ctx, h.srv, identity.UserID, receiptPayload.GetConversationId(), resp.GetReadState().GetLastReadMessageId(), resp.GetReadState().GetUpdatedAt())
 
 	ackFrame, err := ws.NewServerAck(frame.GetSeq(), "", 0)
 	if err != nil {
@@ -149,69 +157,4 @@ func (h *WsHandler) handleReadReceipt(ctx context.Context, conn *websocket.Conn,
 	}
 
 	return h.writeFrame(ctx, conn, ackFrame)
-}
-
-func (h *WsHandler) fanOutTypingLocal(ctx context.Context, fromUserID, conversationID int64) {
-	if h == nil || h.srv == nil || h.srv.LogicConversationClient == nil || h.manager == nil {
-		return
-	}
-
-	members, err := h.localConversationMembers(ctx, conversationID)
-	if err != nil {
-		logx.WithContext(ctx).Debugf("local typing fan-out skipped for conv %d: %v", conversationID, err)
-		return
-	}
-
-	gateway := ws.NewGatewayServer(h.manager)
-	for _, memberID := range members {
-		if memberID <= 0 || memberID == fromUserID || len(h.manager.GetByUserID(memberID)) == 0 {
-			continue
-		}
-
-		_, _ = gateway.PushTyping(ctx, &gwpb.PushTypingReq{
-			TargetUserId:   memberID,
-			FromUserId:     fromUserID,
-			ConversationId: conversationID,
-			Timestamp:      time.Now().UnixMilli(),
-		})
-	}
-}
-
-func (h *WsHandler) fanOutReadReceiptLocal(ctx context.Context, fromUserID, conversationID, lastReadMessageID, updatedAt int64) {
-	if h == nil || h.srv == nil || h.srv.LogicConversationClient == nil || h.manager == nil {
-		return
-	}
-
-	members, err := h.localConversationMembers(ctx, conversationID)
-	if err != nil {
-		logx.WithContext(ctx).Debugf("local read receipt fan-out skipped for conv %d: %v", conversationID, err)
-		return
-	}
-
-	gateway := ws.NewGatewayServer(h.manager)
-	for _, memberID := range members {
-		if memberID <= 0 || memberID == fromUserID || len(h.manager.GetByUserID(memberID)) == 0 {
-			continue
-		}
-
-		_, _ = gateway.PushReadReceipt(ctx, &gwpb.PushReadReceiptReq{
-			TargetUserId:      memberID,
-			ConversationId:    conversationID,
-			FromUserId:        fromUserID,
-			LastReadMessageId: lastReadMessageID,
-			UpdatedAt:         updatedAt,
-		})
-	}
-}
-
-func (h *WsHandler) localConversationMembers(ctx context.Context, conversationID int64) ([]int64, error) {
-	memberCtx, cancel := context.WithTimeout(ctx, time.Second)
-	defer cancel()
-
-	resp, err := h.srv.LogicConversationClient.GetConversationMembers(memberCtx, &logicpb.GetConversationMembersReq{ConversationId: conversationID})
-	if err != nil {
-		return nil, err
-	}
-
-	return resp.GetMemberIds(), nil
 }

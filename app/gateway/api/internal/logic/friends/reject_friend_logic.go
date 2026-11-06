@@ -7,12 +7,10 @@ import (
 	"context"
 
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/authctx"
-
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/friendshipservice"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
-	"github.com/hellopoisonx/aim/app/shared/events"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -32,46 +30,23 @@ func NewRejectFriendLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Reje
 }
 
 func (l *RejectFriendLogic) RejectFriend(req *types.RejectFriendRequest) (resp *types.RejectFriendResponse, err error) {
-	identity, ok := authctx.IdentityFromContext(l.ctx)
-	if !ok {
-		return nil, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
+	userID, err := authctx.RequireUserID(l.ctx)
+	if err != nil {
+		return nil, err
 	}
 
 	rpcResp, err := l.svcCtx.LogicFriendshipClient.RejectFriend(l.ctx, &friendshipservice.RejectFriendReq{
-		UserId:   identity.UserID,
+		UserId:   userID,
 		FriendId: req.Id,
 	})
 	if err != nil {
 		return nil, errorx.SanitizeGRPCError(l, "reject friend", err)
 	}
 
-	friendship := rpcResp.GetFriendship()
-	if friendship == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "internal error")
+	item, err := friendApplicationResult(l.ctx, l.svcCtx, l.Logger, "reject", req.Id, userID, rpcResp.GetFriendship())
+	if err != nil {
+		return nil, err
 	}
-
-	// Notify the requester on every gateway node holding their connections.
-	// The push is best-effort: the REST response below is already committed, so a
-	// broker hiccup must not turn a successful reject into an error.
-	if err := l.svcCtx.FriendAppPub.PublishFriendApplication(l.ctx, events.FriendApplicationEvent{
-		TargetUserID: req.Id,
-		UserID:       identity.UserID,
-		FriendID:     req.Id,
-		Status:       friendship.GetStatus(),
-		CreatedAt:    friendship.GetCreatedAt(),
-		UpdatedAt:    friendship.GetUpdatedAt(),
-	}); err != nil {
-		l.Errorf("publish friend application after reject failed: %v", err)
-	}
-
-	item := types.FriendshipItem{
-		UserId:    friendship.GetUserId(),
-		FriendId:  friendship.GetFriendId(),
-		Status:    friendship.GetStatus(),
-		CreatedAt: friendship.GetCreatedAt(),
-		UpdatedAt: friendship.GetUpdatedAt(),
-	}
-	enrichPeerInfo(l.ctx, l.svcCtx, req.Id, &item)
 
 	return &types.RejectFriendResponse{
 		Friendship: item,

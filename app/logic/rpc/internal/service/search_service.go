@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -12,13 +14,22 @@ import (
 
 const (
 	CodeSearchQueryEmpty = 40030
-	CodeSearchLimitRange = 40031
 
 	defaultSearchLimit = 20
 	maxSearchLimit     = 100
 )
 
 var ErrSearchQueryEmpty = errorx.NewCodeError(CodeSearchQueryEmpty, "search query must not be empty")
+
+// Scope is one searchable category accepted in SearchParams.Scopes.
+type Scope string
+
+const (
+	ScopeUsers         Scope = "users"
+	ScopeFriends       Scope = "friends"
+	ScopeConversations Scope = "conversations"
+	ScopeMessages      Scope = "messages"
+)
 
 // SearchStore defines the DAO queries needed by the search service.
 type SearchStore interface {
@@ -101,9 +112,6 @@ type SearchResults struct {
 	HasMore             bool
 }
 
-// UnifiedSearchFn defines the function type for search methods.
-type UnifiedSearchFn func(ctx context.Context, query string, limit int32) (*SearchResults, error)
-
 // SearchParams carries one search request.
 //
 // The fields mirror the RPC request so callers read like the API they serve;
@@ -140,12 +148,17 @@ func (s *SearchService) Search(ctx context.Context, params SearchParams) (*Searc
 	}
 	limit = normalizeLimit(limit)
 
-	hasUsers := hasScope(scopes, "users")
-	hasFriends := hasScope(scopes, "friends")
-	hasConversations := hasScope(scopes, "conversations")
-	hasMessages := hasScope(scopes, "messages")
+	categories, err := parseScopes(scopes)
+	if err != nil {
+		return nil, err
+	}
+
+	hasUsers := hasScope(categories, ScopeUsers)
+	hasFriends := hasScope(categories, ScopeFriends)
+	hasConversations := hasScope(categories, ScopeConversations)
+	hasMessages := hasScope(categories, ScopeMessages)
 	// Empty scopes means all.
-	allScopes := len(scopes) == 0 || (hasUsers && hasFriends && hasConversations && hasMessages)
+	allScopes := len(categories) == 0 || (hasUsers && hasFriends && hasConversations && hasMessages)
 	if allScopes {
 		hasUsers = true
 		hasFriends = true
@@ -193,13 +206,25 @@ func (s *SearchService) Search(ctx context.Context, params SearchParams) (*Searc
 	return results, nil
 }
 
-func hasScope(scopes []string, target string) bool {
-	for _, s := range scopes {
-		if strings.EqualFold(s, target) {
-			return true
+// parseScopes normalises the requested categories and rejects values outside
+// the closed set instead of silently searching nothing.
+func parseScopes(raw []string) ([]Scope, error) {
+	scopes := make([]Scope, 0, len(raw))
+	for _, r := range raw {
+		scope := Scope(strings.ToLower(strings.TrimSpace(r)))
+		switch scope {
+		case ScopeUsers, ScopeFriends, ScopeConversations, ScopeMessages:
+			scopes = append(scopes, scope)
+		default:
+			return nil, errorx.NewCodeError(errorx.CodeBadInput, fmt.Sprintf("unknown search scope %q", r))
 		}
 	}
-	return false
+
+	return scopes, nil
+}
+
+func hasScope(scopes []Scope, target Scope) bool {
+	return slices.Contains(scopes, target)
 }
 
 func (s *SearchService) searchUsers(ctx context.Context, query string, limit int32) ([]SearchUserResult, error) {

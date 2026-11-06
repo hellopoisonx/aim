@@ -21,11 +21,11 @@ func LeaveGroupHandler(svcCtx *svc.ServiceContext) http.HandlerFunc {
 		}
 
 		l := conversations.NewLeaveGroupLogic(r.Context(), svcCtx)
-		err := l.LeaveGroup(&req)
+		resp, err := l.LeaveGroup(&req)
 		if err != nil {
 			httpx.ErrorCtx(r.Context(), w, err)
 		} else {
-			httpx.Ok(w)
+			httpx.OkJsonCtx(r.Context(), w, resp)
 		}
 	}
 }

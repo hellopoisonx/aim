@@ -24,6 +24,7 @@ description: aim 的网关域。对应 `gateway` 模块。
 - `references/ws-internals.md`
 
 ## 最近变更
+- 2026-11-05: 消息链路重排。WS `SEND_MESSAGE` 与 Bot REST 发消息不再走 `core.Transfer`，改为 `logic.MessageService.IngestMessage`（复用 `LogicRpc` 连接，`CoreRpc`/`CoreClient` 删除）；聊天消息推送改由 gateway 订阅 `aim-gateway-push`（`PushConsumer`，消费组按节点派生 `aim-gateway-push-<node id>`），单聊 `DeliverLocal` 逐人投递、群聊 `DeliverLocalMembers` 单次编码按本节点成员扇出。`GatewayService.PushMessage` 保留给 core 系统消息路径。
 - 2026-11-01: 迁移到 RocketMQ。`Kafka` 配置块改为 `RocketMQ`（`Endpoint` + 4 个 topic），4 个 publisher 共享一个 `*rocketmq.Producer`（group `aim-gateway-producer`），`read_receipt` 用 `conversation_id` 作为 MessageGroup（FIFO topic）；`StartEventProducer`/`GracefulStop` 挂在 `gateway.go`/`Close()`。
 - 2026-06-03: 注册中心从 Nacos 切换到 etcd。`AuthRpc` / `CoreRpc` / `LogicRpc` / `AttachmentRpc` 改为 `zrpc.RpcClientConf`，YAML 写 `Etcd: { Hosts, Key }` 块；`zrpc.NewClient(c.X)` 客户端自动 watch。删除 `aimnacos` resolver 和 4 个 `namingClient` 字段，`Close()` 不再需要 4 个 `CloseClient`。
 

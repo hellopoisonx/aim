@@ -4,17 +4,17 @@ import (
 	"context"
 	"time"
 
-	"github.com/hellopoisonx/aim/app/core/rpc/pb"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/botctx"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
+	logicpb "github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/botperm"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
-// botDeviceID is the device_id reported to core.Transfer for Bot OpenAPI
+// botDeviceID is the device_id reported to logic.IngestMessage for Bot OpenAPI
 // requests so that downstream services can attribute the source as
 // bot-api even though no physical device is involved.
 const botDeviceID = "bot-api"
@@ -37,7 +37,7 @@ func NewBotSendMessageLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Bo
 }
 
 func (l *BotSendMessageLogic) BotSendMessage(req *types.BotSendMessageRequest) (*types.BotSendMessageResponse, error) {
-	identity, ok := botctx.FromContext(l.ctx)
+	identity, ok := botctx.IdentityFromContext(l.ctx)
 	if !ok {
 		return nil, errorx.NewCodeError(errorx.CodeBotTokenInvalid, "missing bot identity")
 	}
@@ -63,7 +63,7 @@ func (l *BotSendMessageLogic) BotSendMessage(req *types.BotSendMessageRequest) (
 	ctx, cancel := context.WithTimeout(l.ctx, 3*time.Second)
 	defer cancel()
 
-	rpcResp, err := l.svcCtx.CoreClient.Transfer(ctx, &pb.TransferReq{
+	rpcResp, err := l.svcCtx.MessageClient.IngestMessage(ctx, &logicpb.IngestMessageReq{
 		SenderId:       identity.BotUserID,
 		DeviceId:       botDeviceID,
 		ConversationId: conversationID,

@@ -5,7 +5,6 @@ import (
 
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
-	"github.com/hellopoisonx/aim/app/shared/errorx"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -25,24 +24,14 @@ func NewRemoveGroupMembersLogic(ctx context.Context, svcCtx *svc.ServiceContext)
 }
 
 func (l *RemoveGroupMembersLogic) RemoveGroupMembers(in *pb.RemoveGroupMembersReq) (*pb.RemoveGroupMembersResp, error) {
-	if in.GetConversationId() <= 0 {
-		return nil, errorx.NewCodeError(errorx.CodeBadInput, "conversation_id is required")
-	}
-	if in.GetOperatorId() <= 0 {
-		return nil, errorx.NewCodeError(errorx.CodeBadInput, "operator_id is required")
-	}
-	if len(in.GetMemberIds()) == 0 {
-		return nil, errorx.NewCodeError(errorx.CodeBadInput, "member_ids must not be empty")
-	}
-
-	convSvc := l.svcCtx.ConversationService
-	if convSvc == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "conversation service is not configured")
-	}
-
-	err := convSvc.RemoveGroupMembers(l.ctx, in.GetConversationId(), in.GetOperatorId(), in.GetOperatorName(), in.GetMemberIds())
+	convSvc, err := requireGroupMembersOp(l.svcCtx.ConversationService, in.GetConversationId(), in.GetOperatorId(), in.GetMemberIds())
 	if err != nil {
-		return nil, errorx.ToGRPCError(err)
+		return nil, err
+	}
+
+	err = convSvc.RemoveGroupMembers(l.ctx, in.GetConversationId(), in.GetOperatorId(), in.GetMemberIds())
+	if err != nil {
+		return nil, err
 	}
 
 	return &pb.RemoveGroupMembersResp{}, nil

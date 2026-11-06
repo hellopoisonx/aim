@@ -5,6 +5,7 @@ import (
 
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/authctx"
 
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/pbconv"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/conversationservice"
@@ -28,13 +29,13 @@ func NewListConversationsLogic(ctx context.Context, svcCtx *svc.ServiceContext) 
 }
 
 func (l *ListConversationsLogic) ListConversations() (resp *types.ListConversationsResponse, err error) {
-	identity, ok := authctx.IdentityFromContext(l.ctx)
-	if !ok {
-		return nil, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
+	userID, err := authctx.RequireUserID(l.ctx)
+	if err != nil {
+		return nil, err
 	}
 
 	rpcResp, err := l.svcCtx.LogicConversationClient.GetUserConversations(l.ctx, &conversationservice.GetUserConversationsReq{
-		UserId: identity.UserID,
+		UserId: userID,
 	})
 	if err != nil {
 		return nil, errorx.SanitizeGRPCError(l, "get user conversations", err)
@@ -43,21 +44,7 @@ func (l *ListConversationsLogic) ListConversations() (resp *types.ListConversati
 	convos := rpcResp.GetConversations()
 	items := make([]types.ConversationItem, 0, len(convos))
 	for _, conv := range convos {
-		memberIDs := conv.GetMemberIds()
-		if memberIDs == nil {
-			memberIDs = []int64{}
-		}
-
-		items = append(items, types.ConversationItem{
-			ConversationId:   conv.GetId(),
-			ConversationType: conv.GetConversationType(),
-			IsActive:         conv.GetIsActive(),
-			CreatedAt:        conv.GetCreatedAt(),
-			MemberIds:        memberIDs,
-			Name:             conv.GetName(),
-			Avatar:           conv.GetAvatar(),
-			CreatorId:        conv.GetCreatorId(),
-		})
+		items = append(items, pbconv.Conversation(conv))
 	}
 
 	return &types.ListConversationsResponse{

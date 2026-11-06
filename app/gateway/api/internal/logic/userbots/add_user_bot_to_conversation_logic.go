@@ -5,6 +5,7 @@ import (
 
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/authctx"
 
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/pbconv"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/botservice"
@@ -23,14 +24,14 @@ func NewAddUserBotToConversationLogic(ctx context.Context, svcCtx *svc.ServiceCo
 	return &AddUserBotToConversationLogic{Logger: logx.WithContext(ctx), ctx: ctx, svcCtx: svcCtx}
 }
 
-func (l *AddUserBotToConversationLogic) AddUserBotToConversation(req *types.AddUserBotToConversationRequest) (resp *types.AddUserBotToConversationResponse, err error) {
-	identity, ok := authctx.IdentityFromContext(l.ctx)
-	if !ok {
-		return nil, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
+func (l *AddUserBotToConversationLogic) AddUserBotToConversation(req *types.AddUserBotToConversationRequest) (resp *types.ConversationItem, err error) {
+	userID, err := authctx.RequireUserID(l.ctx)
+	if err != nil {
+		return nil, err
 	}
 	rpcResp, err := l.svcCtx.LogicBotClient.AddUserBotToConversation(l.ctx, &botservice.AddUserBotToConversationReq{
-		OwnerUserId: identity.UserID, BotUserId: req.Id,
-		ConversationId: req.ConversationId, OperatorId: identity.UserID, OperatorName: "",
+		OwnerUserId: userID, BotUserId: req.Id,
+		ConversationId: req.ConversationId, OperatorId: userID,
 	})
 	if err != nil {
 		return nil, errorx.SanitizeGRPCError(l, "add user bot to conversation", err)
@@ -39,10 +40,6 @@ func (l *AddUserBotToConversationLogic) AddUserBotToConversation(req *types.AddU
 	if conv == nil {
 		return nil, errorx.NewCodeError(errorx.CodeInternal, "internal error")
 	}
-	return &types.AddUserBotToConversationResponse{
-		ConversationId: conv.GetId(), ConversationType: conv.GetConversationType(),
-		IsActive: conv.GetIsActive(), CreatedAt: conv.GetCreatedAt(),
-		MemberIds: conv.GetMemberIds(), Name: conv.GetName(), Avatar: conv.GetAvatar(),
-		CreatorId: conv.GetCreatorId(),
-	}, nil
+	item := pbconv.Conversation(conv)
+	return &item, nil
 }

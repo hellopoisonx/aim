@@ -2,6 +2,8 @@ package svc
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"time"
 
 	"github.com/hellopoisonx/aim/app/auth/rpc/internal/config"
@@ -9,7 +11,7 @@ import (
 	"github.com/hellopoisonx/aim/app/auth/rpc/model/dao"
 	"github.com/hellopoisonx/aim/app/shared/gormdb"
 	"github.com/hellopoisonx/aim/app/shared/rocketmq"
-	"github.com/hellopoisonx/aim/app/shared/tools"
+	"github.com/hellopoisonx/aim/app/shared/snowflake"
 
 	"github.com/redis/go-redis/v9"
 	"github.com/zeromicro/go-zero/core/logx"
@@ -21,36 +23,41 @@ type ServiceContext struct {
 	Users       service.UserStore
 	Sessions    service.SessionStore
 	TokenIssuer service.TokenIssuer
-	IDGen       *tools.Snowflake
+	IDGen       *snowflake.Snowflake
 	// EventProducer publishes user.created as a transactional message. Nil when
 	// RocketMQ is not configured.
 	EventProducer *rocketmq.Producer
+	// RedisClient backs the session store. Nil in test contexts; Close owns it.
+	RedisClient *redis.Client
 	// Registrar creates users with the user.created event published atomically;
 	// nil when transactional publishing is not configured.
 	Registrar service.UserRegistrarStore
 }
 
-// authProducerGroup is the broker-visible producer group of auth.
-const authProducerGroup = "aim-auth-producer"
+// Close releases the session Redis client.
+func (s *ServiceContext) Close() {
+	if s == nil || s.RedisClient == nil {
+		return
+	}
+	if err := s.RedisClient.Close(); err != nil {
+		logx.WithContext(context.Background()).Errorf("failed to close session redis: %v", err)
+	}
+}
 
 // StartEventProducer connects the transactional user event producer.
 func (s *ServiceContext) StartEventProducer() {
-	if s == nil || s.EventProducer == nil {
+	if s == nil {
 		return
 	}
-	if err := s.EventProducer.Start(); err != nil {
-		logx.WithContext(context.Background()).Errorf("failed to start rocketmq user event producer: %v", err)
-	}
+	rocketmq.StartProducer(context.Background(), s.EventProducer, "rocketmq user event producer")
 }
 
 // StopEventProducer flushes and disconnects the transactional producer.
 func (s *ServiceContext) StopEventProducer() {
-	if s == nil || s.EventProducer == nil {
+	if s == nil {
 		return
 	}
-	if err := s.EventProducer.GracefulStop(); err != nil {
-		logx.WithContext(context.Background()).Errorf("failed to stop rocketmq user event producer: %v", err)
-	}
+	rocketmq.StopProducer(context.Background(), s.EventProducer, "rocketmq user event producer")
 }
 
 func NewServiceContext(c config.Config) *ServiceContext {
@@ -58,13 +65,13 @@ func NewServiceContext(c config.Config) *ServiceContext {
 
 	db, err := gormdb.Open(c.Postgres.DataSource)
 	if err != nil {
-		panic(err)
+		logx.Must(fmt.Errorf("auth service requires Postgres: %w", err))
 	}
 	store := dao.New(db)
 
-	idGen, err := tools.NewSnowflake(c.Token.SnowflakeMachineID)
+	idGen, err := snowflake.NewSnowflake(c.Token.SnowflakeMachineID)
 	if err != nil {
-		panic(err)
+		logx.Must(fmt.Errorf("auth service: snowflake generator: %w", err))
 	}
 
 	redisClient := redis.NewClient(&redis.Options{Addr: c.SessionRedis.Host, Password: c.SessionRedis.Pass})
@@ -72,33 +79,24 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	svcCtx := &ServiceContext{
 		Config:      c,
 		DAO:         store,
-		Users:       service.NewDAOUserStoreWithIDGenerator(store, idGen),
+		Users:       service.NewDAOUserStore(store, idGen),
 		Sessions:    service.NewRedisSessionStore(redisClient, c.Token.RefreshTTL),
 		TokenIssuer: service.NewJWTIssuer(c.Token.AccessSecret, c.Token.AccessTTL),
 		IDGen:       idGen,
+		RedisClient: redisClient,
 	}
 
 	// Transactional user.created publishing, when configured.
 	if c.IsUserEventProducerConfigured() {
-		producer, err := rocketmq.NewProducer(
-			c.UserEventProducerConf.EndpointConf,
-			authProducerGroup,
-			c.UserEventProducerConf.Topic,
-		)
+		producer, err := rocketmq.NewProducer(c.UserEventProducerConf, rocketmq.WithJournalChecker(store.DB()))
 		if err != nil {
-			panic(err)
+			logx.Must(fmt.Errorf("auth service: user event producer: %w", err))
 		}
-		producer.WithJournalChecker(store.DB())
 		svcCtx.EventProducer = producer
 		svcCtx.Registrar = service.NewUserRegistrar(store.DB(), idGen, producer, c.UserEventProducerConf.Topic)
 	}
 
 	return svcCtx
-}
-
-// NewServiceContextWithStores allows tests to inject fake stores.
-func NewServiceContextWithStores(c config.Config, users service.UserStore, sessions service.SessionStore, issuer service.TokenIssuer) *ServiceContext {
-	return &ServiceContext{Config: c, Users: users, Sessions: sessions, TokenIssuer: issuer}
 }
 
 func applyDefaults(c *config.Config) {
@@ -107,7 +105,7 @@ func applyDefaults(c *config.Config) {
 	}
 
 	if c.Token.AccessSecret == "" {
-		c.Token.AccessSecret = "aim-dev-access-secret"
+		logx.Must(errors.New("token access secret is required: set Config.Token.AccessSecret"))
 	}
 
 	if c.Token.AccessTTL == 0 {

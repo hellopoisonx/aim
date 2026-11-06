@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/authctx"
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/pbconv"
 
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
@@ -12,27 +13,6 @@ import (
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
-
-// friendTagToType converts a proto FriendTagResponse to a gateway type.
-func friendTagToType(t interface {
-	GetId() int64
-	GetUserId() int64
-	GetName() string
-	GetCreatedAt() int64
-	GetUpdatedAt() int64
-},
-) types.FriendTagItem {
-	if t == nil {
-		return types.FriendTagItem{}
-	}
-	return types.FriendTagItem{
-		Id:        t.GetId(),
-		UserId:    t.GetUserId(),
-		Name:      t.GetName(),
-		CreatedAt: t.GetCreatedAt(),
-		UpdatedAt: t.GetUpdatedAt(),
-	}
-}
 
 type CreateFriendTagLogic struct {
 	logx.Logger
@@ -49,13 +29,13 @@ func NewCreateFriendTagLogic(ctx context.Context, svcCtx *svc.ServiceContext) *C
 }
 
 func (l *CreateFriendTagLogic) CreateFriendTag(req *types.CreateFriendTagRequest) (resp *types.CreateFriendTagResponse, err error) {
-	identity, ok := authctx.IdentityFromContext(l.ctx)
-	if !ok {
-		return nil, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
+	userID, err := authctx.RequireUserID(l.ctx)
+	if err != nil {
+		return nil, err
 	}
 
 	rpcResp, err := l.svcCtx.LogicFriendshipClient.CreateFriendTag(l.ctx, &friendshipservice.CreateFriendTagReq{
-		UserId: identity.UserID,
+		UserId: userID,
 		Name:   req.Name,
 	})
 	if err != nil {
@@ -63,6 +43,6 @@ func (l *CreateFriendTagLogic) CreateFriendTag(req *types.CreateFriendTagRequest
 	}
 
 	return &types.CreateFriendTagResponse{
-		Tag: friendTagToType(rpcResp.GetTag()),
+		Tag: pbconv.FriendTag(rpcResp.GetTag()),
 	}, nil
 }

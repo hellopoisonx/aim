@@ -27,8 +27,8 @@ func NewUserCreatedConsumer(ctx context.Context, svcCtx *svc.ServiceContext) *Us
 func (c *UserCreatedConsumer) Consume(ctx context.Context, key string, value string) error {
 	var event events.UserCreatedEvent
 	if err := json.Unmarshal([]byte(value), &event); err != nil {
-		logx.WithContext(ctx).Errorf("failed to unmarshal user created event: %v", err)
-		return err
+		logx.WithContext(ctx).Errorf("dropping undecodable user created event key=%s: %v payload=%q", key, err, value)
+		return nil
 	}
 
 	ctx = tracing.ExtractTraceContext(ctx, event.TraceContextFields)

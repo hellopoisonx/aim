@@ -6,13 +6,12 @@ import (
 	"strings"
 
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/botctx"
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/fanout"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/membership"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
-	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/conversationservice"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
-	gwpb "github.com/hellopoisonx/aim/shared/proto/gateway/pb"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -40,10 +39,36 @@ func logicConversationClient(svcCtx *svc.ServiceContext) conversationservice.Con
 func ensureBotConversationMember(
 	ctx context.Context,
 	client conversationservice.ConversationService,
-	identity botctx.BotIdentity,
+	identity botctx.Identity,
 	conversationID int64,
 ) error {
 	return membership.RequireMember(ctx, noLogLogger{}, client, conversationID, identity.BotUserID, membership.ActorBot)
+}
+
+// botConversationRequest authorises the bot for action, parses the target
+// conversation id and checks the bot is a member of it.
+func botConversationRequest(
+	ctx context.Context,
+	svcCtx *svc.ServiceContext,
+	action string,
+	rawConversationID string,
+) (int64, conversationservice.ConversationService, error) {
+	identity, err := requireBotAction(ctx, action)
+	if err != nil {
+		return 0, nil, err
+	}
+
+	conversationID, err := parseRequiredID(rawConversationID, "id")
+	if err != nil {
+		return 0, nil, err
+	}
+
+	client := logicConversationClient(svcCtx)
+	if err := ensureBotConversationMember(ctx, client, identity, conversationID); err != nil {
+		return 0, nil, err
+	}
+
+	return conversationID, client, nil
 }
 
 // noLogLogger satisfies errorx.ErrorLogger for call paths that own logging.
@@ -51,21 +76,10 @@ type noLogLogger struct{}
 
 func (noLogLogger) Errorf(string, ...any) {}
 
-func convertBotReadState(st *pb.ReadStateItem) types.BotReadStateItem {
-	return types.BotReadStateItem{
-		UserId:            formatID(st.GetUserId()),
-		LastReadMessageId: formatID(st.GetLastReadMessageId()),
-		UpdatedAt:         st.GetUpdatedAt(),
-		Email:             st.GetEmail(),
-		Avatar:            st.GetAvatar(),
-		Name:              st.GetName(),
-	}
-}
-
 func publishBotReadReceipt(
 	ctx context.Context,
 	svcCtx *svc.ServiceContext,
-	identity botctx.BotIdentity,
+	identity botctx.Identity,
 	conversationID int64,
 	readState *pb.ReadStateItem,
 ) {
@@ -85,40 +99,5 @@ func publishBotReadReceipt(
 		}
 	}
 
-	fanOutBotReadReceiptLocal(ctx, svcCtx, identity.BotUserID, conversationID, readState)
-}
-
-func fanOutBotReadReceiptLocal(
-	ctx context.Context,
-	svcCtx *svc.ServiceContext,
-	fromUserID int64,
-	conversationID int64,
-	readState *pb.ReadStateItem,
-) {
-	if svcCtx == nil || svcCtx.WsManager == nil || readState == nil {
-		return
-	}
-
-	membersResp, err := svcCtx.LogicConversationClient.GetConversationMembers(ctx, &conversationservice.GetConversationMembersReq{
-		ConversationId: conversationID,
-	})
-	if err != nil {
-		logx.WithContext(ctx).Debugf("bot read receipt local fan-out skipped for conv %d: %v", conversationID, err)
-		return
-	}
-
-	gateway := svcCtx.Gateway()
-	for _, memberID := range membersResp.GetMemberIds() {
-		if memberID <= 0 || memberID == fromUserID || len(svcCtx.WsManager.GetByUserID(memberID)) == 0 {
-			continue
-		}
-
-		_, _ = gateway.PushReadReceipt(ctx, &gwpb.PushReadReceiptReq{
-			TargetUserId:      memberID,
-			ConversationId:    conversationID,
-			FromUserId:        fromUserID,
-			LastReadMessageId: readState.GetLastReadMessageId(),
-			UpdatedAt:         readState.GetUpdatedAt(),
-		})
-	}
+	fanout.ReadReceipt(ctx, svcCtx, identity.BotUserID, conversationID, readState.GetLastReadMessageId(), readState.GetUpdatedAt())
 }

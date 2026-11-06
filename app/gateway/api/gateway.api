@@ -116,7 +116,7 @@ type GetUserByNameResponse {
 }
 
 type UserListItem {
-	Id       string `json:"id"`
+	Id       int64  `json:"id"`
 	Nickname string `json:"nickname"`
 	Email    string `json:"email"`
 	Avatar   string `json:"avatar"`
@@ -133,17 +133,6 @@ type CreateConversationRequest {
 	MemberIds        []int64 `json:"member_ids" validate:"required,min=1"`
 	Name             string  `json:"name,optional"`
 	Avatar           string  `json:"avatar,optional"`
-}
-
-type CreateConversationResponse {
-	ConversationId   int64   `json:"conversation_id"`
-	ConversationType string  `json:"conversation_type"`
-	IsActive         bool    `json:"is_active"`
-	CreatedAt        int64   `json:"created_at"`
-	MemberIds        []int64 `json:"member_ids"`
-	Name             string  `json:"name"`
-	Avatar           string  `json:"avatar"`
-	CreatorId        int64   `json:"creator_id"`
 }
 
 type GetConversationHistoryRequest {
@@ -267,38 +256,6 @@ type MemberDetailItem {
 
 type GetConversationMembersResponse {
 	Members []MemberDetailItem `json:"members"`
-}
-
-type AddGroupMembersResponse {
-	ConversationId   int64   `json:"conversation_id"`
-	ConversationType string  `json:"conversation_type"`
-	IsActive         bool    `json:"is_active"`
-	CreatedAt        int64   `json:"created_at"`
-	MemberIds        []int64 `json:"member_ids"`
-	Name             string  `json:"name"`
-	Avatar           string  `json:"avatar"`
-	CreatorId        int64   `json:"creator_id"`
-}
-
-type UpdateGroupInfoResponse {
-	ConversationId   int64  `json:"conversation_id"`
-	ConversationType string `json:"conversation_type"`
-	IsActive         bool   `json:"is_active"`
-	Name             string `json:"name"`
-	Avatar           string `json:"avatar"`
-	CreatorId        int64  `json:"creator_id"`
-	CreatedAt        int64  `json:"created_at"`
-}
-
-type TransferGroupOwnerResponse {
-	ConversationId   int64   `json:"conversation_id"`
-	ConversationType string  `json:"conversation_type"`
-	IsActive         bool    `json:"is_active"`
-	CreatedAt        int64   `json:"created_at"`
-	MemberIds        []int64 `json:"member_ids"`
-	Name             string  `json:"name"`
-	Avatar           string  `json:"avatar"`
-	CreatorId        int64   `json:"creator_id"`
 }
 
 type InitAttachmentUploadRequest {
@@ -426,10 +383,10 @@ service gateway-api {
 )
 service gateway-api {
 	@handler CreateConversation
-	post / (CreateConversationRequest) returns (CreateConversationResponse)
+	post / (CreateConversationRequest) returns (ConversationItem)
 
 	@handler CreateGroup
-	post /group (CreateGroupRequest) returns (CreateConversationResponse)
+	post /group (CreateGroupRequest) returns (ConversationItem)
 
 	@handler GetConversationHistory
 	get /history/:id (GetConversationHistoryRequest) returns (GetConversationHistoryResponse)
@@ -441,28 +398,28 @@ service gateway-api {
 	get /:id/members (GetConversationMembersDetailRequest) returns (GetConversationMembersResponse)
 
 	@handler AddGroupMembers
-	post /:id/members (AddGroupMembersRequest) returns (AddGroupMembersResponse)
+	post /:id/members (AddGroupMembersRequest) returns (ConversationItem)
 
 	@handler RemoveGroupMember
-	delete /:id/members/:user_id (RemoveGroupMemberRequest)
+	delete /:id/members/:user_id (RemoveGroupMemberRequest) returns (MutationResult)
 
 	@handler GrantGroupAdmin
-	post /:id/members/:user_id/admin (GrantGroupAdminRequest)
+	post /:id/members/:user_id/admin (GrantGroupAdminRequest) returns (MutationResult)
 
 	@handler RevokeGroupAdmin
-	delete /:id/members/:user_id/admin (RevokeGroupAdminRequest)
+	delete /:id/members/:user_id/admin (RevokeGroupAdminRequest) returns (MutationResult)
 
 	@handler TransferGroupOwner
-	post /:id/owner (TransferGroupOwnerRequest) returns (TransferGroupOwnerResponse)
+	post /:id/owner (TransferGroupOwnerRequest) returns (ConversationItem)
 
 	@handler LeaveGroup
-	post /:id/leave (LeaveGroupRequest)
+	post /:id/leave (LeaveGroupRequest) returns (MutationResult)
 
 	@handler DismissGroup
-	delete /:id (DismissGroupRequest)
+	delete /:id (DismissGroupRequest) returns (MutationResult)
 
 	@handler UpdateGroupInfo
-	put /:id (UpdateGroupInfoRequest) returns (UpdateGroupInfoResponse)
+	put /:id (UpdateGroupInfoRequest) returns (ConversationItem)
 }
 
 @server (
@@ -995,30 +952,12 @@ type AddUserBotToConversationRequest {
 	ConversationId int64 `path:"conversation_id" validate:"required"`
 }
 
-type AddUserBotToConversationResponse {
-	ConversationId   int64   `json:"conversation_id"`
-	ConversationType string  `json:"conversation_type"`
-	IsActive         bool    `json:"is_active"`
-	CreatedAt        int64   `json:"created_at"`
-	MemberIds        []int64 `json:"member_ids"`
-	Name             string  `json:"name"`
-	Avatar           string  `json:"avatar"`
-	CreatorId        int64   `json:"creator_id"`
-}
-
 type CreateUserBotDirectConversationRequest {
 	Id int64 `path:"id" validate:"required"`
 }
 
-type CreateUserBotDirectConversationResponse {
-	ConversationId   int64   `json:"conversation_id"`
-	ConversationType string  `json:"conversation_type"`
-	IsActive         bool    `json:"is_active"`
-	CreatedAt        int64   `json:"created_at"`
-	MemberIds        []int64 `json:"member_ids"`
-	Name             string  `json:"name"`
-	Avatar           string  `json:"avatar"`
-	CreatorId        int64   `json:"creator_id"`
+type MutationResult {
+	Success bool `json:"success"`
 }
 
 type BotActionItem {
@@ -1084,10 +1023,10 @@ service gateway-api {
 	delete /:id/tokens/:token_id (RevokeUserBotTokenRequest) returns (RevokeUserBotTokenResponse)
 
 	@handler AddUserBotToConversation
-	post /:id/conversations/:conversation_id (AddUserBotToConversationRequest) returns (AddUserBotToConversationResponse)
+	post /:id/conversations/:conversation_id (AddUserBotToConversationRequest) returns (ConversationItem)
 
 	@handler CreateUserBotDirectConversation
-	post /:id/direct-conversation (CreateUserBotDirectConversationRequest) returns (CreateUserBotDirectConversationResponse)
+	post /:id/direct-conversation (CreateUserBotDirectConversationRequest) returns (ConversationItem)
 }
 
 @server (

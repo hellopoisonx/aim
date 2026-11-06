@@ -11,6 +11,7 @@ import (
 
 	rmq "github.com/apache/rocketmq-clients/golang/v5"
 	"github.com/zeromicro/go-zero/core/logx"
+	"github.com/zeromicro/go-zero/core/service"
 )
 
 const (
@@ -36,7 +37,9 @@ const (
 )
 
 // Handler consumes one message. Returning nil acknowledges the message;
-// returning an error leaves it unacknowledged for redelivery.
+// returning an error leaves it unacknowledged for redelivery. A payload that
+// cannot be decoded never becomes decodable on redelivery, so handlers ack it
+// (return nil) rather than stall the partition behind a poison message.
 type Handler func(ctx context.Context, key, value string) error
 
 // Delivery is one received message as the receive loop sees it. Ack reports the
@@ -122,8 +125,8 @@ type ConsumerService struct {
 }
 
 // NewConsumerService builds the consumer, or returns (nil, nil) when the
-// configuration is absent — services wire the result into their service group
-// unconditionally.
+// configuration is absent. A nil *ConsumerService tolerates Start and Stop, so
+// services may wire the result into their service group unconditionally.
 func NewConsumerService(conf ConsumerConf, handler Handler) (*ConsumerService, error) {
 	if !conf.IsConfigured() {
 		return nil, nil
@@ -158,6 +161,24 @@ func NewConsumerService(conf ConsumerConf, handler Handler) (*ConsumerService, e
 	}
 
 	return newConsumerService(conf, concurrency, handler, consumer, open), nil
+}
+
+// RegisterConsumer appends the consumer service for conf to services, or
+// returns services unchanged when conf is absent or cannot be built. Every
+// service registry uses it so the "skip when not configured" protocol is
+// spelled once.
+func RegisterConsumer(ctx context.Context, services []service.Service, label string, conf ConsumerConf, handler Handler) []service.Service {
+	consumer, err := NewConsumerService(conf, handler)
+	if err != nil {
+		logx.WithContext(ctx).Errorf("failed to create %s consumer: %v", label, err)
+		return services
+	}
+	if consumer == nil {
+		return services
+	}
+
+	logx.WithContext(ctx).Infof("%s consumer registered: group=%s topic=%s", label, conf.Group, conf.Topic)
+	return append(services, consumer)
 }
 
 // newConsumerService wires the loop around an arbitrary client.

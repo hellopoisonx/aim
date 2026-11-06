@@ -62,9 +62,12 @@ func ErrorResponse(ctx context.Context, err error) (int, any) {
 // Classification order:
 //  1. *errorx.CodeError raised in the gateway itself.
 //  2. A gRPC status carrying an AIM biz code (or a client-visible gRPC code).
-//  3. Remaining plain errors: go-zero's binding layer reports request parse and
-//     validation failures as untyped errors, so they map to 400. Every handler
-//     must return typed errors for anything else.
+//  3. Anything else: go-zero's binding layer reports request parse and
+//     validation failures as untyped errors, and nothing at this layer
+//     distinguishes them from untyped internal failures, so both become a 400
+//     carrying the raw message. A handler that returns an untyped error for a
+//     non-binding failure therefore reports it as bad input — return a typed
+//     error for anything that is not a binding failure.
 func Classify(err error) (int, Envelope) {
 	if codeErr, ok := errors.AsType[*errorx.CodeError](err); ok {
 		return statusFromCode(codeErr.Code), Envelope{Code: codeErr.Code, Msg: codeErr.Message}

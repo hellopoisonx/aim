@@ -5,6 +5,7 @@ import (
 
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/authctx"
 
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/pbconv"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/conversationservice"
@@ -27,16 +28,15 @@ func NewAddGroupMembersLogic(ctx context.Context, svcCtx *svc.ServiceContext) *A
 	}
 }
 
-func (l *AddGroupMembersLogic) AddGroupMembers(req *types.AddGroupMembersRequest) (resp *types.AddGroupMembersResponse, err error) {
-	identity, ok := authctx.IdentityFromContext(l.ctx)
-	if !ok {
-		return nil, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
+func (l *AddGroupMembersLogic) AddGroupMembers(req *types.AddGroupMembersRequest) (resp *types.ConversationItem, err error) {
+	userID, err := authctx.RequireUserID(l.ctx)
+	if err != nil {
+		return nil, err
 	}
 
 	rpcResp, err := l.svcCtx.LogicConversationClient.AddGroupMembers(l.ctx, &conversationservice.AddGroupMembersReq{
 		ConversationId: req.Id,
-		OperatorId:     identity.UserID,
-		OperatorName:   "",
+		OperatorId:     userID,
 		MemberIds:      req.MemberIds,
 	})
 	if err != nil {
@@ -48,19 +48,7 @@ func (l *AddGroupMembersLogic) AddGroupMembers(req *types.AddGroupMembersRequest
 		return nil, errorx.NewCodeError(errorx.CodeInternal, "internal error")
 	}
 
-	memberIDs := conv.GetMemberIds()
-	if memberIDs == nil {
-		memberIDs = []int64{}
-	}
+	item := pbconv.Conversation(conv)
 
-	return &types.AddGroupMembersResponse{
-		ConversationId:   conv.GetId(),
-		ConversationType: conv.GetConversationType(),
-		IsActive:         conv.GetIsActive(),
-		CreatedAt:        conv.GetCreatedAt(),
-		MemberIds:        memberIDs,
-		Name:             conv.GetName(),
-		Avatar:           conv.GetAvatar(),
-		CreatorId:        conv.GetCreatorId(),
-	}, nil
+	return &item, nil
 }

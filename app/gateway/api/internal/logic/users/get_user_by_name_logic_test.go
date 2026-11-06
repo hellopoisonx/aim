@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/config"
-	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc/svctest"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/userservice"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
@@ -19,27 +19,27 @@ import (
 
 func TestGetUserByNameLogic(t *testing.T) {
 	client := &fakeLogicUserClient{}
-	svcCtx := svc.NewServiceContextWithLogic(config.Config{}, client)
+	svcCtx := svctest.WithLogic(config.Config{}, client)
 
 	got, err := NewGetUserByNameLogic(context.Background(), svcCtx).GetUserByName(&types.GetUserByNameRequest{Name: "Alice"})
 	require.NoError(t, err)
 	require.Equal(t, "Alice", client.nickname)
 	require.Len(t, got.Users, 2)
-	require.Equal(t, "7", got.Users[0].Id)
+	require.Equal(t, int64(7), got.Users[0].Id)
 	require.Equal(t, "alice@example.com", got.Users[0].Email)
 	require.Equal(t, "https://example.com/alice.png", got.Users[0].Avatar)
-	require.Equal(t, "8", got.Users[1].Id)
+	require.Equal(t, int64(8), got.Users[1].Id)
 }
 
 func TestGetUserByNameLogicRequiresName(t *testing.T) {
-	svcCtx := svc.NewServiceContextWithLogic(config.Config{}, &fakeLogicUserClient{})
+	svcCtx := svctest.WithLogic(config.Config{}, &fakeLogicUserClient{})
 
 	_, err := NewGetUserByNameLogic(context.Background(), svcCtx).GetUserByName(&types.GetUserByNameRequest{})
 	requireCodeError(t, err, int(errorx.CodeBadInput), "name is required")
 }
 
 func TestGetUserByNameLogicPreservesLogicGrpcError(t *testing.T) {
-	svcCtx := svc.NewServiceContextWithLogic(config.Config{}, &fakeLogicUserClient{
+	svcCtx := svctest.WithLogic(config.Config{}, &fakeLogicUserClient{
 		err: status.Error(codes.NotFound, "user not found"),
 	})
 
@@ -48,7 +48,7 @@ func TestGetUserByNameLogicPreservesLogicGrpcError(t *testing.T) {
 }
 
 func TestGetUserByNameLogicSanitizesPlainError(t *testing.T) {
-	svcCtx := svc.NewServiceContextWithLogic(config.Config{}, &fakeLogicUserClient{
+	svcCtx := svctest.WithLogic(config.Config{}, &fakeLogicUserClient{
 		err: errors.New("postgres password leaked"),
 	})
 
@@ -58,7 +58,7 @@ func TestGetUserByNameLogicSanitizesPlainError(t *testing.T) {
 
 func TestGetUserByIdLogic(t *testing.T) {
 	client := &fakeLogicUserClient{}
-	svcCtx := svc.NewServiceContextWithLogic(config.Config{}, client)
+	svcCtx := svctest.WithLogic(config.Config{}, client)
 
 	got, err := NewGetUserByIdLogic(context.Background(), svcCtx).GetUserById(&types.GetUserByIdRequest{Id: 7})
 	require.NoError(t, err)
@@ -69,14 +69,14 @@ func TestGetUserByIdLogic(t *testing.T) {
 }
 
 func TestGetUserByIdLogicRequiresId(t *testing.T) {
-	svcCtx := svc.NewServiceContextWithLogic(config.Config{}, &fakeLogicUserClient{})
+	svcCtx := svctest.WithLogic(config.Config{}, &fakeLogicUserClient{})
 
 	_, err := NewGetUserByIdLogic(context.Background(), svcCtx).GetUserById(&types.GetUserByIdRequest{})
 	requireCodeError(t, err, int(errorx.CodeBadInput), "id is required")
 }
 
 func TestGetUserByIdLogicPreservesLogicGrpcError(t *testing.T) {
-	svcCtx := svc.NewServiceContextWithLogic(config.Config{}, &fakeLogicUserClient{
+	svcCtx := svctest.WithLogic(config.Config{}, &fakeLogicUserClient{
 		err: status.Error(codes.NotFound, "user not found"),
 	})
 
@@ -85,7 +85,7 @@ func TestGetUserByIdLogicPreservesLogicGrpcError(t *testing.T) {
 }
 
 func TestGetUserByIdLogicSanitizesPlainError(t *testing.T) {
-	svcCtx := svc.NewServiceContextWithLogic(config.Config{}, &fakeLogicUserClient{
+	svcCtx := svctest.WithLogic(config.Config{}, &fakeLogicUserClient{
 		err: errors.New("postgres password leaked"),
 	})
 

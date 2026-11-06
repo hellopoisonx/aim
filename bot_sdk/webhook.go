@@ -1,36 +1,31 @@
 package botsdk
 
 import (
-	"crypto/hmac"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"strings"
+
+	"github.com/hellopoisonx/aim/app/shared/botwebhook"
 )
 
-const signaturePrefixSHA256 = "sha256="
+// WebhookEvent is the payload AIM POSTs to a bot webhook URL.
+type WebhookEvent = botwebhook.WebhookEvent
 
+// WebhookMessage is the message carried by a WebhookEvent.
+type WebhookMessage = botwebhook.WebhookMessage
+
+// HashWebhookSecret is the form in which AIM stores a webhook secret.
 func HashWebhookSecret(plaintextSecret string) string {
-	sum := sha256.Sum256([]byte(plaintextSecret))
-	return hex.EncodeToString(sum[:])
+	return botwebhook.HashWebhookSecret(plaintextSecret)
 }
 
+// VerifySignature checks the X-AIM-Signature header against the plaintext secret.
 func VerifySignature(plaintextSecret string, rawBody []byte, signatureHeader string) bool {
-	if plaintextSecret == "" {
-		return false
-	}
-	return VerifySignatureWithSecretHash(HashWebhookSecret(plaintextSecret), rawBody, signatureHeader)
+	return botwebhook.VerifySignature(plaintextSecret, rawBody, signatureHeader)
 }
 
+// VerifySignatureWithSecretHash is VerifySignature for callers holding the hash.
 func VerifySignatureWithSecretHash(secretHash string, rawBody []byte, signatureHeader string) bool {
-	if secretHash == "" || !strings.HasPrefix(signatureHeader, signaturePrefixSHA256) {
-		return false
-	}
-
-	got := strings.TrimPrefix(signatureHeader, signaturePrefixSHA256)
-	expected := signWithSecretHash(secretHash, rawBody)
-	return hmac.Equal([]byte(got), []byte(expected))
+	return botwebhook.VerifySignatureWithSecretHash(secretHash, rawBody, signatureHeader)
 }
 
 func ParseWebhookEvent(rawBody []byte) (*WebhookEvent, error) {
@@ -45,10 +40,4 @@ func ParseWebhookEvent(rawBody []byte) (*WebhookEvent, error) {
 		return nil, errors.New("webhook type is required")
 	}
 	return &event, nil
-}
-
-func signWithSecretHash(secretHash string, rawBody []byte) string {
-	mac := hmac.New(sha256.New, []byte(secretHash))
-	mac.Write(rawBody)
-	return hex.EncodeToString(mac.Sum(nil))
 }

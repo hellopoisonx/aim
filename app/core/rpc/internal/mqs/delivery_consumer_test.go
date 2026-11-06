@@ -6,212 +6,180 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/hellopoisonx/aim/app/shared/events"
-
-	"github.com/alicebob/miniredis/v2"
 	"github.com/hellopoisonx/aim/app/core/rpc/internal/config"
-	"github.com/hellopoisonx/aim/app/core/rpc/internal/rpc"
 	"github.com/hellopoisonx/aim/app/core/rpc/internal/svc"
-	logicpb "github.com/hellopoisonx/aim/app/logic/rpc/pb"
+	"github.com/hellopoisonx/aim/app/shared/events"
 	"github.com/hellopoisonx/aim/app/shared/rocketmq"
 	"github.com/hellopoisonx/aim/app/shared/tracing"
-	gwpb "github.com/hellopoisonx/aim/shared/proto/gateway/pb"
-	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel"
 	tracesdk "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
-	"go.opentelemetry.io/otel/trace"
-	"google.golang.org/grpc"
 )
 
-// --- Fake implementations ---
-
-type fakeGatewayClient struct {
-	pushes            []pushRecord
-	typingPushes      []*gwpb.PushTypingReq
-	readReceiptPushes []*gwpb.PushReadReceiptReq
-	pushErr           error
-	pushResp          *gwpb.PushMessageResp
+type fakePushProducer struct {
+	messages []rocketmq.Message
+	err      error
 }
 
-type pushRecord struct {
-	ctx context.Context
-	req *gwpb.PushMessageReq
-}
-
-func (f *fakeGatewayClient) PushMessage(ctx context.Context, req *gwpb.PushMessageReq) (*gwpb.PushMessageResp, error) {
-	if f.pushErr != nil {
-		return nil, f.pushErr
-	}
-
-	f.pushes = append(f.pushes, pushRecord{ctx: ctx, req: req})
-	if f.pushResp != nil {
-		return f.pushResp, nil
-	}
-
-	return &gwpb.PushMessageResp{Success: true}, nil
-}
-
-func (f *fakeGatewayClient) PushPresence(ctx context.Context, req *gwpb.PushPresenceReq) (*gwpb.PushPresenceResp, error) {
-	return &gwpb.PushPresenceResp{Success: true}, nil
-}
-
-func (f *fakeGatewayClient) PushTyping(ctx context.Context, req *gwpb.PushTypingReq) (*gwpb.PushTypingResp, error) {
-	f.typingPushes = append(f.typingPushes, req)
-
-	return &gwpb.PushTypingResp{Success: true}, nil
-}
-
-func (f *fakeGatewayClient) PushReadReceipt(ctx context.Context, req *gwpb.PushReadReceiptReq) (*gwpb.PushReadReceiptResp, error) {
-	f.readReceiptPushes = append(f.readReceiptPushes, req)
-
-	return &gwpb.PushReadReceiptResp{Success: true}, nil
-}
-
-func (f *fakeGatewayClient) PushNotification(ctx context.Context, req *gwpb.PushNotificationReq) (*gwpb.PushNotificationResp, error) {
-	return &gwpb.PushNotificationResp{Success: true}, nil
-}
-
-func (f *fakeGatewayClient) PushFriendApplication(_ context.Context, _ *gwpb.PushFriendApplicationReq) (*gwpb.PushFriendApplicationResp, error) {
-	return &gwpb.PushFriendApplicationResp{Success: true}, nil
-}
-
-func newFakeGatewayClient() *fakeGatewayClient {
-	return &fakeGatewayClient{pushResp: &gwpb.PushMessageResp{Success: true}}
-}
-
-// Ensure fakeGatewayClient implements rpc.GatewayPusher
-var _ rpc.GatewayPusher = (*fakeGatewayClient)(nil)
-
-type fakeConversationClient struct {
-	memberIDs []int64
-	err       error
-}
-
-func (f *fakeConversationClient) CreateConversation(context.Context, *logicpb.CreateConversationReq, ...grpc.CallOption) (*logicpb.CreateConversationResp, error) {
-	return nil, errors.New("CreateConversation not implemented")
-}
-
-func (f *fakeConversationClient) GetConversationHistory(context.Context, *logicpb.GetConversationHistoryReq, ...grpc.CallOption) (*logicpb.GetConversationHistoryResp, error) {
-	return nil, errors.New("GetConversationHistory not implemented")
-}
-
-func (f *fakeConversationClient) GetConversationMembers(context.Context, *logicpb.GetConversationMembersReq, ...grpc.CallOption) (*logicpb.GetConversationMembersResp, error) {
+func (f *fakePushProducer) Publish(_ context.Context, message rocketmq.Message) error {
 	if f.err != nil {
-		return nil, f.err
+		return f.err
 	}
-	return &logicpb.GetConversationMembersResp{MemberIds: f.memberIDs}, nil
+	f.messages = append(f.messages, message)
+	return nil
 }
 
-func (f *fakeConversationClient) GetUserConversations(context.Context, *logicpb.GetUserConversationsReq, ...grpc.CallOption) (*logicpb.GetUserConversationsResp, error) {
-	return nil, errors.New("GetUserConversations not implemented")
+func decodePush(t *testing.T, producer *fakePushProducer, i int) events.PushEvent {
+	t.Helper()
+
+	require.Greater(t, len(producer.messages), i)
+
+	var event events.PushEvent
+	require.NoError(t, json.Unmarshal(producer.messages[i].Body, &event))
+
+	return event
 }
 
-func (f *fakeConversationClient) AddGroupMembers(context.Context, *logicpb.AddGroupMembersReq, ...grpc.CallOption) (*logicpb.AddGroupMembersResp, error) {
-	return nil, errors.New("AddGroupMembers not implemented")
-}
-
-func (f *fakeConversationClient) RemoveGroupMembers(context.Context, *logicpb.RemoveGroupMembersReq, ...grpc.CallOption) (*logicpb.RemoveGroupMembersResp, error) {
-	return nil, errors.New("RemoveGroupMembers not implemented")
-}
-
-func (f *fakeConversationClient) LeaveGroup(context.Context, *logicpb.LeaveGroupReq, ...grpc.CallOption) (*logicpb.LeaveGroupResp, error) {
-	return nil, errors.New("LeaveGroup not implemented")
-}
-
-func (f *fakeConversationClient) DismissGroup(context.Context, *logicpb.DismissGroupReq, ...grpc.CallOption) (*logicpb.DismissGroupResp, error) {
-	return nil, errors.New("DismissGroup not implemented")
-}
-
-func (f *fakeConversationClient) UpdateGroupInfo(context.Context, *logicpb.UpdateGroupInfoReq, ...grpc.CallOption) (*logicpb.UpdateGroupInfoResp, error) {
-	return nil, errors.New("UpdateGroupInfo not implemented")
-}
-
-func (f *fakeConversationClient) GrantGroupAdmin(context.Context, *logicpb.GrantGroupAdminReq, ...grpc.CallOption) (*logicpb.GrantGroupAdminResp, error) {
-	return nil, errors.New("GrantGroupAdmin not implemented")
-}
-
-func (f *fakeConversationClient) RevokeGroupAdmin(context.Context, *logicpb.RevokeGroupAdminReq, ...grpc.CallOption) (*logicpb.RevokeGroupAdminResp, error) {
-	return nil, errors.New("RevokeGroupAdmin not implemented")
-}
-
-func (f *fakeConversationClient) TransferGroupOwner(context.Context, *logicpb.TransferGroupOwnerReq, ...grpc.CallOption) (*logicpb.TransferGroupOwnerResp, error) {
-	return nil, errors.New("TransferGroupOwner not implemented")
-}
-
-func (f *fakeConversationClient) GetConversationMembersDetail(context.Context, *logicpb.GetConversationMembersDetailReq, ...grpc.CallOption) (*logicpb.GetConversationMembersDetailResp, error) {
-	return nil, errors.New("GetConversationMembersDetail not implemented")
-}
-
-func (f *fakeConversationClient) UpdateReadReceipt(context.Context, *logicpb.UpdateReadReceiptReq, ...grpc.CallOption) (*logicpb.UpdateReadReceiptResp, error) {
-	return nil, errors.New("UpdateReadReceipt not implemented")
-}
-
-func (f *fakeConversationClient) ListConversationReadStates(context.Context, *logicpb.ListConversationReadStatesReq, ...grpc.CallOption) (*logicpb.ListConversationReadStatesResp, error) {
-	return nil, errors.New("ListConversationReadStates not implemented")
-}
-
-var _ logicpb.ConversationServiceClient = (*fakeConversationClient)(nil)
-
-// --- Test helpers ---
-
-func newTestServiceContext(t *testing.T, gwClient rpc.GatewayPusher) *svc.ServiceContext {
-	mr := miniredis.NewMiniRedis()
-	require.NoError(t, mr.Start())
-	t.Cleanup(func() { mr.Close() })
-
-	client := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-
-	t.Cleanup(func() {
-		if err := client.Close(); err != nil {
-			t.Logf("close redis client: %v", err)
-		}
-	})
-
-	return &svc.ServiceContext{
-		RedisClient:   client,
-		GatewayClient: gwClient,
+func newDeliveryConsumer(producer *fakePushProducer, conversation *fakeConversationClient) *DeliveryConsumer {
+	svcCtx := &svc.ServiceContext{}
+	if conversation != nil {
+		svcCtx.LogicConversationClient = conversation
 	}
-}
 
-// --- Test cases ---
-
-func TestDeliveryConsumer_Consume_Success(t *testing.T) {
-	fakeGw := newFakeGatewayClient()
-	svcCtx := newTestServiceContext(t, fakeGw)
 	consumer := NewDeliveryConsumer(context.Background(), svcCtx)
+	consumer.push = producer
+	consumer.topic = events.TopicGatewayPush
+
+	return consumer
+}
+
+func transferEventValue(t *testing.T, event events.TransferEvent) string {
+	t.Helper()
+
+	value, err := json.Marshal(event)
+	require.NoError(t, err)
+
+	return string(value)
+}
+
+func TestDeliveryConsumer_DirectConversationWritesOneEventPerRecipient(t *testing.T) {
+	producer := &fakePushProducer{}
+	consumer := newDeliveryConsumer(producer, &fakeConversationClient{
+		memberIDs:        []int64{100, 200, 200},
+		conversationType: "direct",
+	})
 
 	event := events.TransferEvent{
 		MessageID:      12345,
 		SenderID:       100,
-		DeviceID:       "device-1",
+		DeviceID:       "sender-device",
 		ConversationID: 200,
 		MessageType:    "text",
 		Content:        "hello world",
 		ClientMsgID:    "client-msg-1",
-		Mentions:       []string{"alice", "bob"},
+		Mentions:       []string{"200"},
 		Timestamp:      1700000000000,
 	}
-	value, err := json.Marshal(event)
-	require.NoError(t, err)
 
-	err = consumer.Consume(context.Background(), "200", string(value))
-	require.NoError(t, err)
-	require.Len(t, fakeGw.pushes, 1)
-	require.Equal(t, int64(12345), fakeGw.pushes[0].req.MessageId)
-	require.Equal(t, int64(100), fakeGw.pushes[0].req.TargetUserId)
-	require.Equal(t, "text", fakeGw.pushes[0].req.MessageType)
-	require.Equal(t, "hello world", fakeGw.pushes[0].req.Content)
-	require.Equal(t, "device-1", fakeGw.pushes[0].req.SourceDeviceId)
+	require.NoError(t, consumer.Consume(context.Background(), "200", transferEventValue(t, event)))
+
+	require.Len(t, producer.messages, 2, "a direct conversation writes one copy per recipient")
+
+	first := decodePush(t, producer, 0)
+	second := decodePush(t, producer, 1)
+
+	require.Equal(t, int64(100), first.TargetUserID)
+	require.Equal(t, int64(200), second.TargetUserID)
+	require.Empty(t, first.MemberIDs, "a write-fan-out copy carries no member snapshot")
+	require.Empty(t, second.MemberIDs)
+
+	for _, push := range []events.PushEvent{first, second} {
+		require.Equal(t, int64(12345), push.MessageID)
+		require.Equal(t, int64(200), push.ConversationID)
+		require.Equal(t, "direct", push.ConversationType)
+		require.Equal(t, "text", push.MessageType)
+		require.Equal(t, "hello world", push.Content)
+		require.Equal(t, int64(100), push.SenderID)
+		require.Equal(t, "client-msg-1", push.ClientMsgID)
+		require.Equal(t, []string{"200"}, push.Mentions)
+		require.Equal(t, int64(1700000000000), push.SentAt)
+		require.Equal(t, "sender-device", push.SourceDeviceID)
+		require.NotNil(t, push.SenderInfo)
+	}
+
+	for _, message := range producer.messages {
+		require.Equal(t, "200", message.Key)
+		require.Equal(t, "200", message.ShardingKey, "the conversation id keeps the topic ordered")
+	}
 }
 
-func TestDeliveryConsumer_Consume_PropagatesTraceContext(t *testing.T) {
-	fakeGw := newFakeGatewayClient()
-	svcCtx := newTestServiceContext(t, fakeGw)
-	consumer := NewDeliveryConsumer(context.Background(), svcCtx)
-	traceID, err := trace.TraceIDFromHex("4bf92f3577b34da6a3ce929d0e0e4736")
-	require.NoError(t, err)
+func TestDeliveryConsumer_GroupConversationPublishesOneSharedEvent(t *testing.T) {
+	producer := &fakePushProducer{}
+	consumer := newDeliveryConsumer(producer, &fakeConversationClient{
+		memberIDs:        []int64{100, 200, 300},
+		conversationType: "group",
+	})
+
+	event := events.TransferEvent{
+		MessageID:      555,
+		SenderID:       100,
+		DeviceID:       "sender-device",
+		ConversationID: 900,
+		MessageType:    "text",
+		Content:        "hi group",
+		ClientMsgID:    "client-group-1",
+		Timestamp:      1700000000000,
+	}
+
+	require.NoError(t, consumer.Consume(context.Background(), "900", transferEventValue(t, event)))
+
+	require.Len(t, producer.messages, 1, "a group conversation publishes one conversation event")
+
+	push := decodePush(t, producer, 0)
+	require.Zero(t, push.TargetUserID, "a read-fan-out event has no single recipient")
+	require.Equal(t, []int64{100, 200, 300}, push.MemberIDs)
+	require.Equal(t, "group", push.ConversationType)
+	require.Equal(t, "900", producer.messages[0].ShardingKey)
+}
+
+func TestDeliveryConsumer_DropsUndecodablePayload(t *testing.T) {
+	producer := &fakePushProducer{}
+	consumer := newDeliveryConsumer(producer, nil)
+
+	require.NoError(t, consumer.Consume(context.Background(), "200", "invalid json{"))
+	require.Empty(t, producer.messages)
+}
+
+func TestDeliveryConsumer_PublishFailureIsReturned(t *testing.T) {
+	producer := &fakePushProducer{err: errors.New("broker unavailable")}
+	consumer := newDeliveryConsumer(producer, nil)
+
+	event := events.TransferEvent{MessageID: 1, SenderID: 100, ConversationID: 200, MessageType: "text", Content: "hello", ClientMsgID: "c1"}
+	err := consumer.Consume(context.Background(), "200", transferEventValue(t, event))
+	require.Error(t, err)
+}
+
+func TestDeliveryConsumer_MemberLookupFailurePublishesNothing(t *testing.T) {
+	producer := &fakePushProducer{}
+	consumer := newDeliveryConsumer(producer, &fakeConversationClient{err: errors.New("logic unavailable")})
+
+	event := events.TransferEvent{MessageID: 1, SenderID: 100, ConversationID: 200, MessageType: "text", Content: "hello", ClientMsgID: "c1"}
+	err := consumer.Consume(context.Background(), "200", transferEventValue(t, event))
+	require.Error(t, err)
+	require.Empty(t, producer.messages)
+}
+
+func TestDeliveryConsumer_WithoutProducerDropsEvent(t *testing.T) {
+	consumer := NewDeliveryConsumer(context.Background(), &svc.ServiceContext{})
+
+	event := events.TransferEvent{MessageID: 1, SenderID: 100, ConversationID: 200, MessageType: "text", Content: "hello", ClientMsgID: "c1"}
+	require.NoError(t, consumer.Consume(context.Background(), "200", transferEventValue(t, event)))
+}
+
+func TestDeliveryConsumer_PropagatesTraceContext(t *testing.T) {
+	producer := &fakePushProducer{}
+	consumer := newDeliveryConsumer(producer, nil)
 
 	event := events.TransferEvent{
 		TraceContextFields: tracing.TraceContextFields{TraceParent: "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"},
@@ -223,228 +191,35 @@ func TestDeliveryConsumer_Consume_PropagatesTraceContext(t *testing.T) {
 		ClientMsgID:        "client-msg-1",
 		Timestamp:          1700000000000,
 	}
-	value, err := json.Marshal(event)
-	require.NoError(t, err)
 
-	err = consumer.Consume(context.Background(), "200", string(value))
-	require.NoError(t, err)
-	require.Len(t, fakeGw.pushes, 1)
-	require.Equal(t, traceID, trace.SpanContextFromContext(fakeGw.pushes[0].ctx).TraceID())
+	require.NoError(t, consumer.Consume(context.Background(), "200", transferEventValue(t, event)))
+	require.Len(t, producer.messages, 1)
+
+	// The published event carries the incoming trace so gateway spans continue it.
+	push := decodePush(t, producer, 0)
+	require.Contains(t, push.TraceParent, "4bf92f3577b34da6a3ce929d0e0e4736")
 }
 
-func TestDeliveryConsumer_Consume_InvalidJSON(t *testing.T) {
-	fakeGw := newFakeGatewayClient()
-	svcCtx := newTestServiceContext(t, fakeGw)
-	consumer := NewDeliveryConsumer(context.Background(), svcCtx)
-
-	// Undecodable payloads are dropped so the partition keeps moving.
-	err := consumer.Consume(context.Background(), "200", "invalid json{")
-	require.NoError(t, err)
-	require.Empty(t, fakeGw.pushes)
-}
-
-func TestDeliveryConsumer_Consume_GatewayPushFailure(t *testing.T) {
-	fakeGw := &fakeGatewayClient{pushErr: errors.New("gateway unavailable")}
-	svcCtx := newTestServiceContext(t, fakeGw)
-	consumer := NewDeliveryConsumer(context.Background(), svcCtx)
-
-	event := events.TransferEvent{
-		MessageID:      12345,
-		SenderID:       100,
-		ConversationID: 200,
-		MessageType:    "text",
-		Content:        "hello",
-		ClientMsgID:    "client-1",
-		Timestamp:      1700000000000,
-	}
-	value, err := json.Marshal(event)
-	require.NoError(t, err)
-
-	err = consumer.Consume(context.Background(), "200", string(value))
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "gateway unavailable")
-}
-
-func TestDeliveryConsumer_Consume_RecordsSpanError(t *testing.T) {
+func TestDeliveryConsumer_PublishFailureRecordsSpanError(t *testing.T) {
 	spans := tracetest.NewSpanRecorder()
 	tp := tracesdk.NewTracerProvider(tracesdk.WithSpanProcessor(spans))
-	prev := otel.GetTracerProvider()
+	previous := otel.GetTracerProvider()
 	otel.SetTracerProvider(tp)
-	t.Cleanup(func() { otel.SetTracerProvider(prev) })
+	t.Cleanup(func() { otel.SetTracerProvider(previous) })
 
-	fakeGw := &fakeGatewayClient{pushErr: errors.New("gateway unavailable")}
-	svcCtx := newTestServiceContext(t, fakeGw)
-	consumer := NewDeliveryConsumer(context.Background(), svcCtx)
+	producer := &fakePushProducer{err: errors.New("broker unavailable")}
+	consumer := newDeliveryConsumer(producer, nil)
 
 	event := events.TransferEvent{MessageID: 12345, SenderID: 100, ConversationID: 200, MessageType: "text", Content: "hello", ClientMsgID: "client-1", Timestamp: 1700000000000}
-	value, err := json.Marshal(event)
-	require.NoError(t, err)
-
-	err = consumer.Consume(context.Background(), "200", string(value))
-	require.Error(t, err)
+	require.Error(t, consumer.Consume(context.Background(), "200", transferEventValue(t, event)))
 
 	ended := spans.Ended()
 	require.NotEmpty(t, ended)
 	require.NotEmpty(t, ended[0].Events())
 }
 
-func TestDeliveryConsumer_Consume_AllFields(t *testing.T) {
-	fakeGw := newFakeGatewayClient()
-	svcCtx := newTestServiceContext(t, fakeGw)
-	consumer := NewDeliveryConsumer(context.Background(), svcCtx)
-
-	event := events.TransferEvent{
-		MessageID:      99999,
-		SenderID:       42,
-		DeviceID:       "dev-x",
-		ConversationID: 300,
-		MessageType:    "image",
-		Content:        "https://example.com/image.png",
-		ClientMsgID:    "msg-xyz",
-		Mentions:       []string{"alice"},
-		Timestamp:      1700000000000,
-	}
-	value, err := json.Marshal(event)
-	require.NoError(t, err)
-
-	err = consumer.Consume(context.Background(), "300", string(value))
-	require.NoError(t, err)
-	require.Len(t, fakeGw.pushes, 1)
-
-	push := fakeGw.pushes[0].req
-	require.Equal(t, int64(99999), push.MessageId)
-	require.Equal(t, int64(42), push.SenderId)
-	require.Equal(t, int64(300), push.ConversationId)
-	require.Equal(t, "image", push.MessageType)
-	require.Equal(t, "https://example.com/image.png", push.Content)
-	require.Equal(t, "msg-xyz", push.ClientMsgId)
-	require.Equal(t, []string{"alice"}, push.Mentions)
-	require.Equal(t, int64(1700000000000), push.SentAt)
-	require.Equal(t, "dev-x", push.SourceDeviceId)
-}
-
-func TestDeliveryConsumer_Consume_EmptyContent(t *testing.T) {
-	fakeGw := newFakeGatewayClient()
-	svcCtx := newTestServiceContext(t, fakeGw)
-	consumer := NewDeliveryConsumer(context.Background(), svcCtx)
-
-	event := events.TransferEvent{
-		MessageID:      111,
-		SenderID:       10,
-		ConversationID: 50,
-		MessageType:    "text",
-		Content:        "",
-		ClientMsgID:    "client-empty",
-		Timestamp:      1700000000000,
-	}
-	value, err := json.Marshal(event)
-	require.NoError(t, err)
-
-	err = consumer.Consume(context.Background(), "50", string(value))
-	require.NoError(t, err)
-	require.Len(t, fakeGw.pushes, 1)
-	require.Empty(t, fakeGw.pushes[0].req.Content)
-}
-
-func TestDeliveryConsumer_Consume_NoMentions(t *testing.T) {
-	fakeGw := newFakeGatewayClient()
-	svcCtx := newTestServiceContext(t, fakeGw)
-	consumer := NewDeliveryConsumer(context.Background(), svcCtx)
-
-	event := events.TransferEvent{
-		MessageID:      222,
-		SenderID:       20,
-		ConversationID: 60,
-		MessageType:    "text",
-		Content:        "no mentions",
-		ClientMsgID:    "client-no-mentions",
-		Mentions:       []string{},
-		Timestamp:      1700000000000,
-	}
-	value, err := json.Marshal(event)
-	require.NoError(t, err)
-
-	err = consumer.Consume(context.Background(), "60", string(value))
-	require.NoError(t, err)
-	require.Len(t, fakeGw.pushes, 1)
-	require.Empty(t, fakeGw.pushes[0].req.Mentions)
-}
-
-func TestDeliveryConsumer_Consume_MultipleMessages(t *testing.T) {
-	fakeGw := newFakeGatewayClient()
-	svcCtx := newTestServiceContext(t, fakeGw)
-	consumer := NewDeliveryConsumer(context.Background(), svcCtx)
-
-	event1 := events.TransferEvent{
-		MessageID: 1, SenderID: 1, ConversationID: 1,
-		MessageType: "text", Content: "msg1", ClientMsgID: "c1", Timestamp: 1000,
-	}
-	value1, _ := json.Marshal(event1)
-	err := consumer.Consume(context.Background(), "1", string(value1))
-	require.NoError(t, err)
-
-	event2 := events.TransferEvent{
-		MessageID: 2, SenderID: 2, ConversationID: 2,
-		MessageType: "text", Content: "msg2", ClientMsgID: "c2", Timestamp: 2000,
-	}
-	value2, _ := json.Marshal(event2)
-	err = consumer.Consume(context.Background(), "2", string(value2))
-	require.NoError(t, err)
-
-	require.Len(t, fakeGw.pushes, 2)
-	require.Equal(t, int64(1), fakeGw.pushes[0].req.MessageId)
-	require.Equal(t, int64(2), fakeGw.pushes[1].req.MessageId)
-}
-
-func TestDeliveryConsumer_Consume_FanoutToConversationMembers(t *testing.T) {
-	fakeGw := newFakeGatewayClient()
-	svcCtx := newTestServiceContext(t, fakeGw)
-	svcCtx.LogicConversationClient = &fakeConversationClient{memberIDs: []int64{100, 200, 200}}
-	consumer := NewDeliveryConsumer(context.Background(), svcCtx)
-
-	event := events.TransferEvent{
-		MessageID:      12345,
-		SenderID:       100,
-		DeviceID:       "sender-device",
-		ConversationID: 200,
-		MessageType:    "text",
-		Content:        "hello world",
-		ClientMsgID:    "client-msg-1",
-		Timestamp:      1700000000000,
-	}
-	value, err := json.Marshal(event)
-	require.NoError(t, err)
-
-	err = consumer.Consume(context.Background(), "200", string(value))
-	require.NoError(t, err)
-	require.Len(t, fakeGw.pushes, 2)
-	require.Equal(t, int64(100), fakeGw.pushes[0].req.TargetUserId)
-	require.Equal(t, int64(200), fakeGw.pushes[1].req.TargetUserId)
-	require.Equal(t, "sender-device", fakeGw.pushes[0].req.SourceDeviceId)
-	require.Equal(t, "sender-device", fakeGw.pushes[1].req.SourceDeviceId)
-}
-
-func TestDeliveryConsumer_Consume_MemberLookupFailure(t *testing.T) {
-	fakeGw := newFakeGatewayClient()
-	svcCtx := newTestServiceContext(t, fakeGw)
-	svcCtx.LogicConversationClient = &fakeConversationClient{err: errors.New("logic unavailable")}
-	consumer := NewDeliveryConsumer(context.Background(), svcCtx)
-
-	event := events.TransferEvent{MessageID: 12345, SenderID: 100, ConversationID: 200, MessageType: "text", Content: "hello", ClientMsgID: "client-1", Timestamp: 1700000000000}
-	value, err := json.Marshal(event)
-	require.NoError(t, err)
-
-	err = consumer.Consume(context.Background(), "200", string(value))
-	require.Error(t, err)
-	require.Empty(t, fakeGw.pushes)
-}
-
-// --- Consumers registration test ---
-
 func TestConsumers_ReturnsQueueService(t *testing.T) {
-	fakeGw := newFakeGatewayClient()
 	svcCtx := &svc.ServiceContext{
-		GatewayClient: fakeGw,
 		Config: config.Config{
 			DeliveryConsumerConf: rocketmq.ConsumerConf{EndpointConf: rocketmq.EndpointConf{Endpoint: "127.0.0.1:8081"}, Group: "test-group", Topic: "test-topic", Concurrency: 1},
 		},

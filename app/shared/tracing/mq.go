@@ -63,6 +63,11 @@ func StartMQProducerSpan(ctx context.Context, name string, attrs ...attribute.Ke
 	return otel.Tracer(tracerName).Start(ctx, name, trace.WithSpanKind(trace.SpanKindProducer), trace.WithAttributes(attrs...))
 }
 
+// StartClientSpan opens a client span for an outbound call.
+func StartClientSpan(ctx context.Context, tracerName, name string, attrs ...attribute.KeyValue) (context.Context, trace.Span) {
+	return otel.Tracer(tracerName).Start(ctx, name, trace.WithSpanKind(trace.SpanKindClient), trace.WithAttributes(attrs...))
+}
+
 func RecordSpanError(span trace.Span, err error) {
 	if span == nil || err == nil {
 		return

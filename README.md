@@ -13,7 +13,7 @@
 - **多端同步**：基于 DeviceId 的多设备登录，消息一致投递
 - **断线重连**：WS 帧等待队列 + 重放机制
 
-### [雪花ID](app/shared/tools/snowflake.go)
+### [雪花ID](app/shared/snowflake/snowflake.go)
 
 - 小回拨: 时间戳不变序列号递增
 - 大回拨: 等待系统时钟追赶/直接抛出错误
@@ -260,7 +260,7 @@ aim/
 │   ├── core/rpc/          # 消息投递服务
 │   ├── gateway/api/       # 对外入口（REST + WebSocket）
 │   ├── logic/rpc/         # 业务逻辑服务
-│   ├── attachment/        # 附件服务
+│   ├── attachment/rpc/    # 附件服务
 │   ├── data_parsing/      # 数据解析服务
 │   └── shared/            # 进程内共享包
 ├── bot_sdk/               # AIM Bot Go SDK
@@ -298,7 +298,7 @@ API 契约定义在 [`app/gateway/api/gateway.api`](app/gateway/api/gateway.api)
 ## 测试与代码质量
 
 ```bash
-go test ./...                       # 运行全部测试（52 个测试包，87 个测试文件）
+go test ./...                       # 运行全部测试（60 个测试包，103 个测试文件）
 go test -coverprofile=coverage.out ./...  # 覆盖率
 golangci-lint run                   # 代码检查
 goctl api validate                  # API 契约校验

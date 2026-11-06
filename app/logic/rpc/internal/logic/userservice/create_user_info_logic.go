@@ -3,8 +3,8 @@ package userservicelogic
 import (
 	"context"
 
+	"github.com/hellopoisonx/aim/app/logic/rpc/internal/pbconv"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
-	"github.com/hellopoisonx/aim/app/logic/rpc/model/orm"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 
@@ -27,8 +27,9 @@ func NewCreateUserInfoLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Cr
 
 // CreateUserInfo creates a new user profile.
 func (l *CreateUserInfoLogic) CreateUserInfo(in *pb.CreateUserInfoReq) (*pb.CreateUserInfoResp, error) {
-	if in.GetId() <= 0 {
-		return nil, errorx.NewCodeError(errorx.CodeBadInput, "id is required and must be positive")
+	userSvc, err := requireUserOp(l.svcCtx, in.GetId())
+	if err != nil {
+		return nil, err
 	}
 
 	if in.GetEmail() == "" {
@@ -39,29 +40,12 @@ func (l *CreateUserInfoLogic) CreateUserInfo(in *pb.CreateUserInfoReq) (*pb.Crea
 		return nil, errorx.NewCodeError(errorx.CodeBadInput, "nickname is required")
 	}
 
-	userSvc := l.svcCtx.UserInfoService
-	if userSvc == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "user service is not configured")
-	}
-
 	info, err := userSvc.CreateUserInfo(l.ctx, in.GetId(), in.GetEmail(), in.GetNickname(), in.GetAvatar())
 	if err != nil {
-		return nil, errorx.ToGRPCError(err)
+		return nil, err
 	}
 
 	return &pb.CreateUserInfoResp{
-		User: userInfoToResponse(info),
+		User: pbconv.User(info),
 	}, nil
-}
-
-func userInfoToResponse(info orm.UserInfo) *pb.UserInfoResponse {
-	return &pb.UserInfoResponse{
-		Id:        info.ID,
-		Email:     info.Email,
-		Status:    int32(info.Status),
-		Nickname:  info.Nickname,
-		Avatar:    info.Avatar,
-		CreatedAt: info.CreatedAt.Unix(),
-		UpdatedAt: info.UpdatedAt.Unix(),
-	}
 }

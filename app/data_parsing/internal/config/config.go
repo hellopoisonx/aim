@@ -5,14 +5,14 @@ package config
 import (
 	"github.com/hellopoisonx/aim/app/shared/rocketmq"
 
-	"github.com/zeromicro/go-zero/core/prometheus"
+	zservice "github.com/zeromicro/go-zero/core/service"
 	"github.com/zeromicro/go-zero/core/trace"
 )
 
 type Config struct {
-	Name              string            `json:",default=data_parsing"`
-	Prometheus        prometheus.Config `json:",optional"`
-	Telemetry         trace.Config      `json:",optional"`
+	Name              string                   `json:",default=data_parsing"`
+	DevServer         zservice.DevServerConfig `json:",optional"`
+	Telemetry         trace.Config             `json:",optional"`
 	Postgres          PostgresConf
 	Seaweed           SeaweedConf
 	UploadedConsumer  rocketmq.ConsumerConf `json:",optional"`

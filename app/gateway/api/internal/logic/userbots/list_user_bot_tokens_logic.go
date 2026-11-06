@@ -5,6 +5,7 @@ import (
 
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/authctx"
 
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/pbconv"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/botservice"
@@ -24,19 +25,19 @@ func NewListUserBotTokensLogic(ctx context.Context, svcCtx *svc.ServiceContext) 
 }
 
 func (l *ListUserBotTokensLogic) ListUserBotTokens(req *types.ListUserBotTokensRequest) (resp *types.ListUserBotTokensResponse, err error) {
-	identity, ok := authctx.IdentityFromContext(l.ctx)
-	if !ok {
-		return nil, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
+	userID, err := authctx.RequireUserID(l.ctx)
+	if err != nil {
+		return nil, err
 	}
 	rpcResp, err := l.svcCtx.LogicBotClient.ListUserBotTokens(l.ctx, &botservice.ListUserBotTokensReq{
-		OwnerUserId: identity.UserID, BotUserId: req.Id,
+		OwnerUserId: userID, BotUserId: req.Id,
 	})
 	if err != nil {
 		return nil, errorx.SanitizeGRPCError(l, "list user bot tokens", err)
 	}
 	tokens := make([]types.UserBotTokenInfo, 0, len(rpcResp.GetTokens()))
 	for _, t := range rpcResp.GetTokens() {
-		tokens = append(tokens, userBotTokenToType(t))
+		tokens = append(tokens, pbconv.UserBotToken(t))
 	}
 	return &types.ListUserBotTokensResponse{Tokens: tokens}, nil
 }

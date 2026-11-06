@@ -5,6 +5,7 @@ import (
 
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/authctx"
 
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/pbconv"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/botservice"
@@ -24,8 +25,8 @@ func NewListBotEventsLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Lis
 }
 
 func (l *ListBotEventsLogic) ListBotEvents() (resp *types.ListBotEventsResponse, err error) {
-	if _, ok := authctx.IdentityFromContext(l.ctx); !ok {
-		return nil, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
+	if _, err := authctx.RequireUserID(l.ctx); err != nil {
+		return nil, err
 	}
 	rpcResp, err := l.svcCtx.LogicBotClient.ListBotEvents(l.ctx, &botservice.ListBotEventsReq{})
 	if err != nil {
@@ -33,7 +34,7 @@ func (l *ListBotEventsLogic) ListBotEvents() (resp *types.ListBotEventsResponse,
 	}
 	events := make([]types.BotEventItem, 0, len(rpcResp.GetEvents()))
 	for _, e := range rpcResp.GetEvents() {
-		events = append(events, botEventToType(e))
+		events = append(events, pbconv.BotEvent(e))
 	}
 	return &types.ListBotEventsResponse{Events: events}, nil
 }

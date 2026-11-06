@@ -114,7 +114,7 @@ type Config struct {
 }
 ```
 
-`ServiceContext` 新增 `EventProducer *rocketmq.Producer`（`WithJournalChecker(store.DB())`），并作为 `conversationTxRunner{store, producer}` 传入 `ConversationService`；`WithTransactionalEvents(topic)` 打开事件发布。`app/logic/rpc/etc/logic.yaml` 当前配置：
+`ServiceContext` 新增 `EventProducer *rocketmq.Producer`（构造时传入 `rocketmq.WithJournalChecker(store.DB())` 选项），并作为 `conversationTxRunner{store, producer}` 传入 `ConversationService`；`WithTransactionalEvents(topic)` 打开事件发布。`app/logic/rpc/etc/logic.yaml` 当前配置：
 
 ```yaml
 ConversationEventProducerConf:

@@ -6,6 +6,7 @@ import (
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/authctx"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/membership"
 
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/pbconv"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/conversationservice"
@@ -29,9 +30,9 @@ func NewGetConversationHistoryLogic(ctx context.Context, svcCtx *svc.ServiceCont
 }
 
 func (l *GetConversationHistoryLogic) GetConversationHistory(req *types.GetConversationHistoryRequest) (resp *types.GetConversationHistoryResponse, err error) {
-	identity, ok := authctx.IdentityFromContext(l.ctx)
-	if !ok || identity.UserID <= 0 {
-		return nil, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
+	userID, err := authctx.RequireUserID(l.ctx)
+	if err != nil {
+		return nil, err
 	}
 
 	if req.Id <= 0 {
@@ -39,23 +40,15 @@ func (l *GetConversationHistoryLogic) GetConversationHistory(req *types.GetConve
 	}
 
 	// History is conversation-scoped data: only members may read it.
-	if err := membership.RequireMember(l.ctx, l, l.svcCtx.LogicConversationClient, req.Id, identity.UserID, membership.ActorUser); err != nil {
+	if err := membership.RequireMember(l.ctx, l, l.svcCtx.LogicConversationClient, req.Id, userID, membership.ActorUser); err != nil {
 		return nil, err
-	}
-
-	limit := req.Limit
-	if limit <= 0 {
-		limit = 50
-	}
-	if limit > 100 {
-		limit = 100
 	}
 
 	rpcResp, err := l.svcCtx.LogicConversationClient.GetConversationHistory(l.ctx, &conversationservice.GetConversationHistoryReq{
 		ConversationId:  req.Id,
 		CursorCreatedAt: req.CursorCreatedAt,
 		CursorId:        req.CursorId,
-		Limit:           limit,
+		Limit:           req.Limit,
 	})
 	if err != nil {
 		return nil, errorx.SanitizeGRPCError(l, "get conversation history", err)
@@ -63,48 +56,14 @@ func (l *GetConversationHistoryLogic) GetConversationHistory(req *types.GetConve
 
 	messages := make([]types.MessageItem, 0, len(rpcResp.GetMessages()))
 	for _, msg := range rpcResp.GetMessages() {
-		senderInfo := msg.GetSenderInfo()
-		readDetails := make([]types.MessageReadDetailItem, 0, len(msg.GetReadDetails()))
-		for _, rd := range msg.GetReadDetails() {
-			readDetails = append(readDetails, types.MessageReadDetailItem{
-				UserId:            rd.GetUserId(),
-				IsRead:            rd.GetIsRead(),
-				LastReadMessageId: rd.GetLastReadMessageId(),
-				UpdatedAt:         rd.GetUpdatedAt(),
-				Email:             rd.GetEmail(),
-				Avatar:            rd.GetAvatar(),
-			})
-		}
-		messages = append(messages, types.MessageItem{
-			Id:             msg.GetId(),
-			ConversationId: msg.GetConversationId(),
-			SenderId:       msg.GetSenderId(),
-			SenderInfo: types.SenderInfo{
-				Name:  senderInfo.GetName(),
-				Email: senderInfo.GetEmail(),
-			},
-			MessageType: msg.GetMessageType(),
-			Content:     msg.GetContent(),
-			ClientMsgId: msg.GetClientMsgId(),
-			CreatedAt:   msg.GetCreatedAt(),
-			IsSystem:    msg.GetIsSystem(),
-			Mentions:    msg.GetMentions(),
-			ReadDetails: readDetails,
-		})
+		messages = append(messages, pbconv.Message(msg))
 	}
 
 	var readStates []types.ReadStateItem
 	if rpcStates := rpcResp.GetReadStates(); len(rpcStates) > 0 {
 		readStates = make([]types.ReadStateItem, 0, len(rpcStates))
 		for _, st := range rpcStates {
-			readStates = append(readStates, types.ReadStateItem{
-				UserId:            st.GetUserId(),
-				LastReadMessageId: st.GetLastReadMessageId(),
-				UpdatedAt:         st.GetUpdatedAt(),
-				Email:             st.GetEmail(),
-				Avatar:            st.GetAvatar(),
-				Name:              st.GetName(),
-			})
+			readStates = append(readStates, pbconv.ReadState(st))
 		}
 	}
 

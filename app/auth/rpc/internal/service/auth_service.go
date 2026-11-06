@@ -13,7 +13,7 @@ import (
 	"github.com/hellopoisonx/aim/app/auth/rpc/model/orm"
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 	sharedjwt "github.com/hellopoisonx/aim/app/shared/jwt"
-	"github.com/hellopoisonx/aim/app/shared/tools"
+	"github.com/hellopoisonx/aim/app/shared/snowflake"
 	"github.com/redis/go-redis/v9"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -21,11 +21,6 @@ import (
 const (
 	StatusDisabled = 0
 	StatusNormal   = 1
-
-	CodeInvalidArgument = 40000
-	CodeUnauthorized    = 40100
-	CodeConflict        = 40900
-	CodeInternal        = 50000
 )
 
 type UserStore interface {
@@ -61,23 +56,10 @@ type userDAO interface {
 
 type DAOUserStore struct {
 	store userDAO
-	ids   *tools.Snowflake
+	ids   *snowflake.Snowflake
 }
 
-func NewDAOUserStore(store userDAO) *DAOUserStore {
-	return NewDAOUserStoreWithMachineID(store, 1)
-}
-
-func NewDAOUserStoreWithMachineID(store userDAO, machineID int64) *DAOUserStore {
-	ids, err := tools.NewSnowflake(machineID)
-	if err != nil {
-		panic(err)
-	}
-
-	return NewDAOUserStoreWithIDGenerator(store, ids)
-}
-
-func NewDAOUserStoreWithIDGenerator(store userDAO, ids *tools.Snowflake) *DAOUserStore {
+func NewDAOUserStore(store userDAO, ids *snowflake.Snowflake) *DAOUserStore {
 	return &DAOUserStore{store: store, ids: ids}
 }
 
@@ -159,7 +141,7 @@ func (s *RedisSessionStore) Rotate(ctx context.Context, refreshToken string) (in
 	value, err := s.client.Get(ctx, refreshKey(refreshToken)).Result()
 	if err != nil {
 		if errors.Is(err, redis.Nil) {
-			return 0, "", "", errorx.NewCodeError(CodeUnauthorized, "invalid refresh token")
+			return 0, "", "", errorx.NewCodeError(errorx.CodeAuth, "invalid refresh token")
 		}
 
 		return 0, "", "", err
@@ -213,7 +195,7 @@ func NewJWTIssuer(secret string, ttl time.Duration) *JWTIssuer {
 }
 
 func (i *JWTIssuer) Issue(_ context.Context, userID int64, deviceID string) (string, int64, error) {
-	return sharedjwt.NewManagerWithTTL(i.secret, i.ttl).GenerateAccessToken(userID, deviceID)
+	return sharedjwt.NewManager(i.secret, sharedjwt.WithAccessTTL(i.ttl)).GenerateAccessToken(userID, deviceID)
 }
 
 func HashPassword(password string) (string, error) {
@@ -260,12 +242,12 @@ func sessionValue(userID int64, deviceID string) string {
 func parseSessionValue(value string) (int64, string, error) {
 	userPart, deviceID, ok := strings.Cut(value, ":")
 	if !ok || deviceID == "" {
-		return 0, "", errorx.NewCodeError(CodeInternal, "invalid refresh session")
+		return 0, "", errorx.NewCodeError(errorx.CodeInternal, "invalid refresh session")
 	}
 
 	userID, err := strconv.ParseInt(userPart, 10, 64)
 	if err != nil || userID == 0 {
-		return 0, "", errorx.NewCodeError(CodeInternal, "invalid refresh session")
+		return 0, "", errorx.NewCodeError(errorx.CodeInternal, "invalid refresh session")
 	}
 
 	return userID, deviceID, nil

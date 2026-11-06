@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 
+	"github.com/hellopoisonx/aim/app/logic/rpc/internal/pbconv"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/service"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
@@ -32,14 +33,14 @@ func (l *GetUserConversationsLogic) GetUserConversations(in *pb.GetUserConversat
 		return nil, errorx.NewCodeError(errorx.CodeBadInput, "user_id is required and must be positive")
 	}
 
-	convSvc := l.svcCtx.ConversationService
-	if convSvc == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "conversation service is not configured")
+	convSvc, err := requireConversationService(l.svcCtx.ConversationService)
+	if err != nil {
+		return nil, err
 	}
 
 	conversations, err := convSvc.GetUserConversations(l.ctx, in.GetUserId())
 	if err != nil {
-		return nil, errorx.ToGRPCError(err)
+		return nil, err
 	}
 
 	pbConversations := make([]*pb.ConversationResponse, 0, len(conversations))
@@ -53,14 +54,9 @@ func (l *GetUserConversationsLogic) GetUserConversations(in *pb.GetUserConversat
 	}
 
 	for _, conv := range conversations {
-		members, err := convSvc.GetConversationMembers(l.ctx, conv.ID)
+		memberIDs, err := conversationMemberIDs(l.ctx, convSvc, conv.ID)
 		if err != nil {
-			return nil, errorx.ToGRPCError(err)
-		}
-
-		memberIDs := make([]int64, len(members))
-		for i, m := range members {
-			memberIDs[i] = m.UserID
+			return nil, err
 		}
 
 		// For direct conversations, compute display name as the other member's nickname.
@@ -75,16 +71,7 @@ func (l *GetUserConversationsLogic) GetUserConversations(in *pb.GetUserConversat
 			}
 		}
 
-		pbConversations = append(pbConversations, &pb.ConversationResponse{
-			Id:               conv.ID,
-			ConversationType: string(conv.ConversationType),
-			IsActive:         conv.IsActive,
-			CreatedAt:        conv.CreatedAt.UnixMilli(),
-			MemberIds:        memberIDs,
-			Name:             name,
-			Avatar:           conv.Avatar,
-			CreatorId:        conv.CreatorID,
-		})
+		pbConversations = append(pbConversations, pbconv.Conversation(conv, memberIDs, name))
 	}
 
 	return &pb.GetUserConversationsResp{

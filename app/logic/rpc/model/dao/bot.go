@@ -4,9 +4,9 @@ import (
 	"context"
 	"time"
 
-	"github.com/lib/pq"
-
 	"github.com/hellopoisonx/aim/app/logic/rpc/model/orm"
+	"github.com/hellopoisonx/aim/app/shared/pgtypes"
+	shareduser "github.com/hellopoisonx/aim/app/shared/user"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -14,8 +14,8 @@ import (
 // BotTokenWithUser is a token row joined with the bot's profile markers.
 type BotTokenWithUser struct {
 	orm.BotToken
-	UserType   string
-	UserStatus int16
+	UserType   shareduser.Type
+	UserStatus shareduser.Status
 	Nickname   string
 	Avatar     string
 }
@@ -24,12 +24,12 @@ type BotTokenWithUser struct {
 type ManagedUserBot struct {
 	ID                 int64
 	Email              string
-	Status             int16
+	Status             shareduser.Status
 	Nickname           string
 	Avatar             string
 	CreatedAt          time.Time
 	UpdatedAt          time.Time
-	UserType           string
+	UserType           shareduser.Type
 	OwnerUserID        int64
 	DeletedAt          *time.Time
 	OwnershipCreatedAt time.Time
@@ -49,7 +49,7 @@ type BotEvent struct {
 // GetBotTokenByHash loads a token and its bot profile in one query.
 func (s *Store) GetBotTokenByHash(ctx context.Context, tokenHash string) (BotTokenWithUser, error) {
 	const query = `
-SELECT bt.id, bt.bot_user_id, bt.token_hash, bt.name, bt.scopes, bt.expires_at, bt.revoked_at, bt.created_at,
+SELECT bt.id, bt.bot_user_id, bt.token_hash, bt.name, bt.expires_at, bt.revoked_at, bt.created_at,
        ui.user_type, ui.status AS user_status, ui.nickname, ui.avatar
 FROM bot_tokens bt
 JOIN user_info ui ON ui.id = bt.bot_user_id
@@ -117,16 +117,16 @@ func (s *Store) UpsertBotWebhook(ctx context.Context, botUserID int64, url, secr
 		BotUserID:  botUserID,
 		Url:        url,
 		SecretHash: secretHash,
-		Events:     pq.StringArray(events),
+		Events:     pgtypes.TextArray(events),
 		Enabled:    enabled,
 	}
 	err := s.db.WithContext(ctx).Clauses(clause.OnConflict{
 		Columns: []clause.Column{{Name: "bot_user_id"}},
 		DoUpdates: clause.Assignments(map[string]any{
-			"url":         url,
-			"secret_hash": secretHash,
-			"events":      pq.StringArray(events),
-			"enabled":     enabled,
+			"url":           url,
+			"secret_hash":   secretHash,
+			"events":        pgtypes.TextArray(events),
+			"enabled":       enabled,
 			columnUpdatedAt: time.Now(),
 		}),
 	}).Create(&hook).Error
@@ -157,32 +157,20 @@ JOIN conversation_members cm ON cm.user_id = bw.bot_user_id
 JOIN user_info ui ON ui.id = bw.bot_user_id
 WHERE cm.conversation_id = ?
   AND bw.enabled = TRUE
-  AND ui.user_type = 'bot'
-  AND ui.status = 1`
+  AND ui.user_type = ?
+  AND ui.status = ?`
 
 	var hooks []orm.BotWebhook
-	if err := s.db.WithContext(ctx).Raw(query, conversationID).Scan(&hooks).Error; err != nil {
+	if err := s.db.WithContext(ctx).Raw(query, conversationID, string(shareduser.TypeBot), int16(shareduser.StatusEnabled)).Scan(&hooks).Error; err != nil {
 		return nil, err
 	}
 
 	return hooks, nil
 }
 
-// CreateUserBotProfile inserts a user_info row with user_type='bot'.
+// CreateUserBotProfile inserts a user_info row with user_type bot.
 func (s *Store) CreateUserBotProfile(ctx context.Context, id int64, email, nickname, avatar string) (orm.UserInfo, error) {
-	info := orm.UserInfo{
-		ID:       id,
-		Email:    email,
-		Status:   1,
-		Nickname: nickname,
-		Avatar:   avatar,
-		UserType: "bot",
-	}
-	if err := s.db.WithContext(ctx).Create(&info).Error; err != nil {
-		return orm.UserInfo{}, err
-	}
-
-	return info, nil
+	return s.createUserInfo(ctx, id, email, nickname, avatar, shareduser.TypeBot)
 }
 
 // CreateUserBotOwnership records which user may manage the bot.
@@ -207,10 +195,10 @@ JOIN user_info ui ON ui.id = ub.bot_user_id
 WHERE ub.owner_user_id = ?
   AND ub.bot_user_id = ?
   AND ub.deleted_at IS NULL
-  AND ui.user_type = 'bot'`
+  AND ui.user_type = ?`
 
 	var row ManagedUserBot
-	if err := s.db.WithContext(ctx).Raw(query, ownerUserID, botUserID).Scan(&row).Error; err != nil {
+	if err := s.db.WithContext(ctx).Raw(query, ownerUserID, botUserID, string(shareduser.TypeBot)).Scan(&row).Error; err != nil {
 		return ManagedUserBot{}, err
 	}
 	if row.ID == 0 {
@@ -231,11 +219,11 @@ FROM user_bots ub
 JOIN user_info ui ON ui.id = ub.bot_user_id
 WHERE ub.owner_user_id = ?
   AND ub.deleted_at IS NULL
-  AND ui.user_type = 'bot'
+  AND ui.user_type = ?
 ORDER BY ub.created_at DESC, ui.id DESC`
 
 	var rows []ManagedUserBot
-	if err := s.db.WithContext(ctx).Raw(query, ownerUserID).Scan(&rows).Error; err != nil {
+	if err := s.db.WithContext(ctx).Raw(query, ownerUserID, string(shareduser.TypeBot)).Scan(&rows).Error; err != nil {
 		return nil, err
 	}
 
@@ -252,11 +240,11 @@ WHERE ui.id = ub.bot_user_id
   AND ub.owner_user_id = ?
   AND ub.bot_user_id = ?
   AND ub.deleted_at IS NULL
-  AND ui.user_type = 'bot'
+  AND ui.user_type = ?
 RETURNING ui.id, ui.email, ui.status, ui.nickname, ui.avatar, ui.created_at, ui.updated_at, ui.user_type`
 
 	var info orm.UserInfo
-	if err := s.db.WithContext(ctx).Raw(query, nickname, avatar, ownerUserID, botUserID).Scan(&info).Error; err != nil {
+	if err := s.db.WithContext(ctx).Raw(query, nickname, avatar, ownerUserID, botUserID, string(shareduser.TypeBot)).Scan(&info).Error; err != nil {
 		return orm.UserInfo{}, err
 	}
 	if info.ID == 0 {
@@ -267,7 +255,7 @@ RETURNING ui.id, ui.email, ui.status, ui.nickname, ui.avatar, ui.created_at, ui.
 }
 
 // UpdateManagedUserBotStatus updates a bot profile status through ownership.
-func (s *Store) UpdateManagedUserBotStatus(ctx context.Context, ownerUserID, botUserID int64, status int16) (orm.UserInfo, error) {
+func (s *Store) UpdateManagedUserBotStatus(ctx context.Context, ownerUserID, botUserID int64, status shareduser.Status) (orm.UserInfo, error) {
 	const query = `
 UPDATE user_info ui
 SET status = ?, updated_at = NOW()
@@ -276,11 +264,11 @@ WHERE ui.id = ub.bot_user_id
   AND ub.owner_user_id = ?
   AND ub.bot_user_id = ?
   AND ub.deleted_at IS NULL
-  AND ui.user_type = 'bot'
+  AND ui.user_type = ?
 RETURNING ui.id, ui.email, ui.status, ui.nickname, ui.avatar, ui.created_at, ui.updated_at, ui.user_type`
 
 	var info orm.UserInfo
-	if err := s.db.WithContext(ctx).Raw(query, status, ownerUserID, botUserID).Scan(&info).Error; err != nil {
+	if err := s.db.WithContext(ctx).Raw(query, int16(status), ownerUserID, botUserID, string(shareduser.TypeBot)).Scan(&info).Error; err != nil {
 		return orm.UserInfo{}, err
 	}
 	if info.ID == 0 {
@@ -296,7 +284,7 @@ func (s *Store) SoftDeleteManagedUserBot(ctx context.Context, ownerUserID, botUs
 		Model(&orm.UserBot{}).
 		Where("owner_user_id = ? AND bot_user_id = ? AND deleted_at IS NULL", ownerUserID, botUserID).
 		Updates(map[string]any{
-			"deleted_at": gorm.Expr("COALESCE(deleted_at, NOW())"),
+			"deleted_at":    gorm.Expr("COALESCE(deleted_at, NOW())"),
 			columnUpdatedAt: gorm.Expr("NOW()"),
 		})
 	if result.Error != nil {
@@ -320,13 +308,12 @@ func (s *Store) RevokeAllBotTokensByBot(ctx context.Context, botUserID int64) (i
 }
 
 // CreateBotToken inserts a token row.
-func (s *Store) CreateBotToken(ctx context.Context, id, botUserID int64, tokenHash, name string, scopes []string, expiresAt *time.Time) (orm.BotToken, error) {
+func (s *Store) CreateBotToken(ctx context.Context, id, botUserID int64, tokenHash, name string, expiresAt *time.Time) (orm.BotToken, error) {
 	token := orm.BotToken{
 		ID:        id,
 		BotUserID: botUserID,
 		TokenHash: tokenHash,
 		Name:      name,
-		Scopes:    pq.StringArray(scopes),
 		ExpiresAt: expiresAt,
 	}
 	if err := s.db.WithContext(ctx).Create(&token).Error; err != nil {
@@ -352,7 +339,7 @@ func (s *Store) ListBotTokensByBot(ctx context.Context, botUserID int64) ([]orm.
 // GetManagedBotToken loads a token through its bot ownership row.
 func (s *Store) GetManagedBotToken(ctx context.Context, ownerUserID, botUserID, tokenID int64) (orm.BotToken, error) {
 	const query = `
-SELECT bt.id, bt.bot_user_id, bt.token_hash, bt.name, bt.scopes, bt.expires_at, bt.revoked_at, bt.created_at
+SELECT bt.id, bt.bot_user_id, bt.token_hash, bt.name, bt.expires_at, bt.revoked_at, bt.created_at
 FROM bot_tokens bt
 JOIN user_bots ub ON ub.bot_user_id = bt.bot_user_id
 WHERE ub.owner_user_id = ?
@@ -383,7 +370,7 @@ WHERE ub.bot_user_id = bt.bot_user_id
   AND ub.deleted_at IS NULL
   AND bt.id = ?
   AND bt.revoked_at IS NULL
-RETURNING bt.id, bt.bot_user_id, bt.token_hash, bt.name, bt.scopes, bt.expires_at, bt.revoked_at, bt.created_at`
+RETURNING bt.id, bt.bot_user_id, bt.token_hash, bt.name, bt.expires_at, bt.revoked_at, bt.created_at`
 
 	var token orm.BotToken
 	if err := s.db.WithContext(ctx).Raw(query, name, expiresAt, ownerUserID, botUserID, tokenID).Scan(&token).Error; err != nil {

@@ -22,7 +22,9 @@ import (
 	"testing"
 	"time"
 
+	casbinmodel "github.com/casbin/casbin/v3/model"
 	"github.com/hellopoisonx/aim/app/logic/rpc/model/orm"
+	sharedconversation "github.com/hellopoisonx/aim/app/shared/conversation"
 	"github.com/hellopoisonx/aim/app/shared/gormdb"
 	"github.com/hellopoisonx/aim/app/shared/pgtypes"
 	"github.com/stretchr/testify/require"
@@ -167,7 +169,7 @@ func TestIntegrationMessageJSONBColumns(t *testing.T) {
 
 	// Read back through the typed JSON column: a scan failure here would mean
 	// pgtypes.JSON lost its Scanner.
-	history, err := store.ListMessagesByConversation(ctx, conv.ID, time.Now().Add(time.Minute), 0, 10)
+	history, err := store.ListMessagesByConversation(ctx, conv.ID, sharedconversation.MessageCursor{CreatedAt: time.Now().Add(time.Minute)}, 10)
 	require.NoError(t, err)
 	require.Len(t, history, 1)
 	require.JSONEq(t, `{"text":"hello"}`, string(history[0].Content))
@@ -181,7 +183,7 @@ func TestIntegrationMessageJSONBColumns(t *testing.T) {
 	require.JSONEq(t, `{"text":"hello"}`, string(results[0].Content))
 }
 
-func TestIntegrationBotTokenTextArrayColumns(t *testing.T) {
+func TestIntegrationBotWebhookTextArrayColumns(t *testing.T) {
 	store := openTestStore(t)
 	ctx := context.Background()
 	truncate(t, store, "user_info", "bot_tokens", "bot_token_permissions", "bot_actions", "bot_webhooks")
@@ -189,16 +191,6 @@ func TestIntegrationBotTokenTextArrayColumns(t *testing.T) {
 	profile, err := store.CreateUserBotProfile(ctx, 900, "bot@example.com", "helper", "")
 	require.NoError(t, err)
 	require.EqualValues(t, 900, profile.ID)
-
-	token, err := store.CreateBotToken(ctx, 500, 900, "hash-500", "default", []string{"messages:send", "bot.admin"}, nil)
-	require.NoError(t, err)
-	require.ElementsMatch(t, []string{"messages:send", "bot.admin"}, token.Scopes)
-
-	// Round-trip through the text[] column.
-	loaded, err := store.ListBotTokensByBot(ctx, 900)
-	require.NoError(t, err)
-	require.Len(t, loaded, 1)
-	require.ElementsMatch(t, []string{"messages:send", "bot.admin"}, loaded[0].Scopes)
 
 	// Upsert keeps []string→text[] working on the ON CONFLICT path.
 	hook, err := store.UpsertBotWebhook(ctx, 900, "https://example.com/hook", "secret", []string{"message.created"}, true)
@@ -223,4 +215,64 @@ func TestIntegrationDuplicateDetection(t *testing.T) {
 	// callers can use errors.Is instead of matching driver messages.
 	_, err = store.CreateUserBotProfile(ctx, 902, "dup@example.com", "dup2", "")
 	require.ErrorIs(t, err, ErrDuplicateKey)
+}
+
+func TestIntegrationCasbinPolicyRoundTrip(t *testing.T) {
+	store := openTestStore(t)
+	truncate(t, store, "casbin_rule")
+
+	require.NoError(t, store.AddPolicy("g", "g", []string{"user:100", "role:owner", "conv:1"}))
+	require.NoError(t, store.AddPolicy("g", "g", []string{"user:200", "role:member", "conv:1"}))
+	require.NoError(t, store.AddPolicy("g", "g", []string{"user:300", "role:member", "conv:2"}))
+
+	require.NoError(t, store.AddPolicy("g", "g", []string{"user:200", "role:member", "conv:1"}))
+
+	model, err := casbinmodel.NewModelFromString(`
+[request_definition]
+r = sub, dom, obj, act
+[policy_definition]
+p = sub, dom, obj, act
+[role_definition]
+g = _, _, _
+[policy_effect]
+e = some(where (p.eft == allow))
+[matchers]
+m = g(r.sub, p.sub, r.dom)
+`)
+	require.NoError(t, err)
+	require.NoError(t, store.LoadPolicy(model))
+
+	policies, err := model.GetPolicy("g", "g")
+	require.NoError(t, err)
+	require.Len(t, policies, 3)
+	require.Equal(t, []string{"user:100", "role:owner", "conv:1"}, policies[0])
+
+	require.NoError(t, store.RemovePolicy("g", "g", []string{"user:300", "role:member", "conv:2"}))
+	require.NoError(t, store.RemoveFilteredPolicy("g", "g", 0, "user:200", "", "conv:1"))
+
+	reloaded, err := casbinmodel.NewModelFromString(`
+[request_definition]
+r = sub, dom, obj, act
+[policy_definition]
+p = sub, dom, obj, act
+[role_definition]
+g = _, _, _
+[policy_effect]
+e = some(where (p.eft == allow))
+[matchers]
+m = g(r.sub, p.sub, r.dom)
+`)
+	require.NoError(t, err)
+	require.NoError(t, store.LoadPolicy(reloaded))
+
+	remaining, err := reloaded.GetPolicy("g", "g")
+	require.NoError(t, err)
+	require.Equal(t, [][]string{{"user:100", "role:owner", "conv:1"}}, remaining)
+
+	// ClearConversation uses the domain column: fieldIndex 2.
+	require.NoError(t, store.RemoveFilteredPolicy("g", "g", 2, "conv:1"))
+
+	var count int64
+	require.NoError(t, store.DB().Model(&orm.CasbinRule{}).Count(&count).Error)
+	require.Zero(t, count)
 }

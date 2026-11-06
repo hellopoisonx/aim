@@ -2,7 +2,6 @@ package rpc
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
 	gwpb "github.com/hellopoisonx/aim/shared/proto/gateway/pb"
@@ -16,18 +15,19 @@ import (
 
 const gatewayClientTracerName = "github.com/hellopoisonx/aim/app/core/rpc/internal/rpc"
 
-// GatewayPusher defines the interface for pushing messages to a gateway node.
+// GatewayPusher delivers one event to the gateway node holding the target
+// user's connections. An empty nodeID means the single-gateway deployment.
 type GatewayPusher interface {
-	PushMessage(ctx context.Context, req *gwpb.PushMessageReq) (*gwpb.PushMessageResp, error)
-	PushPresence(ctx context.Context, req *gwpb.PushPresenceReq) (*gwpb.PushPresenceResp, error)
-	PushTyping(ctx context.Context, req *gwpb.PushTypingReq) (*gwpb.PushTypingResp, error)
-	PushReadReceipt(ctx context.Context, req *gwpb.PushReadReceiptReq) (*gwpb.PushReadReceiptResp, error)
-	PushNotification(ctx context.Context, req *gwpb.PushNotificationReq) (*gwpb.PushNotificationResp, error)
-	PushFriendApplication(ctx context.Context, req *gwpb.PushFriendApplicationReq) (*gwpb.PushFriendApplicationResp, error)
+	PushMessageToNode(ctx context.Context, nodeID string, req *gwpb.PushMessageReq) (*gwpb.PushMessageResp, error)
+	PushPresenceToNode(ctx context.Context, nodeID string, req *gwpb.PushPresenceReq) (*gwpb.PushPresenceResp, error)
+	PushTypingToNode(ctx context.Context, nodeID string, req *gwpb.PushTypingReq) (*gwpb.PushTypingResp, error)
+	PushReadReceiptToNode(ctx context.Context, nodeID string, req *gwpb.PushReadReceiptReq) (*gwpb.PushReadReceiptResp, error)
+	PushFriendApplicationToNode(ctx context.Context, nodeID string, req *gwpb.PushFriendApplicationReq) (*gwpb.PushFriendApplicationResp, error)
+	// Close releases every underlying connection; it is safe to call twice.
+	Close() error
 }
 
 type GatewayClient struct {
-	target  string
 	conn    *grpc.ClientConn
 	client  gwpb.GatewayServiceClient
 	initErr error
@@ -39,7 +39,7 @@ func NewGatewayClient(target string) *GatewayClient {
 		grpc.WithUnaryInterceptor(traceUnaryClientInterceptor),
 	)
 
-	client := &GatewayClient{target: target, conn: conn, initErr: err}
+	client := &GatewayClient{conn: conn, initErr: err}
 	if err == nil {
 		client.client = gwpb.NewGatewayServiceClient(conn)
 	}
@@ -47,71 +47,42 @@ func NewGatewayClient(target string) *GatewayClient {
 	return client
 }
 
-func (c *GatewayClient) PushMessage(ctx context.Context, req *gwpb.PushMessageReq) (*gwpb.PushMessageResp, error) {
+// A GatewayClient owns exactly one node, so the nodeID argument is ignored.
+func (c *GatewayClient) PushMessageToNode(ctx context.Context, _ string, req *gwpb.PushMessageReq) (*gwpb.PushMessageResp, error) {
 	if c.initErr != nil {
 		return nil, c.initErr
-	}
-
-	if c.client == nil {
-		return nil, fmt.Errorf("gateway client for %s is not initialized", c.target)
 	}
 
 	return c.client.PushMessage(ctx, req)
 }
 
-func (c *GatewayClient) PushPresence(ctx context.Context, req *gwpb.PushPresenceReq) (*gwpb.PushPresenceResp, error) {
+func (c *GatewayClient) PushPresenceToNode(ctx context.Context, _ string, req *gwpb.PushPresenceReq) (*gwpb.PushPresenceResp, error) {
 	if c.initErr != nil {
 		return nil, c.initErr
 	}
-	if c.client == nil {
-		return nil, fmt.Errorf("gateway client for %s is not initialized", c.target)
-	}
+
 	return c.client.PushPresence(ctx, req)
 }
 
-func (c *GatewayClient) PushTyping(ctx context.Context, req *gwpb.PushTypingReq) (*gwpb.PushTypingResp, error) {
+func (c *GatewayClient) PushTypingToNode(ctx context.Context, _ string, req *gwpb.PushTypingReq) (*gwpb.PushTypingResp, error) {
 	if c.initErr != nil {
 		return nil, c.initErr
 	}
-	if c.client == nil {
-		return nil, fmt.Errorf("gateway client for %s is not initialized", c.target)
-	}
+
 	return c.client.PushTyping(ctx, req)
 }
 
-func (c *GatewayClient) PushReadReceipt(ctx context.Context, req *gwpb.PushReadReceiptReq) (*gwpb.PushReadReceiptResp, error) {
+func (c *GatewayClient) PushReadReceiptToNode(ctx context.Context, _ string, req *gwpb.PushReadReceiptReq) (*gwpb.PushReadReceiptResp, error) {
 	if c.initErr != nil {
 		return nil, c.initErr
-	}
-
-	if c.client == nil {
-		return nil, fmt.Errorf("gateway client for %s is not initialized", c.target)
 	}
 
 	return c.client.PushReadReceipt(ctx, req)
 }
 
-func (c *GatewayClient) PushNotification(ctx context.Context, req *gwpb.PushNotificationReq) (*gwpb.PushNotificationResp, error) {
+func (c *GatewayClient) PushFriendApplicationToNode(ctx context.Context, _ string, req *gwpb.PushFriendApplicationReq) (*gwpb.PushFriendApplicationResp, error) {
 	if c.initErr != nil {
 		return nil, c.initErr
-	}
-
-	if c.client == nil {
-		return nil, fmt.Errorf("gateway client for %s is not initialized", c.target)
-	}
-
-	return c.client.PushNotification(ctx, req)
-}
-
-// PushFriendApplication delivers a friend application to the connections held
-// by this gateway node.
-func (c *GatewayClient) PushFriendApplication(ctx context.Context, req *gwpb.PushFriendApplicationReq) (*gwpb.PushFriendApplicationResp, error) {
-	if c.initErr != nil {
-		return nil, c.initErr
-	}
-
-	if c.client == nil {
-		return nil, fmt.Errorf("gateway client for %s is not initialized", c.target)
 	}
 
 	return c.client.PushFriendApplication(ctx, req)
@@ -125,7 +96,6 @@ func (c *GatewayClient) Close() error {
 	return c.conn.Close()
 }
 
-// Ensure GatewayClient implements GatewayPusher
 var _ GatewayPusher = (*GatewayClient)(nil)
 
 func traceUnaryClientInterceptor(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {

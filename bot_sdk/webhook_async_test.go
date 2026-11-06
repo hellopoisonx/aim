@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hellopoisonx/aim/app/shared/botwebhook"
 	"github.com/stretchr/testify/require"
 )
 
@@ -19,7 +20,7 @@ const testPlainSecret = "plain-secret"
 func TestVerifySignatureWithRotateSecretPlaintext(t *testing.T) {
 	body := []byte(`{"event_id":"e1","type":"message.created"}`)
 	secret := "plain-secret-from-rotate-secret"
-	signature := signaturePrefixSHA256 + signWithSecretHash(HashWebhookSecret(secret), body)
+	signature := botwebhook.SignaturePrefix + botwebhook.Sign(botwebhook.HashWebhookSecret(secret), body)
 
 	require.True(t, VerifySignature(secret, body, signature))
 	require.False(t, VerifySignature("wrong", body, signature))
@@ -81,7 +82,9 @@ func TestAsyncProcessorRetriesAndCallsFailureHandler(t *testing.T) {
 func TestAsyncProcessorQueueFullReturns503(t *testing.T) {
 	secret := testPlainSecret
 	block := make(chan struct{})
+	started := make(chan struct{}, 4)
 	processor, err := NewAsyncProcessor(secret, MessageHandlerFunc(func(context.Context, WebhookEvent) error {
+		started <- struct{}{}
 		<-block
 		return nil
 	}), WithProcessorWorkers(1), WithProcessorQueueSize(1))
@@ -90,6 +93,13 @@ func TestAsyncProcessorQueueFullReturns503(t *testing.T) {
 	defer close(block)
 
 	processor.ServeHTTP(httptest.NewRecorder(), signedRequest(t, secret, webhookBody(t, "event-1")))
+	// Wait until the only worker is blocked in the handler, otherwise it may
+	// dequeue event-2 and leave room for event-3.
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("worker did not start handling event-1")
+	}
 	processor.ServeHTTP(httptest.NewRecorder(), signedRequest(t, secret, webhookBody(t, "event-2")))
 	rr := httptest.NewRecorder()
 	processor.ServeHTTP(rr, signedRequest(t, secret, webhookBody(t, "event-3")))
@@ -132,7 +142,7 @@ func webhookBody(t *testing.T, eventID string) []byte {
 func signedRequest(t *testing.T, secret string, body []byte) *http.Request {
 	t.Helper()
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
-	req.Header.Set("X-AIM-Signature", signaturePrefixSHA256+signWithSecretHash(HashWebhookSecret(secret), body))
+	req.Header.Set("X-AIM-Signature", botwebhook.SignaturePrefix+botwebhook.Sign(botwebhook.HashWebhookSecret(secret), body))
 	return req
 }
 

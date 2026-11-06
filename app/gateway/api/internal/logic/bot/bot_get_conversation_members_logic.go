@@ -5,6 +5,7 @@ import (
 
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/pbconv"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/conversationservice"
@@ -28,19 +29,8 @@ func NewBotGetConversationMembersLogic(ctx context.Context, svcCtx *svc.ServiceC
 }
 
 func (l *BotGetConversationMembersLogic) BotGetConversationMembers(req *types.BotGetConversationMembersRequest) (*types.BotGetConversationMembersResponse, error) {
-	identity, err := requireBotAction(l.ctx, botperm.ActionConversationMembersRead)
+	conversationID, client, err := botConversationRequest(l.ctx, l.svcCtx, botperm.ActionConversationMembersRead, req.Id)
 	if err != nil {
-		return nil, err
-	}
-
-	conversationID, err := parseRequiredID(req.Id, "id")
-	if err != nil {
-		return nil, err
-	}
-
-	client := logicConversationClient(l.svcCtx)
-
-	if err := ensureBotConversationMember(l.ctx, client, identity, conversationID); err != nil {
 		return nil, err
 	}
 
@@ -54,14 +44,7 @@ func (l *BotGetConversationMembersLogic) BotGetConversationMembers(req *types.Bo
 	members := rpcResp.GetMembers()
 	items := make([]types.BotMemberDetailItem, 0, len(members))
 	for _, m := range members {
-		items = append(items, types.BotMemberDetailItem{
-			UserId:   formatID(m.GetUserId()),
-			Email:    m.GetEmail(),
-			Avatar:   m.GetAvatar(),
-			Role:     m.GetRole(),
-			JoinedAt: m.GetJoinedAt(),
-			Name:     m.GetName(),
-		})
+		items = append(items, pbconv.BotMember(m))
 	}
 
 	return &types.BotGetConversationMembersResponse{Members: items}, nil

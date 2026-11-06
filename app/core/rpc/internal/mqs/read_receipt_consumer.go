@@ -4,26 +4,15 @@ import (
 	"context"
 	"encoding/json"
 
+	"github.com/hellopoisonx/aim/app/core/rpc/internal/push"
 	"github.com/hellopoisonx/aim/app/core/rpc/internal/svc"
-	logicpb "github.com/hellopoisonx/aim/app/logic/rpc/pb"
+	"github.com/hellopoisonx/aim/app/shared/events"
 	"github.com/hellopoisonx/aim/app/shared/tracing"
 	gwpb "github.com/hellopoisonx/aim/shared/proto/gateway/pb"
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
-// readReceiptEvent mirrors the payload produced by the gateway when a
-// member advances their read cursor for a conversation.
-type readReceiptEvent struct {
-	tracing.TraceContextFields
-
-	FromUserID        int64  `json:"from_user_id"`
-	ConversationID    int64  `json:"conversation_id"`
-	LastReadMessageID int64  `json:"last_read_message_id"`
-	UpdatedAt         int64  `json:"updated_at"`
-	GatewayNodeID     string `json:"gateway_node_id"`
-}
-
-// ReadReceiptConsumer consumes aim-read-receipt-events and fans out to
+// ReadReceiptConsumer consumes events.TopicReadReceipt and fans out to
 // conversation members' gateway nodes via the GatewayService.PushReadReceipt RPC.
 type ReadReceiptConsumer struct {
 	ctx    context.Context
@@ -38,10 +27,12 @@ func NewReadReceiptConsumer(ctx context.Context, svcCtx *svc.ServiceContext) *Re
 func (c *ReadReceiptConsumer) Consume(ctx context.Context, key string, value string) error {
 	logx.WithContext(ctx).Infof("consuming read receipt event, key=%s", key)
 
-	var event readReceiptEvent
+	var event events.ReadReceiptEvent
 	if err := json.Unmarshal([]byte(value), &event); err != nil {
-		logx.WithContext(ctx).Errorf("failed to unmarshal read receipt event: %v", err)
-		return err
+		logx.WithContext(ctx).Errorf(
+			"dropping undecodable read receipt event key=%s: %v payload=%q", key, err, value,
+		)
+		return nil
 	}
 
 	ctx = tracing.ExtractTraceContext(ctx, event.TraceContextFields)
@@ -52,49 +43,34 @@ func (c *ReadReceiptConsumer) Consume(ctx context.Context, key string, value str
 	logx.WithContext(ctx).Infof("read receipt event: from=%d conv=%d last_msg=%d",
 		event.FromUserID, event.ConversationID, event.LastReadMessageID)
 
-	if c.svcCtx.LogicConversationClient == nil {
-		logx.WithContext(ctx).Debugf("no conversation client configured, skipping read receipt fan-out for conv=%d", event.ConversationID)
-		return nil
-	}
-
-	membersResp, err := c.svcCtx.LogicConversationClient.GetConversationMembers(ctx, &logicpb.GetConversationMembersReq{
-		ConversationId: event.ConversationID,
-	})
+	memberIDs, _, err := push.ConversationRecipients(ctx, c.svcCtx, event.ConversationID)
 	if err != nil {
-		logx.WithContext(ctx).Errorf("GetConversationMembers failed for conv %d: %v", event.ConversationID, err)
-		// Don't return error - downstream re-consume cannot help if logic is down for long.
+		logx.WithContext(ctx).Errorf("conversation member lookup conv=%d failed: %v", event.ConversationID, err)
+		return nil
+	}
+	if len(memberIDs) == 0 {
 		return nil
 	}
 
-	for _, memberID := range membersResp.GetMemberIds() {
-		if memberID <= 0 || memberID == event.FromUserID {
-			continue
+	// A failed node is not retried: the client re-syncs read state on reconnect.
+	_ = push.ToMemberNodes(ctx, c.svcCtx, memberIDs, event.FromUserID, event.GatewayNodeID, func(memberID int64, nodeID string) error {
+		req := &gwpb.PushReadReceiptReq{
+			TargetUserId:      memberID,
+			ConversationId:    event.ConversationID,
+			FromUserId:        event.FromUserID,
+			LastReadMessageId: event.LastReadMessageID,
+			UpdatedAt:         event.UpdatedAt,
 		}
 
-		nodeIDs := gatewayNodes(ctx, c.svcCtx, memberID)
-
-		for _, nodeID := range nodeIDs {
-			if event.GatewayNodeID != "" && nodeID == event.GatewayNodeID {
-				continue
-			}
-
-			req := &gwpb.PushReadReceiptReq{
-				TargetUserId:      memberID,
-				ConversationId:    event.ConversationID,
-				FromUserId:        event.FromUserID,
-				LastReadMessageId: event.LastReadMessageID,
-				UpdatedAt:         event.UpdatedAt,
-			}
-
-			if _, err := pushReadReceiptToNode(ctx, c.svcCtx.GatewayClient, nodeID, req); err != nil {
-				logx.WithContext(ctx).Errorf("PushReadReceipt to node %s for member %d failed: %v", nodeID, memberID, err)
-				continue
-			}
-
-			logx.WithContext(ctx).Debugf("read receipt pushed: from=%d to member=%d conv=%d last_msg=%d node=%s",
-				event.FromUserID, memberID, event.ConversationID, event.LastReadMessageID, nodeID)
+		if _, err := c.svcCtx.GatewayClient.PushReadReceiptToNode(ctx, nodeID, req); err != nil {
+			return err
 		}
-	}
+
+		logx.WithContext(ctx).Debugf("read receipt pushed: from=%d to member=%d conv=%d last_msg=%d node=%s",
+			event.FromUserID, memberID, event.ConversationID, event.LastReadMessageID, nodeID)
+
+		return nil
+	})
 
 	return nil
 }

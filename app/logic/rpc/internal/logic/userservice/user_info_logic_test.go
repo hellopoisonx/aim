@@ -8,6 +8,7 @@ import (
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/config"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/service"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
+	"github.com/hellopoisonx/aim/app/logic/rpc/internal/svc/svctest"
 	"github.com/hellopoisonx/aim/app/logic/rpc/model/orm"
 	"github.com/hellopoisonx/aim/app/logic/rpc/pb"
 
@@ -79,7 +80,7 @@ func (f *fakeUserInfoService) SearchUserInfoByNickname(ctx context.Context, nick
 }
 
 func newTestServiceContext(userSvc service.UserInfoQuerier) *svc.ServiceContext {
-	return svc.NewServiceContextWithChecker(config.Config{}, service.DenyAllPermissionChecker{}, userSvc)
+	return svctest.WithChecker(config.Config{}, service.DenyAllPermissionChecker{}, userSvc)
 }
 
 func TestCreateUserInfo(t *testing.T) {
@@ -495,21 +496,8 @@ func TestSearchUserInfoByNickname(t *testing.T) {
 	}
 }
 
-func TestUserInfoToResponse(t *testing.T) {
-	info := orm.UserInfo{
-		ID:       1,
-		Email:    "test@example.com",
-		Status:   1,
-		Nickname: "Test User",
-		Avatar:   "https://avatar.example.com/1.png",
-	}
-
-	resp := userInfoToResponse(info)
-	require.Equal(t, int64(1), resp.Id)
-	require.Equal(t, "test@example.com", resp.Email)
-	require.Equal(t, "Test User", resp.Nickname)
-}
-
+// Handler-level errors stay raw: the server interceptor is what turns an
+// unclassified failure into CodeInternal for the client.
 func TestCreateUserInfo_InternalError(t *testing.T) {
 	svcCtx := newTestServiceContext(&fakeUserInfoService{err: errors.New("database error")})
 	_, err := NewCreateUserInfoLogic(context.Background(), svcCtx).CreateUserInfo(&pb.CreateUserInfoReq{
@@ -518,5 +506,6 @@ func TestCreateUserInfo_InternalError(t *testing.T) {
 		Nickname: "Test",
 	})
 	require.Error(t, err)
-	require.Equal(t, codes.Internal, status.Code(err))
+	require.Equal(t, codes.Unknown, status.Code(err))
+	require.Contains(t, err.Error(), "database error")
 }

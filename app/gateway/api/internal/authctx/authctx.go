@@ -5,7 +5,11 @@
 // transport package.
 package authctx
 
-import "context"
+import (
+	"context"
+
+	"github.com/hellopoisonx/aim/app/shared/errorx"
+)
 
 // Identity is the authenticated caller of a gateway request.
 type Identity struct {
@@ -26,13 +30,23 @@ func IdentityFromContext(ctx context.Context) (Identity, bool) {
 	return id, ok
 }
 
-type authorizationKey struct{}
+// RequireIdentity returns the authenticated caller and fails when ctx carries none.
+func RequireIdentity(ctx context.Context) (Identity, error) {
+	identity, ok := IdentityFromContext(ctx)
+	if !ok || identity.UserID <= 0 {
+		return Identity{}, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
+	}
 
-func WithAuthorization(ctx context.Context, value string) context.Context {
-	return context.WithValue(ctx, authorizationKey{}, value)
+	return identity, nil
 }
 
-func Authorization(ctx context.Context) string {
-	value, _ := ctx.Value(authorizationKey{}).(string)
-	return value
+// RequireUserID returns the caller's user id and fails when ctx carries no
+// authenticated user.
+func RequireUserID(ctx context.Context) (int64, error) {
+	identity, err := RequireIdentity(ctx)
+	if err != nil {
+		return 0, err
+	}
+
+	return identity.UserID, nil
 }

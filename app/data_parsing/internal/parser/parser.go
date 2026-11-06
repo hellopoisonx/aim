@@ -48,12 +48,8 @@ func (DefaultParser) Parse(ctx context.Context, kind, mime string, data []byte) 
 	case sharedattachment.KindImage:
 		thumb, thumbWidth, thumbHeight, width, height, format, err := imageThumbnail(data)
 		if err != nil {
-			res.Metadata.Parser = metadataParserPlaceholder
 			res.Metadata.ThumbnailFallback = err.Error()
-			res.Thumbnail = transparentPNG()
-			res.ThumbMIME = thumbMIMEPNG
-			res.ThumbWidth = 1
-			res.ThumbHeight = 1
+			placeholderThumb(res)
 			break
 		}
 		res.Width = width
@@ -64,18 +60,10 @@ func (DefaultParser) Parse(ctx context.Context, kind, mime string, data []byte) 
 		res.ThumbWidth = thumbWidth
 		res.ThumbHeight = thumbHeight
 	case sharedattachment.KindVideo:
-		res.Metadata.Parser = metadataParserPlaceholder
 		res.Metadata.TargetFormat = "h264/mp4+aac"
-		res.Thumbnail = transparentPNG()
-		res.ThumbMIME = thumbMIMEPNG
-		res.ThumbWidth = 1
-		res.ThumbHeight = 1
+		placeholderThumb(res)
 	case sharedattachment.KindAudio:
-		res.Metadata.Parser = metadataParserPlaceholder
-		res.Thumbnail = transparentPNG()
-		res.ThumbMIME = thumbMIMEPNG
-		res.ThumbWidth = 1
-		res.ThumbHeight = 1
+		placeholderThumb(res)
 	default:
 		return nil, fmt.Errorf("unsupported kind %q", kind)
 	}
@@ -83,6 +71,15 @@ func (DefaultParser) Parse(ctx context.Context, kind, mime string, data []byte) 
 		res.Metadata.MediaType = sharedattachment.KindAudio
 	}
 	return res, nil
+}
+
+// placeholderThumb replaces the thumbnail of a result that has no real one.
+func placeholderThumb(res *Result) {
+	res.Metadata.Parser = metadataParserPlaceholder
+	res.Thumbnail = transparentPNG()
+	res.ThumbMIME = thumbMIMEPNG
+	res.ThumbWidth = 1
+	res.ThumbHeight = 1
 }
 
 func imageThumbnail(data []byte) ([]byte, int, int, int, int, string, error) {

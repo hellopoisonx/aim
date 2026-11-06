@@ -7,6 +7,7 @@ import (
 
 	"github.com/hellopoisonx/aim/app/core/rpc/internal/svc"
 	sharedconversation "github.com/hellopoisonx/aim/app/shared/conversation"
+	"github.com/hellopoisonx/aim/app/shared/events"
 	"github.com/stretchr/testify/require"
 )
 
@@ -14,7 +15,7 @@ func TestConversationEventConsumer_SystemSenderInfo(t *testing.T) {
 	fakeGw := newFakeGatewayClient()
 	consumer := NewConversationEventConsumer(context.Background(), &svc.ServiceContext{GatewayClient: fakeGw})
 
-	event := conversationEvent{
+	event := events.ConversationEvent{
 		MessageID:      1,
 		ConversationID: 2,
 		SenderID:       0,

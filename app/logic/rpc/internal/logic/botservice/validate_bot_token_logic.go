@@ -26,15 +26,16 @@ func NewValidateBotTokenLogic(ctx context.Context, svcCtx *svc.ServiceContext) *
 
 // ValidateBotToken resolves a plaintext token into a bot identity.
 func (l *ValidateBotTokenLogic) ValidateBotToken(in *pb.ValidateBotTokenReq) (*pb.ValidateBotTokenResp, error) {
-	if l.svcCtx.BotService == nil {
-		return nil, errorx.NewCodeError(errorx.CodeInternal, "bot service not configured")
+	botSvc, err := requireBotService(l.svcCtx)
+	if err != nil {
+		return nil, err
 	}
 
 	if in.GetPlaintextToken() == "" {
 		return nil, errorx.NewCodeError(errorx.CodeBotTokenInvalid, "token is required")
 	}
 
-	identity, err := l.svcCtx.BotService.ValidateBotToken(l.ctx, in.GetPlaintextToken())
+	identity, err := botSvc.ValidateBotToken(l.ctx, in.GetPlaintextToken())
 	if err != nil {
 		return nil, err
 	}

@@ -20,6 +20,7 @@ import (
 	logicconfig "github.com/hellopoisonx/aim/app/logic/rpc/internal/config"
 	serverpkg "github.com/hellopoisonx/aim/app/logic/rpc/internal/server/conversationservice"
 	"github.com/hellopoisonx/aim/app/logic/rpc/internal/service"
+	"github.com/hellopoisonx/aim/app/logic/rpc/internal/service/rbac"
 	logicsvc "github.com/hellopoisonx/aim/app/logic/rpc/internal/svc"
 	"github.com/hellopoisonx/aim/app/logic/rpc/model/dao"
 	"github.com/hellopoisonx/aim/app/logic/rpc/model/orm"
@@ -28,7 +29,7 @@ import (
 	"github.com/hellopoisonx/aim/app/shared/errorx"
 	"github.com/hellopoisonx/aim/app/shared/gormdb"
 	"github.com/hellopoisonx/aim/app/shared/pgtypes"
-	"github.com/hellopoisonx/aim/app/shared/tools"
+	"github.com/hellopoisonx/aim/app/shared/snowflake"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -45,10 +46,10 @@ func (r storeTxRunner) WithTx(ctx context.Context, fn func(tx service.Conversati
 	return r.store.WithTx(ctx, func(tx *dao.Store) error { return fn(tx) })
 }
 
-func mustSnowflake(t *testing.T) *tools.Snowflake {
+func mustSnowflake(t *testing.T) *snowflake.Snowflake {
 	t.Helper()
 
-	gen, err := tools.NewSnowflake(1)
+	gen, err := snowflake.NewSnowflake(1)
 	require.NoError(t, err)
 
 	return gen
@@ -59,7 +60,9 @@ func mustSnowflake(t *testing.T) *tools.Snowflake {
 func startLogic(t *testing.T, store *dao.Store) logicpb.ConversationServiceClient {
 	t.Helper()
 
-	convSvc := service.NewConversationService(store, mustSnowflake(t), storeTxRunner{store: store})
+	authz, err := rbac.New(store)
+	require.NoError(t, err)
+	convSvc := service.NewConversationService(store, authz, mustSnowflake(t), storeTxRunner{store: store})
 	logicCtx := &logicsvc.ServiceContext{
 		Config:              logicconfig.Config{},
 		PermissionChecker:   service.DenyAllPermissionChecker{},
@@ -216,5 +219,5 @@ func TestConversationErrorsSurviveTheWire(t *testing.T) {
 
 	codeErr := errorx.FromGRPCError(err)
 	require.NotNil(t, codeErr)
-	require.Equal(t, service.CodeConversationNotFound, codeErr.Code)
+	require.Equal(t, errorx.CodeConversationNotFound, codeErr.Code)
 }

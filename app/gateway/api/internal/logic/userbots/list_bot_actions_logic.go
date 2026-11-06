@@ -5,6 +5,7 @@ import (
 
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/authctx"
 
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/pbconv"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/botservice"
@@ -24,8 +25,8 @@ func NewListBotActionsLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Li
 }
 
 func (l *ListBotActionsLogic) ListBotActions() (resp *types.ListBotActionsResponse, err error) {
-	if _, ok := authctx.IdentityFromContext(l.ctx); !ok {
-		return nil, errorx.NewCodeError(errorx.CodeAuth, "unauthorized")
+	if _, err := authctx.RequireUserID(l.ctx); err != nil {
+		return nil, err
 	}
 	rpcResp, err := l.svcCtx.LogicBotClient.ListBotActions(l.ctx, &botservice.ListBotActionsReq{})
 	if err != nil {
@@ -33,7 +34,7 @@ func (l *ListBotActionsLogic) ListBotActions() (resp *types.ListBotActionsRespon
 	}
 	actions := make([]types.BotActionItem, 0, len(rpcResp.GetActions()))
 	for _, a := range rpcResp.GetActions() {
-		actions = append(actions, botActionToType(a))
+		actions = append(actions, pbconv.BotAction(a))
 	}
 	return &types.ListBotActionsResponse{Actions: actions}, nil
 }

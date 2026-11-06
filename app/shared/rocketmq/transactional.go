@@ -69,6 +69,11 @@ func (p *Producer) SendTransactional(ctx context.Context, db *gorm.DB, m Transac
 	if localTx == nil {
 		return errors.New("rocketmq: transactional publish requires a local transaction")
 	}
+	// Without a journal the broker's check-back cannot resolve a lost commit,
+	// so a half message could never be cleared: refuse instead of degrading.
+	if p.journals.Load() == nil {
+		return errors.New("rocketmq: transactional publish requires a journal checker")
+	}
 
 	keys := []string{m.EventUID}
 	if m.Key != "" && m.Key != m.EventUID {

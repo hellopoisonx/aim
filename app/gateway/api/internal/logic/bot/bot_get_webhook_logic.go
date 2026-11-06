@@ -3,6 +3,7 @@ package bot
 import (
 	"context"
 
+	"github.com/hellopoisonx/aim/app/gateway/api/internal/pbconv"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/svc"
 	"github.com/hellopoisonx/aim/app/gateway/api/internal/types"
 	"github.com/hellopoisonx/aim/app/logic/rpc/client/botservice"
@@ -46,11 +47,6 @@ func (l *BotGetWebhookLogic) BotGetWebhook() (*types.BotGetWebhookResponse, erro
 
 	return &types.BotGetWebhookResponse{
 		Configured: true,
-		Webhook: types.BotWebhookConfig{
-			Url:       cfg.GetUrl(),
-			Events:    cfg.GetEvents(),
-			Enabled:   cfg.GetEnabled(),
-			UpdatedAt: cfg.GetUpdatedAt(),
-		},
+		Webhook:    pbconv.BotWebhook(cfg),
 	}, nil
 }

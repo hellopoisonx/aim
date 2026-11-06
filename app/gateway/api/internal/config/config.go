@@ -5,6 +5,9 @@
 package config
 
 import (
+	"github.com/hellopoisonx/aim/app/shared/events"
+	"github.com/hellopoisonx/aim/app/shared/rocketmq"
+
 	"github.com/zeromicro/go-zero/rest"
 	"github.com/zeromicro/go-zero/zrpc"
 )
@@ -12,7 +15,6 @@ import (
 type Config struct {
 	rest.RestConf
 	AuthRpc  zrpc.RpcClientConf
-	CoreRpc  zrpc.RpcClientConf
 	LogicRpc zrpc.RpcClientConf
 	Auth     struct {
 		AccessSecret string
@@ -43,17 +45,24 @@ type Config struct {
 		// AccessKey and SecretKey are optional ACL credentials.
 		AccessKey string `json:",optional"` //nolint:staticcheck // go-zero conf uses json tag options for defaults.
 		SecretKey string `json:",optional"` //nolint:staticcheck // go-zero conf uses json tag options for defaults.
-		// PresenceTopic carries presence events.
-		PresenceTopic string `json:",default=aim-presence-events"` //nolint:staticcheck // go-zero conf uses json tag options for defaults.
-		// TypingTopic carries typing events.
-		TypingTopic string `json:",default=aim-typing-events"` //nolint:staticcheck // go-zero conf uses json tag options for defaults.
-		// ReadReceiptTopic carries read receipt events. It is a FIFO topic keyed
-		// by conversation id.
-		ReadReceiptTopic string `json:",default=aim-read-receipt-events"` //nolint:staticcheck // go-zero conf uses json tag options for defaults.
+		// PresenceTopic overrides the presence topic; empty means
+		// events.TopicPresence.
+		PresenceTopic string `json:",optional"`
+		// TypingTopic overrides the typing topic; empty means
+		// events.TopicTyping.
+		TypingTopic string `json:",optional"`
+		// ReadReceiptTopic overrides the read-receipt topic (FIFO, keyed by
+		// conversation id); empty means events.TopicReadReceipt.
+		ReadReceiptTopic string `json:",optional"`
 		// FriendApplicationTopic is the topic core consumes to fan friend
 		// application pushes out to every gateway node.
 		FriendApplicationTopic string `json:",default=aim-friend-application-events"` //nolint:staticcheck // go-zero conf uses json tag options for defaults.
+		PushTopic              string `json:",default=aim-gateway-push"`
+		// ProducerGroup is the broker-visible producer group of the gateway
+		// event producer.
+		ProducerGroup string `json:",default=aim-gateway-producer"`
 	}
+	PushConsumer  rocketmq.ConsumerConf `json:",optional"`
 	AttachmentRpc zrpc.RpcClientConf
 	// GatewayNodeID identifies this gateway instance for the directory service.
 	// Populated from env AIM_GATEWAY_NODE_ID; startup fails if empty.
@@ -88,6 +97,22 @@ type CorsConf struct {
 	Enabled bool `json:",default=false"` //nolint:staticcheck // go-zero conf uses json tag options for defaults.
 	// Origins is the list of allowed origins. Defaults to ["*"] when empty.
 	Origins []string `json:",optional"`
+}
+
+// EventTopics resolves the presence, typing and read-receipt topics, falling
+// back to the constants shared with core in app/shared/events.
+func (c *Config) EventTopics() (presence, typing, readReceipt string) {
+	return topicOrDefault(c.RocketMQ.PresenceTopic, events.TopicPresence),
+		topicOrDefault(c.RocketMQ.TypingTopic, events.TopicTyping),
+		topicOrDefault(c.RocketMQ.ReadReceiptTopic, events.TopicReadReceipt)
+}
+
+func topicOrDefault(configured, fallback string) string {
+	if configured == "" {
+		return fallback
+	}
+
+	return configured
 }
 
 // nodeIDEnvVar is where the deployment injects this gateway's node identity.

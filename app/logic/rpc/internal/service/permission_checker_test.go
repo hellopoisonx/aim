@@ -4,11 +4,20 @@ import (
 	"context"
 	"testing"
 
+	"github.com/hellopoisonx/aim/app/shared/errorx"
+
 	"github.com/stretchr/testify/require"
 )
 
+// allowAllPermissionChecker is the permissive stub used by permission tests.
+type allowAllPermissionChecker struct{}
+
+func (allowAllPermissionChecker) CheckMessagePermission(context.Context, PermissionCheck) (PermissionDecision, error) {
+	return PermissionDecision{Allowed: true}, nil
+}
+
 func TestAllowAllPermissionChecker(t *testing.T) {
-	decision, err := AllowAllPermissionChecker{}.CheckMessagePermission(context.Background(), PermissionCheck{
+	decision, err := allowAllPermissionChecker{}.CheckMessagePermission(context.Background(), PermissionCheck{
 		SenderID:       10,
 		ConversationID: 20,
 		MessageType:    "text",
@@ -16,7 +25,7 @@ func TestAllowAllPermissionChecker(t *testing.T) {
 	})
 
 	require.NoError(t, err)
-	require.Equal(t, PermissionDecision{Allowed: true, Code: CodeOK}, decision)
+	require.Equal(t, PermissionDecision{Allowed: true}, decision)
 }
 
 func TestDenyAllPermissionChecker(t *testing.T) {
@@ -29,7 +38,7 @@ func TestDenyAllPermissionChecker(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, PermissionDecision{
 		Allowed: false,
-		Code:    CodePermissionDenied,
+		Code:    errorx.CodeForbidden,
 		Reason:  "permission checker is not configured",
 	}, decision)
 }
