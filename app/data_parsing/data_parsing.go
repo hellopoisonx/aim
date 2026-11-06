@@ -20,7 +20,7 @@ func main() {
 	var c config.Config
 	conf.MustLoad(*configFile, &c)
 	applyDefaults(&c)
-	zservice.ServiceConf{Name: c.Name, Prometheus: c.Prometheus, Telemetry: c.Telemetry}.MustSetUp()
+	zservice.ServiceConf{Name: c.Name, DevServer: c.DevServer, Telemetry: c.Telemetry}.MustSetUp()
 
 	ctx := context.Background()
 	w, err := worker.New(ctx, c)

@@ -695,6 +695,9 @@ func (s *ConversationService) AddGroupMembers(ctx context.Context, conversationI
 
 		return nil
 	})
+	if err != nil {
+		return orm.Conversation{}, err
+	}
 
 	if err := s.postCommit(ctx, conversationID, rolesFromMembers); err != nil {
 		return orm.Conversation{}, err
