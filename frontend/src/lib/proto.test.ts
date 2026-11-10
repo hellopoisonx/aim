@@ -12,12 +12,13 @@ import {
   encodeWsFrame,
   isReplayableServerFrame,
 } from "@/lib/proto"
+import { parseApiJson, stringifyApiBody } from "@/lib/api"
 import { tokenizeMarkedSnippet } from "@/lib/utils"
 
 describe("ws protobuf wire codec", () => {
-  it("round-trips WsFrame with SendMessagePayload and UTF-8 + mentions", () => {
+  it("round-trips WsFrame with SendMessagePayload and 64-bit Snowflake IDs", () => {
     const payloadBytes = encodeSendMessagePayload({
-      conversation_id: 9007199254740991,
+      conversation_id: "245762623319052288",
       message_type: "text",
       content: "你好，AIM Web 端！",
       client_msg_id: "d1-8899-aabb",
@@ -38,7 +39,7 @@ describe("ws protobuf wire codec", () => {
 
     const decodedPayload = decodeSendMessagePayload(decodedFrame.payload)
     expect(decodedPayload).toEqual({
-      conversation_id: 9007199254740991,
+      conversation_id: "245762623319052288",
       message_type: "text",
       content: "你好，AIM Web 端！",
       client_msg_id: "d1-8899-aabb",
@@ -48,11 +49,11 @@ describe("ws protobuf wire codec", () => {
 
   it("round-trips PushMessagePayload and ServerAckPayload", () => {
     const pushBytes = encodePushMessagePayload({
-      message_id: 50001,
-      conversation_id: 88,
+      message_id: "245763041197559808",
+      conversation_id: "245762623319052288",
       message_type: "image",
       content: '{"schema":"aim.attachment.v1","file_id":"att_1"}',
-      sender_id: 7,
+      sender_id: "245762623319052289",
       sent_at: 1717056099000,
       conversation_type: "group",
       client_msg_id: "d1-client-7",
@@ -66,11 +67,11 @@ describe("ws protobuf wire codec", () => {
 
     const decodedPush = decodePushMessagePayload(pushBytes)
     expect(decodedPush).toEqual({
-      message_id: 50001,
-      conversation_id: 88,
+      message_id: "245763041197559808",
+      conversation_id: "245762623319052288",
       message_type: "image",
       content: '{"schema":"aim.attachment.v1","file_id":"att_1"}',
-      sender_id: 7,
+      sender_id: "245762623319052289",
       sent_at: 1717056099000,
       conversation_type: "group",
       client_msg_id: "d1-client-7",
@@ -88,7 +89,7 @@ describe("ws protobuf wire codec", () => {
       code: 0,
       msg: "ok",
       status: AckStatus.ACCEPTED,
-      message_id: 50001,
+      message_id: "245763041197559808",
     })
     expect(decodeServerAckPayload(ackBytes)).toEqual({
       ack_seq: 12,
@@ -96,7 +97,7 @@ describe("ws protobuf wire codec", () => {
       code: 0,
       msg: "ok",
       status: AckStatus.ACCEPTED,
-      message_id: 50001,
+      message_id: "245763041197559808",
     })
   })
 
@@ -117,5 +118,24 @@ describe("ws protobuf wire codec", () => {
       { text: "高亮词", highlighted: true },
       { text: "后缀", highlighted: false },
     ])
+  })
+
+  it("preserves 64-bit Snowflake IDs across JSON parse and stringify", () => {
+    const raw =
+      '{"code":0,"msg":"ok","body":{"users":[{"id":245762623319052288,"nickname":"test-user1","email":"test-user@email.com","avatar":""}]}}'
+    const parsed = parseApiJson<{
+      code: number
+      body: { users: Array<{ id: string; nickname: string }> }
+    }>(raw)
+    expect(parsed.body.users[0].id).toBe("245762623319052288")
+
+    const bodyJson = stringifyApiBody({
+      conversation_type: "direct",
+      member_ids: ["245762623319052288", "245763041197559808"],
+      user_id: "245762623319052288",
+    })
+    expect(bodyJson).toBe(
+      '{"conversation_type":"direct","member_ids":[245762623319052288,245763041197559808],"user_id":245762623319052288}'
+    )
   })
 })

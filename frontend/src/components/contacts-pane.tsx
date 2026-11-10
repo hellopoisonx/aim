@@ -26,6 +26,7 @@ import { Separator } from "@/components/ui/separator"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { aimApi } from "@/lib/api"
 import type {
+  EntityId,
   FriendTagItem,
   FriendshipItem,
   UserListItem,
@@ -33,13 +34,13 @@ import type {
 import { cn, formatTimestamp, initialsFromName } from "@/lib/utils"
 
 interface ContactsPaneProps {
-  currentUserId: number
+  currentUserId: EntityId
   friends: FriendshipItem[]
   applications: FriendshipItem[]
   tags: FriendTagItem[]
-  presenceMap: Record<number, string>
+  presenceMap: Record<EntityId, string>
   onRefreshContacts: () => Promise<void>
-  onStartDirectChat: (friendUserId: number, friendName?: string) => Promise<void>
+  onStartDirectChat: (friendUserId: EntityId, friendName?: string) => Promise<void>
 }
 
 export function ContactsPane({
@@ -51,9 +52,9 @@ export function ContactsPane({
   onRefreshContacts,
   onStartDirectChat,
 }: ContactsPaneProps) {
-  const [selectedTagId, setSelectedTagId] = useState<number | null>(null)
+  const [selectedTagId, setSelectedTagId] = useState<EntityId | null>(null)
   const [newTagName, setNewTagName] = useState("")
-  const [editingTagId, setEditingTagId] = useState<number | null>(null)
+  const [editingTagId, setEditingTagId] = useState<EntityId | null>(null)
   const [editingTagName, setEditingTagName] = useState("")
   const [searchName, setSearchName] = useState("")
   const [foundUsers, setFoundUsers] = useState<UserListItem[]>([])
@@ -73,7 +74,7 @@ export function ContactsPane({
       ? friends
       : friends.filter((f) => f.tags?.some((t) => t.id === selectedTagId))
 
-  function resolvePeerUserId(item: FriendshipItem): number {
+  function resolvePeerUserId(item: FriendshipItem): EntityId {
     return item.user_id === currentUserId ? item.friend_id : item.user_id
   }
 
@@ -94,7 +95,7 @@ export function ContactsPane({
     }
   }
 
-  async function handleRenameTag(tagId: number) {
+  async function handleRenameTag(tagId: EntityId) {
     const trimmed = editingTagName.trim()
     if (!trimmed) return
     setBusyAction(`rename-tag-${tagId}`)
@@ -111,7 +112,7 @@ export function ContactsPane({
     }
   }
 
-  async function handleDeleteTag(tagId: number) {
+  async function handleDeleteTag(tagId: EntityId) {
     setBusyAction(`delete-tag-${tagId}`)
     setErrorMsg(null)
     try {
@@ -128,9 +129,9 @@ export function ContactsPane({
   }
 
   async function handleToggleFriendTag(
-    friendUserId: number,
+    friendUserId: EntityId,
     currentTags: FriendTagItem[],
-    tagId: number,
+    tagId: EntityId,
     checked: boolean
   ) {
     setBusyAction(`friend-tag-${friendUserId}-${tagId}`)
@@ -152,7 +153,7 @@ export function ContactsPane({
     }
   }
 
-  async function handleAcceptApplication(applicantId: number) {
+  async function handleAcceptApplication(applicantId: EntityId) {
     setBusyAction(`accept-${applicantId}`)
     setErrorMsg(null)
     try {
@@ -165,7 +166,7 @@ export function ContactsPane({
     }
   }
 
-  async function handleRejectApplication(applicantId: number) {
+  async function handleRejectApplication(applicantId: EntityId) {
     setBusyAction(`reject-${applicantId}`)
     setErrorMsg(null)
     try {
@@ -195,7 +196,7 @@ export function ContactsPane({
     }
   }
 
-  async function handleSendFriendRequest(targetUserId: number) {
+  async function handleSendFriendRequest(targetUserId: EntityId) {
     setBusyAction(`add-friend-${targetUserId}`)
     setErrorMsg(null)
     setFeedback(null)

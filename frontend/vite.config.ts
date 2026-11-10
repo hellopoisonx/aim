@@ -39,6 +39,7 @@ export default defineConfig({
         changeOrigin: true,
         configure: (proxy) => {
           proxy.on("proxyReq", (proxyReq, req) => {
+            proxyReq.setHeader("Origin", gatewayHttpTarget)
             if (!req.headers.authorization) {
               const token = extractAccessTokenFromCookie(req)
               if (token) {
@@ -47,6 +48,7 @@ export default defineConfig({
             }
           })
           proxy.on("proxyReqWs", (proxyReq, req) => {
+            proxyReq.setHeader("Origin", gatewayHttpTarget)
             if (!req.headers.authorization) {
               const token = extractAccessTokenFromCookie(req)
               if (token) {

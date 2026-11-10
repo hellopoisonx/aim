@@ -20,7 +20,7 @@ import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { aimApi } from "@/lib/api"
-import type { ConversationItem, SearchResponse } from "@/lib/types"
+import type { ConversationItem, EntityId, SearchResponse } from "@/lib/types"
 import {
   formatTimestamp,
   initialsFromName,
@@ -31,8 +31,8 @@ interface SearchDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   scopedConversation?: ConversationItem | null
-  onSelectConversation: (conversationId: number) => void
-  onStartDirectChat: (targetUserId: number, name?: string) => Promise<void>
+  onSelectConversation: (conversationId: EntityId) => void
+  onStartDirectChat: (targetUserId: EntityId, name?: string) => Promise<void>
   onFriendRequested: () => void
 }
 
@@ -74,9 +74,9 @@ export function SearchDialog({
   const [results, setResults] = useState<SearchResponse | null>(null)
   const [loading, setLoading] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
-  const [addingUserId, setAddingUserId] = useState<number | null>(null)
+  const [addingUserId, setAddingUserId] = useState<EntityId | null>(null)
 
-  async function runSearch(cursor?: { createdAt: number; id: number }) {
+  async function runSearch(cursor?: { createdAt: number; id: EntityId }) {
     const trimmed = query.trim()
     if (!trimmed) return
     setLoading(true)
@@ -119,7 +119,7 @@ export function SearchDialog({
     void runSearch()
   }
 
-  async function handleAddFriend(userId: number) {
+  async function handleAddFriend(userId: EntityId) {
     setAddingUserId(userId)
     try {
       await aimApi.addFriend(userId)

@@ -1,4 +1,4 @@
-import type { SenderInfo } from "@/lib/types"
+import type { EntityId, SenderInfo } from "@/lib/types"
 
 export const FrameType = {
   UNSPECIFIED: 0,
@@ -37,7 +37,7 @@ export interface WsFrame {
 }
 
 export interface SendMessagePayload {
-  conversation_id: number
+  conversation_id: EntityId
   message_type: string
   content: string
   client_msg_id: string
@@ -49,12 +49,12 @@ export interface HeartbeatPayload {
 }
 
 export interface TypingPayload {
-  conversation_id: number
+  conversation_id: EntityId
 }
 
 export interface ReadReceiptPayload {
-  conversation_id: number
-  last_read_message_id: number
+  conversation_id: EntityId
+  last_read_message_id: EntityId
 }
 
 export interface ClientAckPayload {
@@ -62,11 +62,11 @@ export interface ClientAckPayload {
 }
 
 export interface PushMessagePayload {
-  message_id: number
-  conversation_id: number
+  message_id: EntityId
+  conversation_id: EntityId
   message_type: string
   content: string
-  sender_id: number
+  sender_id: EntityId
   sent_at: number
   conversation_type: string
   client_msg_id: string
@@ -76,7 +76,7 @@ export interface PushMessagePayload {
 }
 
 export interface PushPresencePayload {
-  user_id: number
+  user_id: EntityId
   status: string
   updated_at: number
 }
@@ -85,26 +85,26 @@ export interface PushNotificationPayload {
   notification_type: string
   title: string
   body: string
-  related_id: number
+  related_id: EntityId
 }
 
 export interface PushFriendApplicationPayload {
-  user_id: number
-  friend_id: number
+  user_id: EntityId
+  friend_id: EntityId
   status: string
   created_at: number
   updated_at: number
 }
 
 export interface PushTypingPayload {
-  user_id: number
-  conversation_id: number
+  user_id: EntityId
+  conversation_id: EntityId
 }
 
 export interface PushReadReceiptPayload {
-  conversation_id: number
-  user_id: number
-  last_read_message_id: number
+  conversation_id: EntityId
+  user_id: EntityId
+  last_read_message_id: EntityId
   updated_at: number
 }
 
@@ -124,7 +124,7 @@ export interface ServerAckPayload {
   code: number
   msg: string
   status: AckStatusValue
-  message_id: number
+  message_id: EntityId
 }
 
 const textEncoder = new TextEncoder()
@@ -133,8 +133,14 @@ const textDecoder = new TextDecoder()
 class ProtoWriter {
   private chunks: number[] = []
 
-  writeVarint(value: number | bigint) {
-    let v = BigInt.asUintN(64, BigInt(Math.trunc(Number(value))))
+  writeVarint(value: number | bigint | string) {
+    const big =
+      typeof value === "bigint"
+        ? value
+        : typeof value === "string"
+          ? BigInt(value.trim() || "0")
+          : BigInt(Math.trunc(value))
+    let v = BigInt.asUintN(64, big)
     while (v >= 0x80n) {
       this.chunks.push(Number((v & 0x7fn) | 0x80n))
       v >>= 7n
@@ -146,8 +152,8 @@ class ProtoWriter {
     this.writeVarint((fieldNumber << 3) | wireType)
   }
 
-  writeInt64Field(fieldNumber: number, value: number) {
-    if (!value) return
+  writeInt64Field(fieldNumber: number, value: number | bigint | string) {
+    if (!value || value === "0" || value === 0n) return
     this.writeTag(fieldNumber, 0)
     this.writeVarint(value)
   }
@@ -227,6 +233,10 @@ class ProtoReader {
 
   readInt64(): number {
     return Number(this.readVarintBigInt())
+  }
+
+  readInt64String(): EntityId {
+    return this.readVarintBigInt().toString()
   }
 
   readInt32(): number {
@@ -330,7 +340,7 @@ export function encodeSendMessagePayload(msg: SendMessagePayload): Uint8Array<Ar
 export function decodeSendMessagePayload(buf: Uint8Array): SendMessagePayload {
   const r = new ProtoReader(buf)
   const out: SendMessagePayload = {
-    conversation_id: 0,
+    conversation_id: "0",
     message_type: "",
     content: "",
     client_msg_id: "",
@@ -338,7 +348,7 @@ export function decodeSendMessagePayload(buf: Uint8Array): SendMessagePayload {
   }
   while (r.hasMore()) {
     const { fieldNumber, wireType } = r.readTag()
-    if (fieldNumber === 1 && wireType === 0) out.conversation_id = r.readInt64()
+    if (fieldNumber === 1 && wireType === 0) out.conversation_id = r.readInt64String()
     else if (fieldNumber === 2 && wireType === 2) out.message_type = r.readString()
     else if (fieldNumber === 3 && wireType === 2) out.content = r.readString()
     else if (fieldNumber === 4 && wireType === 2) out.client_msg_id = r.readString()
@@ -415,11 +425,11 @@ export function encodePushMessagePayload(msg: PushMessagePayload): Uint8Array<Ar
 export function decodePushMessagePayload(buf: Uint8Array): PushMessagePayload {
   const r = new ProtoReader(buf)
   const out: PushMessagePayload = {
-    message_id: 0,
-    conversation_id: 0,
+    message_id: "0",
+    conversation_id: "0",
     message_type: "",
     content: "",
-    sender_id: 0,
+    sender_id: "0",
     sent_at: 0,
     conversation_type: "",
     client_msg_id: "",
@@ -429,11 +439,11 @@ export function decodePushMessagePayload(buf: Uint8Array): PushMessagePayload {
   }
   while (r.hasMore()) {
     const { fieldNumber, wireType } = r.readTag()
-    if (fieldNumber === 1 && wireType === 0) out.message_id = r.readInt64()
-    else if (fieldNumber === 2 && wireType === 0) out.conversation_id = r.readInt64()
+    if (fieldNumber === 1 && wireType === 0) out.message_id = r.readInt64String()
+    else if (fieldNumber === 2 && wireType === 0) out.conversation_id = r.readInt64String()
     else if (fieldNumber === 3 && wireType === 2) out.message_type = r.readString()
     else if (fieldNumber === 4 && wireType === 2) out.content = r.readString()
-    else if (fieldNumber === 5 && wireType === 0) out.sender_id = r.readInt64()
+    else if (fieldNumber === 5 && wireType === 0) out.sender_id = r.readInt64String()
     else if (fieldNumber === 6 && wireType === 0) out.sent_at = r.readInt64()
     else if (fieldNumber === 7 && wireType === 2) out.conversation_type = r.readString()
     else if (fieldNumber === 8 && wireType === 2) out.client_msg_id = r.readString()
@@ -447,10 +457,10 @@ export function decodePushMessagePayload(buf: Uint8Array): PushMessagePayload {
 
 export function decodePushPresencePayload(buf: Uint8Array): PushPresencePayload {
   const r = new ProtoReader(buf)
-  const out: PushPresencePayload = { user_id: 0, status: "", updated_at: 0 }
+  const out: PushPresencePayload = { user_id: "0", status: "", updated_at: 0 }
   while (r.hasMore()) {
     const { fieldNumber, wireType } = r.readTag()
-    if (fieldNumber === 1 && wireType === 0) out.user_id = r.readInt64()
+    if (fieldNumber === 1 && wireType === 0) out.user_id = r.readInt64String()
     else if (fieldNumber === 2 && wireType === 2) out.status = r.readString()
     else if (fieldNumber === 3 && wireType === 0) out.updated_at = r.readInt64()
     else r.skip(wireType)
@@ -464,14 +474,14 @@ export function decodePushNotificationPayload(buf: Uint8Array): PushNotification
     notification_type: "",
     title: "",
     body: "",
-    related_id: 0,
+    related_id: "0",
   }
   while (r.hasMore()) {
     const { fieldNumber, wireType } = r.readTag()
     if (fieldNumber === 1 && wireType === 2) out.notification_type = r.readString()
     else if (fieldNumber === 2 && wireType === 2) out.title = r.readString()
     else if (fieldNumber === 3 && wireType === 2) out.body = r.readString()
-    else if (fieldNumber === 4 && wireType === 0) out.related_id = r.readInt64()
+    else if (fieldNumber === 4 && wireType === 0) out.related_id = r.readInt64String()
     else r.skip(wireType)
   }
   return out
@@ -482,16 +492,16 @@ export function decodePushFriendApplicationPayload(
 ): PushFriendApplicationPayload {
   const r = new ProtoReader(buf)
   const out: PushFriendApplicationPayload = {
-    user_id: 0,
-    friend_id: 0,
+    user_id: "0",
+    friend_id: "0",
     status: "",
     created_at: 0,
     updated_at: 0,
   }
   while (r.hasMore()) {
     const { fieldNumber, wireType } = r.readTag()
-    if (fieldNumber === 1 && wireType === 0) out.user_id = r.readInt64()
-    else if (fieldNumber === 2 && wireType === 0) out.friend_id = r.readInt64()
+    if (fieldNumber === 1 && wireType === 0) out.user_id = r.readInt64String()
+    else if (fieldNumber === 2 && wireType === 0) out.friend_id = r.readInt64String()
     else if (fieldNumber === 3 && wireType === 2) out.status = r.readString()
     else if (fieldNumber === 4 && wireType === 0) out.created_at = r.readInt64()
     else if (fieldNumber === 5 && wireType === 0) out.updated_at = r.readInt64()
@@ -502,11 +512,11 @@ export function decodePushFriendApplicationPayload(
 
 export function decodePushTypingPayload(buf: Uint8Array): PushTypingPayload {
   const r = new ProtoReader(buf)
-  const out: PushTypingPayload = { user_id: 0, conversation_id: 0 }
+  const out: PushTypingPayload = { user_id: "0", conversation_id: "0" }
   while (r.hasMore()) {
     const { fieldNumber, wireType } = r.readTag()
-    if (fieldNumber === 1 && wireType === 0) out.user_id = r.readInt64()
-    else if (fieldNumber === 2 && wireType === 0) out.conversation_id = r.readInt64()
+    if (fieldNumber === 1 && wireType === 0) out.user_id = r.readInt64String()
+    else if (fieldNumber === 2 && wireType === 0) out.conversation_id = r.readInt64String()
     else r.skip(wireType)
   }
   return out
@@ -515,16 +525,16 @@ export function decodePushTypingPayload(buf: Uint8Array): PushTypingPayload {
 export function decodePushReadReceiptPayload(buf: Uint8Array): PushReadReceiptPayload {
   const r = new ProtoReader(buf)
   const out: PushReadReceiptPayload = {
-    conversation_id: 0,
-    user_id: 0,
-    last_read_message_id: 0,
+    conversation_id: "0",
+    user_id: "0",
+    last_read_message_id: "0",
     updated_at: 0,
   }
   while (r.hasMore()) {
     const { fieldNumber, wireType } = r.readTag()
-    if (fieldNumber === 1 && wireType === 0) out.conversation_id = r.readInt64()
-    else if (fieldNumber === 2 && wireType === 0) out.user_id = r.readInt64()
-    else if (fieldNumber === 3 && wireType === 0) out.last_read_message_id = r.readInt64()
+    if (fieldNumber === 1 && wireType === 0) out.conversation_id = r.readInt64String()
+    else if (fieldNumber === 2 && wireType === 0) out.user_id = r.readInt64String()
+    else if (fieldNumber === 3 && wireType === 0) out.last_read_message_id = r.readInt64String()
     else if (fieldNumber === 4 && wireType === 0) out.updated_at = r.readInt64()
     else r.skip(wireType)
   }
@@ -574,7 +584,7 @@ export function decodeServerAckPayload(buf: Uint8Array): ServerAckPayload {
     code: 0,
     msg: "",
     status: AckStatus.UNSPECIFIED,
-    message_id: 0,
+    message_id: "0",
   }
   while (r.hasMore()) {
     const { fieldNumber, wireType } = r.readTag()
@@ -583,7 +593,7 @@ export function decodeServerAckPayload(buf: Uint8Array): ServerAckPayload {
     else if (fieldNumber === 3 && wireType === 0) out.code = r.readInt32()
     else if (fieldNumber === 4 && wireType === 2) out.msg = r.readString()
     else if (fieldNumber === 5 && wireType === 0) out.status = r.readInt32() as AckStatusValue
-    else if (fieldNumber === 6 && wireType === 0) out.message_id = r.readInt64()
+    else if (fieldNumber === 6 && wireType === 0) out.message_id = r.readInt64String()
     else r.skip(wireType)
   }
   return out

@@ -1,4 +1,6 @@
 import { getSession, refreshSessionToken, syncWsAccessTokenCookie } from "@/lib/api"
+import type { EntityId } from "@/lib/types"
+import { hasId } from "@/lib/utils"
 import {
   AckStatus,
   FrameType,
@@ -165,7 +167,7 @@ export class AimWsClient {
       this.ws = null
       try {
         sock.close(1000, "client logout")
-      } catch {}
+      } catch { }
     }
     for (const item of this.pendingMessages.values()) {
       clearTimeout(item.timer)
@@ -192,7 +194,7 @@ export class AimWsClient {
     return promise
   }
 
-  sendTyping(conversationId: number) {
+  sendTyping(conversationId: EntityId) {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return
     this.sendFrame(
       FrameType.TYPING,
@@ -200,8 +202,8 @@ export class AimWsClient {
     )
   }
 
-  sendReadReceipt(conversationId: number, lastReadMessageId: number) {
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN || lastReadMessageId <= 0) {
+  sendReadReceipt(conversationId: EntityId, lastReadMessageId: EntityId) {
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN || !hasId(lastReadMessageId)) {
       return
     }
     this.sendFrame(
@@ -262,7 +264,7 @@ export class AimWsClient {
         const pending = payload.client_msg_id
           ? this.pendingMessages.get(payload.client_msg_id)
           : undefined
-        if (pending && payload.message_id > 0) {
+        if (pending && hasId(payload.message_id)) {
           clearTimeout(pending.timer)
           this.pendingMessages.delete(payload.client_msg_id)
           pending.resolve({
@@ -434,7 +436,7 @@ export class AimWsClient {
     this.ws = null
     try {
       sock.close()
-    } catch {}
+    } catch { }
   }
 
   private sendFrame(type: FrameTypeValue, payload: Uint8Array): number {

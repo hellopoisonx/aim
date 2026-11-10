@@ -28,15 +28,16 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { aimApi } from "@/lib/api"
 import type {
   ConversationItem,
+  EntityId,
   FriendshipItem,
   MemberDetailItem,
 } from "@/lib/types"
-import { initialsFromName } from "@/lib/utils"
+import { initialsFromName, parseSnowflakeId } from "@/lib/utils"
 
 interface CreateConversationDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  currentUserId: number
+  currentUserId: EntityId
   friends: FriendshipItem[]
   onCreated: (conversation: ConversationItem) => void
 }
@@ -51,12 +52,12 @@ export function CreateConversationDialog({
   const [mode, setMode] = useState<"group" | "direct">("group")
   const [groupName, setGroupName] = useState("")
   const [groupAvatar, setGroupAvatar] = useState("")
-  const [selectedIds, setSelectedIds] = useState<number[]>([])
+  const [selectedIds, setSelectedIds] = useState<EntityId[]>([])
   const [manualUserId, setManualUserId] = useState("")
   const [submitting, setSubmitting] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
 
-  function toggleMember(userId: number, checked: boolean) {
+  function toggleMember(userId: EntityId, checked: boolean) {
     if (mode === "direct") {
       setSelectedIds(checked ? [userId] : [])
       return
@@ -67,8 +68,8 @@ export function CreateConversationDialog({
   }
 
   function handleAddManualId() {
-    const parsed = Number.parseInt(manualUserId.trim(), 10)
-    if (!Number.isFinite(parsed) || parsed <= 0 || parsed === currentUserId) {
+    const parsed = parseSnowflakeId(manualUserId)
+    if (!parsed || parsed === currentUserId) {
       return
     }
     toggleMember(parsed, true)
@@ -264,10 +265,10 @@ interface GroupSettingsDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   conversation: ConversationItem
-  currentUserId: number
+  currentUserId: EntityId
   friends: FriendshipItem[]
   onConversationUpdated: (updated: ConversationItem) => void
-  onConversationRemoved: (conversationId: number) => void
+  onConversationRemoved: (conversationId: EntityId) => void
 }
 
 export function GroupSettingsDialog({
@@ -337,7 +338,7 @@ export function GroupSettingsDialog({
     }
   }
 
-  async function handleAddMember(userId: number) {
+  async function handleAddMember(userId: EntityId) {
     setBusyAction(`add-${userId}`)
     setErrorMsg(null)
     try {
@@ -355,7 +356,7 @@ export function GroupSettingsDialog({
     }
   }
 
-  async function handleRemoveMember(userId: number) {
+  async function handleRemoveMember(userId: EntityId) {
     setBusyAction(`remove-${userId}`)
     setErrorMsg(null)
     try {
@@ -391,7 +392,7 @@ export function GroupSettingsDialog({
     }
   }
 
-  async function handleTransferOwner(userId: number) {
+  async function handleTransferOwner(userId: EntityId) {
     setBusyAction(`owner-${userId}`)
     setErrorMsg(null)
     try {
@@ -516,8 +517,8 @@ export function GroupSettingsDialog({
                 variant="secondary"
                 className="h-8"
                 onClick={() => {
-                  const parsed = Number.parseInt(inviteUserId.trim(), 10)
-                  if (Number.isFinite(parsed) && parsed > 0) {
+                  const parsed = parseSnowflakeId(inviteUserId)
+                  if (parsed) {
                     void handleAddMember(parsed)
                   }
                 }}

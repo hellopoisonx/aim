@@ -4,6 +4,7 @@ import type {
   AuthSession,
   ConversationItem,
   DownloadAttachmentResponse,
+  EntityId,
   FriendTagItem,
   FriendshipItem,
   InitAttachmentUploadRequest,
@@ -16,8 +17,48 @@ import type {
   UserInfo,
   UserListItem,
 } from "@/lib/types"
-import { sha256Hex } from "@/lib/utils"
+import { hasId, sha256Hex } from "@/lib/utils"
 
+function isInt64Key(key: string): boolean {
+  return key === "id" || key.endsWith("_id")
+}
+
+function isInt64ArrayKey(key: string): boolean {
+  return key.endsWith("_ids")
+}
+
+export function parseApiJson<T>(rawText: string): T {
+  return JSON.parse(
+    rawText,
+    (key, value, context?: { source?: string }) => {
+      if (typeof value === "number") {
+        if (isInt64Key(key) || !Number.isSafeInteger(value)) {
+          return context?.source ?? String(value)
+        }
+      }
+      if (Array.isArray(value) && isInt64ArrayKey(key)) {
+        return value.map((item) => String(item))
+      }
+      return value
+    }
+  ) as T
+}
+
+export function stringifyApiBody(payload: unknown): string {
+  return JSON.stringify(payload, (key, value) => {
+    if (isInt64Key(key) && typeof value === "string" && /^-?\d+$/.test(value)) {
+      return `__AIM_INT64__:${value}`
+    }
+    if (Array.isArray(value) && isInt64ArrayKey(key)) {
+      return value.map((item) =>
+        typeof item === "string" && /^-?\d+$/.test(item)
+          ? `__AIM_INT64__:${item}`
+          : item
+      )
+    }
+    return value
+  }).replace(/"__AIM_INT64__:(-?\d+)"/g, "$1")
+}
 interface ApiEnvelope<T> {
   code: number
   msg: string
@@ -63,10 +104,11 @@ export function loadStoredSession(): AuthSession | null {
   try {
     const raw = localStorage.getItem(SESSION_STORAGE_KEY)
     if (!raw) return null
-    const parsed = JSON.parse(raw) as AuthSession
-    if (!parsed.accessToken || !parsed.refreshToken || !parsed.userId) {
+    const parsed = parseApiJson<AuthSession>(raw)
+    if (!parsed.accessToken || !parsed.refreshToken || !hasId(parsed.userId)) {
       return null
     }
+    parsed.userId = String(parsed.userId)
     syncWsAccessTokenCookie(parsed.accessToken)
     return parsed
   } catch {
@@ -129,11 +171,13 @@ export async function refreshSessionToken(): Promise<AuthSession | null> {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ refresh_token: currentSession.refreshToken }),
       })
-      const payload = (await response.json()) as ApiEnvelope<{
-        access_token: string
-        refresh_token: string
-        expires_at: number
-      }>
+      const payload = parseApiJson<
+        ApiEnvelope<{
+          access_token: string
+          refresh_token: string
+          expires_at: number
+        }>
+      >(await response.text())
       if (!response.ok || payload.code !== 0 || !payload.body?.access_token) {
         setSession(null)
         return null
@@ -189,7 +233,7 @@ async function request<T>(
 
   let envelope: ApiEnvelope<T> | null = null
   try {
-    envelope = (await response.json()) as ApiEnvelope<T>
+    envelope = parseApiJson<ApiEnvelope<T>>(await response.text())
   } catch {
     if (!response.ok) {
       throw new ApiError(response.status, response.statusText || "请求失败", response.status)
@@ -219,8 +263,8 @@ export const aimApi = {
     password: string
     username: string
     avatar?: string
-  }): Promise<{ user_id: number }> {
-    return request<{ user_id: number }>(
+  }): Promise<{ user_id: EntityId }> {
+    return request<{ user_id: EntityId }>(
       "/api/auth/register",
       {
         method: "POST",
@@ -236,7 +280,7 @@ export const aimApi = {
   async login(input: { email: string; password: string }): Promise<AuthSession> {
     const deviceId = getOrCreateDeviceId()
     const body = await request<{
-      user_id: number
+      user_id: EntityId
       access_token: string
       refresh_token: string
       expires_at: number
@@ -276,7 +320,7 @@ export const aimApi = {
     }
   },
 
-  async getUserById(id: number): Promise<UserInfo> {
+  async getUserById(id: EntityId): Promise<UserInfo> {
     const res = await request<{ user: UserInfo }>(`/api/users/by-id/${id}`)
     return res.user
   },
@@ -288,7 +332,7 @@ export const aimApi = {
     return res.users ?? []
   },
 
-  async addFriend(userId: number): Promise<FriendshipItem> {
+  async addFriend(userId: EntityId): Promise<FriendshipItem> {
     const res = await request<{ friendship: FriendshipItem }>(
       `/api/users/friends/${userId}`,
       { method: "POST" }
@@ -308,7 +352,7 @@ export const aimApi = {
     return res.applications ?? []
   },
 
-  async acceptFriend(userId: number): Promise<FriendshipItem> {
+  async acceptFriend(userId: EntityId): Promise<FriendshipItem> {
     const res = await request<{ friendship: FriendshipItem }>(
       `/api/friends/accept/${userId}`,
       { method: "POST" }
@@ -316,7 +360,7 @@ export const aimApi = {
     return res.friendship
   },
 
-  async rejectFriend(userId: number): Promise<FriendshipItem> {
+  async rejectFriend(userId: EntityId): Promise<FriendshipItem> {
     const res = await request<{ friendship: FriendshipItem }>(
       `/api/friends/reject/${userId}`,
       { method: "POST" }
@@ -337,7 +381,7 @@ export const aimApi = {
     return res.tag
   },
 
-  async renameFriendTag(id: number, name: string): Promise<FriendTagItem> {
+  async renameFriendTag(id: EntityId, name: string): Promise<FriendTagItem> {
     const res = await request<{ tag: FriendTagItem }>(`/api/friends/tags/${id}`, {
       method: "PUT",
       body: JSON.stringify({ name }),
@@ -345,25 +389,25 @@ export const aimApi = {
     return res.tag
   },
 
-  async deleteFriendTag(id: number): Promise<boolean> {
+  async deleteFriendTag(id: EntityId): Promise<boolean> {
     const res = await request<{ deleted: boolean }>(`/api/friends/tags/${id}`, {
       method: "DELETE",
     })
     return res.deleted
   },
 
-  async setFriendTags(friendId: number, tagIds: number[]): Promise<FriendshipItem> {
+  async setFriendTags(friendId: EntityId, tagIds: EntityId[]): Promise<FriendshipItem> {
     const res = await request<{ friendship: FriendshipItem }>(
       `/api/friends/${friendId}/tags`,
       {
         method: "PUT",
-        body: JSON.stringify({ tag_ids: tagIds }),
+        body: stringifyApiBody({ tag_ids: tagIds }),
       }
     )
     return res.friendship
   },
 
-  async removeFriendTag(friendId: number, tagId: number): Promise<FriendshipItem> {
+  async removeFriendTag(friendId: EntityId, tagId: EntityId): Promise<FriendshipItem> {
     const res = await request<{ friendship: FriendshipItem }>(
       `/api/friends/${friendId}/tags/${tagId}`,
       { method: "DELETE" }
@@ -385,36 +429,36 @@ export const aimApi = {
 
   async createConversation(input: {
     conversation_type: "direct" | "group"
-    member_ids: number[]
+    member_ids: EntityId[]
     name?: string
     avatar?: string
   }): Promise<ConversationItem> {
     return request<ConversationItem>("/api/conversations", {
       method: "POST",
-      body: JSON.stringify(input),
+      body: stringifyApiBody(input),
     })
   },
 
   async createGroup(input: {
-    member_ids: number[]
+    member_ids: EntityId[]
     name: string
     avatar?: string
   }): Promise<ConversationItem> {
     return request<ConversationItem>("/api/conversations/group", {
       method: "POST",
-      body: JSON.stringify(input),
+      body: stringifyApiBody(input),
     })
   },
 
   async getConversationHistory(params: {
-    conversationId: number
+    conversationId: EntityId
     cursorCreatedAt?: number
-    cursorId?: number
+    cursorId?: EntityId
     limit?: number
   }): Promise<{
     messages: MessageItem[]
     next_cursor_created_at: number
-    next_cursor_id: number
+    next_cursor_id: EntityId
     has_more: boolean
     read_states: ReadStateItem[]
   }> {
@@ -422,7 +466,7 @@ export const aimApi = {
     if (params.cursorCreatedAt) {
       query.set("cursor_created_at", String(params.cursorCreatedAt))
     }
-    if (params.cursorId) {
+    if (hasId(params.cursorId)) {
       query.set("cursor_id", String(params.cursorId))
     }
     query.set("limit", String(params.limit ?? 50))
@@ -430,7 +474,7 @@ export const aimApi = {
     return request(`/api/conversations/history/${params.conversationId}?${qs}`)
   },
 
-  async getConversationMembers(conversationId: number): Promise<MemberDetailItem[]> {
+  async getConversationMembers(conversationId: EntityId): Promise<MemberDetailItem[]> {
     const res = await request<{ members: MemberDetailItem[] }>(
       `/api/conversations/${conversationId}/members`
     )
@@ -438,21 +482,21 @@ export const aimApi = {
   },
 
   async addGroupMembers(
-    conversationId: number,
-    memberIds: number[]
+    conversationId: EntityId,
+    memberIds: EntityId[]
   ): Promise<ConversationItem> {
     return request<ConversationItem>(
       `/api/conversations/${conversationId}/members`,
       {
         method: "POST",
-        body: JSON.stringify({ member_ids: memberIds }),
+        body: stringifyApiBody({ member_ids: memberIds }),
       }
     )
   },
 
   async removeGroupMember(
-    conversationId: number,
-    userId: number
+    conversationId: EntityId,
+    userId: EntityId
   ): Promise<{ success: boolean }> {
     return request<{ success: boolean }>(
       `/api/conversations/${conversationId}/members/${userId}`,
@@ -461,8 +505,8 @@ export const aimApi = {
   },
 
   async grantGroupAdmin(
-    conversationId: number,
-    userId: number
+    conversationId: EntityId,
+    userId: EntityId
   ): Promise<{ success: boolean }> {
     return request<{ success: boolean }>(
       `/api/conversations/${conversationId}/members/${userId}/admin`,
@@ -471,8 +515,8 @@ export const aimApi = {
   },
 
   async revokeGroupAdmin(
-    conversationId: number,
-    userId: number
+    conversationId: EntityId,
+    userId: EntityId
   ): Promise<{ success: boolean }> {
     return request<{ success: boolean }>(
       `/api/conversations/${conversationId}/members/${userId}/admin`,
@@ -481,33 +525,33 @@ export const aimApi = {
   },
 
   async transferGroupOwner(
-    conversationId: number,
-    userId: number
+    conversationId: EntityId,
+    userId: EntityId
   ): Promise<ConversationItem> {
     return request<ConversationItem>(
       `/api/conversations/${conversationId}/owner`,
       {
         method: "POST",
-        body: JSON.stringify({ user_id: userId }),
+        body: stringifyApiBody({ user_id: userId }),
       }
     )
   },
 
-  async leaveGroup(conversationId: number): Promise<{ success: boolean }> {
+  async leaveGroup(conversationId: EntityId): Promise<{ success: boolean }> {
     return request<{ success: boolean }>(
       `/api/conversations/${conversationId}/leave`,
       { method: "POST" }
     )
   },
 
-  async dismissGroup(conversationId: number): Promise<{ success: boolean }> {
+  async dismissGroup(conversationId: EntityId): Promise<{ success: boolean }> {
     return request<{ success: boolean }>(`/api/conversations/${conversationId}`, {
       method: "DELETE",
     })
   },
 
   async updateGroupInfo(
-    conversationId: number,
+    conversationId: EntityId,
     input: { name?: string; avatar?: string }
   ): Promise<ConversationItem> {
     return request<ConversationItem>(`/api/conversations/${conversationId}`, {
@@ -521,7 +565,7 @@ export const aimApi = {
   ): Promise<InitAttachmentUploadResponse> {
     return request<InitAttachmentUploadResponse>("/api/attachments/init", {
       method: "POST",
-      body: JSON.stringify(input),
+      body: stringifyApiBody(input),
     })
   },
 
@@ -546,7 +590,7 @@ export const aimApi = {
   },
 
   async uploadFileForConversation(
-    conversationId: number,
+    conversationId: EntityId,
     file: File
   ): Promise<AttachmentContentV1> {
     const buffer = await file.arrayBuffer()
@@ -606,19 +650,19 @@ export const aimApi = {
   async search(params: {
     q: string
     scope?: string
-    conversationId?: number
+    conversationId?: EntityId
     cursorCreatedAt?: number
-    cursorId?: number
+    cursorId?: EntityId
     limit?: number
   }): Promise<SearchResponse> {
     const qs = new URLSearchParams()
     qs.set("q", params.q)
     if (params.scope) qs.set("scope", params.scope)
-    if (params.conversationId) qs.set("conversation_id", String(params.conversationId))
+    if (hasId(params.conversationId)) qs.set("conversation_id", String(params.conversationId))
     if (params.cursorCreatedAt) {
       qs.set("cursor_created_at", String(params.cursorCreatedAt))
     }
-    if (params.cursorId) qs.set("cursor_id", String(params.cursorId))
+    if (hasId(params.cursorId)) qs.set("cursor_id", String(params.cursorId))
     qs.set("limit", String(params.limit ?? 20))
     return request<SearchResponse>(`/api/search?${qs.toString()}`)
   },

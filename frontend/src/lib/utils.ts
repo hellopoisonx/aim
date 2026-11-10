@@ -94,3 +94,31 @@ export function tokenizeMarkedSnippet(snippet: string): SnippetToken[] {
   }
   return tokens
 }
+
+export function hasId(id: string | number | null | undefined): boolean {
+  if (id === null || id === undefined) return false
+  const s = String(id).trim()
+  return s !== "" && s !== "0"
+}
+
+export function compareId(
+  a: string | number | null | undefined,
+  b: string | number | null | undefined
+): number {
+  const ba = hasId(a) ? BigInt(String(a).trim()) : 0n
+  const bb = hasId(b) ? BigInt(String(b).trim()) : 0n
+  return ba < bb ? -1 : ba > bb ? 1 : 0
+}
+
+export function maxId(
+  a: string | number | null | undefined,
+  b: string | number | null | undefined
+): string {
+  return compareId(a, b) >= 0 ? String(a ?? "0") : String(b ?? "0")
+}
+
+export function parseSnowflakeId(raw: string): string | null {
+  const trimmed = raw.trim()
+  if (!/^[1-9]\d*$/.test(trimmed)) return null
+  return trimmed
+}

@@ -34,31 +34,34 @@ import {
 } from "@/components/ui/popover"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Textarea } from "@/components/ui/textarea"
-import { aimApi } from "@/lib/api"
+import { aimApi, parseApiJson } from "@/lib/api"
 import type {
   AttachmentContentV1,
   ChatMessage,
   ConversationItem,
+  EntityId,
   MemberDetailItem,
   ReadStateItem,
   SystemMessageEvent,
 } from "@/lib/types"
 import {
   cn,
+  compareId,
   formatBytes,
   formatTimestamp,
+  hasId,
   initialsFromName,
 } from "@/lib/utils"
 
 interface MessagePaneProps {
   conversation: ConversationItem | null
-  currentUserId: number
+  currentUserId: EntityId
   messages: ChatMessage[]
   hasMoreHistory: boolean
   loadingHistory: boolean
   readStates: ReadStateItem[]
-  typingUserIds: number[]
-  presenceMap: Record<number, string>
+  typingUserIds: EntityId[]
+  presenceMap: Record<EntityId, string>
   onLoadOlderHistory: () => Promise<void>
   onSendMessage: (input: {
     messageType: string
@@ -85,7 +88,7 @@ function parseAttachmentContent(raw: string): AttachmentContentV1 | null {
 
 function formatSystemMessage(raw: string): string {
   try {
-    const parsed = JSON.parse(raw) as SystemMessageEvent
+    const parsed = parseApiJson<SystemMessageEvent>(raw)
     const targets = parsed.target_user_ids?.map((id) => `#${id}`).join(", ") ?? ""
     switch (parsed.event) {
       case "member_joined":
@@ -342,7 +345,7 @@ export function MessagePane({
     }
   }
 
-  function toggleMention(userId: number, displayName: string) {
+  function toggleMention(userId: EntityId, displayName: string) {
     const idStr = String(userId)
     if (mentions.includes(idStr)) {
       setMentions((prev) => prev.filter((item) => item !== idStr))
@@ -452,11 +455,11 @@ export function MessagePane({
           {messages.map((msg) => {
             const isSystemNotice =
               msg.is_system &&
-              (msg.message_type === "system" || msg.sender_id === 0)
+              (msg.message_type === "system" || !hasId(msg.sender_id))
             if (isSystemNotice) {
               return (
                 <div
-                  key={msg.id || msg.client_msg_id}
+                  key={hasId(msg.id) ? msg.id : msg.client_msg_id}
                   className="flex justify-center my-2"
                 >
                   <div className="rounded-full bg-muted px-3 py-1 text-[11px] text-muted-foreground">
@@ -480,15 +483,15 @@ export function MessagePane({
             const peerReads = readStates.filter(
               (rs) =>
                 rs.user_id !== currentUserId &&
-                msg.id > 0 &&
-                rs.last_read_message_id >= msg.id
+                hasId(msg.id) &&
+                compareId(rs.last_read_message_id, msg.id) >= 0
             )
             const detailReads = (msg.read_details ?? []).filter(
               (rd) => rd.user_id !== currentUserId && rd.is_read
             )
             const readUserMap = new Map<
-              number,
-              { user_id: number; name: string }
+              EntityId,
+              { user_id: EntityId; name: string }
             >()
             for (const r of peerReads) {
               readUserMap.set(r.user_id, {
@@ -506,7 +509,7 @@ export function MessagePane({
 
             return (
               <div
-                key={msg.id > 0 ? `id-${msg.id}` : `client-${msg.client_msg_id}`}
+                key={hasId(msg.id) ? `id-${msg.id}` : `client-${msg.client_msg_id}`}
                 className={cn(
                   "flex items-start gap-2.5",
                   isMine ? "flex-row-reverse" : "flex-row"

@@ -52,6 +52,7 @@ import type {
   AuthSession,
   ChatMessage,
   ConversationItem,
+  EntityId,
   FriendTagItem,
   FriendshipItem,
   MessageItem,
@@ -59,12 +60,19 @@ import type {
   SystemNotificationItem,
   UserInfo,
 } from "@/lib/types"
-import { cn, formatTimestamp, initialsFromName } from "@/lib/utils"
+import {
+  cn,
+  compareId,
+  formatTimestamp,
+  hasId,
+  initialsFromName,
+  maxId,
+} from "@/lib/utils"
 import { type WsConnectionStatus, aimWsClient } from "@/lib/ws-client"
 
 interface HistoryCursor {
   createdAt: number
-  id: number
+  id: EntityId
   hasMore: boolean
 }
 
@@ -72,11 +80,11 @@ function mergeMessages(
   existing: ChatMessage[],
   incoming: ChatMessage[]
 ): ChatMessage[] {
-  const byId = new Map<number, ChatMessage>()
+  const byId = new Map<EntityId, ChatMessage>()
   const byClientId = new Map<string, ChatMessage>()
 
   for (const item of existing) {
-    if (item.id > 0) byId.set(item.id, item)
+    if (hasId(item.id)) byId.set(item.id, item)
     if (item.client_msg_id) byClientId.set(item.client_msg_id, item)
   }
 
@@ -84,7 +92,7 @@ function mergeMessages(
     const prevByClient = msg.client_msg_id
       ? byClientId.get(msg.client_msg_id)
       : undefined
-    const prevById = msg.id > 0 ? byId.get(msg.id) : undefined
+    const prevById = hasId(msg.id) ? byId.get(msg.id) : undefined
     const merged: ChatMessage = {
       ...(prevByClient ?? prevById ?? msg),
       ...msg,
@@ -95,7 +103,7 @@ function mergeMessages(
             ? "sent"
             : msg.local_status,
     }
-    if (merged.id > 0) {
+    if (hasId(merged.id)) {
       byId.set(merged.id, merged)
     }
     if (merged.client_msg_id) {
@@ -108,13 +116,13 @@ function mergeMessages(
     combined.set(`id:${item.id}`, item)
   }
   for (const item of byClientId.values()) {
-    if (item.id > 0 && byId.has(item.id)) continue
+    if (hasId(item.id) && byId.has(item.id)) continue
     combined.set(`client:${item.client_msg_id}`, item)
   }
 
   return Array.from(combined.values()).sort((a, b) => {
     if (a.created_at !== b.created_at) return a.created_at - b.created_at
-    return a.id - b.id
+    return compareId(a.id, b.id)
   })
 }
 
@@ -136,25 +144,25 @@ export function App() {
 
   const [conversations, setConversations] = useState<ConversationItem[]>([])
   const [convFilter, setConvFilter] = useState("")
-  const [activeConvId, setActiveConvId] = useState<number | null>(null)
+  const [activeConvId, setActiveConvId] = useState<EntityId | null>(null)
   const [messagesByConv, setMessagesByConv] = useState<
-    Record<number, ChatMessage[]>
+    Record<EntityId, ChatMessage[]>
   >({})
   const [cursorsByConv, setCursorsByConv] = useState<
-    Record<number, HistoryCursor>
+    Record<EntityId, HistoryCursor>
   >({})
   const [readStatesByConv, setReadStatesByConv] = useState<
-    Record<number, ReadStateItem[]>
+    Record<EntityId, ReadStateItem[]>
   >({})
   const [loadingHistoryConvId, setLoadingHistoryConvId] = useState<
-    number | null
+    EntityId | null
   >(null)
 
   const [friends, setFriends] = useState<FriendshipItem[]>([])
   const [applications, setApplications] = useState<FriendshipItem[]>([])
   const [friendTags, setFriendTags] = useState<FriendTagItem[]>([])
-  const [presenceMap, setPresenceMap] = useState<Record<number, string>>({})
-  const [typingByConv, setTypingByConv] = useState<Record<number, number[]>>({})
+  const [presenceMap, setPresenceMap] = useState<Record<EntityId, string>>({})
+  const [typingByConv, setTypingByConv] = useState<Record<EntityId, EntityId[]>>({})
   const [notifications, setNotifications] = useState<SystemNotificationItem[]>(
     []
   )
@@ -164,7 +172,7 @@ export function App() {
   const [searchDialogOpen, setSearchDialogOpen] = useState(false)
   const [searchScoped, setSearchScoped] = useState(false)
 
-  const activeConvIdRef = useRef<number | null>(null)
+  const activeConvIdRef = useRef<EntityId | null>(null)
   activeConvIdRef.current = activeConvId
 
   useEffect(() => {
@@ -199,7 +207,7 @@ export function App() {
     if (appsRes.status === "fulfilled") setApplications(appsRes.value)
     if (tagsRes.status === "fulfilled") setFriendTags(tagsRes.value)
     if (presenceRes.status === "fulfilled") {
-      const nextPresence: Record<number, string> = {}
+      const nextPresence: Record<EntityId, string> = {}
       for (const item of presenceRes.value) {
         nextPresence[item.user_id] = item.status
       }
@@ -208,7 +216,7 @@ export function App() {
   }, [])
 
   const fetchConversationSnapshot = useCallback(
-    async (conversationId: number) => {
+    async (conversationId: EntityId) => {
       const res = await aimApi.getConversationHistory({
         conversationId,
         limit: 50,
@@ -243,7 +251,7 @@ export function App() {
     aimApi
       .getUserById(active.userId)
       .then(setCurrentUser)
-      .catch(() => {})
+      .catch(() => { })
 
     try {
       const convList = await aimApi.listConversations()
@@ -257,7 +265,7 @@ export function App() {
           .map((c) => fetchConversationSnapshot(c.conversation_id))
       )
       await refreshContactsData()
-    } catch {}
+    } catch { }
   }, [fetchConversationSnapshot, refreshContactsData])
 
   useEffect(() => {
@@ -285,7 +293,7 @@ export function App() {
     function handlePushMessage(payload: PushMessagePayload) {
       const isAttachmentParseUpdate =
         payload.is_system &&
-        payload.sender_id === 0 &&
+        !hasId(payload.sender_id) &&
         (payload.message_type === "image" ||
           payload.message_type === "video" ||
           payload.message_type === "audio")
@@ -303,16 +311,16 @@ export function App() {
                 if (existing.file_id === parsed.file_id) {
                   return { ...msg, content: payload.content }
                 }
-              } catch {}
+              } catch { }
               return msg
             })
             return { ...prev, [payload.conversation_id]: updated }
           })
-        } catch {}
+        } catch { }
         return
       }
 
-      const myId = getSession()?.userId ?? 0
+      const myId = getSession()?.userId ?? "0"
       const incomingMsg: ChatMessage = {
         id: payload.message_id,
         conversation_id: payload.conversation_id,
@@ -345,12 +353,12 @@ export function App() {
         aimApi
           .listConversations()
           .then(setConversations)
-          .catch(() => {})
+          .catch(() => { })
       }
 
       if (
         activeConvIdRef.current === payload.conversation_id &&
-        payload.message_id > 0 &&
+        hasId(payload.message_id) &&
         payload.sender_id !== myId
       ) {
         aimWsClient.sendReadReceipt(payload.conversation_id, payload.message_id)
@@ -380,7 +388,7 @@ export function App() {
     }
 
     function handlePushTyping(payload: PushTypingPayload) {
-      const myId = getSession()?.userId ?? 0
+      const myId = getSession()?.userId ?? "0"
       if (payload.user_id === myId) return
       setTypingByConv((prev) => {
         const list = prev[payload.conversation_id] ?? []
@@ -407,8 +415,8 @@ export function App() {
       setReadStatesByConv((prev) => {
         const list = prev[payload.conversation_id] ?? []
         const existing = list.find((r) => r.user_id === payload.user_id)
-        const nextLastRead = Math.max(
-          existing?.last_read_message_id ?? 0,
+        const nextLastRead = maxId(
+          existing?.last_read_message_id ?? "0",
           payload.last_read_message_id
         )
         const nextItem: ReadStateItem = {
@@ -458,15 +466,18 @@ export function App() {
     if (!list) {
       setLoadingHistoryConvId(activeConvId)
       fetchConversationSnapshot(activeConvId)
-        .catch(() => {})
+        .catch(() => { })
         .finally(() => setLoadingHistoryConvId(null))
       return
     }
-    const maxMsgId = list.reduce((acc, m) => (m.id > acc ? m.id : acc), 0)
+    const maxMsgId = list.reduce(
+      (acc, m) => (compareId(m.id, acc) > 0 ? m.id : acc),
+      "0"
+    )
     const myRead =
       readStatesByConv[activeConvId]?.find((r) => r.user_id === session.userId)
-        ?.last_read_message_id ?? 0
-    if (maxMsgId > myRead) {
+        ?.last_read_message_id ?? "0"
+    if (compareId(maxMsgId, myRead) > 0) {
       aimWsClient.sendReadReceipt(activeConvId, maxMsgId)
       setReadStatesByConv((prev) => {
         const current = prev[activeConvId] ?? []
@@ -492,16 +503,16 @@ export function App() {
   ])
 
   const unreadByConv = useMemo(() => {
-    const out: Record<number, number> = {}
+    const out: Record<EntityId, number> = {}
     if (!session) return out
     for (const conv of conversations) {
       const msgs = messagesByConv[conv.conversation_id] ?? []
       const myRead =
         readStatesByConv[conv.conversation_id]?.find(
           (r) => r.user_id === session.userId
-        )?.last_read_message_id ?? 0
+        )?.last_read_message_id ?? "0"
       out[conv.conversation_id] = msgs.filter(
-        (m) => m.id > myRead && m.sender_id !== session.userId
+        (m) => compareId(m.id, myRead) > 0 && m.sender_id !== session.userId
       ).length
     }
     return out
@@ -577,7 +588,7 @@ export function App() {
       input.retryClientMsgId ?? `d1-${crypto.randomUUID()}`
 
     const optimistic: ChatMessage = {
-      id: 0,
+      id: "0",
       conversation_id: targetConvId,
       sender_id: session.userId,
       sender_info: {
@@ -611,7 +622,7 @@ export function App() {
         [targetConvId]: mergeMessages(prev[targetConvId] ?? [], [
           {
             ...optimistic,
-            id: ack.message_id || optimistic.id,
+            id: hasId(ack.message_id) ? ack.message_id : optimistic.id,
             local_status: "sent",
           },
         ]),
@@ -630,7 +641,7 @@ export function App() {
     }
   }
 
-  async function handleStartDirectChat(friendUserId: number, friendName?: string) {
+  async function handleStartDirectChat(friendUserId: EntityId, friendName?: string) {
     const existing = conversations.find(
       (c) =>
         c.conversation_type === "direct" &&

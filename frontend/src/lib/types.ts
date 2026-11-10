@@ -1,10 +1,12 @@
+export type EntityId = string
+
 export interface SenderInfo {
   name: string
   email: string
 }
 
 export interface UserInfo {
-  id: number
+  id: EntityId
   email: string
   status: number
   nickname: string
@@ -14,23 +16,23 @@ export interface UserInfo {
 }
 
 export interface UserListItem {
-  id: number
+  id: EntityId
   nickname: string
   email: string
   avatar: string
 }
 
 export interface FriendTagItem {
-  id: number
-  user_id: number
+  id: EntityId
+  user_id: EntityId
   name: string
   created_at: number
   updated_at: number
 }
 
 export interface FriendshipItem {
-  user_id: number
-  friend_id: number
+  user_id: EntityId
+  friend_id: EntityId
   status: string
   created_at: number
   updated_at: number
@@ -41,9 +43,9 @@ export interface FriendshipItem {
 }
 
 export interface MessageReadDetailItem {
-  user_id: number
+  user_id: EntityId
   is_read: boolean
-  last_read_message_id: number
+  last_read_message_id: EntityId
   updated_at: number
   email: string
   avatar: string
@@ -51,8 +53,8 @@ export interface MessageReadDetailItem {
 }
 
 export interface ReadStateItem {
-  user_id: number
-  last_read_message_id: number
+  user_id: EntityId
+  last_read_message_id: EntityId
   updated_at: number
   email?: string
   avatar?: string
@@ -60,9 +62,9 @@ export interface ReadStateItem {
 }
 
 export interface MessageItem {
-  id: number
-  conversation_id: number
-  sender_id: number
+  id: EntityId
+  conversation_id: EntityId
+  sender_id: EntityId
   sender_info: SenderInfo
   message_type: string
   content: string
@@ -81,18 +83,18 @@ export interface ChatMessage extends MessageItem {
 }
 
 export interface ConversationItem {
-  conversation_id: number
+  conversation_id: EntityId
   conversation_type: "direct" | "group" | string
   is_active: boolean
   created_at: number
-  member_ids: number[]
+  member_ids: EntityId[]
   name: string
   avatar: string
-  creator_id: number
+  creator_id: EntityId
 }
 
 export interface MemberDetailItem {
-  user_id: number
+  user_id: EntityId
   email: string
   avatar: string
   role: "owner" | "admin" | "member" | string
@@ -101,14 +103,14 @@ export interface MemberDetailItem {
 }
 
 export interface PresenceItem {
-  user_id: number
+  user_id: EntityId
   status: "online" | "offline" | string
   updated_at: number
   name?: string
 }
 
 export interface InitAttachmentUploadRequest {
-  conversation_id: number
+  conversation_id: EntityId
   kind: "image" | "video" | "audio" | "file"
   original_name: string
   mime: string
@@ -128,8 +130,8 @@ export interface InitAttachmentUploadResponse {
 
 export interface AttachmentFileInfo {
   file_id: string
-  owner_id: number
-  conversation_id: number
+  owner_id: EntityId
+  conversation_id: EntityId
   kind: "image" | "video" | "audio" | "file" | string
   original_name: string
   mime: string
@@ -172,8 +174,8 @@ export interface AttachmentContentV1 {
 
 export interface SystemMessageEvent {
   event: string
-  operator_id?: number
-  target_user_ids?: number[]
+  operator_id?: EntityId
+  target_user_ids?: EntityId[]
   name?: string
   avatar?: string
 }
@@ -205,12 +207,12 @@ export interface SearchResponse {
   conversations: SearchConversationResultItem[]
   messages: SearchMessageResultItem[]
   next_cursor_created_at: number
-  next_cursor_id: number
+  next_cursor_id: EntityId
   has_more: boolean
 }
 
 export interface AuthSession {
-  userId: number
+  userId: EntityId
   accessToken: string
   refreshToken: string
   expiresAt: number
@@ -223,6 +225,6 @@ export interface SystemNotificationItem {
   notification_type: string
   title: string
   body: string
-  related_id: number
+  related_id: EntityId
   received_at: number
 }
