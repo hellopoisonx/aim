@@ -13,11 +13,13 @@
   ```
 
 - gateway 只接受 Header token，不接受 `?token=...`，避免 JWT 泄露到日志、浏览器历史或代理记录。
-- 握手前鉴权失败时，不升级 WebSocket，直接返回 HTTP 401 JSON：
+- 握手前鉴权失败时，不升级 WebSocket，直接返回 HTTP 401 JSON（与 REST 同一错误封装，`code` 为 auth sentinel）：
 
   ```json
-  { "code": 40100, "msg": "unauthorized" }
+  { "code": 1004, "msg": "missing token", "body": null }
   ```
+
+  `1004` 表示 token 缺失/格式错误/无效，`1005` 表示 token 过期；两种都是 HTTP 401。
 
 - 连接身份来自 access token claims：`user_id` 与 `device_id`。同一 gateway 节点内同一个 `(user_id, device_id)` 只能存在一个活跃连接；重复注册会被拒绝并关闭新连接。
 - 当前配置默认值（见 `app/gateway/api/internal/config/config.go` 与 `app/gateway/api/etc/gateway-api.yaml`）：
@@ -59,7 +61,7 @@ message WsFrame {
 |---|---:|---|---|---|
 | `FRAME_TYPE_SEND_MESSAGE` | 1 | `SendMessagePayload` | 是 | 发送聊天消息，经 gateway 调 core `Transfer`。 |
 | `FRAME_TYPE_HEARTBEAT` | 2 | `HeartbeatPayload` | 是 | 心跳保活，续约 presence TTL。 |
-| `FRAME_TYPE_TYPING` | 3 | `TypingPayload` | 否 | 输入状态，校验会话成员后 best-effort 发布 RocketMQ 并本节点即时 fan-out。 |
+| `FRAME_TYPE_TYPING` | 3 | `TypingPayload` | 仅拒绝时 | 输入状态，校验会话成员后 best-effort 发布 RocketMQ 并本节点即时 fan-out。 |
 | `FRAME_TYPE_READ_RECEIPT` | 4 | `ReadReceiptPayload` | 是 | 已读回执，持久化已读游标并 fan-out。 |
 | `FRAME_TYPE_ACK` | 5 | `ClientAckPayload` | 否 | 客户端确认收到服务端推送。 |
 
@@ -357,7 +359,7 @@ message ServerAckPayload {
 | 发送成功 | `ACK_STATUS_ACCEPTED` | `0` | 标记消息已发送，记录 `message_id`。 |
 | 重复 `client_msg_id` 且已有消息 | `ACK_STATUS_ACCEPTED` | `0` | 使用返回的已有 `message_id`，不要重复生成新消息。 |
 | 参数错误 | `ACK_STATUS_REJECTED` | `40000` | 展示错误，不自动重试。 |
-| token/身份无效 | `ACK_STATUS_REJECTED` | `40100` | 刷新 token 或重新登录后重连。 |
+| token/身份无效 | `ACK_STATUS_REJECTED` | `1004` / `1005` / `40100` | 刷新 token 或重新登录后重连。 |
 | 无权限、被禁言、非会话成员、拉黑等 | `ACK_STATUS_REJECTED` | `40300` | 展示业务错误，不自动重试。 |
 | 会话不存在 | `ACK_STATUS_REJECTED` | `40400` | 刷新会话列表或提示不存在。 |
 | 业务冲突 | `ACK_STATUS_REJECTED` | `40900` | 展示业务错误，不自动重试。 |

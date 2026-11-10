@@ -182,6 +182,7 @@ func buildMessageReadDetails(
 			UpdatedAt:         state.UpdatedAt,
 			Email:             member.Email,
 			Avatar:            member.Avatar,
+			Name:              member.Name,
 		})
 	}
 

@@ -23,7 +23,8 @@ info:
     { "code": 40000, "msg": "...", "body": null }
     ```
 
-    认证中间件失败路径可能只返回 `{ "code": 40100, "msg": "..." }`，不带 `body` 字段。
+    认证与限流中间件失败也使用同一封装；`body` 字段总是存在，错误时为 `null`。
+    认证中间件（REST 与 `/ws` 握手）复用 auth sentinel 码：`1004` 表示 token 缺失/无效，`1005` 表示 token 过期，HTTP 状态均为 401。
     所有成功响应都带 `body`：返回资源的接口给出完整资源；RPC 只返回空的变更接口给出 `{"success": true}`。
 
     ## 时间与 ID
@@ -189,7 +190,7 @@ paths:
       operationId: usersAddFriend
       summary: 向指定用户发起好友申请
       description: |
-        需要 Bearer JWT。路径参数 `id` 为目标用户 ID；当前用户来自 JWT。成功创建好友申请后，如果目标用户连接在本 gateway 节点，会通过 WS 推送 `FRAME_TYPE_PUSH_FRIEND_APPLICATION`。
+        需要 Bearer JWT。路径参数 `id` 为目标用户 ID；当前用户来自 JWT。成功创建好友申请后，gateway 发布 `aim-friend-application-events`，由 core 跨节点推送 `FRAME_TYPE_PUSH_FRIEND_APPLICATION` 给目标在线的所有 gateway 节点上的连接；目标不在线时不会补发，客户端以好友申请列表接口为准。
       security:
         - BearerAuth: []
       parameters:
@@ -1647,13 +1648,15 @@ components:
             badInput:
               value: { code: 40000, msg: "bad input", body: null }
     Unauthorized:
-      description: 未认证、access token 缺失/无效/过期。
+      description: 未认证、access token 缺失/无效/过期。code 为 auth sentinel：1004（缺失/无效）或 1005（过期）。
       content:
         application/json:
           schema: { $ref: '#/components/schemas/ErrorEnvelope' }
           examples:
             auth:
-              value: { code: 40100, msg: "unauthorized" }
+              value: { code: 1004, msg: "missing token", body: null }
+            expired:
+              value: { code: 1005, msg: "token expired", body: null }
     Forbidden:
       description: 无权限、非会话成员、被禁言/拉黑等。
       content:
@@ -1740,7 +1743,7 @@ components:
           description: 可展示给客户端的错误消息；基础设施错误会被清洗为 `internal error`。
         body:
           nullable: true
-          description: 错误响应中通常为 null；部分中间件失败路径可能省略该字段。
+          description: 错误响应中恒为 null；字段本身总是存在。
     RegisterRequest:
       type: object
       required: [email, password, username, device_id]
@@ -2073,7 +2076,7 @@ components:
         email: { type: string }
     MessageReadDetailItem:
       type: object
-      required: [user_id, is_read, last_read_message_id, updated_at, email, avatar]
+      required: [user_id, is_read, last_read_message_id, updated_at, email, avatar, name]
       properties:
         user_id: { type: integer, format: int64 }
         is_read: { type: boolean }
@@ -2649,7 +2652,7 @@ components:
         email: { type: string, format: email }
         nickname: { type: string }
         avatar: { type: string }
-        status: { type: integer, format: int32, description: 状态：1=启用, 2=禁用。 }
+        status: { type: integer, format: int32, description: 状态：1=启用, 0=禁用。 }
         created_at: { type: integer, format: int64, description: Unix milliseconds。 }
         updated_at: { type: integer, format: int64, description: Unix milliseconds。 }
     CreateUserBotRequest:

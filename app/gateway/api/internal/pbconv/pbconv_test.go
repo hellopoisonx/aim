@@ -40,3 +40,19 @@ func TestFriendshipSerialisesEmptyTagsAsList(t *testing.T) {
 	require.NoError(t, err)
 	require.JSONEq(t, `{"user_id":1,"friend_id":2,"status":"accepted","created_at":0,"updated_at":0,"name":"","email":"","avatar":"","tags":[]}`, string(raw))
 }
+
+func TestMessageReadDetailCarriesMemberName(t *testing.T) {
+	detail := MessageReadDetail(&pb.MessageReadDetailItem{
+		UserId:            7,
+		IsRead:            true,
+		LastReadMessageId: 99,
+		UpdatedAt:         1_700_000_000_123,
+		Email:             "bob@example.com",
+		Avatar:            "b.png",
+		Name:              "bob",
+	})
+
+	raw, err := json.Marshal(detail)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"user_id":7,"is_read":true,"last_read_message_id":99,"updated_at":1700000000123,"email":"bob@example.com","avatar":"b.png","name":"bob"}`, string(raw))
+}

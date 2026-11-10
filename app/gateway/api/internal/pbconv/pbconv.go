@@ -113,6 +113,7 @@ func MessageReadDetail(rd *pb.MessageReadDetailItem) types.MessageReadDetailItem
 		UpdatedAt:         rd.GetUpdatedAt(),
 		Email:             rd.GetEmail(),
 		Avatar:            rd.GetAvatar(),
+		Name:              rd.GetName(),
 	}
 }
 
