@@ -245,6 +245,9 @@ docker compose --env-file deploy/env/local.env \
 # 本地构建
 go mod tidy
 go build ./...
+
+# 启动前端页面
+cd frontend/ && bun run dev
 ```
 
 > 部署拆分说明见 `deploy/README.md`。
