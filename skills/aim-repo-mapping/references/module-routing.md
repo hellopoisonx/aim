@@ -9,6 +9,7 @@
 - `attachment`：聊天附件服务，负责 SeaweedFS 落盘、附件元数据、下载授权。
 - `data_parsing`：附件解析服务，负责媒体元数据提取、缩略图/派生对象生成。
 - `dev-tool`：Python CLI 测试工具，覆盖 gateway REST/WS 接口，用于冒烟测试和接口调试。
+- `frontend`：React 19 + Tailwind CSS + shadcn/ui 网页客户端，通过 `gateway` `/api/*` 与二进制 Protobuf WebSocket `/ws` 完成认证、会话、消息、附件、好友与群管交互（不含开放平台面板）。
 
 ## 外部接口边界
 

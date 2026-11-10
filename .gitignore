@@ -28,3 +28,5 @@ docker-images/
 .pi/approval.json
 .desloppify/
 scorecard.png
+/frontend/node_modules/
+/frontend/dist/
